@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Assessment Answering Agent</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --text: #16191d;
+    --muted: #6b7480;
+    --border: #e2e5ea;
+    --accent: #2f5bea;
+    --accent-fg: #ffffff;
+    --ok: #16794a;
+    --ok-bg: #e6f4ec;
+    --warn: #8a5a00;
+    --warn-bg: #fdf2dc;
+    --err: #b42318;
+    --err-bg: #fdecea;
+    --code-bg: #f0f2f5;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116;
+      --panel: #161a21;
+      --text: #e6eaf0;
+      --muted: #98a2b0;
+      --border: #272d37;
+      --accent: #5c7cfa;
+      --accent-fg: #0b0e13;
+      --ok: #4ec98a;
+      --ok-bg: #14301f;
+      --warn: #e3b341;
+      --warn-bg: #33280d;
+      --err: #f87168;
+      --err-bg: #3a1a17;
+      --code-bg: #0d1117;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, sans-serif;
+  }
+  header {
+    padding: 26px 24px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card .hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+
+  label.file {
+    display: block;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 14px;
+    transition: border-color .15s, color .15s;
+  }
+  label.file:hover, label.file.drag { border-color: var(--accent); color: var(--accent); }
+  label.file input { display: none; }
+  label.file .chosen { display: block; margin-top: 6px; color: var(--text); font-size: 13px; word-break: break-all; }
+
+  button {
+    font: inherit;
+    font-weight: 500;
+    background: var(--accent);
+    color: var(--accent-fg);
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+  button.link { background: none; border: none; color: var(--muted); padding: 2px 6px; font-size: 13px; }
+  button.link:hover { color: var(--err); }
+  button.link.view:hover { color: var(--accent); }
+  a.button-link {
+    display: inline-block; font: inherit; font-weight: 500; text-decoration: none;
+    background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 9px 16px;
+  }
+
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  select {
+    font: inherit; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+
+  .status { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 10px; }
+  .status.error { color: var(--err); }
+  .status.ok { color: var(--ok); }
+
+  ul.sources { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  ul.sources li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid var(--border);
+  }
+  ul.sources li:last-child { border-bottom: none; }
+  ul.sources .name { flex: 1; word-break: break-all; }
+
+  .library-heading {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 18px 0 10px;
+  }
+  .library-heading:first-of-type { margin-top: 0; }
+  .library-heading h3 { margin: 0; font-size: 14px; }
+  .document-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+  .document-card {
+    display: flex; flex-direction: column; gap: 9px; min-width: 0;
+    border: 1px solid var(--border); border-radius: 9px; padding: 12px;
+    background: var(--bg);
+  }
+  .document-card .doc-title { font-weight: 600; word-break: break-word; }
+  .document-card .doc-name { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .document-card .doc-meta { color: var(--muted); font-size: 12px; }
+  .document-card .row { margin-top: auto; }
+
+  dialog {
+    width: min(1050px, calc(100vw - 28px)); height: min(820px, calc(100vh - 28px));
+    padding: 0; color: var(--text); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 24px 80px rgba(0, 0, 0, .3);
+  }
+  dialog::backdrop { background: rgba(6, 10, 18, .62); }
+  .viewer-shell { height: 100%; display: flex; flex-direction: column; }
+  .viewer-header {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+  }
+  .viewer-header h2 { margin: 0; font-size: 16px; }
+  .viewer-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+  .viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .viewer-tabs { display: flex; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .viewer-tabs button.active { color: var(--accent); border-color: var(--accent); }
+  .viewer-panel { flex: 1; min-height: 0; padding: 14px 18px 18px; }
+  .viewer-panel iframe { width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 8px; background: white; }
+  .extracted-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .extracted-wrap .status { flex: 0 0 auto; }
+  pre.extracted {
+    flex: 1; min-height: 0; overflow: auto; margin: 8px 0 0; padding: 16px;
+    white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--code-bg); color: var(--text);
+  }
+
+  .tag {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  }
+  .tag.guideline { background: var(--code-bg); color: var(--muted); }
+  .tag.prior_answer { background: var(--ok-bg); color: var(--ok); }
+  .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  .tag.err { background: var(--err-bg); color: var(--err); }
+
+  .summary { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 16px; }
+  .summary div { font-size: 13px; color: var(--muted); }
+  .summary strong { display: block; font-size: 21px; color: var(--text); font-weight: 600; }
+
+  .answer { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; background: var(--panel); }
+  .answer.review { border-left: 3px solid var(--warn); }
+  .answer .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+  .answer .qtext { font-weight: 600; margin-bottom: 10px; }
+  .answer textarea {
+    width: 100%; min-height: 78px; resize: vertical;
+    font: inherit; padding: 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  .answer .rationale { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .answer details { margin-top: 10px; font-size: 13px; }
+  .answer details summary { cursor: pointer; color: var(--muted); }
+  .answer .ev { background: var(--code-bg); border-radius: 8px; padding: 10px; margin-top: 8px; white-space: pre-wrap; font-size: 13px; }
+  .answer .ev .src { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  [dir="rtl"] { text-align: right; }
+
+  .spinner {
+    display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-inline-end: 7px;
+    border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Assessment Answering Agent</h1>
+  <p>Upload your guidelines and previously answered assessments, then submit a new one to fill in — English or Arabic.</p>
+</header>
+
+<main>
+  <div class="grid">
+    <section class="card">
+      <h2>Guidelines</h2>
+      <p class="hint">Policies, standards and reference material that state your organisation's position.</p>
+      <label class="file" data-drop="guidelines">
+        <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
+        Drop PDF or DOCX files here, or click to choose
+        <span class="chosen" id="guidelinesChosen"></span>
+      </label>
+      <div class="row">
+        <button id="guidelinesBtn" disabled>Index guidelines</button>
+      </div>
+      <div class="status" id="guidelinesStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>Previously answered assessments</h2>
+      <p class="hint">Completed questionnaires. Question/answer pairs are extracted and reused as the strongest signal.</p>
+      <label class="file" data-drop="prior">
+        <input type="file" id="priorInput" multiple accept=".pdf,.docx" />
+        Drop PDF or DOCX files here, or click to choose
+        <span class="chosen" id="priorChosen"></span>
+      </label>
+      <div class="row">
+        <button id="priorBtn" disabled>Index previous answers</button>
+      </div>
+      <div class="status" id="priorStatus"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Knowledge base</h2>
+    <p class="hint" id="kbSummary">Loading…</p>
+    <ul class="sources" id="kbSources"></ul>
+    <div class="row">
+      <button class="ghost" id="kbRefresh">Refresh</button>
+      <button class="ghost" id="kbClear">Clear everything</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Documents & trial files</h2>
+    <p class="hint">Open original PDFs, inspect the exact extracted text, or load a bundled trial file into an uploader.</p>
+
+    <div class="library-heading">
+      <h3>Your uploaded documents</h3>
+      <span class="status" id="uploadedDocumentsSummary" style="margin:0"></span>
+    </div>
+    <div class="document-list" id="uploadedDocuments"></div>
+
+    <div class="library-heading">
+      <h3>Bundled trial documents</h3>
+      <select id="trialFilter" title="Filter trial documents">
+        <option value="">All trial documents</option>
+        <option value="guideline">Guidelines</option>
+        <option value="prior_assessment">Completed assessments</option>
+        <option value="new_assessment">Blank assessments to answer</option>
+      </select>
+    </div>
+    <div class="document-list" id="trialDocuments"></div>
+    <div class="status" id="trialStatus"></div>
+  </section>
+
+  <section class="card">
+    <h2>Answer a new assessment</h2>
+    <p class="hint">The agent extracts every question, retrieves supporting material, drafts an answer and reviews it for grounding.</p>
+    <label class="file" data-drop="assessment">
+      <input type="file" id="assessmentInput" accept=".pdf,.docx" />
+      Drop the assessment here, or click to choose
+      <span class="chosen" id="assessmentChosen"></span>
+    </label>
+    <div class="row">
+      <select id="languageSelect" title="Output language">
+        <option value="">Answer in each question's own language</option>
+        <option value="en">Force English</option>
+        <option value="ar">Force Arabic — العربية</option>
+      </select>
+      <button id="answerBtn" disabled>Answer assessment</button>
+    </div>
+    <div class="status" id="answerStatus"></div>
+  </section>
+
+  <section class="card" id="resultsCard" hidden>
+    <h2>Answers</h2>
+    <div class="summary" id="resultsSummary"></div>
+    <div class="row" style="margin-top:0;margin-bottom:14px">
+      <button class="ghost" id="exportJson">Download JSON</button>
+      <button class="ghost" id="exportCsv">Download CSV</button>
+      <span class="status" style="margin:0">Edits you make below are included in the download.</span>
+    </div>
+    <div id="results"></div>
+  </section>
+</main>
+
+<dialog id="documentViewer">
+  <div class="viewer-shell">
+    <div class="viewer-header">
+      <div>
+        <h2 id="viewerTitle">Document</h2>
+        <p id="viewerMeta"></p>
+      </div>
+      <div class="viewer-actions">
+        <a class="button-link" id="documentDownload" href="#" download>Download original</a>
+        <button class="ghost" id="viewerClose">Close</button>
+      </div>
+    </div>
+    <div class="viewer-tabs">
+      <button class="ghost active" id="originalTab">Document preview</button>
+      <button class="ghost" id="textTab">Extracted text</button>
+    </div>
+    <div class="viewer-panel" id="originalPanel">
+      <iframe id="documentFrame" title="Document preview"></iframe>
+    </div>
+    <div class="viewer-panel" id="textPanel" hidden>
+      <div class="extracted-wrap">
+        <div class="status" id="extractedStatus"></div>
+        <pre class="extracted" id="extractedText"></pre>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  let result = null;   // last AssessmentResult, kept so exports can pick up edits
+  let documents = [];
+  let currentDocument = null;
+
+  // --- helpers -------------------------------------------------------------
+
+  function setStatus(el, message, kind) {
+    el.className = "status" + (kind ? " " + kind : "");
+    el.innerHTML = kind === "busy" ? '<span class="spinner"></span>' + message : message;
+  }
+
+  async function request(url, options) {
+    const response = await fetch(url, options);
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = body && body.detail;
+      throw new Error(typeof detail === "string" ? detail : "Request failed (" + response.status + ")");
+    }
+    return body;
+  }
+
+  function isArabic(text) {
+    return /[؀-ۿ]/.test(text || "");
+  }
+
+  function download(filename, content, mime) {
+    const url = URL.createObjectURL(new Blob([content], { type: mime }));
+    const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function documentUrl(doc, action) {
+    return "/api/documents/" + encodeURIComponent(doc.origin) + "/" +
+      encodeURIComponent(doc.category) + "/" + encodeURIComponent(doc.name) + "/" + action;
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  // Wire a file input to its drop zone, chosen-file label and submit button.
+  function fileField(inputId, chosenId, buttonId) {
+    const input = $(inputId), chosen = $(chosenId), button = $(buttonId);
+    const zone = input.closest("label.file");
+
+    function refresh() {
+      const names = Array.from(input.files).map((f) => f.name);
+      chosen.textContent = names.join(", ");
+      button.disabled = names.length === 0;
+    }
+
+    input.addEventListener("change", refresh);
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("drag"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.classList.remove("drag");
+      input.files = e.dataTransfer.files;
+      refresh();
+    });
+
+    return input;
+  }
+
+  // --- ingestion -----------------------------------------------------------
+
+  function ingestHandler(input, endpoint, button, status, noun) {
+    return async function () {
+      const files = Array.from(input.files);
+      if (!files.length) return;
+
+      button.disabled = true;
+      setStatus(status, "Indexing " + files.length + " " + noun + "… extraction can take a minute per file.", "busy");
+
+      const form = new FormData();
+      files.forEach((file) => form.append("files", file));
+
+      try {
+        const results = await request(endpoint, { method: "POST", body: form });
+        const failed = results.filter((r) => r.error);
+        const chunks = results.reduce((total, r) => total + r.chunks_indexed, 0);
+        const pairs = results.reduce((total, r) => total + (r.qa_pairs_found || 0), 0);
+
+        let message = "Indexed " + (results.length - failed.length) + "/" + results.length +
+                      " file(s) — " + chunks + " chunks" + (pairs ? ", " + pairs + " Q/A pairs" : "") + ".";
+        if (failed.length) {
+          message += "<br>" + failed.map((r) => "✗ " + r.source_name + ": " + r.error).join("<br>");
+        }
+        setStatus(status, message, failed.length ? "error" : "ok");
+
+        input.value = "";
+        input.dispatchEvent(new Event("change"));
+        loadKnowledge();
+        loadDocuments();
+      } catch (error) {
+        setStatus(status, error.message, "error");
+        button.disabled = false;
+      }
+    };
+  }
+
+  // --- knowledge base ------------------------------------------------------
+
+  async function loadKnowledge() {
+    try {
+      const stats = await request("/api/knowledge");
+      $("kbSummary").textContent = stats.total_chunks
+        ? stats.sources.length + " file(s) · " + stats.guideline_chunks + " guideline chunks · " +
+          stats.prior_answer_chunks + " previous answers"
+        : "Nothing indexed yet. Upload guidelines or previous assessments above.";
+
+      $("kbSources").innerHTML = "";
+      stats.sources.forEach((source) => {
+        const item = document.createElement("li");
+
+        const tag = document.createElement("span");
+        tag.className = "tag " + source.source_type;
+        tag.textContent = source.source_type === "prior_answer" ? "answers" : "guideline";
+
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = source.name + " (" + source.chunks + ")";
+
+        const view = document.createElement("button");
+        view.className = "link view";
+        view.textContent = "view";
+        view.onclick = () => openDocument({
+          name: source.name,
+          title: source.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
+          origin: "uploaded",
+          category: "uploaded",
+          label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
+          extension: source.name.split(".").pop().toLowerCase(),
+          size_bytes: 0,
+        });
+
+        const remove = document.createElement("button");
+        remove.className = "link";
+        remove.textContent = "remove";
+        remove.onclick = async () => {
+          await request("/api/knowledge/sources/" + encodeURIComponent(source.name), { method: "DELETE" });
+          loadKnowledge();
+        };
+
+        item.append(tag, name, view, remove);
+        $("kbSources").append(item);
+      });
+    } catch (error) {
+      $("kbSummary").textContent = "Could not load the knowledge base: " + error.message;
+    }
+  }
+
+  // --- document library ---------------------------------------------------
+
+  function emptyLibraryMessage(container, message) {
+    container.innerHTML = "";
+    const empty = document.createElement("div");
+    empty.className = "status";
+    empty.textContent = message;
+    container.append(empty);
+  }
+
+  function documentCard(doc) {
+    const card = document.createElement("div");
+    card.className = "document-card";
+
+    const title = document.createElement("div");
+    title.className = "doc-title";
+    title.textContent = doc.title;
+
+    const name = document.createElement("div");
+    name.className = "doc-name";
+    name.textContent = doc.name;
+
+    const meta = document.createElement("div");
+    meta.className = "doc-meta";
+    meta.textContent = doc.label + " · " + doc.extension.toUpperCase() +
+      (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
+
+    const actions = document.createElement("div");
+    actions.className = "row";
+
+    const view = document.createElement("button");
+    view.className = "ghost";
+    view.textContent = "View document";
+    view.onclick = () => openDocument(doc);
+    actions.append(view);
+
+    if (doc.origin === "trial") {
+      const load = document.createElement("button");
+      load.textContent = doc.category === "guideline" ? "Try as guideline" :
+        doc.category === "prior_assessment" ? "Try as previous answers" : "Try assessment";
+      load.onclick = () => loadTrialDocument(doc, load);
+      actions.append(load);
+    }
+
+    card.append(title, name, meta, actions);
+    return card;
+  }
+
+  function renderDocuments() {
+    const uploaded = documents.filter((doc) => doc.origin === "uploaded");
+    const trialFilter = $("trialFilter").value;
+    const trials = documents.filter((doc) =>
+      doc.origin === "trial" && (!trialFilter || doc.category === trialFilter));
+
+    const uploadedContainer = $("uploadedDocuments");
+    uploadedContainer.innerHTML = "";
+    uploaded.forEach((doc) => uploadedContainer.append(documentCard(doc)));
+    if (!uploaded.length) {
+      emptyLibraryMessage(uploadedContainer, "No uploaded documents yet.");
+    }
+    $("uploadedDocumentsSummary").textContent = uploaded.length + " file(s)";
+
+    const trialContainer = $("trialDocuments");
+    trialContainer.innerHTML = "";
+    trials.forEach((doc) => trialContainer.append(documentCard(doc)));
+    if (!trials.length) {
+      emptyLibraryMessage(trialContainer, "No trial documents match this filter.");
+    }
+  }
+
+  async function loadDocuments() {
+    try {
+      const data = await request("/api/documents");
+      documents = data.documents;
+      renderDocuments();
+    } catch (error) {
+      emptyLibraryMessage($("uploadedDocuments"), "Could not load documents: " + error.message);
+      emptyLibraryMessage($("trialDocuments"), "Could not load trial documents.");
+    }
+  }
+
+  async function loadTrialDocument(doc, button) {
+    button.disabled = true;
+    setStatus($("trialStatus"), "Loading " + doc.name + "…", "busy");
+    try {
+      const response = await fetch(documentUrl(doc, "file"));
+      if (!response.ok) throw new Error("Could not load the trial document (" + response.status + ")");
+      const blob = await response.blob();
+      const file = new File([blob], doc.name, { type: blob.type });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+
+      const input = doc.category === "guideline" ? $("guidelinesInput") :
+        doc.category === "prior_assessment" ? $("priorInput") : $("assessmentInput");
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change"));
+
+      const target = input.closest("section.card");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setStatus($("trialStatus"), "Loaded " + doc.name + ". Use the highlighted uploader to continue.", "ok");
+    } catch (error) {
+      setStatus($("trialStatus"), error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function showViewerTab(tab) {
+    const original = tab === "original";
+    $("originalPanel").hidden = !original;
+    $("textPanel").hidden = original;
+    $("originalTab").classList.toggle("active", original);
+    $("textTab").classList.toggle("active", !original);
+  }
+
+  async function openDocument(doc) {
+    currentDocument = doc;
+    $("viewerTitle").textContent = doc.title || doc.name;
+    $("viewerMeta").textContent = doc.label + " · " + doc.name +
+      (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
+    $("documentDownload").href = documentUrl(doc, "file");
+    $("documentDownload").download = doc.name;
+    $("extractedText").textContent = "";
+    setStatus($("extractedStatus"), "Extracting text… the first view may take a minute.", "busy");
+
+    $("documentFrame").src = documentUrl(doc, "preview");
+    showViewerTab("original");
+
+    if (!$("documentViewer").open) $("documentViewer").showModal();
+
+    try {
+      const data = await request(documentUrl(doc, "text"));
+      if (currentDocument !== doc) return;
+      $("extractedText").textContent = data.text;
+      if (isArabic(data.text)) $("extractedText").dir = "rtl";
+      else $("extractedText").removeAttribute("dir");
+      setStatus($("extractedStatus"), data.characters.toLocaleString() + " extracted characters.", "ok");
+    } catch (error) {
+      if (currentDocument !== doc) return;
+      setStatus($("extractedStatus"), error.message, "error");
+    }
+  }
+
+  function closeViewer() {
+    currentDocument = null;
+    $("documentFrame").src = "about:blank";
+    $("documentViewer").close();
+  }
+
+  // --- answering -----------------------------------------------------------
+
+  function renderAnswer(item, index) {
+    const card = document.createElement("div");
+    card.className = "answer" + (item.needs_review ? " review" : "");
+
+    const confidence = Math.round(item.confidence * 100);
+    const level = item.needs_review ? (item.answer ? "warn" : "err") : "ok";
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML =
+      '<span class="tag ' + level + '">' + confidence + "% confidence</span>" +
+      (item.needs_review ? '<span class="tag warn">needs review</span>' : "") +
+      "<span>" + (item.question.id || index + 1) + "</span>" +
+      (item.question.section ? "<span>· " + item.question.section + "</span>" : "") +
+      "<span>· " + item.question.question_type.replace("_", " ") + "</span>" +
+      (item.attempts > 1 ? "<span>· " + item.attempts + " retrieval rounds</span>" : "");
+
+    const question = document.createElement("div");
+    question.className = "qtext";
+    question.textContent = item.question.text;
+    if (isArabic(item.question.text)) question.dir = "rtl";
+
+    const answer = document.createElement("textarea");
+    answer.value = item.answer;
+    answer.placeholder = "No answer was produced — see the note below.";
+    if (isArabic(item.answer)) answer.dir = "rtl";
+    // Edits are written straight back onto the result object the exports read.
+    answer.addEventListener("input", () => { result.answers[index].answer = answer.value; });
+
+    card.append(meta, question, answer);
+
+    if (item.rationale) {
+      const rationale = document.createElement("div");
+      rationale.className = "rationale";
+      rationale.textContent = item.rationale;
+      card.append(rationale);
+    }
+
+    if (item.evidence && item.evidence.length) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = item.evidence.length + " supporting source(s)";
+      details.append(summary);
+
+      item.evidence.forEach((evidence) => {
+        const block = document.createElement("div");
+        block.className = "ev";
+        const label = document.createElement("span");
+        label.className = "src";
+        label.textContent =
+          (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
+          " — " + evidence.source_name + " (score " + evidence.score + ")";
+        block.append(label, document.createTextNode(evidence.snippet));
+        if (isArabic(evidence.snippet)) block.dir = "rtl";
+        details.append(block);
+      });
+
+      card.append(details);
+    }
+
+    return card;
+  }
+
+  function renderResult(data) {
+    result = data;
+
+    const reviewCount = data.answers.filter((a) => a.needs_review).length;
+    $("resultsSummary").innerHTML =
+      "<div><strong>" + data.questions_found + "</strong>questions found</div>" +
+      "<div><strong>" + data.answers.length + "</strong>answered</div>" +
+      "<div><strong>" + reviewCount + "</strong>need review</div>" +
+      "<div><strong>" + (data.language === "ar" ? "العربية" : "English") + "</strong>language</div>";
+
+    const container = $("results");
+    container.innerHTML = "";
+    data.answers.forEach((item, index) => container.append(renderAnswer(item, index)));
+    $("resultsCard").hidden = false;
+    $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function submitAssessment() {
+    const input = $("assessmentInput");
+    if (!input.files.length) return;
+
+    $("answerBtn").disabled = true;
+    setStatus($("answerStatus"), "Extracting questions and answering. This can take several minutes for a long assessment.", "busy");
+
+    const form = new FormData();
+    form.append("file", input.files[0]);
+    if ($("languageSelect").value) form.append("language", $("languageSelect").value);
+
+    try {
+      const data = await request("/api/assessments/answer", { method: "POST", body: form });
+      setStatus($("answerStatus"), "Answered " + data.answers.length + " question(s).", "ok");
+      renderResult(data);
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    } finally {
+      $("answerBtn").disabled = false;
+      loadDocuments();
+    }
+  }
+
+  // --- exports -------------------------------------------------------------
+
+  function csvCell(value) {
+    return '"' + String(value == null ? "" : value).replace(/"/g, '""') + '"';
+  }
+
+  function exportCsv() {
+    const header = ["id", "section", "question", "answer", "confidence", "needs_review", "sources"];
+    const rows = result.answers.map((item) => [
+      item.question.id,
+      item.question.section || "",
+      item.question.text,
+      item.answer,
+      item.confidence,
+      item.needs_review,
+      (item.evidence || []).map((e) => e.source_name).join("; "),
+    ]);
+    // BOM so Excel opens Arabic as UTF-8 rather than mojibake.
+    const csv = "﻿" + [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    download(result.source_name + ".answers.csv", csv, "text/csv;charset=utf-8");
+  }
+
+  // --- wiring --------------------------------------------------------------
+
+  const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
+  const priorInput = fileField("priorInput", "priorChosen", "priorBtn");
+  fileField("assessmentInput", "assessmentChosen", "answerBtn");
+
+  $("guidelinesBtn").onclick = ingestHandler(
+    guidelinesInput, "/api/knowledge/guidelines", $("guidelinesBtn"), $("guidelinesStatus"), "guideline(s)");
+  $("priorBtn").onclick = ingestHandler(
+    priorInput, "/api/knowledge/prior-assessments", $("priorBtn"), $("priorStatus"), "assessment(s)");
+
+  $("answerBtn").onclick = submitAssessment;
+  $("trialFilter").onchange = renderDocuments;
+  $("kbRefresh").onclick = loadKnowledge;
+  $("kbClear").onclick = async () => {
+    if (!confirm("Delete every indexed guideline and previous answer?")) return;
+    await request("/api/knowledge", { method: "DELETE" });
+    loadKnowledge();
+  };
+
+  $("exportJson").onclick = () =>
+    download(result.source_name + ".answers.json", JSON.stringify(result, null, 2), "application/json");
+  $("exportCsv").onclick = exportCsv;
+
+  $("originalTab").onclick = () => showViewerTab("original");
+  $("textTab").onclick = () => showViewerTab("text");
+  $("viewerClose").onclick = closeViewer;
+  $("documentViewer").addEventListener("click", (event) => {
+    if (event.target === $("documentViewer")) closeViewer();
+  });
+  $("documentViewer").addEventListener("close", () => {
+    currentDocument = null;
+    $("documentFrame").src = "about:blank";
+  });
+
+  loadKnowledge();
+  loadDocuments();
+})();
+</script>
+</body>
+</html>

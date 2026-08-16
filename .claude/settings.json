@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip3 --version)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import httpx; print\\(httpx.__version__\\)\")",
+      "Bash(sed -i '' 's|GROQ_CHAT_MODEL=openai/gpt-oss-120b|GROQ_CHAT_MODEL=minimaxai/minimax-m2.7|' .env .env.example)",
+      "Bash(sed -i '' 's|`openai/gpt-oss-120b`|`minimaxai/minimax-m2.7`|' README.md)",
+      "Bash(python3 -)",
+      "Bash(.venv/bin/python -c \"import docx, reportlab; print\\('docx ok, reportlab ok'\\)\")",
+      "Read(//usr/share/fonts/truetype/**)",
+      "Bash(.venv/bin/python -c \"import docx; print\\('python-docx', docx.__version__ if hasattr\\(docx,'__version__'\\) else 'ok'\\)\")",
+      "Bash(.venv/bin/python -m demo_data.smoke)",
+      "Bash(.venv/bin/python -c ' *)"
+    ]
+  }
+}

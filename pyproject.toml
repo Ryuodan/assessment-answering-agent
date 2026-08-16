@@ -1,0 +1,54 @@
+[project]
+name = "assessment-answer"
+version = "0.1.0"
+description = "Agentic assistant that fills in assessments from guidelines and previously answered assessments (English + Arabic)."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "langchain>=1.1.0,<2.0.0",
+    "langchain-core>=1.2.0,<2.0.0",
+    "langchain-groq>=1.0.0,<2.0.0",
+    "langchain-openai>=1.1.0,<2.0.0",
+    "langchain-chroma>=1.0.0,<2.0.0",
+    "langchain-text-splitters>=1.0.0,<2.0.0",
+    "langgraph>=1.0.5,<2.0.0",
+    "chromadb>=1.0.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    "pdfplumber>=0.11",
+    "python-docx>=1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff",
+]
+
+[project.scripts]
+assessment-answer = "src.cli:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Live tests are excluded by default; `pytest -m live_ai` overrides this.
+addopts = "-ra -m 'not live_ai'"
+asyncio_mode = "auto"
+markers = [
+    "live_ai: opt-in tests that call Groq or the embedding endpoint",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F401", "F841"]
