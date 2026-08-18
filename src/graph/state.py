@@ -13,10 +13,58 @@ from src.models import (
     AnsweredQuestion,
     AnswerReview,
     DraftedAnswer,
-    Evidence,
     Language,
     Question,
+    Evidence, 
+    SourceType
 )
+
+
+
+def merge_evidence(left: list[Evidence], right: list[Evidence]) -> list[Evidence]:
+    """Union of two retrieval rounds, de-duplicated, best score wins.
+
+    Retrieval rounds are additive rather than replacing: a refined query is meant
+    to find material the first query missed, not to discard what it found.
+    """
+    merged: list[Evidence] = list(left or [])
+    index = {(item.source_name, item.chunk): position for position, item in enumerate(merged)}
+
+    for item in right or []:
+        key = (item.source_name, item.chunk)
+        position = index.get(key)
+        if position is None:
+            index[key] = len(merged)
+            merged.append(item)
+        elif item.score > merged[position].score:
+            merged[position] = item
+
+    return order_evidence(merged)
+
+
+def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
+    """Prior answers first, then by unit, contiguous within a unit.
+
+    Units are ranked by their best-scoring member so a series is not scattered
+    through the prompt; parts stay in document order so the drafter reads
+    7.2.1 before 7.2.2.
+    """
+    best: dict[tuple, float] = {}
+    for item in evidence:
+        group = (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+        best[group] = max(best.get(group, 0.0), item.score)
+
+    def sort_key(item: Evidence):
+        group = (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+        return (
+            item.source_type is not SourceType.PRIOR_ANSWER,
+            -best[group],
+            item.source_name,
+            item.part,
+            item.chunk,
+        )
+
+    return sorted(evidence, key=sort_key)
 
 
 class QuestionState(TypedDict, total=False):
@@ -32,7 +80,7 @@ class QuestionState(TypedDict, total=False):
     attempt: int
     """Retrieval rounds completed. Bounded by settings.max_answer_attempts."""
 
-    evidence: list[Evidence]
+    evidence: Annotated[list[Evidence], merge_evidence]
     draft: DraftedAnswer | None
     review: AnswerReview | None
     answered: AnsweredQuestion | None

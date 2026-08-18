@@ -70,8 +70,10 @@ class Settings(BaseSettings):
     max_concurrent_questions: int = Field(default=4, ge=1, le=32)
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
-    chunk_size: int = 1200
-    chunk_overlap: int = 150
+    chunk_size: int = 1800
+    chunk_overlap: int = 150          # retained for the prose fallback only
+    max_expanded_chars: int = 6000    # cap on parent-unit expansion per hit
+    max_evidence_chunks: int = 14     # cap on accumulated evidence per question
     extraction_window: int = 8000
 
     log_level: str = "INFO"

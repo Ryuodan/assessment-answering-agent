@@ -68,6 +68,7 @@ How to answer:
 - Answer in the format the question asks for. For a yes/no question, open with the verdict and then justify it in one or two sentences. For a choice question, use one of the listed options exactly as written. For free text, write a self-contained answer of two to five sentences.
 - Write the answer in {language_name}, and only in {language_name}, whatever language the sources are in.
 - When the sources do not cover the question, say so plainly in {language_name} instead of guessing, and set confidence at or below 0.3.
+- Each source header carries its clause locator, e.g. "MDS-CS-STD-003 §7.2.1". When you state a value that comes from one clause, name that clause in the answer prose exactly as the header gives it. Do not invent a clause number that is not in a header.
 
 Set `confidence` to how well the sources support the answer: above 0.8 when a previous answer or guideline covers it directly, 0.4-0.7 when you had to infer from adjacent material, at or below 0.3 when the sources do not really cover it.
 
@@ -128,17 +129,18 @@ def format_question_block(
     return "\n".join(lines)
 
 
-def format_sources_block(sources: list[tuple[str, str, str]]) -> str:
-    """Render retrieved evidence as a numbered, labelled block.
-
-    Each source is a `(source_type, source_name, snippet)` triple. The name is
-    repeated in the header because the drafter cites sources by name.
-    """
+def format_sources_block(sources: list["Evidence"]) -> str:
+    """Render retrieved evidence as a numbered, locator-labelled block."""
     if not sources:
         return "(no relevant sources were found in the knowledge base)"
 
     blocks = []
-    for index, (source_type, source_name, snippet) in enumerate(sources, start=1):
-        label = "PREVIOUS ANSWER" if source_type == "prior_answer" else "GUIDELINE"
-        blocks.append(f"[{index}] {label} — {source_name}\n{snippet}")
+    for index, item in enumerate(sources, start=1):
+        label = "PREVIOUS ANSWER" if item.source_type.value == "prior_answer" else "GUIDELINE"
+        header = f"[{index}] {label} \u2014 {item.locator}"
+        if item.heading:
+            header += f"  ({item.heading})"
+        if item.is_fragment:
+            header += f"  [part {item.part} of {item.parts}]"
+        blocks.append(f"{header}\n{item.snippet}")
     return "\n\n".join(blocks)

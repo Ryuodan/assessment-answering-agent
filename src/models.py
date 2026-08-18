@@ -57,6 +57,43 @@ class Evidence(BaseModel):
     snippet: str
     score: float = 0.0
 
+    # Locator, parsed at ingest. Carried so answers can cite a clause.
+    doc_id: str = ""
+    clause: str = ""
+    heading: str = ""
+    page: int = -1
+    chunk: int = -1
+
+    # Unit bookkeeping, used by expansion and by coverage-aware confidence.
+    kind: str = "prose"
+    unit_id: str = ""
+    part: int = 1
+    parts: int = 1
+
+    # Prior-answer provenance (Step 6).
+    questionnaire: str = ""
+    answered_date: str = ""
+
+    @property
+    def locator(self) -> str:
+        """Human-readable citation, e.g. 'MDS-CS-STD-003 §7.2.1'."""
+        if self.source_type is SourceType.PRIOR_ANSWER:
+            parts = [self.questionnaire or self.source_name]
+            if self.answered_date:
+                parts.append(f"({self.answered_date})")
+            return " ".join(parts)
+        base = self.doc_id or self.source_name
+        if self.clause:
+            return f"{base} \u00a7{self.clause}"
+        if self.page >= 0:
+            return f"{base} p.{self.page}"
+        return base
+
+    @property
+    def is_fragment(self) -> bool:
+        """True when this chunk is one part of a unit that was split."""
+        return self.parts > 1
+
 
 class AnsweredQuestion(BaseModel):
     """A question plus the agent's answer and its supporting evidence."""
@@ -68,6 +105,7 @@ class AnsweredQuestion(BaseModel):
     needs_review: bool = True
     evidence: list[Evidence] = Field(default_factory=list)
     attempts: int = 1
+    citations: list[str] = Field(default_factory=list, description="Clause-level locators for the sources actually used")
 
 
 class AssessmentResult(BaseModel):

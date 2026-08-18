@@ -45,5 +45,6 @@ def get_embeddings() -> Embeddings:
         api_key=SecretStr(settings.embedding_api_key),
         check_embedding_ctx_length=False,
         tiktoken_enabled=False,
+        chunk_size=64,  # To fit API max http chunk size (no affect on RAG)
         model_kwargs={"encoding_format": "float"},
     )

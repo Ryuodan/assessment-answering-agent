@@ -44,7 +44,7 @@ def _question_block(state: QuestionState) -> str:
 
 
 def _sources_block(evidence: list[Evidence]) -> str:
-    return format_sources_block([(e.source_type.value, e.source_name, e.snippet) for e in evidence])
+    return format_sources_block(evidence[: settings.max_evidence_chunks])
 
 
 # ---------------------------------------------------------------------------
@@ -85,8 +85,10 @@ async def retrieve(state: QuestionState) -> dict:
     )
 
     attempt = state.get("attempt", 0) + 1
-    logger.debug("Question %s attempt %d: %d prior, %d guideline hits",
-                 state["question"].id, attempt, len(prior_answers), len(guidelines))
+    logger.debug(
+        "Question %s attempt %d: %d prior, %d guideline hits",
+        state["question"].id, attempt, len(prior_answers), len(guidelines),
+    )
     return {"evidence": prior_answers + guidelines, "attempt": attempt}
 
 
@@ -143,6 +145,10 @@ async def finalize(state: QuestionState) -> dict:
     retrieved = state.get("evidence", [])
     cited = [retrieved[n - 1] for n in dict.fromkeys(drafted.used_source_ids) if 1 <= n <= len(retrieved)]
 
+    # Clause-level locators for the sources that survived. Order-preserving and
+    # de-duplicated, because several chunks of one clause collapse to one citation.
+    citations = list(dict.fromkeys(item.locator for item in cited))
+
     # Two independent confidence estimates; trust the lower one.
     confidence = min(drafted.confidence, verdict.confidence)
 
@@ -153,6 +159,7 @@ async def finalize(state: QuestionState) -> dict:
         confidence=confidence,
         needs_review=not verdict.grounded or confidence < settings.review_confidence_threshold,
         evidence=cited,
+        citations=citations,
         attempts=state.get("attempt", 1),
     )
     return {"answered": answered}

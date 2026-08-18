@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 from typing import Callable
 
@@ -128,6 +129,17 @@ def _load_pdf(path: Path) -> str:
     return "\n".join(parts)
 
 
+_HEADING_STYLE = re.compile(r"^Heading\s+([1-6])$", re.IGNORECASE)
+_LIST_STYLE = re.compile(r"list\s*(number|bullet|paragraph)", re.IGNORECASE)
+_LITERAL_NUMBER = re.compile(r"^\s*(\d+(?:[.\u066b]\d+){0,5})[.)\-]?\s+\S")
+
+
+def _has_numbering(paragraph) -> bool:
+    """True when Word generates this paragraph's list number from the numbering XML."""
+    p_pr = paragraph._p.pPr
+    return p_pr is not None and p_pr.numPr is not None
+
+
 def _load_docx(path: Path) -> str:
     from docx import Document
     from docx.table import Table
@@ -136,15 +148,33 @@ def _load_docx(path: Path) -> str:
     document = Document(str(path))
     parts: list[str] = []
 
-    # `document.paragraphs` and `document.tables` are separate sequences that
-    # lose interleaving, so the body XML is walked directly to keep reading order.
+    # Walk the body XML directly: document.paragraphs and document.tables are
+    # separate sequences and lose the interleaving that reading order depends on.
     for child in document.element.body.iterchildren():
         tag = child.tag.split("}")[-1]
 
         if tag == "p":
-            text = Paragraph(child, document).text.strip()
-            if text:
-                parts.append(text)
+            paragraph = Paragraph(child, document)
+            text = paragraph.text.strip()
+            if not text:
+                continue
+
+            style_name = paragraph.style.name if paragraph.style is not None else ""
+
+            heading = _HEADING_STYLE.match(style_name.strip())
+            if heading:
+                parts.append(f"{'#' * int(heading.group(1))} {text}")
+                continue
+
+            if _LIST_STYLE.search(style_name) or _has_numbering(paragraph):
+                # Word keeps a numbered list's number in the numbering XML, so
+                # paragraph.text arrives unnumbered. Keep an author-typed number
+                # as a real clause id; otherwise mark it a bullet rather than
+                # inventing a number that would poison citations.
+                parts.append(text if _LITERAL_NUMBER.match(text) else f"- {text}")
+                continue
+
+            parts.append(text)
 
         elif tag == "tbl":
             rows = [_format_row([cell.text for cell in row.cells]) for row in Table(child, document).rows]
@@ -152,7 +182,7 @@ def _load_docx(path: Path) -> str:
             if rendered:
                 parts.append(f"[table]\n{rendered}\n[/table]")
 
-    return "\n".join(parts)
+    return "\n\n".join(parts)
 
 
 _LOADERS: dict[str, Callable[[Path], str]] = {

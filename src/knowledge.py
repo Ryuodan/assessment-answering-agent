@@ -18,27 +18,14 @@ from functools import lru_cache
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import settings
 from src.embeddings import get_embeddings
 from src.models import Evidence, ExtractedQAPair, SourceType
+from src.chunking import chunk_document
 
 logger = logging.getLogger(__name__)
 
-# Arabic uses the same paragraph and sentence structure as the defaults, plus
-# the Arabic comma and full stop, which the default separators do not cover.
-_SEPARATORS = ["\n\n", "\n", "۔", "。", ". ", "، ", ", ", " ", ""]
-
-
-@lru_cache(maxsize=1)
-def _splitter() -> RecursiveCharacterTextSplitter:
-    return RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
-        separators=_SEPARATORS,
-        keep_separator=True,
-    )
 
 
 class KnowledgeStore:
@@ -56,17 +43,17 @@ class KnowledgeStore:
 
     def add_guideline(self, source_name: str, text: str) -> int:
         """Chunk and index a guideline document. Replaces any earlier upload of the same name."""
-        chunks = _splitter().split_text(text)
+        chunks = chunk_document(text, source_name=source_name, chunk_size=settings.chunk_size)
         documents = [
             Document(
-                page_content=chunk,
+                page_content=chunk.text,
                 metadata={
                     "source_type": SourceType.GUIDELINE.value,
                     "source_name": source_name,
-                    "chunk": index,
+                    **chunk.metadata,
                 },
             )
-            for index, chunk in enumerate(chunks)
+            for chunk in chunks
         ]
         return self._replace_source(source_name, documents)
 
@@ -115,23 +102,88 @@ class KnowledgeStore:
 
     # -- reading ------------------------------------------------------------
 
-    async def search(self, query: str, source_type: SourceType, k: int) -> list[Evidence]:
-        """Return the `k` closest chunks of one type, best first."""
+    def _evidence(self, document: Document, score: float, source_type: SourceType) -> Evidence:
+        meta = document.metadata
+        return Evidence(
+            source_type=source_type,
+            source_name=meta.get("source_name", "unknown"),
+            snippet=document.page_content,
+            score=round(score, 4),
+            doc_id=meta.get("doc_id", ""),
+            clause=meta.get("clause", ""),
+            heading=meta.get("heading", ""),
+            page=int(meta.get("page", -1)),
+            chunk=int(meta.get("chunk", -1)),
+            kind=meta.get("kind", "prose"),
+            unit_id=meta.get("unit_id", ""),
+            part=int(meta.get("part", 1)),
+            parts=int(meta.get("parts", 1)),
+            questionnaire=meta.get("questionnaire", ""),
+            answered_date=meta.get("answered_date", ""),
+        )
+
+    async def search(
+        self, query: str, source_type: SourceType, k: int, *, expand: bool = True
+    ) -> list[Evidence]:
+        """Return the `k` closest chunks of one type, best first.
+
+        A hit inside a split table or clause series is expanded to the whole unit
+        before returning. Retrieval ranks fragments, but the drafter must see the
+        complete series or it will present a fragment as the whole set.
+        """
         if k <= 0 or not query.strip():
             return []
 
         hits = await self._store.asimilarity_search_with_relevance_scores(
             query, k=k, filter={"source_type": source_type.value}
         )
-        return [
-            Evidence(
-                source_type=source_type,
-                source_name=document.metadata.get("source_name", "unknown"),
-                snippet=document.page_content,
-                score=round(score, 4),
+        evidence = [self._evidence(document, score, source_type) for document, score in hits]
+        return self._expand_units(evidence) if expand else evidence
+
+    def _expand_units(self, evidence: list[Evidence]) -> list[Evidence]:
+        """Pull in the sibling parts of any split unit a hit landed in."""
+        seen = {(item.source_name, item.chunk) for item in evidence}
+        expanded: list[Evidence] = []
+
+        for item in evidence:
+            expanded.append(item)
+            if not item.unit_id or item.parts <= 1:
+                continue
+
+            records = self._store.get(
+                where={
+                    "$and": [
+                        {"source_name": item.source_name},
+                        {"unit_id": item.unit_id},
+                    ]
+                },
+                include=["documents", "metadatas"],
             )
-            for document, score in hits
-        ]
+            siblings = sorted(
+                zip(records.get("documents") or [], records.get("metadatas") or []),
+                key=lambda pair: int(pair[1].get("part", 1)),
+            )
+
+            budget = settings.max_expanded_chars
+            for text, meta in siblings:
+                key = (meta.get("source_name"), int(meta.get("chunk", -1)))
+                if key in seen:
+                    continue
+                if budget - len(text) < 0:
+                    logger.debug("Expansion budget exhausted for unit %s", item.unit_id)
+                    break
+                budget -= len(text)
+                seen.add(key)
+                sibling = self._evidence(
+                    Document(page_content=text, metadata=meta),
+                    # Inherit the triggering hit's score so the completed unit
+                    # ranks together rather than sinking to the bottom.
+                    item.score,
+                    item.source_type,
+                )
+                expanded.append(sibling)
+
+        return expanded
 
     def stats(self) -> dict:
         """Counts per source type and the list of indexed file names, for the UI."""
