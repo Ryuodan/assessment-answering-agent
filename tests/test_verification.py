@@ -1,0 +1,251 @@
+"""Tests for citation support checking and coverage-aware confidence."""
+
+from __future__ import annotations
+
+import pytest
+
+from src.models import Evidence, SourceType
+from src.verification import (
+    assess,
+    incomplete_units,
+    mentioned_clauses,
+    unsupported_clauses,
+)
+
+
+def ev(**overrides) -> Evidence:
+    base = dict(
+        source_type=SourceType.GUIDELINE,
+        source_name="std.pdf",
+        snippet="body",
+        doc_id="MDS-CS-STD-006",
+    )
+    base.update(overrides)
+    return Evidence(**base)
+
+
+# --- clause mentions -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Per MDS-CS-STD-006 \u00a75.5, releases require all gates.", ["5.5"]),
+        ("See \u00a7 7.2.1 and \u00a710.", ["7.2.1", "10"]),
+        ("Covered by \u00a75.1\u20135.6 of the standard.", ["5.1", "5.6"]),
+        ("No clause identifiers here at all.", []),
+        ("Section 5.5 without the sign is not a claim.", []),
+    ],
+)
+def test_mentioned_clauses(text, expected):
+    assert mentioned_clauses(text) == expected
+
+
+def test_clause_inside_the_span_is_supported():
+    cited = [ev(clause_start="5.1", clause_end="5.6")]
+    assert unsupported_clauses("Per \u00a75.5 the gates apply.", cited) == []
+
+
+def test_clause_outside_the_span_is_flagged():
+    """The Q43 failure: prose cites 5.5 while the evidence stops at 5.4."""
+    cited = [ev(clause_start="5.1", clause_end="5.4")]
+    assert unsupported_clauses("Per \u00a75.5 the gates apply.", cited) == ["5.5"]
+
+
+def test_clause_supported_by_any_one_of_several_sources():
+    cited = [ev(clause_start="5.1", clause_end="5.4"), ev(clause_start="8.1", clause_end="8.9")]
+    assert unsupported_clauses("See \u00a75.2 and \u00a78.3.", cited) == []
+
+
+def test_all_clauses_unsupported_when_nothing_was_cited():
+    assert unsupported_clauses("Per \u00a75.5.", []) == ["5.5"]
+
+
+def test_single_clause_chunk_supports_only_itself():
+    cited = [ev(clause_start="7.2", clause_end="7.2")]
+    assert unsupported_clauses("See \u00a77.2.", cited) == []
+    assert unsupported_clauses("See \u00a77.3.", cited) == ["7.3"]
+
+
+def test_clause_numbered_inside_the_body_is_supported():
+    """The 95%-false-positive case: the label and the body number differently.
+
+    A chunk headed "5.1.7 Data Deletion" whose bullets are 5.2.1 to 5.2.4 does
+    cover 5.2.1. Matching only the chunk's own label reported all four as
+    fabricated and capped confidence on 22 of 28 answers.
+    """
+    cited = [
+        ev(
+            clause_start="5.1.7",
+            clause_end="5.1.7",
+            snippet=(
+                "## 5.1.7 Data Deletion:\n"
+                "- 5.2.1. T2 will delete all customer data within 90 days of termination.\n"
+                "- 5.2.4. Deletion covers backups, archives and disaster recovery systems."
+            ),
+        )
+    ]
+    assert unsupported_clauses("Deleted within 90 days (§5.2.1), backups included (§5.2.4).", cited) == []
+
+
+def test_body_match_does_not_accept_a_neighbouring_number():
+    """A mention of 5.2.1 must not be satisfied by 15.2.1 or 5.2.10 in the text."""
+    cited = [ev(clause_start="", clause_end="", snippet="See 15.2.1 and 5.2.10 for detail.")]
+    assert unsupported_clauses("Per §5.2.1 the data is deleted.", cited) == ["5.2.1"]
+
+
+def test_body_match_tolerates_a_trailing_sentence_period():
+    cited = [ev(clause_start="", clause_end="", snippet="- 5.2.1. Data is deleted within 90 days.")]
+    assert unsupported_clauses("Per §5.2.1 the data is deleted.", cited) == []
+
+
+# --- unit completeness -----------------------------------------------------
+
+
+def test_all_parts_present_is_complete():
+    cited = [ev(unit_id="u1", part=n, parts=3) for n in (1, 2, 3)]
+    assert incomplete_units(cited) == []
+
+
+def test_missing_part_is_detected():
+    cited = [ev(unit_id="u1", part=1, parts=3), ev(unit_id="u1", part=2, parts=3)]
+    assert incomplete_units(cited) == ["u1"]
+
+
+def test_unsplit_units_are_never_incomplete():
+    assert incomplete_units([ev(unit_id="u1", part=1, parts=1)]) == []
+
+
+def test_evidence_without_a_unit_id_is_ignored():
+    assert incomplete_units([ev(part=1, parts=4)]) == []
+
+
+def test_several_units_reported_independently():
+    cited = [
+        ev(unit_id="u1", part=1, parts=2),
+        ev(unit_id="u2", part=1, parts=2),
+        ev(unit_id="u2", part=2, parts=2),
+    ]
+    assert incomplete_units(cited) == ["u1"]
+
+
+# --- assess ----------------------------------------------------------------
+
+
+def clean(**kwargs):
+    defaults = dict(grounded=True, review_threshold=0.6, incomplete_cap=0.5)
+    defaults.update(kwargs)
+    return defaults
+
+
+def test_a_clean_answer_passes_untouched():
+    cited = [ev(clause_start="7.2", clause_end="7.4", unit_id="u1", part=1, parts=1)]
+    confidence, review, reasons = assess("Per \u00a77.3.", cited, 0.9, **clean())
+    assert (confidence, review, reasons) == (0.9, False, [])
+
+
+def test_unsupported_citation_caps_confidence_and_forces_review():
+    """The dangerous case: a wrong answer wearing a precise citation."""
+    cited = [ev(clause_start="5.1", clause_end="5.4")]
+    confidence, review, reasons = assess("Per \u00a75.5.", cited, 0.85, **clean())
+    assert confidence == 0.5 and review is True
+    assert "5.5" in reasons[0]
+
+
+def test_partial_series_caps_confidence_and_forces_review():
+    cited = [ev(unit_id="u1", part=1, parts=4, clause_start="7.2", clause_end="7.2.3")]
+    confidence, review, reasons = assess("The conditions are three.", cited, 0.85, **clean())
+    assert confidence == 0.5 and review is True
+    assert "incomplete" in reasons[0]
+
+
+def test_ungrounded_always_needs_review():
+    _, review, reasons = assess("text", [ev(clause_start="1")], 0.95, **clean(grounded=False))
+    assert review is True and reasons
+
+
+def test_threshold_is_inclusive():
+    """An answer at exactly 0.60 was shipping unflagged on a strict comparison."""
+    cited = [ev(clause_start="7.2", clause_end="7.2")]
+    _, review, _ = assess("no clause claims", cited, 0.60, **clean())
+    assert review is True
+
+
+def test_just_above_threshold_passes():
+    cited = [ev(clause_start="7.2", clause_end="7.2")]
+    _, review, _ = assess("no clause claims", cited, 0.61, **clean())
+    assert review is False
+
+
+def test_confidence_is_never_raised():
+    cited = [ev(clause_start="5.1", clause_end="5.6")]
+    confidence, _, _ = assess("Per \u00a75.2.", cited, 0.3, **clean())
+    assert confidence == 0.3
+
+
+def test_reasons_accumulate():
+    cited = [ev(clause_start="5.1", clause_end="5.4", unit_id="u1", part=1, parts=3)]
+    _, _, reasons = assess("Per \u00a75.9.", cited, 0.9, **clean(grounded=False))
+    assert len(reasons) == 3
+
+# --- completeness, judged on cited x retrieved -----------------------------
+
+
+def _part(unit: str, part: int, parts: int, chunk: int = 0) -> Evidence:
+    return Evidence(
+        source_type=SourceType.GUIDELINE,
+        source_name="std.pdf",
+        snippet=f"{unit} part {part}",
+        unit_id=unit,
+        part=part,
+        parts=parts,
+        chunk=chunk,
+    )
+
+
+def test_citing_one_part_of_a_fully_retrieved_unit_is_not_flagged():
+    """The drafter read all four parts; referencing one is not a gap."""
+    retrieved = [_part("u1", n, 4, chunk=n) for n in (1, 2, 3, 4)]
+    assert incomplete_units([retrieved[0]], retrieved) == []
+
+
+def test_citing_a_part_whose_siblings_were_never_retrieved_is_flagged():
+    retrieved = [_part("u1", 2, 4, chunk=2)]
+    assert incomplete_units(retrieved, retrieved) == ["u1"]
+
+
+def test_an_unused_partial_unit_does_not_flag_the_answer():
+    """The failure that made the queue useless: 34 of 42 answers flagged."""
+    used = _part("u1", 1, 1, chunk=1)
+    unused_partial = _part("u2", 3, 5, chunk=9)
+
+    assert incomplete_units([used], [used, unused_partial]) == []
+
+
+def test_an_unsplit_unit_is_never_flagged():
+    whole = _part("u1", 1, 1)
+    assert incomplete_units([whole], [whole]) == []
+
+
+def test_completeness_falls_back_to_cited_when_nothing_retrieved_is_given():
+    cited = [_part("u1", 2, 3, chunk=2)]
+    assert incomplete_units(cited) == ["u1"]
+
+
+def test_assess_does_not_cap_confidence_for_an_unused_partial_unit():
+    used = _part("u1", 1, 1, chunk=1)
+    unused_partial = _part("u2", 3, 5, chunk=9)
+
+    confidence, needs_review, reasons = assess(
+        "A grounded answer with no clause citations.",
+        [used],
+        0.9,
+        retrieved=[used, unused_partial],
+        grounded=True,
+        review_threshold=0.6,
+        incomplete_cap=0.5,
+    )
+
+    assert confidence == 0.9
+    assert needs_review is False
+    assert reasons == []

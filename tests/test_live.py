@@ -28,7 +28,28 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(scope="module")
-async def populated_store():
+def isolated_knowledge_base(tmp_path_factory):
+    """Point the store at a throwaway Chroma directory for the whole module.
+
+    These tests call `reset()`, and `get_store()` is a process-wide singleton
+    over whatever `settings.chroma_dir` says. Without this fixture, running
+    `pytest -m live_ai` on a machine with a populated knowledge base deletes
+    it — the indexed corpus is hours of work and there is no undo.
+    """
+    directory = tmp_path_factory.mktemp("chroma_live")
+    original = (settings.chroma_dir, settings.collection_name)
+    settings.chroma_dir = directory
+    settings.collection_name = "assessment_knowledge_test"
+    get_store.cache_clear()
+    try:
+        yield
+    finally:
+        settings.chroma_dir, settings.collection_name = original
+        get_store.cache_clear()
+
+
+@pytest.fixture(scope="module")
+async def populated_store(isolated_knowledge_base):
     """A knowledge base holding the fixture guideline and prior assessment."""
     store = get_store()
     store.reset()

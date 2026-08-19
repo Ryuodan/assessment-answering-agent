@@ -10,7 +10,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.chunking import build_units, chunk_document, parent_clause, parse_blocks, strip_bidi
+from src.chunking import (
+    build_units,
+    chunk_document,
+    clause_range,
+    match_clause,
+    parent_clause,
+    parse_blocks,
+    strip_bidi,
+)
 
 SERIES_ITEMS = [f"7.2.{n}" for n in range(1, 13)]
 TABLE_ROWS = ["Critical", "High", "Medium", "Low"]
@@ -96,11 +104,12 @@ def test_whole_series_stays_in_one_chunk_at_default_size(series_doc):
     assert series[0].metadata["parts"] == 1
 
 
-def test_table_is_never_merged_with_surrounding_prose(series_doc):
-    chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=4000)
-    tables = [chunk for chunk in chunks if chunk.metadata["kind"] == "table"]
-    assert len(tables) == 1
-    assert "3072 bits" not in tables[0].text, "cryptography prose leaked into the table chunk"
+def test_table_rows_are_never_separated_from_their_header(series_doc):
+    """Tables now sit inside their section, but a header must reach every row."""
+    chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=400)
+    with_rows = [c for c in chunks if "| Critical |" in c.text or "| Low |" in c.text]
+    assert with_rows
+    assert all("Severity" in chunk.text for chunk in with_rows)
 
 
 # --- split behaviour -------------------------------------------------------
@@ -125,6 +134,13 @@ def test_split_table_repeats_the_header_on_every_part():
     assert all(f"Row{n}" in joined for n in range(1, 30))
 
 
+def test_every_chunk_carries_a_unit_id(series_doc):
+    """v2 assigns unit_id to every unit, not only split ones, so expansion works."""
+    for size in (400, 1800):
+        chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=size)
+        assert all(chunk.metadata["unit_id"] for chunk in chunks)
+
+
 def test_split_parts_share_a_unit_id_and_are_numbered(series_doc):
     chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=400)
     parts = [c for c in chunks if c.metadata["unit_id"]]
@@ -138,10 +154,9 @@ def test_split_parts_share_a_unit_id_and_are_numbered(series_doc):
         assert all(part.metadata["parts"] == len(group) for part in group)
 
 
-def test_unsplit_chunks_have_no_unit_id(series_doc):
-    """`unit_id` is the expansion trigger, so a whole unit must not set it."""
-    chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=1800)
-    assert all(chunk.metadata["unit_id"] == "" for chunk in chunks)
+def test_a_unit_that_fits_is_a_single_part(series_doc):
+    """`parts == 1` is the signal that nothing was split, not an absent unit_id."""
+    chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=4000)
     assert all(chunk.metadata["parts"] == 1 for chunk in chunks)
 
 
@@ -152,9 +167,21 @@ def test_metadata_carries_locator_fields(series_doc):
     chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=1800)
     series = next(c for c in chunks if c.metadata["kind"] == "series")
     assert series.metadata["doc_id"] == "MDS-CS-STD-003"
-    assert series.metadata["clause"] == "7.2.1"
-    assert series.metadata["parent_clause"] == "7.2"
-    assert "7.2 SOC alert conditions" in series.metadata["heading"]
+    assert series.metadata["clause_start"] == "7"
+    assert series.metadata["clause_end"] == "8"
+    assert series.metadata["item_count"] >= 12
+    assert "7 Monitoring" in series.metadata["heading"]
+
+
+def test_clause_range_reports_the_span_not_just_the_first(series_doc):
+    """A chunk labelled only by its first clause makes partial answers look audited."""
+    chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=1800)
+    spanning = [c for c in chunks if c.metadata["clause_end"] != c.metadata["clause_start"]]
+    assert spanning, "expected at least one multi-clause chunk"
+
+
+def test_clause_range_orders_numerically_not_lexically():
+    assert clause_range(["7.9", "7.10", "7.2"]) == ("7.2", "7.10")
 
 
 def test_chunk_indexes_are_dense_and_ordered(series_doc):
@@ -166,7 +193,7 @@ def test_chunk_indexes_are_dense_and_ordered(series_doc):
 def test_heading_path_nests(series_doc):
     chunks = chunk_document(series_doc, source_name="std.pdf", chunk_size=1800)
     headings = [c.metadata["heading"] for c in chunks if c.metadata["heading"]]
-    assert any(" > 7 Monitoring > " in heading for heading in headings)
+    assert any("7 Monitoring" in heading for heading in headings)
 
 
 # --- Arabic ----------------------------------------------------------------
@@ -176,8 +203,7 @@ def test_arabic_series_survives_and_folds_clause_numbers(arabic_doc):
     chunks = chunk_document(arabic_doc, source_name="std-ar.pdf", chunk_size=1800)
     series = [c for c in chunks if c.metadata["kind"] == "series"]
     assert series, "Arabic clause series not detected"
-    assert series[0].metadata["clause"] == "7.2.1"
-    assert series[0].metadata["parent_clause"] == "7.2"
+    assert series[0].metadata["clause_start"] == "7"
     for digit in "\u0661\u0662\u0663\u0664\u0665":
         assert f"\u0667.\u0662.{digit}" in series[0].text
 
@@ -192,9 +218,9 @@ def test_arabic_and_english_editions_produce_matching_clause_keys(series_doc, ar
     """The corpus numbers clauses identically across languages; keys must match."""
     english = chunk_document(series_doc, source_name="en.pdf", chunk_size=1800)
     arabic = chunk_document(arabic_doc, source_name="ar.pdf", chunk_size=1800)
-    en_clause = next(c.metadata["clause"] for c in english if c.metadata["kind"] == "series")
-    ar_clause = next(c.metadata["clause"] for c in arabic if c.metadata["kind"] == "series")
-    assert en_clause == ar_clause == "7.2.1"
+    en_clause = next(c.metadata["clause_start"] for c in english if c.metadata["kind"] == "series")
+    ar_clause = next(c.metadata["clause_start"] for c in arabic if c.metadata["kind"] == "series")
+    assert en_clause == ar_clause == "7"
 
 
 # --- DOCX shape ------------------------------------------------------------
@@ -230,15 +256,14 @@ def test_docx_bullet_run_is_grouped_as_a_series():
 
 def test_docx_bracket_table_markers_are_recognised():
     chunks = chunk_document(DOCX_PATCHED, source_name="std.docx", chunk_size=1800)
-    tables = [c for c in chunks if c.metadata["kind"] == "table"]
-    assert len(tables) == 1
-    assert "[table]" not in tables[0].text, "marker leaked into chunk text"
-    assert "Critical" in tables[0].text
+    joined = "\n".join(c.text for c in chunks)
+    assert "[table]" not in joined, "marker leaked into chunk text"
+    assert "Critical" in joined and "24 hours" in joined
 
 
 def test_docx_headings_reach_metadata():
     chunks = chunk_document(DOCX_PATCHED, source_name="std.docx", chunk_size=1800)
-    assert any("7.2 SOC alert conditions" in c.metadata["heading"] for c in chunks)
+    assert any("SOC alert conditions" in c.metadata["heading"] for c in chunks)
 
 
 def test_unstructured_docx_still_chunks_without_crashing():
@@ -268,3 +293,100 @@ def test_single_paragraph_longer_than_chunk_size_is_split_on_sentences():
 def test_build_units_is_stable_on_headings_only():
     blocks = parse_blocks("# A\n\n## B\n\n### C\n")
     assert build_units(blocks)
+
+# --- coalescing ------------------------------------------------------------
+
+# The shape that caused the regression: "3.4 End or Termination of Employment"
+# holds 3.4.1-3.4.3 as plain clauses, then 3.4.4 opens its own heading. Sectioning
+# alone puts the two in different chunks, and the last-working-day rule in 3.4.3
+# is then invisible to a question that ranks 3.4.4 first.
+TERMINATION_DOC = """## 3.4 End or Termination of Employment
+
+- 3.4.1 Define employment termination procedures covering cybersecurity requirements.
+- 3.4.2 The human resources director must inform the relevant units on termination.
+- 3.4.3 Ensure that all assets are returned, and personnel access rights are cancelled
+  on their last working day and prior to obtaining the necessary clearance.
+
+## 3.4.4 Post-Employment Access Monitoring
+
+After an employee's termination, cybersecurity teams must ensure all credentials
+and access rights are revoked, monitor for unauthorised access attempts, and audit
+the last 30 days of access logs to verify security compliance.
+"""
+
+
+def test_adjacent_sections_are_merged_into_one_retrievable_chunk():
+    """3.4.3 and 3.4.4 must arrive together, or 'how quickly' has no answer."""
+    chunks = chunk_document(TERMINATION_DOC, source_name="hr.pdf", chunk_size=1800)
+
+    holding = [chunk for chunk in chunks if "last working day" in chunk.text]
+    assert len(holding) == 1
+    assert "Post-Employment Access Monitoring" in holding[0].text
+    assert holding[0].metadata["clause_start"] == "3.4"
+    assert holding[0].metadata["clause_end"] == "3.4.4"
+
+
+def test_merging_stops_at_the_chunk_size():
+    """Coalescing fills chunks; it must not concatenate a whole document into one."""
+    prose = "Policy prose that runs on for a while. " * 20
+    section = """## {n}. Section {n}
+
+{prose}
+
+"""
+    document = "".join(section.format(n=n, prose=prose) for n in range(1, 15))
+
+    chunks = chunk_document(document, source_name="long.pdf", chunk_size=1800)
+
+    assert len(chunks) > 1
+    # `chunk_size` is a soft ceiling: a runt tail may be folded back into its
+    # predecessor, which _absorb_tiny_tail bounds at 1.3x.
+    assert max(len(chunk.text) for chunk in chunks) <= 1800 * 1.3
+
+
+def test_small_documents_still_produce_a_chunk():
+    document = """## 1. Purpose
+
+This policy is short.
+"""
+    chunks = chunk_document(document, source_name="tiny.pdf", chunk_size=1800)
+    assert len(chunks) == 1
+    assert "This policy is short." in chunks[0].text
+
+
+# --- hard ceiling ----------------------------------------------------------
+
+
+def test_a_single_giant_table_cell_is_split():
+    """One cell holding a whole section produced a 13,000-character chunk."""
+    cell = "Requirements for cybersecurity incident management shall include the following. " * 90
+    document = "## 3. Incident Management\n\n| Control | Requirement |\n| --- | --- |\n| 3-1 | " + cell + " |\n"
+
+    chunks = chunk_document(document, source_name="ecc.pdf", chunk_size=1800)
+
+    assert max(len(chunk.text) for chunk in chunks) <= 1800 * 1.3
+
+
+def test_unpunctuated_prose_is_still_bounded():
+    """A clause with no sentence terminator has nothing to split on."""
+    document = "## 5. Definitions\n\n" + ("word " * 2000)
+
+    chunks = chunk_document(document, source_name="long.pdf", chunk_size=1800)
+
+    assert max(len(chunk.text) for chunk in chunks) <= 1800 * 1.3
+
+
+def test_hard_wrap_prefers_a_clean_boundary():
+    from src.chunking import _hard_wrap
+
+    text = "First sentence here. " + ("x" * 40) + ". Second sentence follows."
+    pieces = _hard_wrap(text, 60)
+
+    assert all(len(piece) <= 60 for piece in pieces)
+    assert "".join(pieces).replace(" ", "") == text.replace(" ", "")
+
+
+def test_hard_wrap_leaves_short_text_alone():
+    from src.chunking import _hard_wrap
+
+    assert _hard_wrap("short enough", 100) == ["short enough"]

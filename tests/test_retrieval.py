@@ -10,8 +10,9 @@ from __future__ import annotations
 import pytest
 
 from src.config import settings
-from src.models import Evidence, SourceType
-from tests.conftest import build_store
+from src.knowledge import KnowledgeStore
+from src.models import Evidence, ExtractedQAPair, SourceType
+from tests.conftest import bare_store, build_store
 
 
 # --- locator ---------------------------------------------------------------
@@ -28,7 +29,23 @@ def make(**overrides) -> Evidence:
 
 
 def test_locator_prefers_doc_id_and_clause():
-    assert make(doc_id="MDS-CS-STD-003", clause="7.2.1").locator == "MDS-CS-STD-003 \u00a77.2.1"
+    single = make(doc_id="MDS-CS-STD-003", clause_start="7.2.1")
+    assert single.locator == "MDS-CS-STD-003 \u00a77.2.1"
+
+
+def test_locator_reports_a_span_when_the_chunk_covers_several_clauses():
+    spanning = make(doc_id="MDS-CS-STD-006", clause_start="5.1", clause_end="5.6")
+    assert spanning.locator == "MDS-CS-STD-006 \u00a75.1\u20135.6"
+
+
+@pytest.mark.parametrize(
+    ("clause", "expected"),
+    [("5.1", True), ("5.5", True), ("5.6", True), ("4.9", False), ("6.1", False), ("", False)],
+)
+def test_covers_clause(clause, expected):
+    """Guards against attaching a precise clause to evidence that lacks it."""
+    spanning = make(clause_start="5.1", clause_end="5.6")
+    assert spanning.covers_clause(clause) is expected
 
 
 def test_locator_falls_back_to_page_then_filename():
@@ -37,7 +54,7 @@ def test_locator_falls_back_to_page_then_filename():
 
 
 def test_locator_uses_filename_when_doc_id_missing():
-    assert make(source_name="policy.pdf", clause="4.1").locator == "policy.pdf \u00a74.1"
+    assert make(source_name="policy.pdf", clause_start="4.1").locator == "policy.pdf \u00a74.1"
 
 
 def test_prior_answer_locator_uses_questionnaire_and_date():
@@ -163,12 +180,75 @@ async def test_metadata_survives_the_round_trip(series_doc):
 
     evidence = (await store.search("alerts", SourceType.GUIDELINE, k=1))[0]
     assert evidence.doc_id == "MDS-CS-STD-003"
-    assert evidence.clause == "7.2.1"
+    assert evidence.clause_start == "7"
+    assert evidence.clause_end == "8"
     assert evidence.kind == "series"
-    assert evidence.locator == "MDS-CS-STD-003 \u00a77.2.1"
+    assert evidence.locator == "MDS-CS-STD-003 \u00a77\u20138"
 
 
 async def test_empty_query_short_circuits(series_doc):
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=1800)
     assert await store.search("   ", SourceType.GUIDELINE, k=5) == []
     assert await store.search("alerts", SourceType.GUIDELINE, k=0) == []
+
+# --- previously answered assessments ---------------------------------------
+
+
+class _RecordingStore:
+    """Captures what `add_documents` was handed, and serves nothing back."""
+
+    def __init__(self):
+        self.documents = []
+        self.deleted = []
+
+    def add_documents(self, documents, ids=None):
+        self.documents = documents
+
+    def delete(self, where=None):
+        self.deleted.append(where)
+
+    def get(self, where=None, include=None):
+        return {"documents": [], "metadatas": []}
+
+    async def asimilarity_search_with_relevance_scores(self, query, k, filter=None):
+        return []
+
+
+def _store_with(recorder):
+    return bare_store(recorder)
+
+
+def test_prior_answers_embed_the_question_with_its_answer():
+    """The question wording is what a new question matches on; the answer must travel with it."""
+    recorder = _RecordingStore()
+    store = _store_with(recorder)
+
+    store.add_prior_answers(
+        "vendor_review_2025.docx",
+        [ExtractedQAPair(question="Do you encrypt data at rest?", answer="Yes, AES-256.", section="Cryptography")],
+    )
+
+    (document,) = recorder.documents
+    assert "Do you encrypt data at rest?" in document.page_content
+    assert "AES-256" in document.page_content
+    assert document.metadata["source_type"] == SourceType.PRIOR_ANSWER.value
+    assert document.metadata["question"] == "Do you encrypt data at rest?"
+    assert document.metadata["section"] == "Cryptography"
+
+
+async def test_an_empty_prior_answer_bank_is_not_an_error():
+    """Most deployments start with policies only; retrieval must simply return nothing."""
+    store = _store_with(_RecordingStore())
+    assert await store.search("anything at all", SourceType.PRIOR_ANSWER, 5) == []
+
+
+def test_duplicate_upload_is_reported_against_the_original():
+    recorder = _RecordingStore()
+    recorder.get = lambda where=None, include=None: {
+        "metadatas": [{"source_name": "Acceptable Use Policy.pdf", "content_hash": "abc"}]
+    }
+    store = _store_with(recorder)
+
+    assert store.source_with_hash("abc", excluding="Acceptable Use Policy(1).pdf") == "Acceptable Use Policy.pdf"
+    # The file already indexed under this hash must not report itself as a duplicate.
+    assert store.source_with_hash("abc", excluding="Acceptable Use Policy.pdf") is None

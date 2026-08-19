@@ -29,19 +29,29 @@ from pydantic import BaseModel, SecretStr, ValidationError
 from src.config import settings
 
 try:  # pragma: no cover - depends on the installed groq client version
+    from groq import APIConnectionError as GroqConnectionError
     from groq import BadRequestError as GroqBadRequestError
+    from groq import InternalServerError as GroqServerError
+    from groq import RateLimitError as GroqRateLimitError
 except ImportError:  # pragma: no cover
-    GroqBadRequestError = None  # type: ignore[assignment]
+    GroqBadRequestError = GroqRateLimitError = GroqConnectionError = GroqServerError = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
+# Everything worth trying again. Rate limits matter most: questions fan out
+# concurrently, so a 429 is the expected response to a large assessment, not an
+# exceptional one — and without it here the question fails and comes back with
+# an empty answer rather than waiting its turn.
 _RETRYABLE: tuple[type[BaseException], ...] = (ValidationError, OutputParserException)
-if GroqBadRequestError is not None:
-    _RETRYABLE = (*_RETRYABLE, GroqBadRequestError)
+_RETRYABLE += tuple(
+    error
+    for error in (GroqBadRequestError, GroqRateLimitError, GroqConnectionError, GroqServerError)
+    if error is not None
+)
 
-_MAX_ATTEMPTS = 3
+_MAX_ATTEMPTS = 5
 
 
 @lru_cache(maxsize=8)

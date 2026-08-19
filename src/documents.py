@@ -12,6 +12,9 @@ pdfplumber / python-docx loaders remain as a fallback for when Docling is down
 or switched off, so an upload never fails purely because a container is
 unreachable; they emit `[table]` markers instead of Markdown pipe tables, which
 the extraction prompts accept either way.
+
+One class of PDF is routed away from Docling deliberately: see
+`_prefers_local_extraction` and the bidi reconstruction below it.
 """
 
 from __future__ import annotations
@@ -19,8 +22,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from typing import Callable
+
+from bidi.algorithm import get_display
 
 from src import docling_client
 from src.config import settings
@@ -35,6 +41,139 @@ class UnsupportedDocumentError(ValueError):
     """Raised for a file type the app cannot read."""
 
 
+# ---------------------------------------------------------------------------
+# Right-to-left text layers
+# ---------------------------------------------------------------------------
+#
+# Some Arabic PDFs — including the T2 password and safe-usage policies — store
+# their text layer in *visual* order using Arabic presentation forms, the shapes
+# the renderer draws rather than the letters an author typed. Docling reads
+# those files as a series of disconnected fragments: it drops most of each
+# sentence and reverses embedded numbers, which is how a 12-character minimum
+# password length was indexed as 21.
+#
+# pdfplumber returns the same visual order but keeps every character, so the
+# logical text can be recovered exactly: run the Unicode bidirectional
+# algorithm to undo the reordering, then normalise the presentation forms back
+# to letters. Both steps are standard and reversible, and the round trip is
+# covered by tests.
+
+_ARABIC_PRESENTATION = re.compile(r"[ﭐ-﷿ﹰ-﻿]")
+_ARABIC_ANY = re.compile(r"[؀-ۿﭐ-﷿ﹰ-﻿]")
+
+# Below these, a document is not Arabic enough for the question to arise: a
+# single Arabic word in an English policy is not evidence of a visual-order
+# text layer, and misrouting a well-formed document costs Docling's tables.
+_MIN_ARABIC_CHARS = 200
+_MIN_PRESENTATION_RATIO = 0.5
+
+# Below this many characters of text layer per page, a PDF is treated as scanned
+# and OCR is switched on for it alone. Real pages in this corpus run 600-2000.
+_MIN_CHARS_PER_PAGE = 120
+
+# These PDFs' fonts map Arabic letters onto Persian/Urdu look-alikes, which
+# survive NFKC because they are distinct letters rather than shape variants.
+# Folding them keeps "يجب" spelled one way across the corpus, so retrieval and
+# clause matching are not split across two encodings of the same word.
+_LETTER_FOLD = str.maketrans(
+    {
+        "ی": "ي",  # Farsi yeh   -> Arabic yeh
+        "ک": "ك",  # Keheh       -> Kaf
+        "ھ": "ه",  # Heh doachashmee -> Heh
+    }
+)
+
+
+def to_logical_order(text: str) -> str:
+    """Recover logical-order Arabic from a visual-order line.
+
+    `get_display` is the Unicode bidirectional algorithm (UAX #9). For a line
+    whose only embedding levels are the RTL paragraph and its LTR runs — which
+    is what a PDF text layer holds — the reordering is its own inverse, so
+    applying it to visual order yields logical order. Latin and numeric runs
+    survive intact: "AES-256" and "NIST SP 800-63B" come back unchanged, and
+    "12" does not become "21".
+
+    NFKC then maps the presentation forms back to the letters they render,
+    including the lam-alef ligatures. It runs *after* the reordering, because a
+    ligature is one character in visual order and two in logical order.
+    """
+    if not _ARABIC_ANY.search(text):
+        return text
+    reordered = get_display(text, base_dir="R")
+    return unicodedata.normalize("NFKC", reordered).translate(_LETTER_FOLD)
+
+
+def _visual_order_arabic_score(path: Path, pages: int = 4) -> tuple[int, float]:
+    """Arabic character count and presentation-form share of a PDF's opening pages."""
+    import pdfplumber
+
+    with pdfplumber.open(path) as pdf:
+        sample = "\n".join((page.extract_text() or "") for page in pdf.pages[:pages])
+
+    arabic = len(_ARABIC_ANY.findall(sample))
+    presentation = len(_ARABIC_PRESENTATION.findall(sample))
+    return arabic, (presentation / arabic if arabic else 0.0)
+
+
+def _looks_scanned(path: Path, pages: int = 6) -> bool:
+    """Whether a PDF carries too little text to have a real text layer.
+
+    OCR is decided per file rather than per deployment. Forcing it on costs
+    roughly 2.3x on ingestion and, on a born-digital policy, changes nothing
+    that matters: table structure is recognised by a separate model that runs
+    either way, so the only text it adds is whatever it reads off the logos —
+    "E: info@t2.com" and a stray full-width colon, scattered through the
+    chunks. Forcing it off would silently index a scanned document as empty.
+    Sampling the text layer answers the question directly.
+    """
+    if path.suffix.lower() != ".pdf":
+        return False
+
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(path) as pdf:
+            sample = pdf.pages[: min(pages, len(pdf.pages))]
+            if not sample:
+                return False
+            characters = sum(len((page.extract_text() or "").strip()) for page in sample)
+        per_page = characters / len(sample)
+    except Exception as exc:  # noqa: BLE001 - detection must never fail an upload
+        logger.debug("Could not sample %s for a text layer: %s", path.name, exc)
+        return False
+
+    if per_page < _MIN_CHARS_PER_PAGE:
+        logger.info("Enabling OCR for %s: only %.0f characters per page of text layer", path.name, per_page)
+        return True
+    return False
+
+
+def _prefers_local_extraction(path: Path) -> bool:
+    """Whether this PDF should bypass Docling for the RTL-aware local loader."""
+    if path.suffix.lower() != ".pdf":
+        return False
+
+    try:
+        arabic, ratio = _visual_order_arabic_score(path)
+    except Exception as exc:  # noqa: BLE001 - routing must never fail an upload
+        logger.debug("Could not sample %s for text direction: %s", path.name, exc)
+        return False
+
+    if arabic >= _MIN_ARABIC_CHARS and ratio >= _MIN_PRESENTATION_RATIO:
+        logger.info(
+            "Routing %s to the local RTL loader: %d Arabic characters, %.0f%% presentation forms",
+            path.name, arabic, ratio * 100,
+        )
+        return True
+
+    logger.debug(
+        "Routing %s to Docling: %d Arabic characters, %.0f%% presentation forms",
+        path.name, arabic, ratio * 100,
+    )
+    return False
+
+
 async def load_text(path: str | Path) -> str:
     """Extract the full text of a PDF or DOCX file, tables included."""
     path = Path(path)
@@ -46,9 +185,13 @@ async def load_text(path: str | Path) -> str:
         raise FileNotFoundError(f"No such document: {path}")
 
     text = ""
-    if settings.docling_enabled:
+    local_only = await asyncio.to_thread(_prefers_local_extraction, path)
+    if settings.docling_enabled and not local_only:
+        do_ocr = settings.docling_do_ocr or (
+            settings.docling_ocr_auto and await asyncio.to_thread(_looks_scanned, path)
+        )
         try:
-            text = (await docling_client.convert_file(path)).strip()
+            text = (await docling_client.convert_file(path, do_ocr=do_ocr)).strip()
         except DoclingError as exc:
             if not settings.docling_fallback_local:
                 raise UnsupportedDocumentError(f"Could not convert '{path.name}': {exc}") from exc
@@ -99,14 +242,19 @@ def load_text_local(path: str | Path) -> str:
     return loader(path)
 
 
-def _format_row(cells: list) -> str:
+def _format_row(cells: list, transform: Callable[[str], str] = lambda text: text) -> str:
     """Render one table row as a pipe-delimited line, dropping empty rows."""
-    values = [str(cell).replace("\n", " ").strip() if cell else "" for cell in cells]
+    values = [transform(str(cell).replace("\n", " ")).strip() if cell else "" for cell in cells]
     return " | ".join(values) if any(values) else ""
 
 
 def _load_pdf(path: Path) -> str:
     import pdfplumber
+
+    # Decided once per document, not per line: direction is a property of how
+    # the file was produced, and a per-line guess would flip on the English
+    # headers and page furniture an Arabic policy also carries.
+    transform = to_logical_order if _prefers_local_extraction(path) else _identity
 
     parts: list[str] = []
     with pdfplumber.open(path) as pdf:
@@ -115,18 +263,22 @@ def _load_pdf(path: Path) -> str:
 
             page_text = page.extract_text() or ""
             if page_text.strip():
-                parts.append(page_text.strip())
+                parts.append("\n".join(transform(line) for line in page_text.strip().splitlines()))
 
             # pdfplumber's extract_text already includes cell text, but without
             # row structure. Re-emitting the tables costs a few tokens and makes
             # the column a question's answer lives in unambiguous.
             for table in page.extract_tables():
-                rows = [_format_row(row) for row in table]
+                rows = [_format_row(row, transform) for row in table]
                 rendered = "\n".join(row for row in rows if row)
                 if rendered:
                     parts.append(f"[table]\n{rendered}\n[/table]")
 
     return "\n".join(parts)
+
+
+def _identity(text: str) -> str:
+    return text
 
 
 _HEADING_STYLE = re.compile(r"^Heading\s+([1-6])$", re.IGNORECASE)

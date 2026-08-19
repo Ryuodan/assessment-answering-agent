@@ -2,9 +2,9 @@
 
     outer:  extract ──fan out (Send per question)──> answer ──> END
 
-    inner:  retrieve ──> draft ──> review ──┬─> finalize ──> END
-                 ^                          │
-                 └──── refined query ───────┘
+    inner:  plan ──> retrieve ──> rerank ──> draft ──> review ──┬─> finalize ──> END
+                          ^                                     │
+                          └──────────── refined query ──────────┘
 
 The fan-out is `Send`, so questions are answered concurrently; the caller caps
 that with `max_concurrency` in the runnable config.
@@ -20,6 +20,7 @@ from langgraph.types import Send
 
 from src.graph import nodes
 from src.graph.state import AssessmentState, QuestionState
+from src.models import AnsweredQuestion, Language, Question
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +30,56 @@ def question_graph():
     """Compile the inner graph that answers one question."""
     builder = StateGraph(QuestionState)
 
+    builder.add_node("plan", nodes.plan)
     builder.add_node("retrieve", nodes.retrieve)
+    builder.add_node("rerank", nodes.rerank_evidence)
     builder.add_node("draft", nodes.draft)
     builder.add_node("review", nodes.review)
     builder.add_node("finalize", nodes.finalize)
 
-    builder.add_edge(START, "retrieve")
-    builder.add_edge("retrieve", "draft")
+    builder.add_edge(START, "plan")
+    builder.add_edge("plan", "retrieve")
+    builder.add_edge("retrieve", "rerank")
+    builder.add_edge("rerank", "draft")
     builder.add_edge("draft", "review")
     builder.add_conditional_edges("review", nodes.route_after_review, ["retrieve", "finalize"])
     builder.add_edge("finalize", END)
 
     return builder.compile()
+
+
+async def answer_one_question(question: Question, language: Language) -> AnsweredQuestion:
+    """Answer a single question through the inner graph.
+
+    The outer graph reaches the same place via `Send`; this is the door for a
+    caller who already has the question and no document to extract it from.
+    """
+    result = await question_graph().ainvoke(
+        {
+            "question": question,
+            "language": language,
+            "search_queries": [question.text],
+            "attempt": 0,
+            "evidence": [],
+        }
+    )
+    return result["answered"]
+
+
+def failed_answer(question: Question, error: BaseException) -> AnsweredQuestion:
+    """The placeholder a question that could not be answered comes back as.
+
+    Shared by both entry points, because both need the same containment: one
+    question tripping over a bad response must never cost the caller the rest
+    of the batch.
+    """
+    return AnsweredQuestion(
+        question=question,
+        answer="",
+        rationale=f"Answering failed: {error}",
+        confidence=0.0,
+        needs_review=True,
+    )
 
 
 async def _answer_question(state: QuestionState) -> dict:
@@ -56,19 +95,7 @@ async def _answer_question(state: QuestionState) -> dict:
         return {"answers": [result["answered"]]}
     except Exception as exc:  # noqa: BLE001 - deliberately contained per question
         logger.exception("Failed to answer question %s", question.id)
-        from src.models import AnsweredQuestion
-
-        return {
-            "answers": [
-                AnsweredQuestion(
-                    question=question,
-                    answer="",
-                    rationale=f"Answering failed: {exc}",
-                    confidence=0.0,
-                    needs_review=True,
-                )
-            ]
-        }
+        return {"answers": [failed_answer(question, exc)]}
 
 
 def _fan_out(state: AssessmentState) -> list[Send] | str:
@@ -85,7 +112,7 @@ def _fan_out(state: AssessmentState) -> list[Send] | str:
             {
                 "question": question,
                 "language": forced_language or question.language,
-                "search_query": question.text,
+                "search_queries": [question.text],
                 "attempt": 0,
                 "evidence": [],
             },

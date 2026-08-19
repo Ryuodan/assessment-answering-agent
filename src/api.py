@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from src import service
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
+from src.export_pdf import ExportError, ExportOptions, render_pdf, selected_answers
 from src.models import AssessmentResult, IngestResult, Language, SourceType
 
 configure_logging()
@@ -190,6 +191,46 @@ async def answer_assessment(
             detail=f"No questions could be extracted from '{result.source_name}'.",
         )
     return result
+
+
+@app.post("/api/assessments/export/pdf")
+def export_pdf(
+    result: AssessmentResult,
+    include_flagged: bool = False,
+    include_citations: bool = True,
+    include_reasoning: bool = False,
+) -> Response:
+    """Render an answered assessment as a PDF.
+
+    The result is posted back rather than looked up, because the interface lets
+    a reviewer edit answers before exporting and those edits are the point.
+
+    By default the file carries only answers that were not flagged for review:
+    what goes back to an assessor should not silently include drafts the system
+    itself was unsure of.
+    """
+    options = ExportOptions(
+        include_flagged=include_flagged,
+        include_citations=include_citations,
+        include_reasoning=include_reasoning,
+    )
+    if not selected_answers(result, options):
+        raise HTTPException(
+            status_code=422,
+            detail="No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+        )
+
+    try:
+        content = render_pdf(result, options)
+    except ExportError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    filename = f"{Path(result.source_name).stem or 'assessment'}.answers.pdf"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

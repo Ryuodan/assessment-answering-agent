@@ -11,20 +11,71 @@ import pytest
 from src.config import settings
 from src.graph import nodes
 from src.graph.workflow import _answer_question, _fan_out
-from src.models import AnswerReview, DraftedAnswer, Evidence, Question, SourceType
+from src.models import AnsweredQuestion, AnswerReview, DraftedAnswer, Evidence, Question, SourceType
 
 
 def _state(**overrides):
     base = {
         "question": Question(id="1", text="Are you certified?", language="en"),
         "language": "en",
-        "search_query": "Are you certified?",
+        "search_queries": ["Are you certified?"],
         "attempt": 1,
         "evidence": [],
         "draft": DraftedAnswer(answer="Yes.", confidence=0.9, used_source_ids=[1]),
         "review": AnswerReview(grounded=True, confidence=0.9),
     }
     return {**base, **overrides}
+
+
+# --- query planning --------------------------------------------------------
+
+
+async def test_plan_keeps_the_question_itself_and_adds_the_variants(monkeypatch):
+    monkeypatch.setattr(settings, "query_expansion", True)
+    _stub_plan(monkeypatch, ["access revoked on termination", "إلغاء صلاحيات الوصول"])
+
+    result = await nodes.plan(_state())
+
+    assert result["search_queries"][0] == "Are you certified?"
+    assert "access revoked on termination" in result["search_queries"]
+
+
+async def test_plan_is_a_single_query_when_expansion_is_off(monkeypatch):
+    monkeypatch.setattr(settings, "query_expansion", False)
+    assert (await nodes.plan(_state()))["search_queries"] == ["Are you certified?"]
+
+
+async def test_plan_falls_back_to_the_question_when_planning_fails(monkeypatch):
+    """A planning failure must cost recall, never the answer."""
+    monkeypatch.setattr(settings, "query_expansion", True)
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("groq is down")
+
+    monkeypatch.setattr(nodes, "chat_llm", explode)
+    assert (await nodes.plan(_state()))["search_queries"] == ["Are you certified?"]
+
+
+async def test_plan_deduplicates_and_caps(monkeypatch):
+    monkeypatch.setattr(settings, "query_expansion", True)
+    monkeypatch.setattr(settings, "max_search_queries", 3)
+    _stub_plan(monkeypatch, ["Are you certified?", "iso 27001 scope", "certification body", "audit date", "surveillance"])
+
+    queries = (await nodes.plan(_state()))["search_queries"]
+
+    assert queries == ["Are you certified?", "iso 27001 scope", "certification body"]
+
+
+def _stub_plan(monkeypatch, queries):
+    """The plan node reads plain text, one query per line."""
+    class _Response:
+        content = chr(10).join(queries)
+
+    class _Runnable:
+        async def ainvoke(self, _messages):
+            return _Response()
+
+    monkeypatch.setattr(nodes, "chat_llm", lambda *args, **kwargs: _Runnable())
 
 
 # --- routing ---------------------------------------------------------------
@@ -143,3 +194,51 @@ async def test_one_failing_question_does_not_sink_the_run(monkeypatch):
     assert answered.answer == ""
     assert answered.needs_review is True
     assert "groq exploded" in answered.rationale
+
+
+def test_query_parsing_survives_the_shapes_models_actually_emit():
+    """Numbered lists, bullets, quotes and a reasoning preamble."""
+    parsed = nodes._parse_queries(
+        "<think>splitting this up</think>\n"
+        "1. access revocation on termination\n"
+        "- exit clearance form requirement\n"
+        '"notification of affected subscribers"\n'
+        "Here are the queries:\n"
+    )
+    assert parsed == [
+        "access revocation on termination",
+        "exit clearance form requirement",
+        "notification of affected subscribers",
+    ]
+
+
+def test_query_parsing_drops_commentary_and_blank_lines():
+    parsed = nodes._parse_queries(
+        "short one\n\n" + ("a very long sentence of commentary " * 8) + "\n"
+    )
+    assert parsed == ["short one"]
+
+
+def test_query_parsing_handles_content_blocks():
+    assert nodes._parse_queries([{"text": "first query\nsecond query"}]) == ["first query", "second query"]
+
+
+async def test_a_failing_question_does_not_discard_the_whole_batch(monkeypatch):
+    """A transient upstream error cost a nearly-finished 42-question run."""
+    from src import service
+
+    async def flaky(question, language):
+        if question.id == "2":
+            raise RuntimeError("model is not available in the specified region")
+        return AnsweredQuestion(question=question, answer="fine", confidence=0.8, needs_review=False)
+
+    monkeypatch.setattr(service, "answer_one_question", flaky)
+
+    answers = await service.answer_questions(
+        [Question(id=str(n), text=f"q{n}", language="en") for n in (1, 2, 3)]
+    )
+
+    assert [a.question.id for a in answers] == ["1", "2", "3"]
+    assert answers[0].answer == "fine" and answers[2].answer == "fine"
+    assert answers[1].answer == "" and answers[1].needs_review
+    assert "not available" in answers[1].rationale

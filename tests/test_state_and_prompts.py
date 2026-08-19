@@ -125,7 +125,7 @@ def test_higher_scoring_document_leads_among_guidelines():
 
 def test_sources_block_shows_clause_locators():
     block = format_sources_block(
-        [guideline(1, doc_id="MDS-CS-STD-003", clause="7.2.1", heading="7 Monitoring")]
+        [guideline(1, doc_id="MDS-CS-STD-003", clause_start="7.2.1", heading="7 Monitoring")]
     )
     assert "MDS-CS-STD-003 \u00a77.2.1" in block
     assert "(7 Monitoring)" in block
@@ -165,9 +165,9 @@ def test_sources_block_includes_the_snippet_text():
 def test_citation_list_is_deduplicated_and_ordered():
     """Mirrors `finalize`: dict.fromkeys preserves order and drops repeats."""
     cited = [
-        guideline(1, doc_id="MDS-CS-STD-003", clause="7.2.1"),
-        guideline(2, doc_id="MDS-CS-STD-003", clause="7.2.1"),
-        guideline(3, doc_id="MDS-CS-STD-003", clause="7.4"),
+        guideline(1, doc_id="MDS-CS-STD-003", clause_start="7.2.1"),
+        guideline(2, doc_id="MDS-CS-STD-003", clause_start="7.2.1"),
+        guideline(3, doc_id="MDS-CS-STD-003", clause_start="7.4"),
     ]
     citations = list(dict.fromkeys(item.locator for item in cited))
     assert citations == ["MDS-CS-STD-003 \u00a77.2.1", "MDS-CS-STD-003 \u00a77.4"]

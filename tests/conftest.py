@@ -12,8 +12,35 @@ from __future__ import annotations
 import pytest
 
 from src.chunking import chunk_document
+from src.config import settings
 from src.knowledge import KnowledgeStore
 from src.models import SourceType
+
+
+@pytest.fixture(autouse=True)
+def dense_only_retrieval():
+    """Pin the lexical pass off, whatever the deployment's .env says.
+
+    `FakeVectorStore` returns whatever a test staged regardless of the query, so
+    fusing a real BM25 ranking over it would silently reorder results the test
+    is asserting on. Hybrid search has its own tests, which opt back in.
+    """
+    original = settings.hybrid_search
+    settings.hybrid_search = False
+    yield
+    settings.hybrid_search = original
+
+
+def bare_store(fake) -> KnowledgeStore:
+    """A KnowledgeStore over a fake vector store, without touching Chroma.
+
+    Mirrors `__init__` rather than only setting `_store`, so a new instance
+    attribute does not break every test that uses a fake.
+    """
+    store = object.__new__(KnowledgeStore)
+    store._store = fake
+    store._lexical_cache = {}
+    return store
 
 RLM = "\u200f"
 
@@ -81,9 +108,7 @@ def build_store(text: str, *, source_name: str, chunk_size: int) -> tuple[Knowle
         for chunk in chunk_document(text, source_name=source_name, chunk_size=chunk_size)
     ]
     fake = FakeVectorStore(records)
-    store = object.__new__(KnowledgeStore)
-    store._store = fake
-    return store, fake
+    return bare_store(fake), fake
 
 
 SERIES_DOC = """# MDS-CS-STD-003 Secure Configuration and Hardening Standard

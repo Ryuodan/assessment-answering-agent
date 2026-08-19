@@ -21,6 +21,17 @@ dependencies = [
     "httpx>=0.27",
     "pdfplumber>=0.11",
     "python-docx>=1.1",
+    # Unicode bidirectional algorithm (UAX #9), used to recover logical
+    # order from Arabic PDFs whose text layer is stored visually.
+    "python-bidi>=0.6",
+    # Local BGE-M3 embeddings; see src/embeddings.py.
+    "langchain-huggingface>=1.2",
+    "sentence-transformers>=5.0",
+    # BM25 for the optional lexical retrieval pass; see src/lexical.py.
+    "rank-bm25>=0.2.2",
+    # PDF export of answered assessments, Arabic shaped correctly.
+    "reportlab>=4.0",
+    "arabic-reshaper>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +40,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff",
 ]
+# Only needed to regenerate the bundled trial corpus (`python -m demo_data.generate`).
+# reportlab and arabic-reshaper are core dependencies — the PDF export uses them.
+demo = []
 
 [project.scripts]
 assessment-answer = "src.cli:main"

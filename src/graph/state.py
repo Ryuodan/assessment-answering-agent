@@ -74,13 +74,29 @@ class QuestionState(TypedDict, total=False):
     language: Language
     """Language the answer must be written in — may differ from the question's own."""
 
-    search_query: str
-    """Current retrieval query. Starts as the question text; the reviewer may refine it."""
+    search_queries: list[str]
+    """Queries for the current retrieval round.
+
+    Starts as the question text alone, is widened by the `plan` node when query
+    expansion is on, and is replaced wholesale by the reviewer's refined query
+    on a retry. Replaced rather than appended because evidence accumulates
+    across rounds anyway — see `merge_evidence` — so a retry should spend its
+    searches on the angle that was missed, not repeat the ones that failed.
+    """
 
     attempt: int
     """Retrieval rounds completed. Bounded by settings.max_answer_attempts."""
 
     evidence: Annotated[list[Evidence], merge_evidence]
+
+    ranked: list[Evidence]
+    """Evidence in the order the drafter should read it, best first.
+
+    Written by the rerank node and replaced outright on each retrieval round,
+    unlike `evidence`, which accumulates. Kept separate so reranking never has
+    to fight the accumulating reducer for control of the ordering.
+    """
+
     draft: DraftedAnswer | None
     review: AnswerReview | None
     answered: AnsweredQuestion | None

@@ -14,7 +14,7 @@ from src.config import Settings, settings
 from src.docling_client import DoclingError, _markdown
 from src.documents import UnsupportedDocumentError, load_text, load_text_local, windows
 from src.extraction import _deduplicate_ids, detect_language
-from src.models import Question, QuestionType
+from src.models import Evidence, Question, QuestionType, SourceType
 from src.prompts import format_question_block, format_sources_block
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -88,7 +88,7 @@ def docling(monkeypatch):
     calls: list[Path] = []
 
     def stub(result):
-        async def convert_file(path):
+        async def convert_file(path, *, do_ocr=None):
             calls.append(path)
             if isinstance(result, Exception):
                 raise result
@@ -110,8 +110,11 @@ async def test_load_prefers_docling_markdown(docling):
     assert [path.name for path in calls] == ["prior_assessment_2024.docx"]
 
 
-async def test_load_falls_back_locally_when_docling_fails(docling):
+async def test_load_falls_back_locally_when_docling_fails(docling, monkeypatch):
     docling(DoclingError("connection refused"))
+    # Pinned rather than inherited: a deployment's .env may switch the fallback
+    # off, and this test is about the behaviour when it is on.
+    monkeypatch.setattr(settings, "docling_fallback_local", True)
 
     text = await load_text(FIXTURES / "prior_assessment_2024.docx")
 
@@ -196,11 +199,68 @@ def test_question_block_includes_options_for_choice_questions():
 
 def test_sources_block_is_numbered_and_labelled():
     block = format_sources_block(
-        [("prior_answer", "a.docx", "past answer"), ("guideline", "b.docx", "policy text")]
+        [
+            Evidence(source_type=SourceType.PRIOR_ANSWER, source_name="a.docx", snippet="past answer"),
+            Evidence(source_type=SourceType.GUIDELINE, source_name="b.docx", snippet="policy text"),
+        ]
     )
     assert "[1] PREVIOUS ANSWER — a.docx" in block
     assert "[2] GUIDELINE — b.docx" in block
+    assert "past answer" in block and "policy text" in block
 
 
 def test_sources_block_says_so_when_empty():
     assert "no relevant sources" in format_sources_block([])
+
+
+# --- automatic OCR ---------------------------------------------------------
+
+
+def test_born_digital_pdf_does_not_trigger_ocr():
+    """OCR on a text-layer PDF only adds whatever text sits inside the logos."""
+    assert documents._looks_scanned(FIXTURES / "new_assessment_2026.pdf") is False
+
+
+def test_docx_never_triggers_ocr():
+    assert documents._looks_scanned(FIXTURES / "prior_assessment_2024.docx") is False
+
+
+def test_ocr_detection_survives_an_unreadable_file(tmp_path):
+    """A detection failure must not fail the upload; it just declines to force OCR."""
+    broken = tmp_path / "broken.pdf"
+    broken.write_bytes(b"not really a pdf")
+    assert documents._looks_scanned(broken) is False
+
+
+async def test_ocr_is_requested_per_file(docling, monkeypatch):
+    """The Docling call carries the per-file decision, not the global default."""
+    requested: list = []
+
+    async def convert_file(path, *, do_ocr=None):
+        requested.append(do_ocr)
+        return "# Converted"
+
+    monkeypatch.setattr(documents.docling_client, "convert_file", convert_file)
+    monkeypatch.setattr(settings, "docling_do_ocr", False)
+    monkeypatch.setattr(settings, "docling_ocr_auto", True)
+    monkeypatch.setattr(documents, "_looks_scanned", lambda path: True)
+
+    await load_text(FIXTURES / "new_assessment_2026.pdf")
+
+    assert requested == [True]
+
+
+async def test_forcing_ocr_overrides_detection(docling, monkeypatch):
+    requested: list = []
+
+    async def convert_file(path, *, do_ocr=None):
+        requested.append(do_ocr)
+        return "# Converted"
+
+    monkeypatch.setattr(documents.docling_client, "convert_file", convert_file)
+    monkeypatch.setattr(settings, "docling_do_ocr", True)
+    monkeypatch.setattr(documents, "_looks_scanned", lambda path: False)
+
+    await load_text(FIXTURES / "new_assessment_2026.pdf")
+
+    assert requested == [True]

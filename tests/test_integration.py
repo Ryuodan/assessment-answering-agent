@@ -39,16 +39,15 @@ async def test_fragment_hit_becomes_a_complete_series_in_the_prompt(series_doc):
 
 async def test_two_retrieval_rounds_union_into_one_prompt(series_doc):
     """The Step 3 bug reproduced: without the reducer, round 1 is lost."""
-    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=1800)
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    first = next(r for r in fake.records if "7.2.1" in r["text"])
+    second = next(r for r in fake.records if "| Critical |" in r["text"])
 
-    series = next(r for r in fake.records if r["metadata"]["kind"] == "series")
-    table = next(r for r in fake.records if r["metadata"]["kind"] == "table")
+    fake.stage(chunk_indexes=[first["metadata"]["chunk"]], score=0.72)
+    round_one = await store.search("soc alert conditions", SourceType.GUIDELINE, k=1, expand=False)
 
-    fake.stage(chunk_indexes=[series["metadata"]["chunk"]], score=0.72)
-    round_one = await store.search("soc alert conditions", SourceType.GUIDELINE, k=1)
-
-    fake.stage(chunk_indexes=[table["metadata"]["chunk"]], score=0.66)
-    round_two = await store.search("remediation windows", SourceType.GUIDELINE, k=1)
+    fake.stage(chunk_indexes=[second["metadata"]["chunk"]], score=0.66)
+    round_two = await store.search("remediation windows", SourceType.GUIDELINE, k=1, expand=False)
 
     replaced = round_two                      # old behaviour
     accumulated = merge_evidence(round_one, round_two)  # new behaviour
@@ -57,7 +56,7 @@ async def test_two_retrieval_rounds_union_into_one_prompt(series_doc):
     assert len(accumulated) == 2
 
     block = format_sources_block(accumulated)
-    assert "7.2.12" in block and "Critical" in block
+    assert "7.2.1" in block and "Critical" in block
 
 
 async def test_every_source_in_the_prompt_carries_a_clause_or_page(series_doc):
@@ -79,7 +78,7 @@ async def test_arabic_document_survives_the_full_chain(arabic_doc):
     evidence = await store.search("\u0634\u0631\u0648\u0637 \u0627\u0644\u062a\u0646\u0628\u064a\u0647", SourceType.GUIDELINE, k=1)
     block = format_sources_block(merge_evidence([], evidence))
 
-    assert "MDS-CS-STD-003 \u00a77.2.1" in block, "Arabic clause not folded into the locator"
+    assert "MDS-CS-STD-003 \u00a77" in block, "Arabic clause not folded into the locator"
     assert "\u200f" not in block, "bidi control reached the prompt"
     for digit in "\u0661\u0662\u0663\u0664\u0665":
         assert f"\u0667.\u0662.{digit}" in block

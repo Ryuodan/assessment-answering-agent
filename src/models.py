@@ -14,7 +14,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 Language = Literal["ar", "en"]
 
@@ -74,20 +74,46 @@ class Evidence(BaseModel):
     questionnaire: str = ""
     answered_date: str = ""
 
+    clause_start: str = ""
+    clause_end: str = ""
+    section_clause: str = ""
+    item_count: int = 0
+
+    @computed_field
     @property
     def locator(self) -> str:
-        """Human-readable citation, e.g. 'MDS-CS-STD-003 §7.2.1'."""
+        """Human-readable citation, e.g. 'MDS-CS-STD-003 §7.2.1'.
+
+        A computed field rather than a plain property so it is serialised: the
+        web interface and the exports show the clause, and rebuilding it in
+        JavaScript would be a second implementation to keep in step.
+        """
         if self.source_type is SourceType.PRIOR_ANSWER:
             parts = [self.questionnaire or self.source_name]
             if self.answered_date:
                 parts.append(f"({self.answered_date})")
             return " ".join(parts)
         base = self.doc_id or self.source_name
-        if self.clause:
-            return f"{base} \u00a7{self.clause}"
+        start = self.clause_start or self.clause
+        end = self.clause_end or start
+        if start:
+            return f"{base} \u00a7{start}\u2013{end}" if end and end != start else f"{base} \u00a7{start}"
         if self.page >= 0:
             return f"{base} p.{self.page}"
         return base
+
+    def covers_clause(self, clause: str) -> bool:
+        """Whether `clause` falls inside this chunk's span."""
+        if not clause or not self.clause_start:
+            return False
+
+        def key(value: str) -> tuple[int, ...]:
+            return tuple(int(p) for p in value.split(".") if p.isdigit())
+
+        try:
+            return key(self.clause_start) <= key(clause) <= key(self.clause_end or self.clause_start)
+        except ValueError:
+            return False
 
     @property
     def is_fragment(self) -> bool:
@@ -106,6 +132,10 @@ class AnsweredQuestion(BaseModel):
     evidence: list[Evidence] = Field(default_factory=list)
     attempts: int = 1
     citations: list[str] = Field(default_factory=list, description="Clause-level locators for the sources actually used")
+    review_reasons: list[str] = Field(
+        default_factory=list,
+        description="Why this answer was flagged: unsupported citations, partial series, ungrounded",
+    )
 
 
 class AssessmentResult(BaseModel):
@@ -130,6 +160,10 @@ class IngestResult(BaseModel):
     chunks_indexed: int
     qa_pairs_found: int = 0
     error: str | None = None
+    duplicate_of: str | None = Field(
+        default=None,
+        description="Name of an already-indexed file with identical content; set when this upload was skipped",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +198,15 @@ class ExtractedQAPair(BaseModel):
 
 class ExtractedQAPairs(BaseModel):
     pairs: list[ExtractedQAPair] = Field(default_factory=list)
+
+
+class QueryPlan(BaseModel):
+    """Searches to run for one question, before any answer exists."""
+
+    queries: list[str] = Field(
+        default_factory=list,
+        description="2-4 short search queries, one per distinct thing the question asks",
+    )
 
 
 class DraftedAnswer(BaseModel):

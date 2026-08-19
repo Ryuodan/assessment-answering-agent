@@ -24,6 +24,14 @@ chroma_db/
 *.answers.csv
 filled*.json
 
+# Evaluation runs and reports. Same reasoning as data/: every case carries the
+# answer text and the evidence snippets it was drawn from.
+eval/results/
+
+# Whole-repo dumps written by repo_flatten.py / repo_py_flatten.py.
+all_code.txt
+all_python_code.txt
+
 # ---------------------------------------------------------------------------
 # Python
 # ---------------------------------------------------------------------------

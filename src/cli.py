@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
 from src import service
@@ -24,6 +25,8 @@ async def _ingest(paths: list[str], source_type: SourceType) -> int:
         if result.error:
             failed += 1
             print(f"✗ {result.source_name}: {result.error}")
+        elif result.duplicate_of:
+            print(f"– {result.source_name}: skipped, identical to '{result.duplicate_of}'")
         else:
             detail = f"{result.qa_pairs_found} Q/A pairs" if result.qa_pairs_found else f"{result.chunks_indexed} chunks"
             print(f"✓ {result.source_name}: {detail}")
@@ -82,7 +85,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _use_utf8_console() -> None:
+    """Stop a Windows console codepage from killing a run mid-batch.
+
+    The default Windows console encoding cannot represent Arabic file names or
+    the tick this CLI prints, and `print` raises rather than degrading — so
+    indexing forty-nine policies died on the first Arabic one, after the work
+    was already done. Replacement characters in the terminal are the right
+    trade here; the data itself is written as UTF-8 regardless.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    _use_utf8_console()
     configure_logging()
     args = build_parser().parse_args()
 

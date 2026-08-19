@@ -21,6 +21,7 @@ from langchain_core.documents import Document
 
 from src.config import settings
 from src.embeddings import get_embeddings
+from src.lexical import LexicalIndex, reciprocal_rank_fusion
 from src.models import Evidence, ExtractedQAPair, SourceType
 from src.chunking import chunk_document
 
@@ -33,6 +34,7 @@ class KnowledgeStore:
 
     def __init__(self) -> None:
         settings.ensure_directories()
+        self._lexical_cache: dict = {}
         self._store = Chroma(
             collection_name=settings.collection_name,
             embedding_function=get_embeddings(),
@@ -41,7 +43,7 @@ class KnowledgeStore:
 
     # -- writing ------------------------------------------------------------
 
-    def add_guideline(self, source_name: str, text: str) -> int:
+    def add_guideline(self, source_name: str, text: str, content_hash: str = "") -> int:
         """Chunk and index a guideline document. Replaces any earlier upload of the same name."""
         chunks = chunk_document(text, source_name=source_name, chunk_size=settings.chunk_size)
         documents = [
@@ -50,6 +52,7 @@ class KnowledgeStore:
                 metadata={
                     "source_type": SourceType.GUIDELINE.value,
                     "source_name": source_name,
+                    "content_hash": content_hash,
                     **chunk.metadata,
                 },
             )
@@ -57,7 +60,7 @@ class KnowledgeStore:
         ]
         return self._replace_source(source_name, documents)
 
-    def add_prior_answers(self, source_name: str, pairs: list[ExtractedQAPair]) -> int:
+    def add_prior_answers(self, source_name: str, pairs: list[ExtractedQAPair], content_hash: str = "") -> int:
         """Index question/answer pairs from a completed assessment."""
         documents = [
             Document(
@@ -65,6 +68,7 @@ class KnowledgeStore:
                 metadata={
                     "source_type": SourceType.PRIOR_ANSWER.value,
                     "source_name": source_name,
+                    "content_hash": content_hash,
                     "chunk": index,
                     "question": pair.question,
                     "answer": pair.answer,
@@ -75,6 +79,24 @@ class KnowledgeStore:
         ]
         return self._replace_source(source_name, documents)
 
+    def source_with_hash(self, content_hash: str, *, excluding: str = "") -> str | None:
+        """Name of an already-indexed file with identical content, if any.
+
+        Policy corpora arrive with the same document under two names — "Policy
+        .pdf" and "Policy(1).pdf" — and indexing both doubles every hit from
+        that document, which the evaluator flagged as avoidable retrieval
+        ambiguity.
+        """
+        if not content_hash:
+            return None
+
+        records = self._store.get(where={"content_hash": content_hash}, include=["metadatas"])
+        for metadata in records.get("metadatas") or []:
+            name = metadata.get("source_name", "")
+            if name and name != excluding:
+                return name
+        return None
+
     def _replace_source(self, source_name: str, documents: list[Document]) -> int:
         """Index `documents`, first removing anything previously stored under this name.
 
@@ -82,6 +104,7 @@ class KnowledgeStore:
         the old text stays in the index and keeps being retrieved alongside the new.
         """
         self.delete_source(source_name)
+        self._lexical_cache.clear()
         if not documents:
             return 0
 
@@ -93,10 +116,12 @@ class KnowledgeStore:
 
     def delete_source(self, source_name: str) -> None:
         """Remove every chunk belonging to one uploaded file."""
+        self._lexical_cache.clear()
         self._store.delete(where={"source_name": source_name})
 
     def reset(self) -> None:
         """Drop the whole collection. Used by the UI's 'clear knowledge base' action."""
+        self._lexical_cache.clear()
         self._store.reset_collection()
         logger.warning("Knowledge base cleared")
 
@@ -111,6 +136,10 @@ class KnowledgeStore:
             score=round(score, 4),
             doc_id=meta.get("doc_id", ""),
             clause=meta.get("clause", ""),
+            clause_start=meta.get("clause_start", "") or meta.get("clause", ""),
+            clause_end=meta.get("clause_end", ""),
+            section_clause=meta.get("section_clause", ""),
+            item_count=int(meta.get("item_count", 0)),
             heading=meta.get("heading", ""),
             page=int(meta.get("page", -1)),
             chunk=int(meta.get("chunk", -1)),
@@ -134,11 +163,66 @@ class KnowledgeStore:
         if k <= 0 or not query.strip():
             return []
 
+        # Over-fetch when a lexical pass will re-rank: fusion can only promote a
+        # chunk that one of the two lists actually returned.
+        dense_k = k * 3 if settings.hybrid_search else k
         hits = await self._store.asimilarity_search_with_relevance_scores(
-            query, k=k, filter={"source_type": source_type.value}
+            query, k=dense_k, filter={"source_type": source_type.value}
         )
         evidence = [self._evidence(document, score, source_type) for document, score in hits]
+
+        if settings.hybrid_search:
+            evidence = self._fuse_with_lexical(query, evidence, source_type, k)
+        evidence = evidence[:k]
+
         return self._expand_units(evidence) if expand else evidence
+
+    def _fuse_with_lexical(
+        self, query: str, dense: list[Evidence], source_type: SourceType, k: int
+    ) -> list[Evidence]:
+        """Re-rank dense hits against a BM25 pass over the same collection."""
+        index, documents = self._lexical(source_type)
+        if not len(index):
+            return dense
+
+        by_key = {(item.source_name, item.chunk): item for item in dense}
+        # A lexical hit the dense pass never returned still has to become
+        # Evidence, and the text and metadata for that come from the index.
+        for key in index.search(query, k):
+            if key not in by_key and key in documents:
+                text, metadata = documents[key]
+                by_key[key] = self._evidence(Document(page_content=text, metadata=metadata), 0.0, source_type)
+
+        dense_ranking = [(item.source_name, item.chunk) for item in dense]
+        lexical_ranking = [key for key in index.search(query, k) if key in by_key]
+        fused = reciprocal_rank_fusion(
+            [dense_ranking, lexical_ranking], weights=[1.0, settings.lexical_weight]
+        )
+        return [by_key[key] for key in fused if key in by_key]
+
+    def _lexical(self, source_type: SourceType) -> tuple[LexicalIndex, dict]:
+        """The BM25 index for one collection, built once per process.
+
+        Invalidated by `_replace_source` and `reset`, which are the only ways
+        the collection's contents change.
+        """
+        cached = self._lexical_cache.get(source_type)
+        if cached is not None:
+            return cached
+
+        records = self._store.get(
+            where={"source_type": source_type.value}, include=["documents", "metadatas"]
+        )
+        texts = records.get("documents") or []
+        metadatas = records.get("metadatas") or []
+
+        keys = [(meta.get("source_name", ""), int(meta.get("chunk", -1))) for meta in metadatas]
+        documents = {key: (text, meta) for key, text, meta in zip(keys, texts, metadatas)}
+
+        built = (LexicalIndex(keys, texts), documents)
+        self._lexical_cache[source_type] = built
+        logger.debug("Built lexical index for %s over %d chunks", source_type.value, len(keys))
+        return built
 
     def _expand_units(self, evidence: list[Evidence]) -> list[Evidence]:
         """Pull in the sibling parts of any split unit a hit landed in."""

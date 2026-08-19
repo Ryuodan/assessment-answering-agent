@@ -12,6 +12,7 @@ is what `_shape` does. The consequence is covered in demo_data/README.md.
 from __future__ import annotations
 
 import csv
+import os
 import re
 from pathlib import Path
 
@@ -29,19 +30,44 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 ARABIC_RE = re.compile(r"[؀-ۿݐ-ݿ]")
+
+# A font that covers Latin and Arabic, in (regular, bold) pairs. The generator
+# is run on developer machines rather than in the container, so the Linux
+# DejaVu path alone made this module unusable on Windows and macOS.
+_FONT_CANDIDATES = (
+    Path("/usr/share/fonts/truetype/dejavu") / "DejaVuSans.ttf",
+    Path("/Library/Fonts") / "Arial Unicode.ttf",
+    Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf",
+)
 
 _FONTS_READY = False
 
 
+def _bold_variant(regular: Path) -> Path:
+    """The bold face beside a regular one, or the regular face again."""
+    for suffix in ("-Bold", "bd", " Bold"):
+        candidate = regular.with_name(f"{regular.stem}{suffix}{regular.suffix}")
+        if candidate.is_file():
+            return candidate
+    return regular
+
+
 def _register_fonts() -> None:
-    """DejaVu covers Latin and Arabic presentation forms; register it once."""
+    """Register a Latin+Arabic font under the name the styles ask for."""
     global _FONTS_READY
     if _FONTS_READY:
         return
-    pdfmetrics.registerFont(TTFont("DejaVu", str(FONT_DIR / "DejaVuSans.ttf")))
-    pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(FONT_DIR / "DejaVuSans-Bold.ttf")))
+
+    regular = next((path for path in _FONT_CANDIDATES if path.is_file()), None)
+    if regular is None:
+        raise FileNotFoundError(
+            "No Latin+Arabic TrueType font found. Looked for: "
+            + ", ".join(str(path) for path in _FONT_CANDIDATES)
+        )
+
+    pdfmetrics.registerFont(TTFont("DejaVu", str(regular)))
+    pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(_bold_variant(regular))))
     pdfmetrics.registerFontFamily("DejaVu", normal="DejaVu", bold="DejaVu-Bold")
     _FONTS_READY = True
 

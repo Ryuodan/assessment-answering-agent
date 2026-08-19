@@ -17,34 +17,56 @@ Three non-obvious flags matter:
   `model_kwargs` because it is not a declared field on `OpenAIEmbeddings`.
 """
 
+# from __future__ import annotations
+
+# import logging
+# from functools import lru_cache
+
+# from langchain_core.embeddings import Embeddings
+# from langchain_openai import OpenAIEmbeddings
+# from pydantic import SecretStr
+
+# from src.config import settings
+
+# logger = logging.getLogger(__name__)
+
+
+# @lru_cache(maxsize=1)
+# def get_embeddings() -> Embeddings:
+#     """Return the shared embeddings client."""
+#     logger.debug(
+#         "Creating embeddings client model=%s base_url=%s",
+#         settings.embedding_model,
+#         settings.embedding_base_url,
+#     )
+#     return OpenAIEmbeddings(
+#         model=settings.embedding_model,
+#         base_url=settings.embedding_base_url,
+#         api_key=SecretStr(settings.embedding_api_key),
+#         check_embedding_ctx_length=False,
+#         tiktoken_enabled=False,
+#         chunk_size=64,  # To fit API max http chunk size (no affect on RAG)
+#         model_kwargs={"encoding_format": "float"},
+#     )
+
+
+
 from __future__ import annotations
 
 import logging
 from functools import lru_cache
 
 from langchain_core.embeddings import Embeddings
-from langchain_openai import OpenAIEmbeddings
-from pydantic import SecretStr
-
-from src.config import settings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
 def get_embeddings() -> Embeddings:
-    """Return the shared embeddings client."""
-    logger.debug(
-        "Creating embeddings client model=%s base_url=%s",
-        settings.embedding_model,
-        settings.embedding_base_url,
-    )
-    return OpenAIEmbeddings(
-        model=settings.embedding_model,
-        base_url=settings.embedding_base_url,
-        api_key=SecretStr(settings.embedding_api_key),
-        check_embedding_ctx_length=False,
-        tiktoken_enabled=False,
-        chunk_size=64,  # To fit API max http chunk size (no affect on RAG)
-        model_kwargs={"encoding_format": "float"},
+    """Return the shared local HuggingFace embeddings client."""
+    logger.debug("Creating local HuggingFace embeddings client for BAAI/bge-m3")
+    return HuggingFaceEmbeddings(
+        model_name="BAAI/bge-m3",
+        encode_kwargs={"normalize_embeddings": True},
     )

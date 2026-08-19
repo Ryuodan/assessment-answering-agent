@@ -1,0 +1,701 @@
+[
+  {
+    "test_id": "TC-001",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "Upon termination or expiration of our contract, within what timeframe will you return our data and permanently delete it from your systems?",
+    "expected_core_facts": [
+      "All customer data in T2's possession is deleted within 90 days of contract termination, unless retention is required by law",
+      "Data is returned upon the customer's written request, within the agreed date, in an agreed, easily accessible and usable format",
+      "T2 is not responsible for the data after 60 days from the termination/expiration date if no explicit request for data return is received",
+      "Deletion covers all storage locations including backups, archives and disaster recovery systems",
+      "Data is securely erased using industry-standard deletion methods so it cannot be recovered",
+      "If data cannot be deleted for technical or legal reasons, the customer is informed of the reason and the expected deletion date"
+    ],
+    "source_reference": "T2-Client Data Retention and Deletion Policy (T2-POL-CDRDP-2024-023), Section 5.1 Data Retrieval and Section 5.2 Data Deletion",
+    "evaluator_notes": "A correct answer MUST state both the 90-day deletion window and the 60-day return-request window, and must not confuse the two. Watch for the system inventing a '7 year' or 'NIST SP 800-88' retention standard - neither appears anywhere in T2 policy. Bonus if it mentions backups/archives/DR systems are in scope."
+  },
+  {
+    "test_id": "TC-002",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "What is your minimum retention period for cybersecurity event logs and audit trails?",
+    "expected_core_facts": [
+      "Cybersecurity event logs must be retained securely for a minimum period of twelve (12) months",
+      "Contracts with third-party security service providers must explicitly require the same minimum 12-month retention period",
+      "Logs exceeding the retention period must be securely and irreversibly deleted",
+      "Retention is driven by relevant cybersecurity legal and regulatory requirements"
+    ],
+    "source_reference": "T2 - Cybersecurity Event Logs and Monitoring Management Policy, Sections 3.1.5, 3.1.6 and 3.1.13",
+    "evaluator_notes": "Look for the explicit figure '12 months' (or 'twelve months'). A strong answer also mentions that the 12-month requirement is flowed down contractually to third-party providers. Do not accept '6 months' or 'as required by law' alone."
+  },
+  {
+    "test_id": "TC-003",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "How frequently do you test the restoration of backups? Please state the frequency for standard, critical and cloud-hosted systems.",
+    "expected_core_facts": [
+      "Restoration testing at least once a year for all backups",
+      "Restoration testing once every three months for critical systems' backups",
+      "Restoration testing once every six months for remote work (telework) systems' backups",
+      "All cloud backups must undergo restoration testing at least once every six months",
+      "Backup scope includes databases, applications, servers and network devices"
+    ],
+    "source_reference": "T2 - Backup and Recovery Policy (T2-POL-BRP-2024-013), Sections 3.4.1 - 3.4.6",
+    "evaluator_notes": "All four cadences must be present and correctly matched to their system type. A common failure is collapsing everything into 'annually'. Note the distinct 6-month cadence applies to BOTH telework backups and cloud backups."
+  },
+  {
+    "test_id": "TC-004",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "How often is penetration testing performed against your critical systems and your internet-facing services, and who performs it?",
+    "expected_core_facts": [
+      "Penetration testing on critical systems, their technology components and all internal and external services at least every six months",
+      "Penetration testing on telework systems and all externally provided (internet-facing) services at least once a year",
+      "Scope covers infrastructure, websites, web applications, mobile/tablet applications, APIs, email and remote access",
+      "A rules of engagement document covering scope, privileges, duration, target systems and testing mechanism must be developed before testing",
+      "A qualified team with relevant certificates and experience must be appointed; if a third party is used, third-party cybersecurity requirements must be verified",
+      "Testing must use NCA-approved tools and methodologies",
+      "A follow-up test must be conducted within 30 days of remediation to confirm resolution"
+    ],
+    "source_reference": "T2 - Penetration Testing Policy, Sections 3.1.1 - 3.1.7, 3.1.19 - 3.1.21",
+    "evaluator_notes": "Must distinguish the six-month cadence (critical systems) from the annual cadence (telework and externally provided services). Also check the 30-day retest figure and the mention of NCA-approved tools. Rules of engagement should be named."
+  },
+  {
+    "test_id": "TC-005",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "Please provide your incident severity classification levels along with the target response and resolution times for each.",
+    "expected_core_facts": [
+      "Catastrophic - target response time: Immediate; target resolution time: Immediate",
+      "Critical Incident - target response time: Immediate; target resolution time: 2 hours",
+      "High Incident - target response time: 2-3 hours; target resolution time: 5-6 hours",
+      "Medium Incident - target response time: 5-6 hours; target resolution time: 10-12 hours",
+      "Limited Incident - target response time: 7 hours; target resolution time: 48 hours",
+      "Incidents not resolved within the pre-defined timeframes must be escalated per the incident escalation rules and procedures"
+    ],
+    "source_reference": "T2 - Cybersecurity Incident and Threat Management Policy, Section 3.1.6, Table 1 - Cybersecurity Incidents Classification; escalation in Section 3.3.7",
+    "evaluator_notes": "All five severity levels must be named. Response time and resolution time must not be swapped (e.g. Critical is 'Immediate' response but '2 hours' resolution). The escalation-on-breach statement is a bonus, not mandatory."
+  },
+  {
+    "test_id": "TC-006",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "Describe your password policy: minimum length, complexity, rotation frequency, password history and account lockout thresholds.",
+    "expected_core_facts": [
+      "Minimum length of 12 characters, or the maximum permitted by the system, whichever is shorter",
+      "Must contain at least 3 of the 4 element types: uppercase letters, lowercase letters, digits, and special characters",
+      "Passwords must be changed every 60 days (automatically where possible, otherwise manually)",
+      "Users are prevented from reusing their last 4 passwords",
+      "After 5 failed login attempts the account is locked for at least 30 minutes unless unlocked by the IT Manager",
+      "Passwords must not contain personal information such as name, date of birth, driving licence number or employee number",
+      "Passwords must be stored in encrypted form and must never be sent in clear text",
+      "Vendor default credentials on all new systems must be changed, disabled or removed at installation"
+    ],
+    "source_reference": "Password Management Policy (Arabic - سياسة إدارة كلمات المرور), Sections 4.3, 4.5, 5.1 and 5.2",
+    "evaluator_notes": "This is an English question whose only source is the Arabic-language policy - it tests cross-language retrieval in the reverse direction. All five numbers (12, 3-of-4, 60, 4, 5/30) must be correct. Reject any answer that quotes a 90-day rotation or 8-character minimum."
+  },
+  {
+    "test_id": "TC-007",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "Where is our data physically hosted and stored, and what contractual clauses do you require from your cloud and hosting providers?",
+    "expected_core_facts": [
+      "Information hosting and storage location must be inside the Kingdom of Saudi Arabia, and data must not be subject to the laws of any other country",
+      "All contracts and SLAs with cloud/hosting providers must explicitly require: data storage location within KSA; data classification and labelling completed before transfer; provider compliance with NCA cloud cybersecurity requirements; non-disclosure clauses; provisions for data return in a usable format and secure deletion on termination/expiry; regular and secure backups aligned to T2's backup policy; tenant isolation of the hosting environment",
+      "These requirements must be reviewed and validated by the Cybersecurity and Legal Departments before any agreement is signed",
+      "Cybersecurity managed service centres for operation and monitoring that use remote access must be located entirely inside the Kingdom of Saudi Arabia"
+    ],
+    "source_reference": "T2 - Cloud Computing and Hosting Cybersecurity Policy, Sections 3.2.1, 3.2.4 and 3.4; T2 - Third-Party Cybersecurity Policy, Section 3.2.1.2",
+    "evaluator_notes": "The in-Kingdom data residency requirement is the mandatory core fact. A strong answer lists at least four of the required SLA clauses and names the Cybersecurity and Legal Departments as the pre-signature reviewers."
+  },
+  {
+    "test_id": "TC-008",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "What is your vulnerability scanning and assessment frequency across your environment?",
+    "expected_core_facts": [
+      "All systems: every 3 months (operating systems, databases, network devices, applications)",
+      "Critical systems connected to the internet: monthly",
+      "Internal critical systems: scanning monthly, with vulnerability assessment every three months",
+      "Telework systems: monthly",
+      "Social media account systems: every 3 months",
+      "Cloud computing service systems: every 3 months",
+      "Scanning and assessment must be performed by a competent and qualified team",
+      "Vulnerabilities are classified as Critical, High, Medium or Low and remediated within defined timeframes based on severity"
+    ],
+    "source_reference": "T2 - Vulnerabilities Management Policy, Section 3.1.1 (frequency table and footnote) and Section 3.1.11",
+    "evaluator_notes": "The monthly cadence for internet-facing critical systems and telework systems is the key differentiator from the 3-month baseline. Also check the footnote nuance for internal critical systems (monthly scan / quarterly assessment). Note the policy states severity classes but does NOT state numeric remediation SLAs per severity - the system should not invent them."
+  },
+  {
+    "test_id": "TC-009",
+    "category": "Direct Extraction",
+    "question_language": "en",
+    "question": "How long do you retain cryptographic key management records, and what is your notification timeline if a key is compromised or lost?",
+    "expected_core_facts": [
+      "Cryptographic key logs are retained securely for a minimum of 5 years after key expiry or revocation, to support auditing and forensic investigations",
+      "After the retention period, key logs must be securely destroyed per secure disposal guidelines",
+      "If a key is compromised or lost, the Cybersecurity Department must be notified within 2 hours of detection",
+      "The compromised or lost key must be immediately revoked and a replacement key issued",
+      "A detailed security investigation must be conducted, with root causes and corrective actions documented",
+      "Key records must include creation date, renewal date, expiration date, deactivation date, key and certificate details, and when/why the key was accessed"
+    ],
+    "source_reference": "T2 - Cryptography Policy, Sections 3.5.19, 3.5.20 and 3.5.25",
+    "evaluator_notes": "The two numbers that must appear are '5 years' (key log retention) and '2 hours' (compromise notification to the Cybersecurity Department). Do not accept '72 hours' here - that is the PDPL personal-data-breach figure from a different policy."
+  },
+  {
+    "test_id": "TC-010",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "Describe your encryption controls end to end: data at rest, data in transit, cloud storage, key management and the standards you align to.",
+    "expected_core_facts": [
+      "Cryptography procedures, standards and controls comply with the National Cryptography Standards (NCS-1:2020) issued by the NCA",
+      "Data-in-transit must be encrypted for all critical systems; data-at-rest must be encrypted for critical systems at file, database or specific-column level",
+      "Data classified as Restricted must be encrypted at rest and encrypted when stored on mobile devices and media",
+      "Data in transit to, stored in, or in transit from cloud services must be encrypted using up-to-date methods per the national encryption standards and the approved data classification policy; the advanced level applies to cloud services per CCC-1:2020",
+      "Internally developed cryptographic algorithms must not be used (per OWASP Guide to Cryptography and NCS-1:2020)",
+      "Cryptographic protocols such as IPSEC and TLS must be used; TLS certificates for public web servers must be valid and issued by trusted third-party CAs",
+      "Key storage and processing within the Certification Authority must use Hardware Security Modules (HSMs); private keys are classified as 'Top Confidential'",
+      "Key lifecycle covers generation, registration/certification, use, storage, revocation/validation, archive, destruction and accounting; key length requirements are reviewed at least annually",
+      "Third parties must apply encryption controls based on T2's data classification, in line with T2's approved Cryptography Standard"
+    ],
+    "source_reference": "T2 - Cryptography Policy, Sections 3.1.3 - 3.1.4, 3.2, 3.3, 3.4.4, 3.5; T2 - Cloud Computing and Hosting Cybersecurity Policy, Section 3.1.4; T2 - Information Classification Policy, Section 4.2.4; T2 - Third-Party Cybersecurity Policy, Section 3.7.4",
+    "evaluator_notes": "This answer must draw on at least three separate policy documents. The mandatory anchor is 'NCS-1:2020'. Look for the at-rest granularity (file / database / column level), the HSM requirement and the ban on in-house algorithms. Named algorithms like 'AES-256' or 'RSA-2048' are NOT in the source - flag them as hallucination."
+  },
+  {
+    "test_id": "TC-011",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "Walk us through your complete personnel offboarding process from a security perspective, including asset return, access revocation and post-departure monitoring.",
+    "expected_core_facts": [
+      "The Human Resources director must inform the relevant units upon employment expiry or termination so necessary actions are taken",
+      "All assets must be returned and personnel access rights cancelled on their last working day and prior to obtaining the necessary clearance",
+      "Asset return must be documented through an official release form signed by the employee and confirmed by the relevant department",
+      "After termination, cybersecurity teams must ensure all credentials and access rights are revoked, monitor for unauthorized access attempts, and audit the last 30 days of access logs",
+      "A formal exit clearance form must be completed, including a checklist of returned assets (laptops, access cards, tokens), revocation of system access privileges, mandatory signature from the departing employee, and approval by the cybersecurity department",
+      "Personnel must be reminded of confidentiality and non-disclosure requirements on termination; NDA clauses extend beyond the end of employment",
+      "Access privileges must be reviewed where they were granted after the user's employment or role termination",
+      "For third-party personnel, access rights must be revoked upon end/termination of service or on a role change that removes the need for access"
+    ],
+    "source_reference": "T2 - Human Resources Policy, Sections 3.1.6 and 3.4.1 - 3.4.4; T2 - Compliance With Cybersecurity Legislation And Regulations Policy, Sections 4.11 and 4.12; T2 - Personnel Security and Awareness Training Policy, Section 3.1.3; T2 - Identity and Access Management Policy, Sections 3.1.14 and 5.1; T2 - Third-Party Cybersecurity Policy, Section 3.4.4",
+    "evaluator_notes": "Requires combining at least four documents. Two facts are non-negotiable: revocation occurs 'on the last working day' and the cybersecurity team audits 'the last 30 days of access logs'. The official release form and the exit clearance form live in two different policies - a complete answer surfaces both."
+  },
+  {
+    "test_id": "TC-012",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "What are your documented RTO and RPO targets, and how do your backup, disaster recovery and business continuity arrangements support them?",
+    "expected_core_facts": [
+      "Specific numeric RTO and RPO values are NOT stated in the policy documents; they are defined based on Business Impact Analysis (BIA) results and documented in 'Appendix 1 - Recovery Time Objectives (RTO) and Recovery Point Objectives (RPO)', which is a separate referenced document",
+      "T2 must be able to restore backups within a defined timeframe aligned to business needs and the targeted RTO and RPO",
+      "Critical systems and their recovery priorities are defined based on BIA results and included in disaster recovery plans; disaster recovery centres for critical systems must be established",
+      "Both online (remote/cloud) and offline (isolated physical media) backups must cover all critical systems' components; backups are stored in secure off-site locations",
+      "Periodic DR tests must be conducted at least once a year and after any major changes to infrastructure, systems or business operations; an annual live DR test for critical systems must be conducted whenever possible",
+      "During recovery, critical security systems must be restored first (e.g. Firewalls, SIEM, PAM, Anti-Malware, Email Security)",
+      "Disaster recovery teams must undergo quarterly training and simulations",
+      "The final recovery report must document compliance with the established RTO and RPO targets",
+      "A cloud data recovery plan must ensure data restoration within 24 hours of an incident and be tested at least twice a year"
+    ],
+    "source_reference": "T2 - Disaster Recovery Plan Policy (T2-POL-AMP-2024-026), Sections 5.1, 5.2, 5.5, 6.2.2, 6.3.2 and Appendix 1; T2 - Backup and Recovery Policy, Sections 3.2.1 and 3.4.4; T2 - Cybersecurity Business Continuity Policy, Sections 3.2.1 - 3.2.9; T2 - Data Cybersecurity and Privacy Policy, Section 3.7",
+    "evaluator_notes": "This is a partial-information trap. A CORRECT answer explicitly states that concrete RTO/RPO figures are not in the policy set and points to Appendix 1 / the BIA as the authoritative source, while still describing the supporting controls. Any answer that quotes specific RTO/RPO hour values is a hallucination and must be failed. The 24-hour cloud data restoration target is a real figure but belongs to the cloud data recovery plan - it must not be presented as the enterprise RTO."
+  },
+  {
+    "test_id": "TC-013",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "Describe your third-party and supply chain risk management programme, from vendor selection through ongoing monitoring to contract exit.",
+    "expected_core_facts": [
+      "Documented and approved procedures manage the third-party relationship before, during and after the end of the contractual relationship",
+      "A cybersecurity risk assessment of the third party and its services must be conducted before signing contracts, and supply chain risks are incorporated into T2's overall risk management and cybersecurity governance",
+      "A cybersecurity risk assessment is also performed when planning to acquire new services from a third party",
+      "Contracts must include T2's cybersecurity requirements, binding compliance clauses, NDA/non-disclosure clauses, and secure deletion of T2 data during and after the relationship",
+      "Outsourcing and managed service personnel working on critical systems or with classified data access must undergo screening or vetting, and must sign a confidentiality undertaking before starting work",
+      "Outsourcing services for critical systems and services handling classified data must be provided by national companies and entities; managed service centres using remote access must be entirely within the Kingdom of Saudi Arabia",
+      "Third-party services must be monitored in real time via automated security scans, periodic security assessments and incident-based audits",
+      "A formal compliance review of third-party cybersecurity practices is conducted semi-annually, with results documented and communicated to senior cybersecurity management",
+      "On non-compliance, the third party must notify T2's cybersecurity team immediately and provide a corrective action plan within 48 hours of notification",
+      "T2 retains the right to test and audit third-party compliance and to require the necessary reports; third-party personnel must cooperate with event log review and audit activities",
+      "Contracts must include the ability to securely delete T2 data at the third party's side at the end of the relationship, with evidence of deletion provided"
+    ],
+    "source_reference": "T2 - Third-Party Cybersecurity Policy, Sections 3.1, 3.2, 3.3, 3.4.4, 3.7.3 and 3.8; T2 - Cybersecurity Risk Management Policy, Section 3.2.2.1; T2 - Compliance With Cybersecurity Legislation And Regulations Policy, Sections 4.10 and 4.11",
+    "evaluator_notes": "Key checkable numbers: 'semi-annual' compliance reviews and the '48 hour' corrective action plan deadline. The in-Kingdom / national-companies requirement for critical systems and classified data is a distinctive Saudi control - its absence indicates shallow retrieval. Evidence of deletion at exit should be mentioned."
+  },
+  {
+    "test_id": "TC-014",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "What data classification scheme do you use, and what specific handling restrictions apply to your most sensitive classifications?",
+    "expected_core_facts": [
+      "The classification levels listed are: Public, Internal Use, Restricted, Secret/Confidential, and Top Secret",
+      "'Internal Use' is the default classification level when one has not been explicitly defined",
+      "Restricted covers information protected by regulation, policy or contract - examples include customer data collected during consulting engagements, financial information including credit card and account numbers, national/social security numbers, personnel and payroll records, and customer PII",
+      "Restricted data must be encrypted at rest, encrypted on mobile devices and media, protected by strong passwords, and stored in a locked drawer/room or area controlled by cipher lock or card reader",
+      "Restricted data must not be transferred via unencrypted email, text messaging, instant messaging, unencrypted FTP or unencrypted mobile devices, and must not be posted on any public website",
+      "Classified data (Secret/Confidential, Restricted) must NOT be stored on portable storage devices such as external hard drives or USB sticks, regardless of the level of encryption used",
+      "Classified data must not be input, processed, changed, stored or transmitted on employee-owned (BYOD) devices, unless that data is the employee's own data",
+      "Technology assets used to manage T2 social media accounts must not contain classified data",
+      "Classification applies to all formats: digital, electronic communications, physical printouts and spoken discussions",
+      "Data owners are responsible for classifying data and must periodically review it to ensure the correct classification is applied"
+    ],
+    "source_reference": "T2 - Information Classification Policy, Sections 3.2, 4.1.1 - 4.1.6 and 4.2; T2 - Data Cybersecurity and Privacy Policy, Sections 3.2.2, 3.2.8, 3.2.9 and 3.2.12",
+    "evaluator_notes": "Note a genuine inconsistency in the source: Section 4.1.1 says 'one of the following Four categories' but then lists five (Public, Internal Use, Restricted, Secret/Confidential, Top Secret). A high-quality answer lists all five and may flag the discrepancy; do not penalise an answer that reports five levels. The absolute prohibition on portable storage 'regardless of encryption' is the strongest differentiating fact - its absence indicates the system only retrieved the classification policy and missed the data privacy policy."
+  },
+  {
+    "test_id": "TC-015",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "Describe your security monitoring capability: what is logged, who monitors it, and how are the logs themselves protected?",
+    "expected_core_facts": [
+      "Logs must contain as a minimum: event type; source of event (IIS, EDR, AV, Sysmon, security logs); the system the event was performed from; date and time of event; the user or tool used; and event status/outcome (success vs. failure)",
+      "Logging explicitly includes privileged account activities and remote access events, capturing all successful and unsuccessful login attempts with user identities and timestamps",
+      "A dedicated cybersecurity event monitoring team must provide 24/7 monitoring, either through an in-house Security Operations Center (SOC) or a contracted Managed Security Services Provider (MSSP)",
+      "SIEM correlation rules must automatically alert on suspicious privileged-account activity, remote access attempts and unauthorized configuration changes",
+      "The SIEM system must undergo quarterly performance evaluations to validate detection rules, update correlation algorithms and enhance reporting",
+      "Logs are retained for a minimum of 12 months and securely deleted thereafter",
+      "Logs must be protected against unauthorized access, tampering, modification, unlawful deletion and log evasion techniques; integrity checks using cryptographic hashing must be performed on stored logs",
+      "Logs must be protected in transit to the central log repository (e.g. using encryption), and protected using encryption, HMAC and redundant storage",
+      "Event logs and audit trails containing PII must use anonymization or tokenization",
+      "All identity and access management systems, including those managing third-party accounts, must forward logs to the central logging and monitoring system",
+      "Anomalies or threats identified from log analysis must be immediately reported to the cybersecurity incident response team",
+      "The monitoring capability must follow the NCA's operating model for cybersecurity operation centers"
+    ],
+    "source_reference": "T2 - Cybersecurity Event Logs and Monitoring Management Policy, Sections 2, 3.1.1 - 3.1.13 and 3.1.17 - 3.1.22; T2 - Identity and Access Management Policy, Section 3.1.9",
+    "evaluator_notes": "The six mandatory log fields should be enumerated. Check for the 24/7 SOC-or-MSSP option (both are acceptable per policy), the 12-month retention, and the PII anonymization/tokenization requirement, which auditors specifically probe. Quarterly SIEM performance evaluation is a good depth indicator."
+  },
+  {
+    "test_id": "TC-016",
+    "category": "Synthesis",
+    "question_language": "en",
+    "question": "What are your multi-factor authentication and privileged access management requirements, and how often are access rights reviewed?",
+    "expected_core_facts": [
+      "MFA implementations must use at least two of: something you know (password), something you have (OTP via SMS or authenticator app), something you are (biometrics such as fingerprint or facial recognition)",
+      "MFA must be integrated with remote access technologies such as VPN",
+      "MFA is required for users with critical and sensitive privileges accessing Cloud Technology Systems; such roles must be identified, documented and maintained in a regularly updated list",
+      "MFA is required for all access to management systems and administrative consoles, and for all personnel accessing critical systems and the systems used to manage/monitor them",
+      "MFA services must be provided to subscribers for all cloud accounts of users with critical and sensitive privileges",
+      "A Privileged Access Management (PAM) solution must be used to maintain and manage privileged accounts, with encryption of related communications and session recording where applicable",
+      "Default privileged accounts such as 'Root', 'Admin' and 'Sys id' must be renamed; privileged accounts must not be used for day-to-day operations or connected to the internet",
+      "An authorization matrix must be documented, approved and reviewed based on need-to-know/need-to-use, segregation of duties and least privilege",
+      "Generic user accounts must not be allowed; inactive accounts must be disabled per the approved IAM Standard",
+      "User IDs and access privileges must be periodically reviewed with IT and application owners across all applications, networks, infrastructure and servers, and user devices",
+      "Access privileges must also be reviewed when privileges are unused for a long period (e.g. more than 3 months), when conflicting privileges violate segregation of duties, when no longer required for the role, and when granted after employment or role termination",
+      "Sessions must be managed with authenticity, lockout and timeout - e.g. closing the session after 15 minutes and terminating the timeout after 10 minutes of inactivity - with the capability to immediately terminate remote sessions via documented proxy servers"
+    ],
+    "source_reference": "T2 - Identity and Access Management Policy, Sections 3.1.5, 3.1.7, 3.1.8, 3.1.17 - 3.1.24, 4.1 Privileged Access Management, and 5.1 Identity and Access and Privileges Management Review",
+    "evaluator_notes": "The three MFA factor categories and the 'at least two factors' rule must be present. Check the '3 months unused privileges' review trigger and the session timeout values (15 minutes session close / 10 minutes inactivity timeout) - the source phrasing is unusual, so reproduce it as written rather than 'correcting' it. The renaming of Root/Admin/Sys id default accounts is a distinctive control."
+  },
+  {
+    "test_id": "TC-017",
+    "category": "Scenario-Based",
+    "question_language": "en",
+    "question": "If an employee resigns or is terminated, how quickly is their access to your systems and our data revoked, and what evidence do you retain of that?",
+    "expected_core_facts": [
+      "Access rights are cancelled on the employee's last working day, prior to obtaining the necessary clearance, and all assets must be returned by that point",
+      "The HR director must inform the relevant units upon employment expiry or termination so the necessary actions are taken",
+      "The cybersecurity team must confirm all credentials and access rights are revoked, monitor for unauthorized access attempts, and audit the last 30 days of access logs to verify security compliance",
+      "Asset return is evidenced by an official release form signed by the employee and confirmed by the relevant department",
+      "A formal exit clearance form must be completed with an asset checklist (laptops, access cards, tokens), revocation of system access privileges, the departing employee's mandatory signature, and cybersecurity department approval",
+      "The departing employee is reminded of confidentiality and non-disclosure obligations, which continue after the end of employment",
+      "For shared administrative or system passwords, the password must be changed when the system administrator who shared it leaves their job or transfers to another position",
+      "For third-party personnel, access is revoked on end/termination of their service or on a role change removing the need for access"
+    ],
+    "source_reference": "T2 - Human Resources Policy, Sections 3.1.6, 3.4.2, 3.4.3 and 3.4.4; T2 - Compliance With Cybersecurity Legislation And Regulations Policy, Section 4.12; Password Management Policy (Arabic), Section 6.1; T2 - Third-Party Cybersecurity Policy, Section 3.4.4",
+    "evaluator_notes": "The single most important phrase is 'on their last working day' - vendors are frequently scored on whether revocation is same-day. The '30 days of access logs' audit is the evidence-retention element. Bonus credit if the answer surfaces the shared-admin-password rotation rule, which is only found in the Arabic-language password policy."
+  },
+  {
+    "test_id": "TC-018",
+    "category": "Scenario-Based",
+    "question_language": "en",
+    "question": "In the event of a ransomware attack that encrypts production systems and reaches your backup repository, what is your response and recovery process, and when would we be notified?",
+    "expected_core_facts": [
+      "The incident response team must immediately analyse the incident data and determine its impact; the incident is classified by severity per the incident classification table",
+      "For backups affected by a cybersecurity incident: immediate isolation of affected backups to prevent data corruption, validation of backup integrity through cryptographic verification, implementation of rapid recovery processes, and reporting to regulatory authorities if necessary",
+      "Subscribers affected by a cybersecurity incident must be notified immediately after detection, with sufficient information to assess risk, analyse impact and take corrective action, and to track incident response progress on the provider side",
+      "Cybersecurity incidents must be reported to the National Cybersecurity Authority (NCA) once detected, and alerts, threat intelligence, incident reports and breach indicators shared with NCA",
+      "The DRP is activated under the authority of the Disaster Recovery Team Leader after incident assessment; critical security systems and network infrastructure are restored first (Firewalls, SIEM, PAM, Anti-Malware, Email Security)",
+      "Recovery measures include implementing compensating controls, deploying updated security patches, restoring system backup versions and reconfiguring security devices including firewalls and IDS",
+      "Root Cause Analysis is a mandatory phase of the incident response process, with remediation plans developed from the findings",
+      "All activities, decisions and incidents must be logged for post-incident review and compliance evidence; restored systems are validated and tested before resuming normal operations",
+      "A 'lessons learned' meeting must be held with all involved functions after a major incident",
+      "If personal data is involved, the data breach must be reported within 72 hours as mandated by PDPL, notifying the relevant data protection authority and affected data subjects",
+      "T2 must support subscribers in legal cases, including digital forensics analysis and preservation of digital evidence, with a formal Chain of Custody process using cryptographic hashing (e.g. SHA-256)"
+    ],
+    "source_reference": "T2 - Cybersecurity Incident and Threat Management Policy, Sections 3.1.4 - 3.1.6, 3.2.5 - 3.2.7, 3.3.2, 3.3.5, 3.3.9, 3.3.13 and 3.4.5; T2 - Backup and Recovery Policy, Section 3.5; T2 - Disaster Recovery Plan Policy, Sections 4.2, 6.2 and 6.3; T2 - Data Cybersecurity and Privacy Policy, Sections 3.4.5 and 3.4.6",
+    "evaluator_notes": "Three notification obligations must be distinguished: subscribers 'immediately after detection', NCA 'once detected', and personal data breaches within '72 hours' under PDPL. The backup-specific response steps (isolate, cryptographically verify, rapid recovery) are the direct answer to the 'backups also hit' part of the scenario - a generic incident response answer that ignores them should score lower."
+  },
+  {
+    "test_id": "TC-019",
+    "category": "Scenario-Based",
+    "question_language": "en",
+    "question": "A critical vulnerability is discovered in one of your internet-facing applications but a vendor patch is not yet available. What do you do in the interim, and how are we informed?",
+    "expected_core_facts": [
+      "Where a vulnerability cannot be immediately remediated, compensating controls must be implemented: restrict access to affected systems, apply additional monitoring and logging, apply firewall rules to mitigate exploitation risks, and regularly reassess the risk until a permanent fix is available",
+      "Additional compensating measures include disabling affected services and reporting to the incident response team",
+      "An escalation procedure must be triggered so unresolved technical vulnerabilities are reviewed and addressed by management in line with the organization's risk and incident response frameworks",
+      "Subscribers must be immediately notified of any vulnerabilities that may affect their services or data, and provided with all necessary information to address them effectively",
+      "If the critical vulnerability poses a significant risk to national security or organizational operations, it must be immediately reported to the National Cybersecurity Authority (NCA) and relevant regulatory bodies",
+      "Newly detected critical vulnerabilities must be fixed per the approved Change Management Procedures; emergency patches follow the emergency change management process for high-risk vulnerabilities",
+      "A rollback plan must be developed and implemented if patches adversely affect system, application or service performance",
+      "After remediation, a follow-up security assessment must be conducted to confirm the issue is resolved and no residual risks remain; where identified during penetration testing, a follow-up test is conducted within 30 days"
+    ],
+    "source_reference": "T2 - Vulnerabilities Management Policy, Sections 3.2.4 and 3.2.6 - 3.2.14; T2 - Patch Management Policy, Section 3.1.7; T2 - Penetration Testing Policy, Sections 3.1.19 and 3.1.21",
+    "evaluator_notes": "The four compensating controls should be listed. Two escalation paths must both appear: immediate notification to affected subscribers, and reporting to the NCA where national security or operations are materially at risk. Look for the emergency change management route and the post-remediation validation step - a complete answer closes the loop rather than stopping at mitigation."
+  },
+  {
+    "test_id": "TC-020",
+    "category": "Scenario-Based",
+    "question_language": "en",
+    "question": "A newly hired developer needs access to a production database containing our data. What controls must be satisfied before that access is granted?",
+    "expected_core_facts": [
+      "Personnel must undertake to comply with cybersecurity policies before being granted access to T2 systems, and must sign a Confidentiality/Non-Disclosure Agreement before being granted access to any information resource",
+      "A standardized official form must be signed acknowledging commitment to cybersecurity policies before obtaining access to cloud technology systems",
+      "Background checks are required prior to employment; security screening is required for personnel in cybersecurity functions, privileged access technology functions and critical systems functions",
+      "Approved Security Awareness training must be completed prior to, or within 30 days of, being granted access to any T2 information resource",
+      "Direct access to and handling of critical systems' databases must NOT be granted to users; only Database Administrators may access databases, and only through the applications",
+      "Procedures must prevent Database Administrators from accessing classified and sensitive data, per the approved Database Security Policy",
+      "Access must be granted through the documented and approved access management procedure and the approved authorization matrix, applying need-to-know/need-to-use, segregation of duties and least privilege",
+      "Production environments must be physically and logically separated from non-production (development and testing) environments, with documented network segmentation and access controls",
+      "Production data used in non-production environments must be masked or scrambled; synthetic data is preferred for testing and development",
+      "Cybersecurity roles and responsibilities must be defined in the job description, applying the non-conflict-of-interest principle",
+      "Authentication must be via the automated and centralized access control system (e.g. Active Directory); generic accounts are not permitted"
+    ],
+    "source_reference": "T2 - Identity and Access Management Policy, Sections 3.1.1, 3.1.5 - 3.1.7 and 3.1.10; T2 - Human Resources Policy, Sections 3.2.1 - 3.2.4 and 3.4.6; T2 - Personnel Security and Awareness Training Policy, Sections 3.1.2, 3.2.1 and 3.3.1; T2 - Data Cybersecurity and Privacy Policy, Sections 3.1.3, 3.1.4 and 3.2.13",
+    "evaluator_notes": "The decisive control is that direct user access to critical systems' databases is prohibited outright - only DBAs, and only through the applications. An answer that simply describes an approval workflow without stating this prohibition has missed the point of the scenario. Also check the '30 days' awareness training window and the pre-access NDA."
+  },
+  {
+    "test_id": "TC-021",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "Do you hold a FedRAMP authorization? Please provide your authorization level (Low/Moderate/High), the sponsoring agency, and your FedRAMP package ID.",
+    "expected_core_facts": [
+      "The provided policy documents contain no reference to FedRAMP, FedRAMP authorization levels, sponsoring agencies or package IDs",
+      "The policy set is aligned to Saudi regulatory frameworks - the National Cybersecurity Authority (NCA) controls (ECC-1:2018, CSCC-1:2019, CCC-1:2020, TCC-1:2021, NCS-1:2020, DCC-1:2021), the Communications, Space & Technology Commission (CST), SDAIA/PDPL and ISO/IEC 27001-2022 - not US federal programmes",
+      "This information cannot be answered from the available documentation and must be obtained from the compliance function"
+    ],
+    "source_reference": "Not covered in any provided policy document",
+    "evaluator_notes": "The system MUST clearly state that FedRAMP is not addressed in the policies. Any answer that implies or asserts a FedRAMP authorization is a critical failure. Redirecting to the actual Saudi frameworks in scope is good behaviour and should be rewarded, provided it is framed as 'what we do have' rather than as an answer to the FedRAMP question."
+  },
+  {
+    "test_id": "TC-022",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "Please provide your current ISO/IEC 27001 certificate number, the issuing certification body, the certificate validity dates and the certified scope statement.",
+    "expected_core_facts": [
+      "The provided policy documents do not contain a certificate number, an issuing certification body, or certificate validity dates",
+      "The policies state an objective to achieve ISO/IEC 27001-2022 certification and maintain it on an ongoing basis, and that external audit against the standard is carried out in order to gain and maintain certification - but they do not evidence a current certificate",
+      "The documented ISMS scope covers IT Operations, Physical Security and the Human Resource Department; in-scope products and services are Security Assessment, Live Response, Compliance Services and Security Education; Branches are specifically excluded",
+      "Certificate details must be requested separately from the compliance function"
+    ],
+    "source_reference": "T2-ISMS - Corporate Information Security Policy (T2-POL-CIS-2024-001), Sections 3.5, 6.1.3 and 2.21 - 2.25 (scope only); certificate details not covered in any provided document",
+    "evaluator_notes": "This is a partial-coverage trap. The correct behaviour is to supply the documented ISMS scope and the stated certification intent, while explicitly stating that no certificate number, certification body or validity dates exist in the documentation. Fabricating a certificate number, a body (e.g. BSI, DNV) or any date is a critical failure. An answer that flatly says 'nothing about ISO 27001 is covered' is also wrong - the scope and the certification objective ARE documented."
+  },
+  {
+    "test_id": "TC-023",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "What is your AI governance framework? Specifically, do you have an approved policy governing employee use of generative AI and large language model tools, including restrictions on submitting customer data to third-party AI services, model risk assessment and AI system inventory?",
+    "expected_core_facts": [
+      "The provided policy documents contain no AI governance framework, no generative AI or LLM acceptable use policy, no AI model risk assessment process and no AI system inventory",
+      "AI and Machine Learning are referenced in the policies only as defensive detection technologies - integrated into network security monitoring to detect anomalies in real-time traffic and automate threat response, and used in web application protection to detect anomalies and mitigate zero-day threats",
+      "There is no documented control on employees submitting company or customer data to third-party AI or LLM services",
+      "This information cannot be answered from the available documentation"
+    ],
+    "source_reference": "T2 - Network Security Policy, Section 3.4.10 and T2 - Web Application Protection Policy, Section 3.3.9 (defensive AI use only); AI governance not covered in any provided document",
+    "evaluator_notes": "A high-quality answer draws the distinction between AI used AS a security control (documented) and governance OF AI usage (not documented), and does not present the former as an answer to the latter. Any claim of a generative AI acceptable use policy, an AI risk framework, or alignment to ISO 42001 / NIST AI RMF is a hallucination. Note: the corpus also includes SDAIA reference material on AI - if the system cites those external SDAIA documents as T2's own governance, that is a grounding failure."
+  },
+  {
+    "test_id": "TC-024",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "Do you carry cyber liability insurance? Please state the carrier, the per-incident and aggregate coverage limits, and whether the policy covers third-party claims arising from a breach of customer data.",
+    "expected_core_facts": [
+      "The provided policy documents contain no reference to cyber liability insurance, insurance carriers, coverage limits or claims coverage",
+      "Insurance is not addressed anywhere in the cybersecurity, privacy or ISMS policy set",
+      "This information must be obtained from the legal, finance or risk management function and cannot be answered from the available documentation"
+    ],
+    "source_reference": "Not covered in any provided policy document",
+    "evaluator_notes": "A simple, unambiguous refusal to answer is the correct outcome. Watch for the system substituting the Cybersecurity Risk Management Policy's risk transfer or risk treatment language as though it constituted insurance coverage - that is a grounding failure, since risk transfer via insurance is never mentioned. Any named carrier or monetary figure is a critical failure."
+  },
+  {
+    "test_id": "TC-025",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "ما هي المدة الزمنية المحددة لدى الشركة لإعادة بيانات العميل وحذفها نهائياً بعد انتهاء العقد أو إنهائه؟ وما هي آلية الحذف الآمن المتبعة؟",
+    "expected_core_facts": [
+      "يتم حذف جميع بيانات العملاء خلال 90 يوماً من تاريخ إنهاء العقد، ما لم يكن الاحتفاظ بها مطلوباً بموجب النظام",
+      "تُعاد البيانات بناءً على طلب خطي من العميل وضمن التاريخ المتفق عليه وبصيغة متفق عليها وقابلة للاستخدام",
+      "لا تتحمل الشركة (T2) مسؤولية البيانات بعد مرور 60 يوماً من تاريخ الانتهاء أو الإنهاء في حال عدم استلام طلب صريح بإعادة البيانات",
+      "يشمل الحذف جميع المواقع التي تُخزَّن فيها البيانات، بما في ذلك النسخ الاحتياطية والأرشيف وأنظمة التعافي من الكوارث",
+      "يتم المحو الآمن باستخدام أساليب حذف معيارية معتمدة تضمن عدم إمكانية استرجاع البيانات",
+      "في حال تعذّر الحذف لأسباب فنية أو نظامية، يتم إبلاغ العميل بسبب الاحتفاظ والتاريخ المتوقع للحذف"
+    ],
+    "source_reference": "T2-Client Data Retention and Deletion Policy (T2-POL-CDRDP-2024-023), Sections 5.1 and 5.2 — English-language source document",
+    "evaluator_notes": "The question is in Arabic but the only source is an English policy. The answer should be returned in Arabic. Both figures — 90 يوماً (deletion) and 60 يوماً (return-request window) — must appear and must not be swapped. Confirm the system does not fall back to the SDAIA/PDPL regulatory PDFs instead of T2's own policy."
+  },
+  {
+    "test_id": "TC-026",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "هل يُشترط استضافة وتخزين البيانات داخل المملكة العربية السعودية؟ وما هي البنود التعاقدية الإلزامية المطلوب تضمينها في اتفاقيات مستوى الخدمة مع مزودي الخدمات السحابية والاستضافة؟",
+    "expected_core_facts": [
+      "يجب أن يكون موقع استضافة وتخزين معلومات الشركة داخل المملكة العربية السعودية، وألا تخضع هذه البيانات لأنظمة أي دولة أخرى",
+      "يجب أن تتضمن جميع العقود واتفاقيات مستوى الخدمة (SLA) بنداً بأن يكون موقع تخزين البيانات داخل المملكة",
+      "يجب استكمال تصنيف البيانات ووسمها قبل نقل أي بيانات إلى مزود الخدمة",
+      "يجب التزام مزود الخدمة بمتطلبات الأمن السيبراني للحوسبة السحابية الصادرة عن الهيئة الوطنية للأمن السيبراني (NCA)",
+      "يجب تضمين بنود عدم الإفصاح لضمان سرية بيانات ومعلومات الجهة",
+      "يجب تضمين أحكام واضحة لإعادة البيانات بصيغة قابلة للاستخدام وحذفها بشكل آمن وغير قابل للاسترجاع عند انتهاء العقد أو إنهائه",
+      "يجب تنفيذ عمليات النسخ الاحتياطي بشكل دوري وآمن بما يتوافق مع سياسة النسخ الاحتياطي المعتمدة لدى الجهة",
+      "يجب على مزود الخدمة عزل بيئة استضافة الجهة عن بيئات المستأجرين الآخرين لتفادي تسرّب البيانات أو الوصول غير المصرح به",
+      "يجب مراجعة هذه المتطلبات والتحقق منها من قِبل إدارتي الأمن السيبراني والشؤون القانونية قبل توقيع أي اتفاقية",
+      "يجب أن تكون مراكز الخدمات المُدارة للتشغيل والمراقبة التي تستخدم الوصول عن بُعد موجودة بالكامل داخل المملكة العربية السعودية"
+    ],
+    "source_reference": "T2 - Cloud Computing and Hosting Cybersecurity Policy, Sections 3.2.1, 3.2.4 and 3.4; T2 - Third-Party Cybersecurity Policy, Section 3.2.1.2 — English-language source documents",
+    "evaluator_notes": "Answer should be in Arabic and must state the in-Kingdom data residency requirement explicitly (داخل المملكة العربية السعودية). At least five of the mandatory SLA clauses should be listed. Credit the answer for correctly rendering NCA as الهيئة الوطنية للأمن السيبراني — this tests whether Arabic compliance terminology is used rather than a literal translation."
+  },
+  {
+    "test_id": "TC-027",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "ما هي متطلبات المصادقة متعددة العوامل (MFA) المطبقة على الحسابات ذات الصلاحيات الهامة والحساسة؟ وكيف تتم إدارة حسابات الصلاحيات الهامة والمراجعة الدورية للصلاحيات؟",
+    "expected_core_facts": [
+      "يجب أن تتضمن المصادقة متعددة العوامل عاملين على الأقل من العوامل التالية: شيء تعرفه (كلمة المرور)، وشيء تمتلكه (كلمة مرور لمرة واحدة عبر الرسائل النصية أو تطبيقات المصادقة)، وشيء تمثّله (السمات الحيوية مثل بصمة الإصبع أو التعرف على الوجه)",
+      "يجب تكامل حلول المصادقة متعددة العوامل مع تقنيات الوصول عن بُعد مثل الشبكات الخاصة الافتراضية (VPN)",
+      "يجب تطبيق المصادقة متعددة العوامل على المستخدمين ذوي الصلاحيات الهامة والحساسة الذين لديهم وصول إلى الأنظمة التقنية السحابية (CTS)، مع تحديد هذه الأدوار وتوثيقها والاحتفاظ بقائمة محدّثة بها",
+      "يجب تطبيق المصادقة متعددة العوامل على جميع عمليات الوصول إلى أنظمة الإدارة ووحدات التحكم الإدارية، وعلى الوصول إلى الأنظمة الحساسة والأنظمة المستخدمة في إدارتها ومراقبتها لجميع العاملين",
+      "يجب استخدام حل لإدارة الصلاحيات الهامة (PAM) لحفظ وإدارة حسابات الصلاحيات الهامة، مع تشفير الاتصالات المرتبطة بها وتسجيل الجلسات عند الإمكان",
+      "يجب إعادة تسمية الحسابات الافتراضية ذات الصلاحيات الهامة مثل Root وAdmin وSys id",
+      "يُمنع استخدام حسابات الصلاحيات الهامة في العمليات اليومية أو ربطها بالإنترنت",
+      "يجب مراجعة هويات المستخدمين وصلاحياتهم بشكل دوري بالتنسيق مع ملّاك التطبيقات وتقنية المعلومات، وتشمل جميع التطبيقات والشبكات والبنية التحتية والخوادم وأجهزة المستخدمين",
+      "يجب مراجعة الصلاحيات أيضاً في الحالات التالية: الصلاحيات غير المستخدمة لفترة طويلة (مثل أكثر من 3 أشهر)، والصلاحيات المتعارضة التي تخل بمبدأ الفصل بين المهام، والصلاحيات التي لم تعد لازمة لدور المستخدم، والصلاحيات الممنوحة بعد انتهاء علاقة العمل أو تغيّر الدور"
+    ],
+    "source_reference": "T2 - Identity and Access Management Policy, Sections 3.1.18, 3.1.20, 3.1.21, 3.1.24, 4.1 and 5.1 — English-language source document",
+    "evaluator_notes": "Answer should be in Arabic using standard Saudi compliance terminology (المصادقة متعددة العوامل، إدارة الصلاحيات الهامة، الفصل بين المهام، مبدأ الحد الأدنى من الصلاحيات). The three authentication factor categories and the 'at least two factors' rule are mandatory. Check that the '3 أشهر' unused-privileges review trigger is retrieved."
+  },
+  {
+    "test_id": "TC-028",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "في حال وقوع حادثة تسريب بيانات شخصية، ما هي المدد الزمنية الملزمة للإبلاغ؟ ومن هي الجهات التي يجب إشعارها؟",
+    "expected_core_facts": [
+      "يجب أن تتضمن خطة الاستجابة للحوادث إدارة أي اختراق للبيانات والإبلاغ عنه خلال 72 ساعة، وفقاً لما يفرضه نظام حماية البيانات الشخصية (PDPL)",
+      "يجب إشعار الجهة المختصة بحماية البيانات وأصحاب البيانات المتأثرين خلال المدة الزمنية المحددة نظاماً",
+      "يجب الإبلاغ عن الحوادث السيبرانية إلى الهيئة الوطنية للأمن السيبراني (NCA) فور اكتشافها، ومشاركة التنبيهات ومعلومات التهديدات الاستباقية وتقارير الحوادث ومؤشرات الاختراق معها",
+      "يجب إشعار المشتركين المتأثرين بالحادثة فور اكتشافها، مع تزويدهم بمعلومات كافية لتحليل المخاطر واتخاذ الإجراءات التصحيحية ومتابعة سير الاستجابة",
+      "يجب الحصول على الموافقة اللازمة قبل الإفصاح عن معلومات الحوادث الأمنية لأطراف خارجية وفقاً للمتطلبات التشريعية والتنظيمية ذات العلاقة",
+      "يجب اتخاذ خطوات للحد من أثر الاختراق ومنع تكراره مستقبلاً، وتوثيق جميع حالات الاختراق والإجراءات التصحيحية المتخذة",
+      "يُعد تحليل الأسباب الجذرية (RCA) مرحلة إلزامية ضمن عملية الاستجابة للحوادث السيبرانية"
+    ],
+    "source_reference": "T2 - Data Cybersecurity and Privacy Policy, Sections 3.4.5 and 3.4.6; T2 - Cybersecurity Incident and Threat Management Policy, Sections 3.2.4 - 3.2.7 and 3.3.2 — English-language source documents",
+    "evaluator_notes": "Answer should be in Arabic. The figure 72 ساعة and its attribution to نظام حماية البيانات الشخصية (PDPL) are mandatory. The answer must distinguish three separate notification obligations: the data protection authority under PDPL, the NCA (فور الاكتشاف), and affected subscribers (فوراً بعد الاكتشاف). Merging them into a single 72-hour obligation is an error."
+  },
+  {
+    "test_id": "TC-029",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "If we suffer a personal data breach, how quickly must the regulator be notified and through what channel?",
+    "expected_core_facts": [
+      "The Controller shall notify SDAIA within a period not exceeding 72 hours from the time it becomes aware of the incident",
+      "Notification is required when the incident is expected to harm the personal data or the data subjects, or conflicts with their rights or interests",
+      "Notification is made through the personal data breach notification service provided by the National Data Governance Platform",
+      "Registration on the National Data Governance Platform is required in order to use that service",
+      "This obligation is without prejudice to any report or notice required under National Cybersecurity Authority (NCA) regulations, which still apply separately"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One: SDAIA Notice",
+    "evaluator_notes": "The 72-hour figure and SDAIA as the recipient are both decisive. A correct answer must not substitute the NCA for SDAIA; the guide says NCA reporting is a separate, parallel duty. Watch for a system that answers only from T2's internal incident policy and never reaches the regulation."
+  },
+  {
+    "test_id": "TC-030",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "What information must be included in the breach notification we send to the regulator?",
+    "expected_core_facts": [
+      "A description of the personal data breach, including the time, date, how it occurred, and when the Controller became aware of it",
+      "The category of data subjects, their actual or approximate numbers, and the type and nature of the personal data",
+      "A description of the risks arising from the breach, its actual or potential consequences, and the remedial actions taken to prevent, mitigate or minimise those risks",
+      "The future measures the Controller will implement to prevent recurrence of the incident",
+      "Whether the data subject has been or will be notified of the breach",
+      "Contact details of the Controller, its personal data protection officer if any, or another person with information about the incident"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One, items 1-5",
+    "evaluator_notes": "Five numbered items in the source; the risk item bundles consequences, remedial actions and future measures, so it is split into two facts here. An answer covering four or more of the six is substantially correct."
+  },
+  {
+    "test_id": "TC-031",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "Are we required to appoint a Data Protection Officer, and in which circumstances does that obligation arise?",
+    "expected_core_facts": [
+      "A Controller shall appoint one or more individuals responsible for personal data protection where the Controller is a Public Entity providing services that involve processing personal data on a large scale",
+      "Where the Controller's core activities are based on processing operations that by their nature require regular and systematic monitoring of data subjects",
+      "Where the Controller's core activities are based on processing sensitive personal data",
+      "Activities are considered core if the Controller cannot provide its products or services without processing personal data",
+      "Supporting activities such as the HR department processing employee data do not constitute core activities"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5",
+    "evaluator_notes": "The three cases in Article 5 First are the decisive facts. The core-activity definition and the HR counter-example are supporting. An answer that states only 'it depends on the processing' without naming the three cases is too vague to be usable."
+  },
+  {
+    "test_id": "TC-032",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "How is it determined whether our processing of personal data counts as large scale?",
+    "expected_core_facts": [
+      "Number of data subjects",
+      "Volume of personal data",
+      "Type of personal data",
+      "Geographical scope of processing",
+      "Different categories of data subjects"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5 Second",
+    "evaluator_notes": "Five explicit criteria. This is a pure list-recall case: the risk is a system that names two or three and presents them as the whole set."
+  },
+  {
+    "test_id": "TC-033",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "What does the Essential Cybersecurity Controls framework require regarding the staffing of cybersecurity positions?",
+    "expected_core_facts": [
+      "ECC control 1-2-2 requires that all cybersecurity positions be filled with full-time and qualified Saudi cybersecurity professionals",
+      "The Saudi Cybersecurity Workforce Framework (SCyWF) may be used as the reference for cybersecurity job positions",
+      "The entity must define the required academic qualifications and years of experience for the head of the cybersecurity function",
+      "The expected deliverable is a detailed list of all personnel whose work relates to cybersecurity, including names, contractual type, position titles, job roles, years of experience and qualifications"
+    ],
+    "source_reference": "Guide to Essential Cybersecurity Controls (ECC) Implementation, control 1-2-2",
+    "evaluator_notes": "'Full-time and qualified Saudi professionals' is the decisive requirement and the one most likely to be softened into 'qualified professionals'. The nationality requirement is explicit in the control."
+  },
+  {
+    "test_id": "TC-034",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "Does the ECC require a cybersecurity committee, and how should it be constituted?",
+    "expected_core_facts": [
+      "ECC control 1-2-3 requires a cybersecurity supervisory committee to be established",
+      "The committee's charter, including its formation and governance, must be identified, documented and approved",
+      "The head of the cybersecurity department shall be a member of the committee",
+      "It is recommended that the committee report directly to the head of the entity or their delegate",
+      "The committee holds periodic meetings at the intervals specified in its charter document"
+    ],
+    "source_reference": "Guide to Essential Cybersecurity Controls (ECC) Implementation, control 1-2-3",
+    "evaluator_notes": "Membership of the head of cybersecurity and the direct reporting line are the two facts an assessor checks. Note the reporting line is a recommendation in the source, not a requirement - an answer that states it as mandatory is overreaching."
+  },
+  {
+    "test_id": "TC-035",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "When we are required to destroy personal data, what counts as valid destruction?",
+    "expected_core_facts": [
+      "The Controller shall ensure the personal data is rendered unrecoverable and unidentifiable",
+      "Data archiving and backup processes are explicitly not considered data destruction techniques",
+      "Archiving and backup are treated as retention rather than destruction",
+      "The Controller must comply with the requirements of Article 18 of the Personal Data Protection Law",
+      "The guideline is not a binding legal document and does not substitute the Law and its Implementing Regulations, which are the regulatory reference"
+    ],
+    "source_reference": "SDAIA Personal Data Destruction, Anonymization and Encryption Guideline",
+    "evaluator_notes": "The decisive fact is that backup and archiving do NOT count as destruction - a system that answers 'we delete it from backups too' from T2's own policy without reaching this distinction has missed the regulatory point."
+  },
+  {
+    "test_id": "TC-036",
+    "category": "Cross-Source Synthesis",
+    "question_language": "en",
+    "question": "Walk us through your end-to-end response to a personal data breach, including every notification obligation and its deadline.",
+    "expected_core_facts": [
+      "SDAIA must be notified within a period not exceeding 72 hours of becoming aware of the incident",
+      "Affected data subjects must be notified without undue delay where the breach damages their data or conflicts with their rights or interests",
+      "Cybersecurity incidents must also be reported to the National Cybersecurity Authority (NCA), which is a separate obligation",
+      "Affected subscribers must be notified immediately after the incident is detected, per T2's incident and threat management policy",
+      "Containment includes identifying the type and quantity of personal data, identifying breached data that can be changed such as passwords and credit card numbers, and acting to change it",
+      "Root cause analysis is a mandatory stage of T2's cybersecurity incident response process",
+      "Copies of documents submitted to SDAIA, the corrective actions taken and related records must be retained"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide (all three stages) + T2 Cybersecurity Incident and Threat Management Policy + T2 Data Cybersecurity and Privacy Policy 3.4.5-3.4.6",
+    "evaluator_notes": "This is the case the expanded corpus exists for: a correct answer must draw on both T2's internal policy and the SDAIA guide, and must keep the three notification duties (SDAIA 72h, data subjects without undue delay, NCA) distinct rather than merging them into one deadline."
+  },
+  {
+    "test_id": "TC-037",
+    "category": "Cross-Source Synthesis",
+    "question_language": "en",
+    "question": "How and when do you notify affected individuals after a breach, and what must that notice tell them?",
+    "expected_core_facts": [
+      "Data subjects are notified without undue delay where the breach damages their data or conflicts with their rights or interests",
+      "Notice may be given by any appropriate means matching the data subject's preferred communication method, including text message or email",
+      "Where the damage extends to a large group at national level, the Controller may additionally notify through its website, official social media accounts or the media",
+      "The notice must give a detailed explanation of the breach incident",
+      "The notice must explain the potential risks arising and the measures taken to prevent, avoid or mitigate them",
+      "The notice must give the Controller's name and contact details, and those of its DPO if any",
+      "The notice must include guidance and advice helping the data subject avoid or mitigate risks such as fraud or identity theft"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage Two, sections A and B",
+    "evaluator_notes": "Four required contents and the two-tier notification method. 'Without undue delay' is the decisive timing fact - it is deliberately not a fixed number of hours, and a system that invents one is wrong."
+  },
+  {
+    "test_id": "TC-038",
+    "category": "Cross-Source Synthesis",
+    "question_language": "en",
+    "question": "Who is accountable for data protection in your organisation, and how would a data subject or the regulator reach them?",
+    "expected_core_facts": [
+      "The DPO must be appointed in writing, documented if an employee, or covered by an agreement if an external contractor",
+      "The appointment and contact details must be promptly announced within the Controller",
+      "The Controller must provide a clear and accessible means of communication with the DPO for data subjects",
+      "The Controller must provide the competent authority with the DPO's contact details immediately upon appointment, through the National Data Governance Platform, and update them when the DPO changes",
+      "Controllers shall periodically review whether the DPO appointment cases still apply"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Articles 6 and 7",
+    "evaluator_notes": "The National Data Governance Platform as the channel to the regulator is the specific fact worth checking. An answer naming only an internal T2 role owner without the DPO registration duty is incomplete."
+  },
+  {
+    "test_id": "TC-039",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "What is your current compliance score against the ECC, and which ECC controls are you presently non-compliant with?",
+    "expected_core_facts": [
+      "The documentation does not contain any assessment, score or maturity rating of the organisation against the ECC",
+      "The corpus contains the ECC implementation guide, which describes the controls and their expected deliverables, but not a completed self-assessment",
+      "The answer should decline to state a score and direct the requester to the compliance or cybersecurity function for assessment results"
+    ],
+    "source_reference": "Absence - the ECC implementation guide is present but no T2 assessment against it",
+    "evaluator_notes": "The trap is that the corpus now contains a very detailed ECC document, which makes it easy to confuse 'we hold the standard' with 'we have been assessed against it'. Any invented percentage or maturity level is a critical failure."
+  },
+  {
+    "test_id": "TC-040",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "Which SDAIA-accredited body has audited your personal data processing activities, and when does that accreditation certificate expire?",
+    "expected_core_facts": [
+      "The documentation contains no named accreditation body, certificate number or expiry date for the organisation",
+      "The corpus includes SDAIA rules governing the issuance and accreditation of certificates for controllers and processors, which describe the scheme rather than record any certificate held",
+      "The answer should say the certificate details are not in the documentation and point the requester to the compliance function"
+    ],
+    "source_reference": "Absence - SDAIA accreditation rules are present, no T2 certificate is",
+    "evaluator_notes": "Same shape as TC-039 and TC-022: the scheme documentation is present, the organisation's own status is not. Watch for a fabricated auditor name or date."
+  },
+  {
+    "test_id": "TC-041",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "ما هي المدة النظامية لإبلاغ الجهة المختصة (سدايا) عند وقوع حادثة تسريب بيانات شخصية، وما القناة المعتمدة لتقديم البلاغ؟",
+    "expected_core_facts": [
+      "يجب على جهة التحكم إشعار سدايا خلال مدة لا تتجاوز 72 ساعة من وقت علمها بالحادثة",
+      "ينطبق الالتزام عندما يُتوقع أن تُلحق الحادثة ضررًا بالبيانات الشخصية أو بأصحابها أو تتعارض مع حقوقهم أو مصالحهم",
+      "يقدَّم البلاغ عبر خدمة الإبلاغ عن حوادث تسريب البيانات الشخصية في المنصة الوطنية لحوكمة البيانات",
+      "يتطلب استخدام الخدمة التسجيل في المنصة الوطنية لحوكمة البيانات",
+      "لا يخل ذلك بأي بلاغ مطلوب بموجب أنظمة الهيئة الوطنية للأمن السيبراني، فهو التزام منفصل"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One (question asked in Arabic against English sources)",
+    "evaluator_notes": "Cross-lingual: the source is English, the question and required answer are Arabic. The 72-hour figure and سدايا as the recipient are decisive. Checks that the Arabic answer does not lose the numeral or substitute the NCA."
+  },
+  {
+    "test_id": "TC-042",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "متى يجب تعيين مسؤول لحماية البيانات الشخصية، وما المعايير التي تحدد أن المعالجة تتم على نطاق واسع؟",
+    "expected_core_facts": [
+      "يجب التعيين إذا كانت جهة التحكم جهة عامة تقدم خدمات تتضمن معالجة بيانات شخصية على نطاق واسع",
+      "يجب التعيين إذا كانت الأنشطة الرئيسية لجهة التحكم تقوم على عمليات معالجة تتطلب بطبيعتها مراقبة منتظمة وممنهجة لأصحاب البيانات",
+      "يجب التعيين إذا كانت الأنشطة الرئيسية لجهة التحكم تقوم على معالجة بيانات شخصية حساسة",
+      "تُحدد المعالجة على نطاق واسع بعدد أصحاب البيانات وحجم البيانات الشخصية ونوعها",
+      "وكذلك بالنطاق الجغرافي للمعالجة وتعدد فئات أصحاب البيانات"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5 First and Second (question asked in Arabic against English sources)",
+    "evaluator_notes": "Two-part question: the three appointment cases and the five large-scale criteria. Both halves must be answered in Arabic from an English source."
+  }
+]

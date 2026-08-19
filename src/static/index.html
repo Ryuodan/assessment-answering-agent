@@ -191,6 +191,13 @@
     border: 1px solid var(--border); background: var(--bg); color: var(--text);
   }
   .answer .rationale { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .answer .cites { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 9px; }
+  .cites-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .answer .cite { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                  background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+  .answer .reasons { font-size: 12.5px; color: var(--warn); margin-top: 8px; }
+  .pdf-options { gap: 14px; flex-wrap: wrap; align-items: center; }
+  .pdf-options label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
   .answer details { margin-top: 10px; font-size: 13px; }
   .answer details summary { cursor: pointer; color: var(--muted); }
   .answer .ev { background: var(--code-bg); border-radius: 8px; padding: 10px; margin-top: 8px; white-space: pre-wrap; font-size: 13px; }
@@ -298,10 +305,17 @@
   <section class="card" id="resultsCard" hidden>
     <h2>Answers</h2>
     <div class="summary" id="resultsSummary"></div>
-    <div class="row" style="margin-top:0;margin-bottom:14px">
+    <div class="row" style="margin-top:0;margin-bottom:6px">
       <button class="ghost" id="exportJson">Download JSON</button>
       <button class="ghost" id="exportCsv">Download CSV</button>
+      <button class="ghost" id="exportPdf">Download PDF</button>
       <span class="status" style="margin:0">Edits you make below are included in the download.</span>
+    </div>
+    <div class="row pdf-options" style="margin-top:0;margin-bottom:14px">
+      <span class="cites-label">PDF includes</span>
+      <label><input type="checkbox" id="pdfLowConfidence"> answers flagged for review</label>
+      <label><input type="checkbox" id="pdfCitations" checked> clause citations</label>
+      <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
     </div>
     <div id="results"></div>
   </section>
@@ -423,11 +437,17 @@
       try {
         const results = await request(endpoint, { method: "POST", body: form });
         const failed = results.filter((r) => r.error);
+        const duplicates = results.filter((r) => !r.error && r.duplicate_of);
         const chunks = results.reduce((total, r) => total + r.chunks_indexed, 0);
         const pairs = results.reduce((total, r) => total + (r.qa_pairs_found || 0), 0);
+        const indexed = results.length - failed.length - duplicates.length;
 
-        let message = "Indexed " + (results.length - failed.length) + "/" + results.length +
+        let message = "Indexed " + indexed + "/" + results.length +
                       " file(s) — " + chunks + " chunks" + (pairs ? ", " + pairs + " Q/A pairs" : "") + ".";
+        if (duplicates.length) {
+          message += "<br>" + duplicates.map((r) => "– " + r.source_name +
+                     ": skipped, identical to " + r.duplicate_of).join("<br>");
+        }
         if (failed.length) {
           message += "<br>" + failed.map((r) => "✗ " + r.source_name + ": " + r.error).join("<br>");
         }
@@ -677,6 +697,27 @@
 
     card.append(meta, question, answer);
 
+    // The clause locators, which is what an assessor asks for first.
+    if (item.citations && item.citations.length) {
+      const cites = document.createElement("div");
+      cites.className = "cites";
+      cites.append(labelled("Cited"));
+      item.citations.forEach((citation) => {
+        const chip = document.createElement("span");
+        chip.className = "cite";
+        chip.textContent = citation;
+        cites.append(chip);
+      });
+      card.append(cites);
+    }
+
+    if (item.review_reasons && item.review_reasons.length) {
+      const reasons = document.createElement("div");
+      reasons.className = "reasons";
+      reasons.textContent = "Flagged: " + item.review_reasons.join("; ");
+      card.append(reasons);
+    }
+
     if (item.rationale) {
       const rationale = document.createElement("div");
       rationale.className = "rationale";
@@ -695,9 +736,11 @@
         block.className = "ev";
         const label = document.createElement("span");
         label.className = "src";
+        // The locator carries the clause range; the file name alone does not
+        // tell a reviewer where in a sixty-page policy to look.
         label.textContent =
           (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
-          " — " + evidence.source_name + " (score " + evidence.score + ")";
+          " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
         block.append(label, document.createTextNode(evidence.snippet));
         if (isArabic(evidence.snippet)) block.dir = "rtl";
         details.append(block);
@@ -707,6 +750,13 @@
     }
 
     return card;
+  }
+
+  function labelled(text) {
+    const span = document.createElement("span");
+    span.className = "cites-label";
+    span.textContent = text;
+    return span;
   }
 
   function renderResult(data) {
@@ -771,6 +821,41 @@
     download(result.source_name + ".answers.csv", csv, "text/csv;charset=utf-8");
   }
 
+  async function exportPdf() {
+    // Rendered on the server: Arabic needs shaping and bidi reordering before
+    // it can be drawn into a PDF, and that engine already lives there.
+    const query = new URLSearchParams({
+      include_flagged: $("pdfLowConfidence").checked,
+      include_citations: $("pdfCitations").checked,
+      include_reasoning: $("pdfReasoning").checked,
+    });
+
+    const button = $("exportPdf");
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/assessments/export/pdf?" + query, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || ("PDF export failed (" + response.status + ")"));
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.source_name.replace(/\.[^.]+$/, "") + ".answers.pdf";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   // --- wiring --------------------------------------------------------------
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
@@ -794,6 +879,7 @@
   $("exportJson").onclick = () =>
     download(result.source_name + ".answers.json", JSON.stringify(result, null, 2), "application/json");
   $("exportCsv").onclick = exportCsv;
+  $("exportPdf").onclick = exportPdf;
 
   $("originalTab").onclick = () => showViewerTab("original");
   $("textTab").onclick = () => showViewerTab("text");

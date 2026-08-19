@@ -7,6 +7,7 @@ thin: HTTP plumbing in `api.py`, argument parsing in `cli.py`, no logic in eithe
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import html
 import logging
@@ -17,9 +18,16 @@ from pathlib import Path
 from src.config import PROJECT_ROOT, settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs
-from src.graph import assessment_graph
+from src.graph import answer_one_question, assessment_graph, failed_answer
 from src.knowledge import get_store
-from src.models import AssessmentResult, IngestResult, Language, SourceType
+from src.models import (
+    AnsweredQuestion,
+    AssessmentResult,
+    IngestResult,
+    Language,
+    Question,
+    SourceType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +57,25 @@ async def ingest(path: str | Path, source_type: SourceType) -> IngestResult:
     store = get_store()
 
     try:
+        content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        original = store.source_with_hash(content_hash, excluding=path.name)
+        if original:
+            logger.info("Skipping '%s': byte-identical to already-indexed '%s'", path.name, original)
+            return IngestResult(
+                source_name=path.name,
+                source_type=source_type,
+                chunks_indexed=0,
+                duplicate_of=original,
+            )
+
         text = await extracted_document_text(path)
 
         if source_type is SourceType.GUIDELINE:
-            chunks = store.add_guideline(path.name, text)
+            chunks = store.add_guideline(path.name, text, content_hash)
             return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=chunks)
 
         pairs = await extract_qa_pairs(text)
-        chunks = store.add_prior_answers(path.name, pairs)
+        chunks = store.add_prior_answers(path.name, pairs, content_hash)
         return IngestResult(
             source_name=path.name,
             source_type=source_type,
@@ -106,6 +125,32 @@ async def answer_assessment(path: str | Path, language: Language | None = None) 
         questions_found=len(questions),
         answers=answers,
     )
+
+
+async def answer_questions(
+    questions: list[Question], language: Language | None = None
+) -> list[AnsweredQuestion]:
+    """Answer a list of questions that did not come from a document.
+
+    The same per-question graph the assessment flow fans out to, minus the
+    extraction step. Used by the evaluation harness, which holds its questions
+    as data, and by any caller with a question already in hand.
+    """
+    semaphore = asyncio.Semaphore(settings.max_concurrent_questions)
+
+    async def run(question: Question) -> AnsweredQuestion:
+        async with semaphore:
+            try:
+                return await answer_one_question(question, language or question.language)
+            except Exception as exc:  # noqa: BLE001 - contained per question, as in the fan-out
+                # The document flow already contains a per-question failure; this
+                # path did not, so a single transient upstream error — a model
+                # briefly withdrawn from the region, say — discarded a whole
+                # forty-two question run that had nearly finished.
+                logger.exception("Failed to answer question %s", question.id)
+                return failed_answer(question, exc)
+
+    return list(await asyncio.gather(*(run(question) for question in questions)))
 
 
 def knowledge_stats() -> dict:
@@ -337,12 +382,19 @@ def _document_info(path: Path, *, origin: str, category: str) -> dict:
     }
 
 
+# Bumped whenever the extraction code changes in a way that alters its output,
+# so cached text from an older, worse extractor is not silently reused.
+_EXTRACTION_VERSION = "3"
+
+
 def _extracted_text_cache_path(path: Path) -> Path:
     cache_input = "\0".join(
         (
+            _EXTRACTION_VERSION,
             str(path.resolve()),
             settings.docling_base_url,
             str(settings.docling_do_ocr),
+            str(settings.docling_ocr_auto),
             settings.docling_image_export_mode,
         )
     )

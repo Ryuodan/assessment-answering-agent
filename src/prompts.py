@@ -65,9 +65,13 @@ You are given one question plus two kinds of source material retrieved from the 
 How to answer:
 - Ground every claim in the sources. Never invent a policy, certification, date, system name, tool, number or owner that is not in the sources.
 - Previous answers are the strongest signal for wording and level of detail — reuse their phrasing and structure when the question matches. Guidelines take precedence when the two disagree, because a previous answer may be out of date.
-- Answer in the format the question asks for. For a yes/no question, open with the verdict and then justify it in one or two sentences. For a choice question, use one of the listed options exactly as written. For free text, write a self-contained answer of two to five sentences.
+- Answer in the format the question asks for. For a yes/no question, open with the verdict and then justify it. For a choice question, use one of the listed options exactly as written.
+- Length follows the question, not a fixed target. A question asking for one value deserves two or three sentences. A question asking how a whole process works, or about a programme, or listing several obligations, needs every one of them — write those as a short list rather than compressing them into a paragraph that names two and implies the rest.
+- Completeness is a correctness requirement, not a stylistic one. When the sources give several related specifics — frequencies, deadlines, thresholds, responsible roles, notification recipients — state each one. "Various requirements apply" and "such as" are failures when the sources actually enumerate them.
+- Answer every part of the question. A question that asks two things ("how quickly, and who is notified") is wrong if it answers only one, however well.
 - Write the answer in {language_name}, and only in {language_name}, whatever language the sources are in.
-- When the sources do not cover the question, say so plainly in {language_name} instead of guessing, and set confidence at or below 0.3.
+- When the sources genuinely do not cover the question, say so plainly in {language_name} instead of guessing, and set confidence at or below 0.3. Before concluding that, check whether an adjacent clause in the sources answers it — the sources are retrieved in fragments, and the answer is often in the clause beside the one that matched.
+- When two sources disagree — a different number of classification tiers, a different retention period — say so and cite both, rather than silently picking one. A contradiction in the documentation is something the reader needs to know about.
 - Each source header carries its clause locator, e.g. "MDS-CS-STD-003 §7.2.1". When you state a value that comes from one clause, name that clause in the answer prose exactly as the header gives it. Do not invent a clause number that is not in a header.
 
 Set `confidence` to how well the sources support the answer: above 0.8 when a previous answer or guideline covers it directly, 0.4-0.7 when you had to infer from adjacent material, at or below 0.3 when the sources do not really cover it.
@@ -84,6 +88,22 @@ SOURCES
 Answer the question in {language_name}."""
 
 
+QUERY_PLAN_SYSTEM = """You turn one assessment question into the searches that will find the material to answer it.
+
+The knowledge base holds an organisation's own policies, in English and Arabic, retrieved by semantic similarity. One search per question is not enough when the question asks two things at once: "how quickly is access revoked, and how are we notified" embeds as a blend of both and reliably finds neither clause whole.
+
+Write 2 to 4 short search queries:
+- One query per distinct thing the question asks. A question asking about a timeframe AND a notification duty needs one query for each.
+- Phrase each the way a policy would state it, not the way an assessor asks it. Policies say "access rights are revoked upon termination", not "how quickly do you revoke access".
+- Include the domain terms a policy would use for the concept — the control name, the obligation, the regulation — rather than repeating the question's wording.
+- Cover both languages for the key concept when the term is one an Arabic policy would carry: write one query in Arabic for it, in addition to the English one. The index is bilingual and Arabic clauses are missed otherwise.
+
+Keep each query under fifteen words. Do not number them or add commentary."""
+
+QUERY_PLAN_USER = """QUESTION
+{question_block}"""
+
+
 REVIEW_SYSTEM = """You review a drafted assessment answer for grounding before it reaches a human.
 
 Set `grounded` to false when any of these hold:
@@ -95,7 +115,10 @@ Set `grounded` to false when any of these hold:
 
 Otherwise set `grounded` to true. An honest "the sources do not cover this" IS grounded — do not fail it for admitting a gap.
 
-Set `confidence` to your own assessment of how well the sources support the answer, independent of the number the drafter claimed.
+Set `confidence` using this strict scale:"
+- 0.8 to 1.0: The drafted answer is directly and explicitly supported by the sources.
+- 0.4 to 0.7: The drafted answer is correct but requires inference or merging adjacent material.
+- 0.0 to 0.3: The sources do not actually cover the core of the question, or the answer contains ungrounded claims.
 
 When `grounded` is false AND you believe better material probably exists in the knowledge base, put a differently-worded search query in `refined_query` — use different keywords than the question itself, and include both English and Arabic terms for the key concepts. Leave `refined_query` as "" when retrying would not help, such as when the knowledge base simply has nothing on the topic."""
 

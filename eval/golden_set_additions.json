@@ -1,0 +1,212 @@
+[
+  {
+    "test_id": "TC-029",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "If we suffer a personal data breach, how quickly must the regulator be notified and through what channel?",
+    "expected_core_facts": [
+      "The Controller shall notify SDAIA within a period not exceeding 72 hours from the time it becomes aware of the incident",
+      "Notification is required when the incident is expected to harm the personal data or the data subjects, or conflicts with their rights or interests",
+      "Notification is made through the personal data breach notification service provided by the National Data Governance Platform",
+      "Registration on the National Data Governance Platform is required in order to use that service",
+      "This obligation is without prejudice to any report or notice required under National Cybersecurity Authority (NCA) regulations, which still apply separately"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One: SDAIA Notice",
+    "evaluator_notes": "The 72-hour figure and SDAIA as the recipient are both decisive. A correct answer must not substitute the NCA for SDAIA; the guide says NCA reporting is a separate, parallel duty. Watch for a system that answers only from T2's internal incident policy and never reaches the regulation."
+  },
+  {
+    "test_id": "TC-030",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "What information must be included in the breach notification we send to the regulator?",
+    "expected_core_facts": [
+      "A description of the personal data breach, including the time, date, how it occurred, and when the Controller became aware of it",
+      "The category of data subjects, their actual or approximate numbers, and the type and nature of the personal data",
+      "A description of the risks arising from the breach, its actual or potential consequences, and the remedial actions taken to prevent, mitigate or minimise those risks",
+      "The future measures the Controller will implement to prevent recurrence of the incident",
+      "Whether the data subject has been or will be notified of the breach",
+      "Contact details of the Controller, its personal data protection officer if any, or another person with information about the incident"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One, items 1-5",
+    "evaluator_notes": "Five numbered items in the source; the risk item bundles consequences, remedial actions and future measures, so it is split into two facts here. An answer covering four or more of the six is substantially correct."
+  },
+  {
+    "test_id": "TC-031",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "Are we required to appoint a Data Protection Officer, and in which circumstances does that obligation arise?",
+    "expected_core_facts": [
+      "A Controller shall appoint one or more individuals responsible for personal data protection where the Controller is a Public Entity providing services that involve processing personal data on a large scale",
+      "Where the Controller's core activities are based on processing operations that by their nature require regular and systematic monitoring of data subjects",
+      "Where the Controller's core activities are based on processing sensitive personal data",
+      "Activities are considered core if the Controller cannot provide its products or services without processing personal data",
+      "Supporting activities such as the HR department processing employee data do not constitute core activities"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5",
+    "evaluator_notes": "The three cases in Article 5 First are the decisive facts. The core-activity definition and the HR counter-example are supporting. An answer that states only 'it depends on the processing' without naming the three cases is too vague to be usable."
+  },
+  {
+    "test_id": "TC-032",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "How is it determined whether our processing of personal data counts as large scale?",
+    "expected_core_facts": [
+      "Number of data subjects",
+      "Volume of personal data",
+      "Type of personal data",
+      "Geographical scope of processing",
+      "Different categories of data subjects"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5 Second",
+    "evaluator_notes": "Five explicit criteria. This is a pure list-recall case: the risk is a system that names two or three and presents them as the whole set."
+  },
+  {
+    "test_id": "TC-033",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "What does the Essential Cybersecurity Controls framework require regarding the staffing of cybersecurity positions?",
+    "expected_core_facts": [
+      "ECC control 1-2-2 requires that all cybersecurity positions be filled with full-time and qualified Saudi cybersecurity professionals",
+      "The Saudi Cybersecurity Workforce Framework (SCyWF) may be used as the reference for cybersecurity job positions",
+      "The entity must define the required academic qualifications and years of experience for the head of the cybersecurity function",
+      "The expected deliverable is a detailed list of all personnel whose work relates to cybersecurity, including names, contractual type, position titles, job roles, years of experience and qualifications"
+    ],
+    "source_reference": "Guide to Essential Cybersecurity Controls (ECC) Implementation, control 1-2-2",
+    "evaluator_notes": "'Full-time and qualified Saudi professionals' is the decisive requirement and the one most likely to be softened into 'qualified professionals'. The nationality requirement is explicit in the control."
+  },
+  {
+    "test_id": "TC-034",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "Does the ECC require a cybersecurity committee, and how should it be constituted?",
+    "expected_core_facts": [
+      "ECC control 1-2-3 requires a cybersecurity supervisory committee to be established",
+      "The committee's charter, including its formation and governance, must be identified, documented and approved",
+      "The head of the cybersecurity department shall be a member of the committee",
+      "It is recommended that the committee report directly to the head of the entity or their delegate",
+      "The committee holds periodic meetings at the intervals specified in its charter document"
+    ],
+    "source_reference": "Guide to Essential Cybersecurity Controls (ECC) Implementation, control 1-2-3",
+    "evaluator_notes": "Membership of the head of cybersecurity and the direct reporting line are the two facts an assessor checks. Note the reporting line is a recommendation in the source, not a requirement - an answer that states it as mandatory is overreaching."
+  },
+  {
+    "test_id": "TC-035",
+    "category": "Regulatory Reference",
+    "question_language": "en",
+    "question": "When we are required to destroy personal data, what counts as valid destruction?",
+    "expected_core_facts": [
+      "The Controller shall ensure the personal data is rendered unrecoverable and unidentifiable",
+      "Data archiving and backup processes are explicitly not considered data destruction techniques",
+      "Archiving and backup are treated as retention rather than destruction",
+      "The Controller must comply with the requirements of Article 18 of the Personal Data Protection Law",
+      "The guideline is not a binding legal document and does not substitute the Law and its Implementing Regulations, which are the regulatory reference"
+    ],
+    "source_reference": "SDAIA Personal Data Destruction, Anonymization and Encryption Guideline",
+    "evaluator_notes": "The decisive fact is that backup and archiving do NOT count as destruction - a system that answers 'we delete it from backups too' from T2's own policy without reaching this distinction has missed the regulatory point."
+  },
+  {
+    "test_id": "TC-036",
+    "category": "Cross-Source Synthesis",
+    "question_language": "en",
+    "question": "Walk us through your end-to-end response to a personal data breach, including every notification obligation and its deadline.",
+    "expected_core_facts": [
+      "SDAIA must be notified within a period not exceeding 72 hours of becoming aware of the incident",
+      "Affected data subjects must be notified without undue delay where the breach damages their data or conflicts with their rights or interests",
+      "Cybersecurity incidents must also be reported to the National Cybersecurity Authority (NCA), which is a separate obligation",
+      "Affected subscribers must be notified immediately after the incident is detected, per T2's incident and threat management policy",
+      "Containment includes identifying the type and quantity of personal data, identifying breached data that can be changed such as passwords and credit card numbers, and acting to change it",
+      "Root cause analysis is a mandatory stage of T2's cybersecurity incident response process",
+      "Copies of documents submitted to SDAIA, the corrective actions taken and related records must be retained"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide (all three stages) + T2 Cybersecurity Incident and Threat Management Policy + T2 Data Cybersecurity and Privacy Policy 3.4.5-3.4.6",
+    "evaluator_notes": "This is the case the expanded corpus exists for: a correct answer must draw on both T2's internal policy and the SDAIA guide, and must keep the three notification duties (SDAIA 72h, data subjects without undue delay, NCA) distinct rather than merging them into one deadline."
+  },
+  {
+    "test_id": "TC-037",
+    "category": "Cross-Source Synthesis",
+    "question_language": "en",
+    "question": "How and when do you notify affected individuals after a breach, and what must that notice tell them?",
+    "expected_core_facts": [
+      "Data subjects are notified without undue delay where the breach damages their data or conflicts with their rights or interests",
+      "Notice may be given by any appropriate means matching the data subject's preferred communication method, including text message or email",
+      "Where the damage extends to a large group at national level, the Controller may additionally notify through its website, official social media accounts or the media",
+      "The notice must give a detailed explanation of the breach incident",
+      "The notice must explain the potential risks arising and the measures taken to prevent, avoid or mitigate them",
+      "The notice must give the Controller's name and contact details, and those of its DPO if any",
+      "The notice must include guidance and advice helping the data subject avoid or mitigate risks such as fraud or identity theft"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage Two, sections A and B",
+    "evaluator_notes": "Four required contents and the two-tier notification method. 'Without undue delay' is the decisive timing fact - it is deliberately not a fixed number of hours, and a system that invents one is wrong."
+  },
+  {
+    "test_id": "TC-038",
+    "category": "Cross-Source Synthesis",
+    "question_language": "en",
+    "question": "Who is accountable for data protection in your organisation, and how would a data subject or the regulator reach them?",
+    "expected_core_facts": [
+      "The DPO must be appointed in writing, documented if an employee, or covered by an agreement if an external contractor",
+      "The appointment and contact details must be promptly announced within the Controller",
+      "The Controller must provide a clear and accessible means of communication with the DPO for data subjects",
+      "The Controller must provide the competent authority with the DPO's contact details immediately upon appointment, through the National Data Governance Platform, and update them when the DPO changes",
+      "Controllers shall periodically review whether the DPO appointment cases still apply"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Articles 6 and 7",
+    "evaluator_notes": "The National Data Governance Platform as the channel to the regulator is the specific fact worth checking. An answer naming only an internal T2 role owner without the DPO registration duty is incomplete."
+  },
+  {
+    "test_id": "TC-039",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "What is your current compliance score against the ECC, and which ECC controls are you presently non-compliant with?",
+    "expected_core_facts": [
+      "The documentation does not contain any assessment, score or maturity rating of the organisation against the ECC",
+      "The corpus contains the ECC implementation guide, which describes the controls and their expected deliverables, but not a completed self-assessment",
+      "The answer should decline to state a score and direct the requester to the compliance or cybersecurity function for assessment results"
+    ],
+    "source_reference": "Absence - the ECC implementation guide is present but no T2 assessment against it",
+    "evaluator_notes": "The trap is that the corpus now contains a very detailed ECC document, which makes it easy to confuse 'we hold the standard' with 'we have been assessed against it'. Any invented percentage or maturity level is a critical failure."
+  },
+  {
+    "test_id": "TC-040",
+    "category": "Out of Bounds",
+    "question_language": "en",
+    "question": "Which SDAIA-accredited body has audited your personal data processing activities, and when does that accreditation certificate expire?",
+    "expected_core_facts": [
+      "The documentation contains no named accreditation body, certificate number or expiry date for the organisation",
+      "The corpus includes SDAIA rules governing the issuance and accreditation of certificates for controllers and processors, which describe the scheme rather than record any certificate held",
+      "The answer should say the certificate details are not in the documentation and point the requester to the compliance function"
+    ],
+    "source_reference": "Absence - SDAIA accreditation rules are present, no T2 certificate is",
+    "evaluator_notes": "Same shape as TC-039 and TC-022: the scheme documentation is present, the organisation's own status is not. Watch for a fabricated auditor name or date."
+  },
+  {
+    "test_id": "TC-041",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "ما هي المدة النظامية لإبلاغ الجهة المختصة (سدايا) عند وقوع حادثة تسريب بيانات شخصية، وما القناة المعتمدة لتقديم البلاغ؟",
+    "expected_core_facts": [
+      "يجب على جهة التحكم إشعار سدايا خلال مدة لا تتجاوز 72 ساعة من وقت علمها بالحادثة",
+      "ينطبق الالتزام عندما يُتوقع أن تُلحق الحادثة ضررًا بالبيانات الشخصية أو بأصحابها أو تتعارض مع حقوقهم أو مصالحهم",
+      "يقدَّم البلاغ عبر خدمة الإبلاغ عن حوادث تسريب البيانات الشخصية في المنصة الوطنية لحوكمة البيانات",
+      "يتطلب استخدام الخدمة التسجيل في المنصة الوطنية لحوكمة البيانات",
+      "لا يخل ذلك بأي بلاغ مطلوب بموجب أنظمة الهيئة الوطنية للأمن السيبراني، فهو التزام منفصل"
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One (question asked in Arabic against English sources)",
+    "evaluator_notes": "Cross-lingual: the source is English, the question and required answer are Arabic. The 72-hour figure and سدايا as the recipient are decisive. Checks that the Arabic answer does not lose the numeral or substitute the NCA."
+  },
+  {
+    "test_id": "TC-042",
+    "category": "Cross-Lingual / Arabic",
+    "question_language": "ar",
+    "question": "متى يجب تعيين مسؤول لحماية البيانات الشخصية، وما المعايير التي تحدد أن المعالجة تتم على نطاق واسع؟",
+    "expected_core_facts": [
+      "يجب التعيين إذا كانت جهة التحكم جهة عامة تقدم خدمات تتضمن معالجة بيانات شخصية على نطاق واسع",
+      "يجب التعيين إذا كانت الأنشطة الرئيسية لجهة التحكم تقوم على عمليات معالجة تتطلب بطبيعتها مراقبة منتظمة وممنهجة لأصحاب البيانات",
+      "يجب التعيين إذا كانت الأنشطة الرئيسية لجهة التحكم تقوم على معالجة بيانات شخصية حساسة",
+      "تُحدد المعالجة على نطاق واسع بعدد أصحاب البيانات وحجم البيانات الشخصية ونوعها",
+      "وكذلك بالنطاق الجغرافي للمعالجة وتعدد فئات أصحاب البيانات"
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5 First and Second (question asked in Arabic against English sources)",
+    "evaluator_notes": "Two-part question: the three appointment cases and the five large-scale criteria. Both halves must be answered in Arabic from an English source."
+  }
+]

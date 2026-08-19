@@ -1,5 +1,5 @@
 """LangGraph workflow for answering assessments."""
 
-from src.graph.workflow import assessment_graph, question_graph
+from src.graph.workflow import answer_one_question, assessment_graph, failed_answer, question_graph
 
-__all__ = ["assessment_graph", "question_graph"]
+__all__ = ["answer_one_question", "assessment_graph", "failed_answer", "question_graph"]

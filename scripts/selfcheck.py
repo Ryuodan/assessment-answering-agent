@@ -288,11 +288,24 @@ def _finalize_citations():
 
 @check("docx loader emits Markdown headings", required=False)
 def _docx_loader():
-    from src import documents
+    """Checked by loading a real DOCX, not by grepping the source.
 
-    source = inspect.getsource(documents._load_docx)
-    if "Heading" not in source or "#" not in source:
-        return "still emits bare paragraphs; DOCX will chunk without structure"
+    The source-text version of this check reported a false failure — the
+    function names its pattern `_HEADING_STYLE`, which does not contain the
+    literal "Heading" — and the warning it printed ("DOCX will chunk without
+    structure") was actively misleading.
+    """
+    from pathlib import Path
+
+    from src.documents import load_text_local
+
+    fixture = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "prior_assessment_2024.docx"
+    if not fixture.is_file():
+        return "no DOCX fixture to check against"
+
+    text = load_text_local(fixture)
+    if not any(line.lstrip().startswith("#") for line in text.splitlines()):
+        return "emits bare paragraphs; DOCX will chunk without structure"
     return True
 
 
@@ -303,6 +316,50 @@ def _rate_limit_retry():
     names = [getattr(item, "__name__", "") for item in llm._RETRYABLE]
     if not any("RateLimit" in name for name in names):
         return "RateLimitError not in _RETRYABLE; a 429 becomes an empty answer"
+    return True
+
+
+@check("indexed chunks are within the size budget", required=False)
+def _chunk_sizes():
+    """Scan the live index for chunks the chunker should have split.
+
+    Found by hand once already: Docling emits a single-cell Markdown table for
+    some sections of a converted standard, which has no rows to divide by, and
+    those became 13,000-character chunks. A dozen of them would crowd every
+    other source out of the drafting prompt, and nothing else would report it.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from src.config import settings
+
+    database = Path(settings.chroma_dir) / "chroma.sqlite3"
+    if not database.is_file():
+        return "no index to check"
+
+    ceiling = int(settings.chunk_size * 1.3)
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        sources = {
+            row[0]: row[1]
+            for row in connection.execute(
+                "select id, string_value from embedding_metadata where key='source_name'"
+            )
+        }
+        oversized = {}
+        for identifier, document in connection.execute(
+            "select id, string_value from embedding_metadata where key='chroma:document'"
+        ):
+            name = sources.get(identifier)
+            if name and len(document) > ceiling:
+                oversized[name] = oversized.get(name, 0) + 1
+    finally:
+        connection.close()
+
+    if oversized:
+        worst = sorted(oversized.items(), key=lambda pair: -pair[1])[:3]
+        detail = ", ".join(f"{name} ({count})" for name, count in worst)
+        return f"{sum(oversized.values())} chunks over {ceiling} chars; re-index: {detail}"
     return True
 
 
