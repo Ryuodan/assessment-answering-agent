@@ -137,3 +137,29 @@ def test_arabic_cases_are_asked_in_arabic():
     for case in load_golden_set():
         if case.question_language == "ar":
             assert case.as_question(0).language == "ar", case.test_id
+
+
+# --- configuration surface -------------------------------------------------
+
+
+def test_every_setting_appears_in_the_example_env():
+    """A setting absent from .env.example is a setting nobody knows they have.
+
+    Four of them were missing when a deployment's values were first compared
+    against the code, which is how a run can differ from the one it is being
+    compared with and nothing shows it.
+    """
+    import io
+
+    from src.config import PROJECT_ROOT, Settings
+
+    example = {
+        line.split("=", 1)[0].strip()
+        for line in io.open(PROJECT_ROOT / ".env.example", encoding="utf-8")
+        if line.strip() and not line.startswith("#") and "=" in line
+    }
+    secrets = {"GROQ_API_KEY", "EMBEDDING_API_KEY"}
+    expected = {name.upper() for name in Settings.model_fields} - secrets
+
+    assert not (expected - example), f"missing from .env.example: {sorted(expected - example)}"
+    assert not (example - expected - secrets), f"unknown keys in .env.example: {sorted(example - expected - secrets)}"

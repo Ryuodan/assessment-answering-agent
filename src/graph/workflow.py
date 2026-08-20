@@ -18,6 +18,7 @@ from functools import lru_cache
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from src import progress
 from src.graph import nodes
 from src.graph.state import AssessmentState, QuestionState
 from src.models import AnsweredQuestion, Language, Question
@@ -96,6 +97,10 @@ async def _answer_question(state: QuestionState) -> dict:
     except Exception as exc:  # noqa: BLE001 - deliberately contained per question
         logger.exception("Failed to answer question %s", question.id)
         return {"answers": [failed_answer(question, exc)]}
+    finally:
+        # Counted whether it succeeded or failed: a run that loses one question
+        # must still reach the end of its own progress bar.
+        progress.advance(state.get("run_id"))
 
 
 def _fan_out(state: AssessmentState) -> list[Send] | str:
@@ -105,6 +110,8 @@ def _fan_out(state: AssessmentState) -> list[Send] | str:
         logger.warning("No questions extracted from '%s'", state.get("source_name", "document"))
         return END
 
+    progress.set_total(state.get("run_id"), len(questions))
+
     forced_language = state.get("language")
     return [
         Send(
@@ -112,6 +119,7 @@ def _fan_out(state: AssessmentState) -> list[Send] | str:
             {
                 "question": question,
                 "language": forced_language or question.language,
+                "run_id": state.get("run_id", ""),
                 "search_queries": [question.text],
                 "attempt": 0,
                 "evidence": [],

@@ -15,13 +15,13 @@ from src.extraction import extract_questions
 from src.graph.state import AssessmentState, QuestionState
 from src.llm import chat_llm, structured_llm
 from src.rerank import rerank
-from src.verification import assess
+from src.formatting import strip_source_markers
+from src.verification import assess, evidence_for
 from src.models import (
     AnsweredQuestion,
     AnswerReview,
     DraftedAnswer,
     Evidence,
-    QueryPlan,
     SourceType,
 )
 from src.prompts import (
@@ -247,7 +247,10 @@ async def finalize(state: QuestionState) -> dict:
     # [n] position, not by file name, because one uploaded file contributes many
     # chunks and name-matching would keep all of them every time.
     shown = _sources(state)
+    retrieved = state.get("evidence", [])
     cited = [shown[n - 1] for n in dict.fromkeys(drafted.used_source_ids) if 1 <= n <= len(shown)]
+    # Recover the sources the drafter used but did not list; see `evidence_for`.
+    cited = evidence_for(drafted.answer, cited, shown or retrieved)
 
     # Clause-level locators for the sources that survived. Order-preserving and
     # de-duplicated, because several chunks of one clause collapse to one citation.
@@ -257,7 +260,7 @@ async def finalize(state: QuestionState) -> dict:
         drafted.answer,
         cited,
         min(drafted.confidence, verdict.confidence),
-        retrieved=state.get("evidence", []),
+        retrieved=retrieved,
         grounded=verdict.grounded,
         review_threshold=settings.review_confidence_threshold,
         incomplete_cap=settings.incomplete_list_confidence_cap,
@@ -265,7 +268,7 @@ async def finalize(state: QuestionState) -> dict:
 
     answered = AnsweredQuestion(
         question=question,
-        answer=drafted.answer.strip(),
+        answer=strip_source_markers(drafted.answer).strip(),
         rationale=(drafted.rationale or verdict.verdict_reason).strip(),
         confidence=confidence,
         needs_review=needs_review,

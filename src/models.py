@@ -93,7 +93,17 @@ class Evidence(BaseModel):
             if self.answered_date:
                 parts.append(f"({self.answered_date})")
             return " ".join(parts)
-        base = self.doc_id or self.source_name
+
+        # The file name leads. A citation is something a person has to go and
+        # check, and the internal document code alone cannot be looked up in a
+        # folder: the Arabic password policy carries "T2--PRO-PMP-2024-00" in
+        # its header, so answers cited "PRO-PMP-2024 \u00a74.1-4.5" and gave the
+        # reader no way to tell which of eighty files that was. The code is
+        # kept alongside, because assessors do ask for it.
+        base = self.source_name or self.doc_id
+        if self.doc_id and self.doc_id not in base:
+            base = f"{base} [{self.doc_id}]"
+
         start = self.clause_start or self.clause
         end = self.clause_end or start
         if start:

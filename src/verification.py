@@ -57,20 +57,66 @@ def supports_clause(evidence: Evidence, clause: str) -> bool:
     return evidence.covers_clause(clause) or _appears_in(clause, evidence.snippet)
 
 
-def unsupported_clauses(answer: str, cited: list[Evidence]) -> list[str]:
-    """Clauses named in prose that no cited chunk actually covers.
+def unsupported_clauses(
+    answer: str, cited: list[Evidence], retrieved: list[Evidence] | None = None
+) -> list[str]:
+    """Clauses named in prose that nothing the drafter read actually covers.
 
-    A non-empty result means the answer points somewhere its own evidence does
-    not reach. That is worth flagging even when the answer is otherwise right,
-    because the reader cannot tell the two cases apart.
+    Support is judged against everything retrieved, not only what the drafter
+    listed as used. Those are different things, and conflating them produced
+    false alarms on correct answers: asked how often penetration testing runs,
+    the drafter read both halves of a split policy section, wrote a correct
+    sentence citing §3.1.20 from the second half, and listed only the first
+    half in its sources. §3.1.20 exists and was on screen — the answer was
+    right and the flag was wrong.
+
+    What remains flagged is the case worth flagging: a clause identifier that
+    appears in no retrieved chunk at all, which the drafter can only have
+    invented. `evidence_for` then attaches the chunk that does support a
+    clause, so the reader can check it rather than take the citation on trust.
     """
-    if not cited:
+    universe = list(cited) + list(retrieved or [])
+    if not universe:
         return mentioned_clauses(answer)
     return [
         clause
         for clause in mentioned_clauses(answer)
-        if not any(supports_clause(item, clause) for item in cited)
+        if not any(supports_clause(item, clause) for item in universe)
     ]
+
+
+def evidence_for(answer: str, cited: list[Evidence], retrieved: list[Evidence]) -> list[Evidence]:
+    """`cited`, plus what else the answer demonstrably leaned on.
+
+    A drafter under-reports its sources: it cites the chunk it started from and
+    omits the sibling part it finished with. The reader then sees "1 supporting
+    source" beneath an answer built on two. Both are recovered here — the other
+    parts of a split unit the answer cited, and any retrieved chunk carrying a
+    clause the prose names — so the evidence shown is the evidence used.
+    """
+    chosen = list(cited)
+    keys = {(item.source_name, item.chunk) for item in chosen}
+
+    def take(item: Evidence) -> None:
+        key = (item.source_name, item.chunk)
+        if key not in keys:
+            keys.add(key)
+            chosen.append(item)
+
+    cited_units = {item.unit_id for item in cited if item.unit_id and item.parts > 1}
+    for item in retrieved:
+        if item.unit_id and item.unit_id in cited_units:
+            take(item)
+
+    for clause in mentioned_clauses(answer):
+        if any(supports_clause(item, clause) for item in chosen):
+            continue
+        for item in retrieved:
+            if supports_clause(item, clause):
+                take(item)
+                break
+
+    return chosen
 
 
 def incomplete_units(cited: list[Evidence], retrieved: list[Evidence] | None = None) -> list[str]:
@@ -124,7 +170,7 @@ def assess(
     """
     reasons: list[str] = []
 
-    missing = unsupported_clauses(answer, cited)
+    missing = unsupported_clauses(answer, cited, retrieved)
     if missing:
         reasons.append("cites clauses not covered by its sources: " + ", ".join(missing))
         confidence = min(confidence, incomplete_cap)

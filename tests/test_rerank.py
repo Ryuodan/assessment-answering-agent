@@ -151,3 +151,55 @@ def test_the_prompt_falls_back_to_the_retrieval_order():
 def test_the_prompt_is_capped_at_the_evidence_limit(monkeypatch):
     monkeypatch.setattr(settings, "max_evidence_chunks", 2)
     assert len(nodes._sources(_state())) == 2
+
+
+# --- one model, however many threads ---------------------------------------
+
+
+def test_the_model_is_built_once_under_concurrent_first_use(monkeypatch):
+    """Four questions reranking at once built four copies of a 2.3 GB model.
+
+    The threads are released together, so they reach the lock at the same
+    moment — the race an unguarded `lru_cache` loses. Construction is slowed
+    deliberately to widen the window a second thread could slip through.
+    """
+    import sys
+    import threading as _threading
+    import time
+
+    from src import rerank as module
+
+    builds = []
+    start_together = _threading.Barrier(4)
+
+    class _Model:
+        def predict(self, pairs, **kwargs):
+            return [0.5] * len(pairs)
+
+    def build(name, max_length=None):
+        time.sleep(0.05)
+        builds.append(name)
+        return _Model()
+
+    class _FakeSentenceTransformers:
+        CrossEncoder = staticmethod(build)
+
+    monkeypatch.setattr(module, "_MODEL", None)
+    monkeypatch.setattr(module, "_MODEL_LOCK", _threading.Lock())
+    monkeypatch.setitem(sys.modules, "sentence_transformers", _FakeSentenceTransformers)
+
+    seen = []
+
+    def worker():
+        start_together.wait(timeout=5)
+        seen.append(module._model())
+
+    threads = [_threading.Thread(target=worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert len(builds) == 1, f"model built {len(builds)} times"
+    # And every caller got the same instance, not a per-thread copy.
+    assert len(seen) == 4 and len({id(model) for model in seen}) == 1

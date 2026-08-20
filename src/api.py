@@ -175,22 +175,36 @@ async def view_extracted_text(origin: str, category: str, name: str) -> dict:
 async def answer_assessment(
     file: UploadFile = File(...),
     language: Language | None = Form(default=None),
+    run_id: str | None = Form(default=None),
 ) -> AssessmentResult:
     """Answer a new assessment.
 
     `language` forces the output language ("ar" or "en"); omit it to answer each
     question in the language it was asked.
+
+    `run_id` is chosen by the caller so it can watch the run while this request
+    is still open — answering a long assessment is minutes of silence, and the
+    identifier has to be known before the work starts to be of any use.
     """
     _check_suffix(file.filename or "")
     path = service.save_upload(file.filename or "assessment", await file.read())
 
-    result = await service.answer_assessment(path, language=language)
+    result = await service.answer_assessment(path, language=language, run_id=run_id)
     if not result.answers:
         raise HTTPException(
             status_code=422,
             detail=f"No questions could be extracted from '{result.source_name}'.",
         )
     return result
+
+
+@app.get("/api/assessments/progress/{run_id}")
+def assessment_progress(run_id: str) -> dict:
+    """How far a run has got: questions found, answered, and left to answer."""
+    state = service.run_progress(run_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"No run in progress with id '{run_id}'.")
+    return state
 
 
 @app.post("/api/assessments/export/pdf")

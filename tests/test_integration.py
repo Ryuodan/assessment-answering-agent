@@ -67,7 +67,10 @@ async def test_every_source_in_the_prompt_carries_a_clause_or_page(series_doc):
     evidence = await store.search("alerts", SourceType.GUIDELINE, k=len(fake.records))
     locators = [item.locator for item in evidence if item.kind in ("series", "table")]
     assert locators, "expected structural units in the corpus"
-    assert all(locator.startswith("MDS-CS-STD-003") for locator in locators)
+    # The file name leads, with the document code beside it; both must be there
+    # for a reader to find the source and for an assessor to quote it.
+    assert all(locator.startswith("std.pdf") for locator in locators)
+    assert all("[MDS-CS-STD-003]" in locator for locator in locators)
 
 
 async def test_arabic_document_survives_the_full_chain(arabic_doc):
@@ -78,7 +81,7 @@ async def test_arabic_document_survives_the_full_chain(arabic_doc):
     evidence = await store.search("\u0634\u0631\u0648\u0637 \u0627\u0644\u062a\u0646\u0628\u064a\u0647", SourceType.GUIDELINE, k=1)
     block = format_sources_block(merge_evidence([], evidence))
 
-    assert "MDS-CS-STD-003 \u00a77" in block, "Arabic clause not folded into the locator"
+    assert "[MDS-CS-STD-003] \u00a77" in block, "Arabic clause not folded into the locator"
     assert "\u200f" not in block, "bidi control reached the prompt"
     for digit in "\u0661\u0662\u0663\u0664\u0665":
         assert f"\u0667.\u0662.{digit}" in block

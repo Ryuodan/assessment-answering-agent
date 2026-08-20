@@ -8,6 +8,7 @@ They are the only place the prompts themselves are exercised.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,7 @@ from src.config import settings
 from src.documents import load_text
 from src.extraction import extract_qa_pairs, extract_questions
 from src.knowledge import get_store
-from src.models import SourceType
+from src.models import Question, SourceType
 
 pytestmark = [
     pytest.mark.live_ai,
@@ -121,3 +122,47 @@ async def test_forced_language_overrides_every_question(populated_store):
     assert answered_questions
     for answered in answered_questions:
         assert any("؀" <= char <= "ۿ" for char in answered.answer), answered.answer
+
+
+# --- forced output language ------------------------------------------------
+
+_ARABIC_LETTERS = re.compile(r"[ء-ي]")
+_LATIN_LETTERS = re.compile(r"[A-Za-z]")
+
+
+def _arabic_share(text: str) -> float:
+    arabic, latin = len(_ARABIC_LETTERS.findall(text)), len(_LATIN_LETTERS.findall(text))
+    return arabic / (arabic + latin) if (arabic + latin) else 0.0
+
+
+@pytest.mark.parametrize("forced", ["ar", "en"])
+async def test_forced_language_holds_across_a_batch(populated_store, forced):
+    """Every answer must obey the forced language, not most of them.
+
+    Consistency is the point: one English paragraph in an Arabic questionnaire
+    is what a reviewer has to find and rewrite by hand.
+    """
+    questions = [
+        Question(id="1", text="What is the data retention period?", language="en"),
+        Question(id="2", text="ما هي مدة الاحتفاظ بالبيانات؟", language="ar"),
+        Question(id="3", text="Are you FedRAMP authorized?", language="en"),
+    ]
+
+    answers = await service.answer_questions(questions, language=forced)
+
+    for answered in answers:
+        share = _arabic_share(answered.answer)
+        if forced == "ar":
+            assert share > 0.5, f"Q{answered.question.id} was not answered in Arabic: {answered.answer[:80]}"
+        else:
+            assert share < 0.15, f"Q{answered.question.id} was not answered in English: {answered.answer[:80]}"
+
+
+async def test_an_uncovered_question_admits_the_gap_in_the_forced_language(populated_store):
+    """Admitting ignorance must survive translation, and stay low-confidence."""
+    question = Question(id="1", text="Are you FedRAMP authorized?", language="en")
+
+    answered = (await service.answer_questions([question], language="ar"))[0]
+
+    assert _arabic_share(answered.answer) > 0.5
+    assert answered.confidence <= 0.4

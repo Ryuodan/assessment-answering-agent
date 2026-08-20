@@ -71,8 +71,12 @@ class QuestionState(TypedDict, total=False):
     """State of the inner graph: retrieve -> draft -> review -> finalize."""
 
     question: Question
+
     language: Language
     """Language the answer must be written in — may differ from the question's own."""
+
+    run_id: str
+    """Which run this question belongs to, so progress can be reported."""
 
     search_queries: list[str]
     """Queries for the current retrieval round.
@@ -107,6 +111,10 @@ class AssessmentState(TypedDict, total=False):
 
     source_name: str
     document_text: str
+
+    run_id: str
+    """Identifier the caller can poll for progress while the run is in flight."""
+
 
     language: Language | None
     """Caller's forced output language. None means each answer follows its own question.

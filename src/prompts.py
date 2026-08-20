@@ -74,6 +74,16 @@ How to answer:
 - When two sources disagree — a different number of classification tiers, a different retention period — say so and cite both, rather than silently picking one. A contradiction in the documentation is something the reader needs to know about.
 - Each source header carries its clause locator, e.g. "MDS-CS-STD-003 §7.2.1". When you state a value that comes from one clause, name that clause in the answer prose exactly as the header gives it. Do not invent a clause number that is not in a header.
 
+Grounding is the hard constraint. Every sentence has to be traceable to a source above, and where the sources run out, so does the answer:
+- Do not supply a control, figure, certification, tool, role, framework or deadline from general knowledge of how organisations usually work, or of what a standard like ISO 27001, SOC 2 or the GDPR typically requires. If it is not in the sources, this organisation has not told you it is true.
+- Do not soften a gap into a plausible generality. "Access is revoked in line with industry best practice" asserts something no source says; "the documentation does not state a timeframe" is the honest answer and the useful one.
+- Where the sources cover part of the question, answer that part and say plainly which part is not covered, rather than rounding the whole thing up or down.
+- Naming the absence is a complete answer. Say what is missing, say what related material the documentation does contain, and point the reader to the function that would know. An assessor can act on that; an invented control they cannot verify is worse than a blank.
+
+List in `used_source_ids` every source you drew on, not just the first. If a fact came from source [7], [7] belongs in the list even when most of the answer came from [2].
+
+Never put a source number in the answer text. The [n] numbering belongs to this prompt, not to the reader, who sees the answer without it — a sentence ending in a bracketed digit points at nothing they can follow. Cite the clause instead; that is a reference they can look up.
+
 Set `confidence` to how well the sources support the answer: above 0.8 when a previous answer or guideline covers it directly, 0.4-0.7 when you had to infer from adjacent material, at or below 0.3 when the sources do not really cover it.
 
 List in `used_source_ids` the bracketed numbers — [1], [2] and so on — of only the sources you actually relied on. Cite by number, not by file name: several sources usually come from the same file. Leave it empty when no source supported the answer.
@@ -106,14 +116,17 @@ QUERY_PLAN_USER = """QUESTION
 
 REVIEW_SYSTEM = """You review a drafted assessment answer for grounding before it reaches a human.
 
+Read every sentence of the answer against the sources. A sentence that sounds like something an organisation of this kind would say, but that no source states, is the failure this review exists to catch — it is the one a reader is least likely to question.
+
 Set `grounded` to false when any of these hold:
 - The answer asserts a fact — a certification, control, tool, frequency, date, role or number — that is not present in the sources.
+- It generalises beyond the sources: an appeal to industry practice, to what a standard usually requires, or to what is "typically" done, where the sources say nothing.
 - The answer contradicts the sources.
 - The answer does not actually address what the question asked.
 - The answer is in the wrong language: it must be written in {language_name}.
 - The question offered options and the answer does not use one of them.
 
-Otherwise set `grounded` to true. An honest "the sources do not cover this" IS grounded — do not fail it for admitting a gap.
+Otherwise set `grounded` to true. An honest "the sources do not cover this" IS grounded — do not fail it for admitting a gap. Naming a gap accurately is the correct answer to a question the documentation does not answer, and it should score as such.
 
 Set `confidence` using this strict scale:"
 - 0.8 to 1.0: The drafted answer is directly and explicitly supported by the sources.

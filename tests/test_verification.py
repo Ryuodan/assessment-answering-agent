@@ -6,6 +6,7 @@ import pytest
 
 from src.models import Evidence, SourceType
 from src.verification import (
+    evidence_for,
     assess,
     incomplete_units,
     mentioned_clauses,
@@ -249,3 +250,66 @@ def test_assess_does_not_cap_confidence_for_an_unused_partial_unit():
     assert confidence == 0.9
     assert needs_review is False
     assert reasons == []
+
+
+# --- support judged on what the drafter read -------------------------------
+
+
+def _chunk(snippet: str, chunk: int, unit: str = "", part: int = 1, parts: int = 1) -> Evidence:
+    return Evidence(
+        source_type=SourceType.GUIDELINE,
+        source_name="pentest.pdf",
+        snippet=snippet,
+        chunk=chunk,
+        unit_id=unit,
+        part=part,
+        parts=parts,
+    )
+
+
+PART_ONE = _chunk("3.1.4 Testing every six months. 3.1.7 A qualified team.", 1, "u3", 1, 2)
+PART_TWO = _chunk("3.1.20 Approved Penetration Testing Tools: NCA-approved tools.", 2, "u3", 2, 2)
+ANSWER = "Testing runs every six months (§3.1.4) using NCA-approved tools (§3.1.20)."
+
+
+def test_a_clause_the_drafter_read_but_did_not_cite_is_not_unsupported():
+    """The reported false positive: 3.1.20 exists, was retrieved, was correct."""
+    assert unsupported_clauses(ANSWER, [PART_ONE], [PART_ONE, PART_TWO]) == []
+
+
+def test_a_clause_in_no_retrieved_chunk_is_still_flagged():
+    """Fabrication is the case worth keeping."""
+    invented = "Testing follows §9.9.9, which nothing covers."
+    assert unsupported_clauses(invented, [PART_ONE], [PART_ONE, PART_TWO]) == ["9.9.9"]
+
+
+def test_the_sibling_part_is_attached_to_the_answer_evidence():
+    """The reader saw '1 supporting source' under an answer built on two."""
+    chosen = evidence_for(ANSWER, [PART_ONE], [PART_ONE, PART_TWO])
+    assert [item.chunk for item in chosen] == [1, 2]
+
+
+def test_a_chunk_supporting_a_named_clause_is_attached_even_from_another_unit():
+    other = _chunk("5.5.5 An unrelated but cited clause.", 9, "u9")
+    chosen = evidence_for("See §5.5.5.", [PART_ONE], [PART_ONE, other])
+    assert other.chunk in [item.chunk for item in chosen]
+
+
+def test_evidence_recovery_adds_nothing_when_the_citation_is_complete():
+    chosen = evidence_for("Testing every six months (§3.1.4).", [PART_ONE], [PART_ONE])
+    assert [item.chunk for item in chosen] == [1]
+
+
+def test_the_q4_case_end_to_end_is_no_longer_flagged():
+    confidence, needs_review, reasons = assess(
+        ANSWER,
+        evidence_for(ANSWER, [PART_ONE], [PART_ONE, PART_TWO]),
+        0.85,
+        retrieved=[PART_ONE, PART_TWO],
+        grounded=True,
+        review_threshold=0.6,
+        incomplete_cap=0.5,
+    )
+    assert reasons == []
+    assert needs_review is False
+    assert confidence == 0.85

@@ -113,6 +113,15 @@
   }
 
   .status { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 10px; }
+  .status strong { color: var(--text); font-weight: 600; }
+  .progress {
+    display: block; height: 5px; margin-top: 8px; border-radius: 999px;
+    background: var(--border); overflow: hidden;
+  }
+  .progress-fill {
+    display: block; height: 100%; background: var(--accent);
+    border-radius: 999px; transition: width .4s ease;
+  }
   .status.error { color: var(--err); }
   .status.ok { color: var(--ok); }
 
@@ -186,16 +195,47 @@
   .answer .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
   .answer .qtext { font-weight: 600; margin-bottom: 10px; }
   .answer textarea {
-    width: 100%; min-height: 78px; resize: vertical;
-    font: inherit; padding: 10px; border-radius: 8px;
+    width: 100%; min-height: 220px; resize: vertical;
+    font: inherit; line-height: 1.55; padding: 12px 14px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg); color: var(--text);
   }
-  .answer .rationale { font-size: 13px; color: var(--muted); margin-top: 8px; }
-  .answer .cites { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 9px; }
+  /* Rendered answer: the read view, so the model's emphasis and lists show as
+     formatting rather than as raw asterisks. Editing swaps in the textarea. */
+  .answer .rendered {
+    min-height: 120px; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg);
+  }
+  .answer .rendered p { margin: 0 0 .6em; }
+  .answer .rendered p:last-child { margin-bottom: 0; }
+  .answer .rendered ul, .answer .rendered ol { margin: .3em 0 .6em; padding-inline-start: 1.35em; }
+  .answer .rendered li { margin: .18em 0; }
+  .answer .rendered h4 { margin: .8em 0 .3em; font-size: 14px; }
+  .answer .rendered strong { font-weight: 650; }
+  .answer .rendered .empty { color: var(--muted); }
+
+  /* Every block under an answer carries a label, so nothing is unexplained. */
+  .field { margin-top: 12px; }
+  .field-label {
+    display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 5px;
+  }
+  .field-label.accent { color: var(--accent); }
+  .field-label.warn { color: var(--warn); }
+
+  .answer .rationale {
+    font-size: 13px; line-height: 1.5; color: var(--text);
+    background: var(--code-bg); border-inline-start: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 9px 12px;
+  }
+  .answer .cites { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .cites-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   .answer .cite { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
-                  background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
-  .answer .reasons { font-size: 12.5px; color: var(--warn); margin-top: 8px; }
+                  background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; }
+  .answer .reasons {
+    font-size: 12.5px; line-height: 1.5; color: var(--warn);
+    background: var(--warn-bg); border-radius: 8px; padding: 9px 12px;
+  }
+  .answer .edit-toggle { float: inline-end; font-size: 12px; padding: 2px 8px; }
   .pdf-options { gap: 14px; flex-wrap: wrap; align-items: center; }
   .pdf-options label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
   .answer details { margin-top: 10px; font-size: 13px; }
@@ -688,41 +728,40 @@
     question.textContent = item.question.text;
     if (isArabic(item.question.text)) question.dir = "rtl";
 
-    const answer = document.createElement("textarea");
-    answer.value = item.answer;
-    answer.placeholder = "No answer was produced — see the note below.";
-    if (isArabic(item.answer)) answer.dir = "rtl";
-    // Edits are written straight back onto the result object the exports read.
-    answer.addEventListener("input", () => { result.answers[index].answer = answer.value; });
-
-    card.append(meta, question, answer);
+    card.append(meta, question, answerField(item, index));
 
     // The clause locators, which is what an assessor asks for first.
     if (item.citations && item.citations.length) {
+      const field = labelledField("Sources cited", "accent");
       const cites = document.createElement("div");
       cites.className = "cites";
-      cites.append(labelled("Cited"));
       item.citations.forEach((citation) => {
         const chip = document.createElement("span");
         chip.className = "cite";
         chip.textContent = citation;
         cites.append(chip);
       });
-      card.append(cites);
+      field.append(cites);
+      card.append(field);
     }
 
     if (item.review_reasons && item.review_reasons.length) {
+      const field = labelledField("Why this is flagged", "warn");
       const reasons = document.createElement("div");
       reasons.className = "reasons";
-      reasons.textContent = "Flagged: " + item.review_reasons.join("; ");
-      card.append(reasons);
+      reasons.textContent = item.review_reasons.join("; ");
+      field.append(reasons);
+      card.append(field);
     }
 
     if (item.rationale) {
+      const field = labelledField("Reasoning", "accent");
       const rationale = document.createElement("div");
       rationale.className = "rationale";
       rationale.textContent = item.rationale;
-      card.append(rationale);
+      if (isArabic(item.rationale)) rationale.dir = "rtl";
+      field.append(rationale);
+      card.append(field);
     }
 
     if (item.evidence && item.evidence.length) {
@@ -752,11 +791,116 @@
     return card;
   }
 
-  function labelled(text) {
-    const span = document.createElement("span");
-    span.className = "cites-label";
-    span.textContent = text;
-    return span;
+  function labelledField(text, tone) {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const label = document.createElement("span");
+    label.className = "field-label" + (tone ? " " + tone : "");
+    label.textContent = text;
+    wrap.append(label);
+    return wrap;
+  }
+
+  /* The answer, rendered by default and editable on demand.
+
+     The model writes emphasis and lists, and a textarea can only ever show
+     those as raw asterisks. Rendering is the read view; the textarea is still
+     the edit surface, and edits go straight back onto the result object the
+     exports read. */
+  function answerField(item, index) {
+    const field = labelledField("Answer", "");
+    const rendered = document.createElement("div");
+    rendered.className = "rendered";
+    const editor = document.createElement("textarea");
+    const toggle = document.createElement("button");
+    toggle.className = "ghost edit-toggle";
+
+    const paint = () => {
+      const text = result.answers[index].answer;
+      rendered.innerHTML = "";
+      if (!text.trim()) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "No answer was produced — see the note below.";
+        rendered.append(empty);
+      } else {
+        renderMarkdown(text).forEach((node) => rendered.append(node));
+      }
+      rendered.dir = isArabic(text) ? "rtl" : "ltr";
+    };
+
+    let editing = false;
+    const setMode = (next) => {
+      editing = next;
+      rendered.hidden = editing;
+      editor.hidden = !editing;
+      toggle.textContent = editing ? "Done" : "Edit";
+      if (editing) { editor.focus(); } else { paint(); }
+    };
+
+    editor.value = item.answer;
+    editor.hidden = true;
+    if (isArabic(item.answer)) editor.dir = "rtl";
+    editor.addEventListener("input", () => { result.answers[index].answer = editor.value; });
+    toggle.onclick = () => setMode(!editing);
+
+    field.querySelector(".field-label").append(toggle);
+    field.append(rendered, editor);
+    setMode(false);
+    return field;
+  }
+
+  /* The four constructs the drafter actually writes: bold, bullets, numbered
+     items and headings. Built as DOM nodes rather than an HTML string, so
+     model output can never inject markup. */
+  function renderMarkdown(text) {
+    const nodes = [];
+    let list = null;
+
+    const boldInto = (parent, line) => {
+      const pattern = /(\*\*|__)(?=\S)([\s\S]+?)(?<=\S)\1/g;
+      let at = 0, match;
+      while ((match = pattern.exec(line)) !== null) {
+        if (match.index > at) parent.append(line.slice(at, match.index));
+        const strong = document.createElement("strong");
+        strong.textContent = match[2];
+        parent.append(strong);
+        at = pattern.lastIndex;
+      }
+      if (at < line.length) parent.append(line.slice(at));
+    };
+
+    const closeList = () => { if (list) { nodes.push(list); list = null; } };
+
+    text.split("\n").forEach((raw) => {
+      const line = raw.trim();
+      if (!line) { closeList(); return; }
+
+      const heading = line.match(/^#{1,6}\s+(.*)$/);
+      const bullet = line.match(/^[-*•]\s+(.*)$/);
+      const numbered = line.match(/^(\d{1,3})[.)]\s+(.*)$/);
+
+      if (heading) {
+        closeList();
+        const node = document.createElement("h4");
+        boldInto(node, heading[1]);
+        nodes.push(node);
+      } else if (bullet || numbered) {
+        const wanted = bullet ? "UL" : "OL";
+        if (!list || list.tagName !== wanted) { closeList(); list = document.createElement(wanted.toLowerCase()); }
+        const item = document.createElement("li");
+        boldInto(item, (bullet || numbered)[bullet ? 1 : 2]);
+        list.append(item);
+      } else {
+        closeList();
+        const node = document.createElement("p");
+        boldInto(node, line);
+        nodes.push(node);
+      }
+    });
+
+    closeList();
+    return nodes;
   }
 
   function renderResult(data) {
@@ -776,16 +920,53 @@
     $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  /* The answer request does not return until every question is done, so the
+     run id is generated here and sent with it: the only way to say anything
+     about a run in flight is to know its name before it starts. */
+  function watchProgress(runId, onUpdate) {
+    let stopped = false;
+    (async () => {
+      while (!stopped) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (stopped) return;
+        try {
+          const response = await fetch("/api/assessments/progress/" + runId);
+          if (response.ok) onUpdate(await response.json());
+        } catch (error) {
+          /* A dropped poll is not worth reporting; the next one will do. */
+        }
+      }
+    })();
+    return () => { stopped = true; };
+  }
+
+  function progressMessage(state) {
+    if (state.stage === "extracting") return "Reading the document and extracting questions…";
+    if (!state.total) return "Answering…";
+    const bar =
+      '<span class="progress"><span class="progress-fill" style="width:' + state.percent + '%"></span></span>';
+    return "Answered <strong>" + state.completed + "</strong> of <strong>" + state.total +
+           "</strong> — " + state.remaining + " to go" + bar;
+  }
+
   async function submitAssessment() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
 
+    const runId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16);
+
     $("answerBtn").disabled = true;
-    setStatus($("answerStatus"), "Extracting questions and answering. This can take several minutes for a long assessment.", "busy");
+    setStatus($("answerStatus"), "Reading the document and extracting questions…", "busy");
 
     const form = new FormData();
     form.append("file", input.files[0]);
+    form.append("run_id", runId);
     if ($("languageSelect").value) form.append("language", $("languageSelect").value);
+
+    const stop = watchProgress(runId, (state) => {
+      $("answerStatus").innerHTML = progressMessage(state);
+      $("answerStatus").className = "status busy";
+    });
 
     try {
       const data = await request("/api/assessments/answer", { method: "POST", body: form });
@@ -794,6 +975,7 @@
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     } finally {
+      stop();
       $("answerBtn").disabled = false;
       loadDocuments();
     }

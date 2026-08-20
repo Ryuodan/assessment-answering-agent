@@ -242,3 +242,99 @@ async def test_a_failing_question_does_not_discard_the_whole_batch(monkeypatch):
     assert answers[0].answer == "fine" and answers[2].answer == "fine"
     assert answers[1].answer == "" and answers[1].needs_review
     assert "not available" in answers[1].rationale
+
+
+# --- the two entry points must answer identically --------------------------
+
+
+async def test_the_document_flow_and_the_batch_flow_run_the_same_pipeline(monkeypatch):
+    """The web interface answers a document; the harness answers a list.
+
+    Both must put each question through the same inner graph, or the numbers
+    the evaluation reports describe a system the interface does not run.
+    """
+    from src import service
+    from src.graph import workflow
+
+    seen: list[tuple[str, tuple]] = []
+
+    async def spy(state):
+        seen.append((state["question"].id, tuple(state.get("search_queries") or ())))
+        return {
+            "answered": AnsweredQuestion(
+                question=state["question"], answer="ok", confidence=0.9, needs_review=False
+            )
+        }
+
+    class _Graph:
+        async def ainvoke(self, state, config=None):
+            return await spy(state)
+
+    monkeypatch.setattr(workflow, "question_graph", lambda: _Graph())
+
+    questions = [Question(id="1", text="First question?", language="en")]
+
+    # The batch entry point, as the evaluation harness uses it.
+    await service.answer_questions(questions)
+    via_batch = list(seen)
+
+    # The document entry point, with extraction stubbed to yield the same question.
+    seen.clear()
+
+    async def fake_extract(state):
+        return {"questions": questions, "document_language": "en"}
+
+    monkeypatch.setattr(nodes, "extract", fake_extract)
+    workflow.assessment_graph.cache_clear()
+    state = await workflow.assessment_graph().ainvoke(
+        {"source_name": "a.pdf", "document_text": "irrelevant", "language": None,
+         "questions": [], "answers": []}
+    )
+    via_document = list(seen)
+    workflow.assessment_graph.cache_clear()
+
+    assert via_batch == via_document
+    assert [a.question.id for a in state["answers"]] == ["1"]
+
+
+# --- progress reporting ----------------------------------------------------
+
+
+async def test_progress_reaches_the_end_of_its_own_bar(monkeypatch):
+    """The bar must close at total/total, including when a question fails."""
+    from src import progress, service
+    from src.graph import workflow
+
+    questions = [Question(id=str(n), text=f"q{n}", language="en") for n in (1, 2, 3)]
+
+    async def fake_extract(state):
+        return {"questions": questions, "document_language": "en"}
+
+    class _Graph:
+        async def ainvoke(self, state, config=None):
+            if state["question"].id == "2":
+                raise RuntimeError("upstream hiccup")
+            return {
+                "answered": AnsweredQuestion(
+                    question=state["question"], answer="ok", confidence=0.9, needs_review=False
+                )
+            }
+
+    monkeypatch.setattr(nodes, "extract", fake_extract)
+    monkeypatch.setattr(workflow, "question_graph", lambda: _Graph())
+    monkeypatch.setattr(service, "extracted_document_text", lambda path: _text_stub())
+
+    async def _text_stub():
+        return "irrelevant"
+
+    workflow.assessment_graph.cache_clear()
+    result = await service.answer_assessment("assessment.pdf", run_id="progress-run")
+    workflow.assessment_graph.cache_clear()
+
+    state = progress.snapshot("progress-run")
+    assert state["total"] == 3
+    assert state["completed"] == 3, "a failed question must still be counted"
+    assert state["remaining"] == 0
+    assert state["percent"] == 100
+    assert state["stage"] == "done"
+    assert len(result.answers) == 3

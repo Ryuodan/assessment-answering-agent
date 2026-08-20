@@ -19,7 +19,7 @@ ordered by the scores it was trying to replace.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
+import threading
 
 from src.config import settings
 from src.models import Evidence
@@ -27,18 +27,32 @@ from src.models import Evidence
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
+_MODEL_LOCK = threading.Lock()
+_MODEL = None
+
+
 def _model():
     """The cross-encoder, loaded once per process.
 
     Imported lazily: the model is a few gigabytes and most deployments run with
     reranking off, so importing at module scope would make every process — the
     CLI, the tests, the API — pay for a feature it may not use.
-    """
-    from sentence_transformers import CrossEncoder
 
-    logger.info("Loading reranker %s", settings.reranker_model)
-    return CrossEncoder(settings.reranker_model, max_length=settings.reranker_max_length)
+    Guarded by a lock rather than `lru_cache`, because the cache does not make
+    construction atomic. Questions are answered concurrently and each reranks
+    on its own thread, so with four in flight all four missed the empty cache
+    together and built their own copy of a 2.3 GB model — four loads, four
+    times the memory, and on a GPU host four allocations that need not exist.
+    """
+    global _MODEL
+    if _MODEL is None:
+        with _MODEL_LOCK:
+            if _MODEL is None:  # another thread may have won the race
+                from sentence_transformers import CrossEncoder
+
+                logger.info("Loading reranker %s", settings.reranker_model)
+                _MODEL = CrossEncoder(settings.reranker_model, max_length=settings.reranker_max_length)
+    return _MODEL
 
 
 def rerank(query: str, evidence: list[Evidence], top_n: int | None = None) -> list[Evidence]:

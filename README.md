@@ -93,14 +93,28 @@ revoked retrieved 3.4.4 alone and concluded the policy specified no timeframe.
 It does — in 3.4.3, one clause away. Every chunk still records the *range* of
 clauses it covers, so a citation stays precise.
 
+**A citation names the file, not just a code.** Answers cite
+`T2 - سياسة إدارة كلمات المرور..pdf [PRO-PMP-2024] §5–5.2`, because the internal
+document code alone is not something a reader can find in a folder of eighty
+files. The code stays alongside it, since assessors ask for it.
+
 **Every answer is reviewed before you see it.** A second model call checks each
 claim against the retrieved sources and can send the question back for one more
 retrieval round with a differently-worded query. Answers that stay ungrounded,
 or that land below the confidence threshold, come back flagged rather than
 silently accepted — the failure mode that matters in compliance work is a
 confident wrong answer, not a missing one. A mechanical check runs alongside it:
-any clause the prose names must appear in the evidence that answer actually
-cited, either inside the chunk's clause range or verbatim in its text.
+any clause the prose names must appear in something the drafter actually read.
+
+That last distinction is load-bearing. Checking against what the drafter
+*listed* as used, rather than what it read, flagged correct answers: asked how
+often penetration testing runs, the drafter read both halves of a split policy
+section, wrote a correct sentence citing §3.1.20 from the second half, and
+listed only the first. The clause existed and was on screen. Support is now
+judged against everything retrieved, and the chunk that backs a named clause is
+attached to the answer's evidence — so the reader can check it instead of
+taking the citation on trust, and "1 supporting source" no longer appears under
+an answer built on two.
 
 **Not knowing is a valid answer.** When the knowledge base does not cover a
 question, the agent says so and scores itself low instead of inventing a
@@ -191,6 +205,8 @@ python -m src.cli stats
 | `GET` | `/api/documents/{origin}/{category}/{name}/preview` | Preview PDF or DOCX in the browser |
 | `GET` | `/api/documents/{origin}/{category}/{name}/text` | View extracted text |
 | `POST` | `/api/assessments/answer` | Answer a new assessment |
+| `GET` | `/api/assessments/progress/{run_id}` | How far a run has got, while it is still running |
+| `POST` | `/api/assessments/export/pdf` | Render the answers as a PDF |
 
 Interactive docs at `/docs`.
 
@@ -325,8 +341,17 @@ because judges differ in severity far more than configurations do.
 | --- | --- | --- | --- | --- |
 | minimax-m2.7 | off | 64.3% | 52.7% | 12 |
 | gpt-oss-120b | off | 61.4% | 46.2% | 13 |
-| minimax-m2.7 | **on** | 70.5% | **63.1%** | 5 |
-| gpt-oss-120b | **on** | **74.8%** | 57.0% | 5 |
+| minimax-m2.7 | on | 70.5% | 63.1% | 5 |
+| gpt-oss-120b | on | 74.8% | 57.0% | 5 |
+| gpt-oss-120b, after the grounding and citation fixes | on | 73.3% / 76.2% | 55.6% | 5 |
+
+**Judge variance is about three points, so read the table with that in mind.**
+The last row is one answers file scored twice by the same judge: 73.3% and
+76.2%. Nothing about the system changed between them. Retrieval breadth shows
+the same picture — `TOP_K_GUIDELINES` of 5 and 8 both scored exactly 160/210
+with the reranker on, so the smaller value is the better default: same answers,
+fewer chunks to rerank. Only differences larger than that spread are worth
+acting on, which in this project means the reranker and nothing else.
 
 **The reranker is the finding.** Same drafter, same settings, only the
 cross-encoder differs: +13.4 points for gpt-oss-120b and +6.2 for
@@ -349,12 +374,6 @@ from 4.3 to 2.9 points, so there is a real but modest self-preference. Note also
 that the neutral judge scored the identical answers at 86.7% and 83.8% — twelve
 points more generous across the board. That is judge severity, not quality, and
 it is why the history file records which judge produced each row.
-
-**`k=8` / `attempts=3` is not established.** On the old 49-policy corpus,
-raising top-k with query expansion measured +6.5. On this corpus the same
-change measured 3.3 points *against*, which is near enough to noise in the
-other direction that neither claim should be leaned on. The reranker's size
-makes it the lever that matters either way.
 
 Hybrid search is the one change that did not survive measurement, and it is off
 for that reason (measured on the earlier 28-case set). It does what it was added to do — it moved the PDPL 72-hour
@@ -396,12 +415,29 @@ demo_data/        generator for the bundled trial corpus
 
 ## Limits
 
+- **Arabic sentences containing Latin runs can arrive out of order.** A
+  displaced list marker is repaired at ingestion — `…؟ وما .25` becomes
+  `25. …؟ وما`, which is what stabilised question extraction from 27-or-28 to a
+  reliable 28. But where an embedded acronym splits an Arabic sentence, the
+  segments around it can still be transposed by the converter, and repairing
+  that reliably would mean reconciling two independent extractions of the same
+  page. Arabic questions containing Latin acronyms are the ones to check.
 - **Scanned PDFs need OCR turned on.** Set `DOCLING_DO_OCR=true` to read them;
   with OCR off (the default) a PDF with no text layer is rejected with an
   explanatory error rather than silently indexed empty. The local fallback has
   no OCR at all.
 - **Answers are drafts.** Anything flagged `needs_review` — and ideally
   everything else — should be read by a person before the form is submitted.
+- **Storage paths are anchored to the project, not the working directory.** A
+  relative `CHROMA_DIR` in `.env` would otherwise mean a different folder
+  depending on where the process was launched, and the failure is silent: an
+  empty database is created and the knowledge base reports nothing indexed.
+- **The embedding endpoint is a hard dependency at ingest time.** If
+  `EMBEDDING_BASE_URL` is unreachable, indexing that file fails and is reported
+  per file; answering fails per question and the rest of the run continues.
+  `src/embeddings.py` carries a commented local `HuggingFaceEmbeddings`
+  alternative for working offline — the vectors are compatible, since it is the
+  same BGE-M3 model.
 - **Filled forms are not written back into the original file.** Output is JSON
   or CSV; re-injecting answers into the source PDF/DOCX layout is not implemented.
 - **The corpus is not de-conflicted for you.** Byte-identical uploads are

@@ -14,7 +14,6 @@ from src.chunking import (
     build_units,
     chunk_document,
     clause_range,
-    match_clause,
     parent_clause,
     parse_blocks,
     strip_bidi,

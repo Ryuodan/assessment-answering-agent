@@ -81,7 +81,7 @@ def test_an_included_draft_is_labelled_as_flagged():
     """A draft may go in the file, but never unmarked."""
     text = _text(render_pdf(_result(), ExportOptions(include_flagged=True)))
     assert "FedRAMP" in text
-    assert "Flagged for review" in text
+    assert "NEEDS REVIEW" in text
 
 
 def test_citations_are_on_by_default_and_can_be_turned_off():
@@ -165,3 +165,48 @@ def test_the_document_is_a_valid_pdf():
 ])
 def test_every_option_combination_renders(options):
     assert render_pdf(_result(), options).startswith(b"%PDF-")
+
+
+# --- markup rendering ------------------------------------------------------
+
+
+def _with_answer(answer: str) -> AssessmentResult:
+    return AssessmentResult(
+        run_id="t", source_name="markup.pdf", language="en", questions_found=1,
+        answers=[AnsweredQuestion(
+            question=Question(id="1", text="What are the requirements?"),
+            answer=answer, confidence=0.9, needs_review=False,
+        )],
+    )
+
+
+def test_bold_markers_do_not_reach_the_page():
+    """The reported complaint: raw ** in the exported answer."""
+    text = _text(render_pdf(_with_answer("Retention is **twelve (12) months** minimum.")))
+    assert "**" not in text
+    assert "twelve (12) months" in text
+
+
+def test_bullets_are_rendered_as_a_list_not_as_hyphens():
+    answer = "The controls are:\n- Encryption at rest\n- Multi-factor authentication"
+    text = _text(render_pdf(_with_answer(answer)))
+    assert "Encryption at rest" in text
+    assert "- Encryption" not in text
+
+
+def test_numbered_items_keep_their_numbers():
+    answer = "Stages:\n1. Notify the regulator\n2. Contain the breach"
+    text = _text(render_pdf(_with_answer(answer)))
+    assert "Notify the regulator" in text
+    assert "Contain the breach" in text
+
+
+def test_a_heading_inside_an_answer_survives():
+    text = _text(render_pdf(_with_answer("## Rotation\nKeys rotate annually.")))
+    assert "Rotation" in text
+    assert "##" not in text
+
+
+def test_confidence_is_always_reported():
+    text = _text(render_pdf(_with_answer("Plain answer.")))
+    assert "90% confidence" in text

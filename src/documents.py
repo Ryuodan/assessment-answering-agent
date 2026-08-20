@@ -116,6 +116,46 @@ def _visual_order_arabic_score(path: Path, pages: int = 4) -> tuple[int, float]:
     return arabic, (presentation / arabic if arabic else 0.0)
 
 
+# An Arabic line whose list marker has been carried to the end: "…العقد؟ وما .25"
+# should read "25. …العقد؟ وما". The marker is an LTR run inside an RTL
+# paragraph, so it belongs at the logical start even though it is drawn on the
+# right, and converters routinely emit it last.
+#
+# The dot is what distinguishes a marker from a value. "25." reversed becomes
+# ".25", so the punctuation travels with the number, while a figure quoted
+# mid-sentence carries none. Without that test a line cut after its number
+# would be rewritten with that figure promoted to a list marker.
+_TRAILING_MARKER = re.compile(r"^(?P<body>.*?)[\s ]+(?:\.(?P<dotted>\d{1,3})|(?P<plain>\d{1,3})\.)$")
+_ARABIC_LETTERS = re.compile(r"[ء-ي]")
+
+
+def repair_rtl_numbering(text: str) -> str:
+    """Move a displaced list marker back to the start of an Arabic line.
+
+    Only the marker moves; the words are already in logical order, so running
+    the bidi algorithm over these lines would reverse letters that are
+    perfectly correct. This is the narrower and safer repair.
+
+    It matters more than it looks. With the number stranded at the end, the
+    extraction model has to guess where each question begins, and it guessed
+    differently from run to run — which is why the same questionnaire yielded
+    27 questions on one run and 28 on the next, and why Arabic question ids
+    came back as ".25".
+    """
+    repaired = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        match = _TRAILING_MARKER.match(stripped) if stripped else None
+        if match and _ARABIC_LETTERS.search(match.group("body")):
+            body = match.group("body").strip()
+            number = match.group("dotted") or match.group("plain")
+            if body:
+                repaired.append(f"{number}. {body}")
+                continue
+        repaired.append(line)
+    return "\n".join(repaired)
+
+
 def _looks_scanned(path: Path, pages: int = 6) -> bool:
     """Whether a PDF carries too little text to have a real text layer.
 
@@ -206,6 +246,10 @@ async def load_text(path: str | Path) -> str:
         raise UnsupportedDocumentError(
             f"No text found in '{path.name}'. Scanned images are not supported — enable DOCLING_DO_OCR."
         )
+
+    # Applied to whichever path produced the text: both Docling and the bidi
+    # reconstruction strand an RTL list marker at the end of its line.
+    text = repair_rtl_numbering(text)
 
     logger.info("Loaded %s (%d characters)", path.name, len(text))
     return text

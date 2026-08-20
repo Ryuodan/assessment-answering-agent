@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 
 from src.config import settings
-from src.knowledge import KnowledgeStore
 from src.models import Evidence, ExtractedQAPair, SourceType
 from tests.conftest import bare_store, build_store
 
@@ -28,14 +27,31 @@ def make(**overrides) -> Evidence:
     return Evidence(**base)
 
 
-def test_locator_prefers_doc_id_and_clause():
+def test_locator_leads_with_the_file_name_and_clause():
+    """A reader has to find the file; a document code alone is not findable."""
     single = make(doc_id="MDS-CS-STD-003", clause_start="7.2.1")
-    assert single.locator == "MDS-CS-STD-003 \u00a77.2.1"
+    assert single.locator == "MDS-CS-STD-003-secure-configuration.pdf \u00a77.2.1"
 
 
-def test_locator_reports_a_span_when_the_chunk_covers_several_clauses():
+def test_locator_appends_a_document_code_the_file_name_does_not_carry():
     spanning = make(doc_id="MDS-CS-STD-006", clause_start="5.1", clause_end="5.6")
-    assert spanning.locator == "MDS-CS-STD-006 \u00a75.1\u20135.6"
+    assert spanning.locator == "MDS-CS-STD-003-secure-configuration.pdf [MDS-CS-STD-006] \u00a75.1\u20135.6"
+
+
+def test_locator_does_not_repeat_a_code_already_in_the_file_name():
+    assert "[" not in make(doc_id="MDS-CS-STD-003", clause_start="1").locator
+
+
+def test_locator_names_an_arabic_file_rather_than_its_internal_code():
+    """The reported bug: "PRO-PMP-2024 \u00a74.1\u20134.5" named no findable file."""
+    evidence = make(
+        source_name="T2 - \u0633\u064a\u0627\u0633\u0629 \u0625\u062f\u0627\u0631\u0629 \u0643\u0644\u0645\u0627\u062a \u0627\u0644\u0645\u0631\u0648\u0631.pdf",
+        doc_id="PRO-PMP-2024",
+        clause_start="5",
+        clause_end="5.2",
+    )
+    assert evidence.locator.startswith("T2 - \u0633\u064a\u0627\u0633\u0629")
+    assert "[PRO-PMP-2024]" in evidence.locator
 
 
 @pytest.mark.parametrize(
@@ -49,7 +65,9 @@ def test_covers_clause(clause, expected):
 
 
 def test_locator_falls_back_to_page_then_filename():
-    assert make(doc_id="MDS-CS-STD-003", page=14).locator == "MDS-CS-STD-003 p.14"
+    assert make(doc_id="MDS-CS-STD-003", page=14).locator == (
+        "MDS-CS-STD-003-secure-configuration.pdf p.14"
+    )
     assert make().locator == "MDS-CS-STD-003-secure-configuration.pdf"
 
 
@@ -183,7 +201,7 @@ async def test_metadata_survives_the_round_trip(series_doc):
     assert evidence.clause_start == "7"
     assert evidence.clause_end == "8"
     assert evidence.kind == "series"
-    assert evidence.locator == "MDS-CS-STD-003 \u00a77\u20138"
+    assert evidence.locator == "std.pdf [MDS-CS-STD-003] \u00a77\u20138"
 
 
 async def test_empty_query_short_circuits(series_doc):

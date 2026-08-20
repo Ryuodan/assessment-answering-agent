@@ -15,6 +15,7 @@ import re
 import uuid
 from pathlib import Path
 
+from src import progress
 from src.config import PROJECT_ROOT, settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs
@@ -88,13 +89,18 @@ async def ingest(path: str | Path, source_type: SourceType) -> IngestResult:
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0, error=str(exc))
 
 
-async def answer_assessment(path: str | Path, language: Language | None = None) -> AssessmentResult:
+async def answer_assessment(
+    path: str | Path, language: Language | None = None, run_id: str | None = None
+) -> AssessmentResult:
     """Answer every question in an assessment document.
 
     `language` forces the output language; leaving it None answers each question
     in whatever language it was asked.
     """
     path = Path(path)
+    run_id = run_id or uuid.uuid4().hex[:12]
+    progress.start(run_id, stage="extracting")
+
     text = await extracted_document_text(path)
 
     final_state = await assessment_graph().ainvoke(
@@ -102,6 +108,7 @@ async def answer_assessment(path: str | Path, language: Language | None = None) 
             "source_name": path.name,
             "document_text": text,
             "language": language,
+            "run_id": run_id,
             "questions": [],
             "answers": [],
         },
@@ -118,8 +125,9 @@ async def answer_assessment(path: str | Path, language: Language | None = None) 
     position = {question.id: index for index, question in enumerate(questions)}
     answers.sort(key=lambda answered: position.get(answered.question.id, len(position)))
 
+    progress.finish(run_id)
     return AssessmentResult(
-        run_id=uuid.uuid4().hex[:12],
+        run_id=run_id,
         source_name=path.name,
         language=final_state.get("language") or final_state.get("document_language") or "en",
         questions_found=len(questions),
@@ -151,6 +159,11 @@ async def answer_questions(
                 return failed_answer(question, exc)
 
     return list(await asyncio.gather(*(run(question) for question in questions)))
+
+
+def run_progress(run_id: str) -> dict | None:
+    """How far an in-flight assessment run has got, or None if unknown."""
+    return progress.snapshot(run_id)
 
 
 def knowledge_stats() -> dict:
@@ -384,7 +397,7 @@ def _document_info(path: Path, *, origin: str, category: str) -> dict:
 
 # Bumped whenever the extraction code changes in a way that alters its output,
 # so cached text from an older, worse extractor is not silently reused.
-_EXTRACTION_VERSION = "3"
+_EXTRACTION_VERSION = "5"
 
 
 def _extracted_text_cache_path(path: Path) -> Path:

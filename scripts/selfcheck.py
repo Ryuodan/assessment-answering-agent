@@ -133,7 +133,9 @@ def _evidence_properties():
         clause="7.2.1",
         parts=3,
     )
-    if item.locator != "MDS-CS-STD-003 \u00a77.2.1":
+    # The file name leads and the document code follows it, because a citation
+    # has to be findable in a folder of eighty files; see Evidence.locator.
+    if item.locator != "f.pdf [MDS-CS-STD-003] \u00a77.2.1":
         return f"locator returned {item.locator!r}"
     if item.is_fragment is not True:
         return "is_fragment did not detect a split unit"
