@@ -5,358 +5,660 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Assessment Answering Agent</title>
 <style>
+  /* ---------------------------------------------------------------------
+     Light first. The palette is a warm near-white ground with one blue
+     accent and three status hues; everything else is a step on a single
+     neutral ramp, so nothing competes with the answer text for attention.
+     Dark mode redefines the same tokens rather than adding new rules.
+     --------------------------------------------------------------------- */
   :root {
-    --bg: #f5f6f8;
-    --panel: #ffffff;
-    --text: #16191d;
-    --muted: #6b7480;
-    --border: #e2e5ea;
-    --accent: #2f5bea;
-    --accent-fg: #ffffff;
-    --ok: #16794a;
-    --ok-bg: #e6f4ec;
-    --warn: #8a5a00;
-    --warn-bg: #fdf2dc;
+    --ground: #f4f5f7;
+    --surface: #ffffff;
+    --surface-sunken: #f7f8fa;
+    --surface-raised: #ffffff;
+
+    --ink: #14181f;
+    --ink-soft: #4a5361;
+    --ink-faint: #666e7b;
+
+    --line: #e4e7ec;
+    --line-strong: #d3d8e0;
+
+    --accent: #2c5ce6;
+    --accent-soft: #eaf0ff;
+    --accent-ink: #1c3fa8;
+    --on-accent: #ffffff;
+
+    --ok: #0f7a4d;
+    --ok-soft: #e6f5ed;
+    --warn: #9a6206;
+    --warn-soft: #fdf3e0;
     --err: #b42318;
-    --err-bg: #fdecea;
-    --code-bg: #f0f2f5;
-    --radius: 10px;
+    --err-soft: #fdecea;
+
+    --shadow-sm: 0 1px 2px rgba(20, 24, 31, .06), 0 1px 3px rgba(20, 24, 31, .04);
+    --shadow-md: 0 2px 4px rgba(20, 24, 31, .05), 0 6px 16px rgba(20, 24, 31, .07);
+    --shadow-lg: 0 12px 40px rgba(20, 24, 31, .16);
+
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-pill: 999px;
   }
+
+  :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    color-scheme: light;
+  }
+
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0e1116;
-      --panel: #161a21;
-      --text: #e6eaf0;
-      --muted: #98a2b0;
-      --border: #272d37;
-      --accent: #5c7cfa;
-      --accent-fg: #0b0e13;
-      --ok: #4ec98a;
-      --ok-bg: #14301f;
-      --warn: #e3b341;
-      --warn-bg: #33280d;
-      --err: #f87168;
-      --err-bg: #3a1a17;
-      --code-bg: #0d1117;
+    :root:not([data-theme="light"]) {
+      --ground: #0f1216;
+      --surface: #171b21;
+      --surface-sunken: #12161b;
+      --surface-raised: #1c2129;
+
+      --ink: #e9edf3;
+      --ink-soft: #a9b3c1;
+      --ink-faint: #909aa8;
+
+      --line: #262c35;
+      --line-strong: #333b46;
+
+      --accent: #6b8dff;
+      --accent-soft: #1a2340;
+      --accent-ink: #a9c0ff;
+      --on-accent: #0b0e13;
+
+      --ok: #4fc98c;
+      --ok-soft: #123024;
+      --warn: #e0aa4a;
+      --warn-soft: #322610;
+      --err: #f4796f;
+      --err-soft: #3a1a17;
+
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+      --shadow-md: 0 2px 6px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+      --shadow-lg: 0 16px 48px rgba(0, 0, 0, .6);
+      color-scheme: dark;
     }
   }
 
+  :root[data-theme="dark"] {
+    --ground: #0f1216;
+    --surface: #171b21;
+    --surface-sunken: #12161b;
+    --surface-raised: #1c2129;
+    --ink: #e9edf3;
+    --ink-soft: #a9b3c1;
+    --ink-faint: #909aa8;
+    --line: #262c35;
+    --line-strong: #333b46;
+    --accent: #6b8dff;
+    --accent-soft: #1a2340;
+    --accent-ink: #a9c0ff;
+    --on-accent: #0b0e13;
+    --ok: #4fc98c;
+    --ok-soft: #123024;
+    --warn: #e0aa4a;
+    --warn-soft: #322610;
+    --err: #f4796f;
+    --err-soft: #3a1a17;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+
   * { box-sizing: border-box; }
+
   body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, sans-serif;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  header {
-    padding: 26px 24px 18px;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
+
+  /* --- page furniture ---------------------------------------------------- */
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 26px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
   }
-  header h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
-  header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
-  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #9b6bff));
+    display: grid; place-items: center; color: var(--on-accent); font-weight: 700; font-size: 14px;
+  }
+  .brand-text h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .brand-text p { margin: 0; font-size: 12.5px; color: var(--ink-faint); }
+  .topbar .spacer { flex: 1; }
 
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  main { max-width: 1120px; margin: 0 auto; padding: 26px 24px 80px; }
 
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
+  /* --- steps ------------------------------------------------------------- */
+
+  .step { margin-bottom: 30px; }
+  .step-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .step-number {
+    flex: 0 0 auto; width: 24px; height: 24px; border-radius: var(--radius-pill);
+    background: var(--accent-soft); color: var(--accent-ink);
+    display: grid; place-items: center; font-size: 12px; font-weight: 700;
+    align-self: center;
+  }
+  .step-head h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  .step-hint { margin: 0 0 15px 36px; color: var(--ink-soft); font-size: 13.5px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
     border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
     padding: 18px;
-    margin-bottom: 18px;
   }
-  .card h2 { margin: 0 0 4px; font-size: 15px; }
-  .card .hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .panel + .panel { margin-top: 14px; }
+  .split .panel + .panel { margin-top: 0; }
+  .panel h3 { margin: 0 0 3px; font-size: 14px; font-weight: 620; }
+  .panel .hint { margin: 0 0 14px; color: var(--ink-faint); font-size: 12.5px; }
 
-  label.file {
-    display: block;
-    border: 1.5px dashed var(--border);
-    border-radius: var(--radius);
-    padding: 18px;
-    text-align: center;
-    cursor: pointer;
-    color: var(--muted);
-    font-size: 14px;
-    transition: border-color .15s, color .15s;
-  }
-  label.file:hover, label.file.drag { border-color: var(--accent); color: var(--accent); }
-  label.file input { display: none; }
-  label.file .chosen { display: block; margin-top: 6px; color: var(--text); font-size: 13px; word-break: break-all; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: stretch; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+  /* Side-by-side panels have to line up row for row. The hint reserves two
+     lines whether or not it needs them, and the drop zone takes the slack, so
+     the two "Index…" buttons sit on the same baseline. */
+  .split .panel { display: flex; flex-direction: column; }
+  .split .panel .hint { min-height: 3.2em; }
+  .split .panel label.file { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .split .panel .status { margin-top: auto; padding-top: 11px; }
+
+  /* --- controls ---------------------------------------------------------- */
 
   button {
-    font: inherit;
-    font-weight: 500;
-    background: var(--accent);
-    color: var(--accent-fg);
-    border: none;
-    border-radius: 8px;
-    padding: 9px 16px;
-    cursor: pointer;
+    font: inherit; font-weight: 550;
+    background: var(--accent); color: var(--on-accent);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: 9px 15px; cursor: pointer;
+    transition: filter .15s, background .15s, border-color .15s, color .15s;
   }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-  button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
-  button.link { background: none; border: none; color: var(--muted); padding: 2px 6px; font-size: 13px; }
-  button.link:hover { color: var(--err); }
-  button.link.view:hover { color: var(--accent); }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  button.ghost {
+    background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong);
+  }
+  button.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); filter: none; }
+  button.quiet {
+    background: none; border: none; color: var(--ink-faint);
+    padding: 3px 7px; font-size: 12.5px; border-radius: 6px;
+  }
+  button.quiet:hover { color: var(--accent); background: var(--accent-soft); filter: none; }
+  button.quiet.danger:hover { color: var(--err); background: var(--err-soft); }
+
   a.button-link {
-    display: inline-block; font: inherit; font-weight: 500; text-decoration: none;
-    background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 9px 16px;
+    display: inline-block; font: inherit; font-weight: 550; text-decoration: none;
+    background: var(--accent); color: var(--on-accent);
+    border-radius: var(--radius-sm); padding: 9px 15px;
   }
 
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
   select {
-    font: inherit; padding: 8px 10px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    font: inherit; padding: 8px 11px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
   }
 
-  .status { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 10px; }
-  .status strong { color: var(--text); font-weight: 600; }
-  .progress {
-    display: block; height: 5px; margin-top: 8px; border-radius: 999px;
-    background: var(--border); overflow: hidden;
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 13px; }
+
+  label.file {
+    display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
+    padding: 20px 16px; text-align: center; cursor: pointer;
+    color: var(--ink-faint); font-size: 13.5px; background: var(--surface-sunken);
+    transition: border-color .15s, color .15s, background .15s;
   }
-  .progress-fill {
-    display: block; height: 100%; background: var(--accent);
-    border-radius: 999px; transition: width .4s ease;
+  label.file:hover, label.file.drag {
+    border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
   }
+  label.file input { display: none; }
+  label.file .chosen {
+    display: block; margin-top: 7px; color: var(--ink); font-size: 13px;
+    font-weight: 550; word-break: break-all;
+  }
+
+  .status { font-size: 13px; color: var(--ink-faint); min-height: 20px; margin-top: 11px; }
   .status.error { color: var(--err); }
   .status.ok { color: var(--ok); }
+  .status strong { color: var(--ink); font-weight: 650; }
+  .progress {
+    display: block; height: 6px; margin-top: 9px; border-radius: var(--radius-pill);
+    background: var(--line); overflow: hidden;
+  }
+  .progress-fill {
+    display: block; height: 100%; border-radius: var(--radius-pill);
+    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #9b6bff));
+    transition: width .45s ease;
+  }
+  .spinner {
+    display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-inline-end: 7px;
+    border: 2px solid var(--line-strong); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  ul.sources { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  /* --- knowledge base ---------------------------------------------------- */
+
+  .kb-summary {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    font-size: 13.5px; color: var(--ink-soft); margin-bottom: 12px;
+  }
+  ul.sources { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 300px; overflow: auto; }
   ul.sources li {
-    display: flex; align-items: center; gap: 8px;
-    padding: 7px 0; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 2px; border-bottom: 1px solid var(--line);
   }
   ul.sources li:last-child { border-bottom: none; }
-  ul.sources .name { flex: 1; word-break: break-all; }
-
-  .library-heading {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    margin: 18px 0 10px;
-  }
-  .library-heading:first-of-type { margin-top: 0; }
-  .library-heading h3 { margin: 0; font-size: 14px; }
-  .document-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
-  .document-card {
-    display: flex; flex-direction: column; gap: 9px; min-width: 0;
-    border: 1px solid var(--border); border-radius: 9px; padding: 12px;
-    background: var(--bg);
-  }
-  .document-card .doc-title { font-weight: 600; word-break: break-word; }
-  .document-card .doc-name { color: var(--muted); font-size: 12px; word-break: break-all; }
-  .document-card .doc-meta { color: var(--muted); font-size: 12px; }
-  .document-card .row { margin-top: auto; }
-
-  dialog {
-    width: min(1050px, calc(100vw - 28px)); height: min(820px, calc(100vh - 28px));
-    padding: 0; color: var(--text); background: var(--panel);
-    border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 24px 80px rgba(0, 0, 0, .3);
-  }
-  dialog::backdrop { background: rgba(6, 10, 18, .62); }
-  .viewer-shell { height: 100%; display: flex; flex-direction: column; }
-  .viewer-header {
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
-    padding: 16px 18px; border-bottom: 1px solid var(--border);
-  }
-  .viewer-header h2 { margin: 0; font-size: 16px; }
-  .viewer-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
-  .viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .viewer-tabs { display: flex; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
-  .viewer-tabs button.active { color: var(--accent); border-color: var(--accent); }
-  .viewer-panel { flex: 1; min-height: 0; padding: 14px 18px 18px; }
-  .viewer-panel iframe { width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 8px; background: white; }
-  .extracted-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-  .extracted-wrap .status { flex: 0 0 auto; }
-  pre.extracted {
-    flex: 1; min-height: 0; overflow: auto; margin: 8px 0 0; padding: 16px;
-    white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
-    border: 1px solid var(--border); border-radius: 8px; background: var(--code-bg); color: var(--text);
-  }
+  ul.sources .name { flex: 1; word-break: break-all; color: var(--ink-soft); }
 
   .tag {
-    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
-    padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+    font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+    padding: 3px 8px; border-radius: var(--radius-pill); white-space: nowrap;
   }
-  .tag.guideline { background: var(--code-bg); color: var(--muted); }
-  .tag.prior_answer { background: var(--ok-bg); color: var(--ok); }
-  .tag.ok { background: var(--ok-bg); color: var(--ok); }
-  .tag.warn { background: var(--warn-bg); color: var(--warn); }
-  .tag.err { background: var(--err-bg); color: var(--err); }
+  .tag.guideline { background: var(--surface-sunken); color: var(--ink-faint); border: 1px solid var(--line); }
+  .tag.prior_answer { background: var(--ok-soft); color: var(--ok); }
+  .tag.ok { background: var(--ok-soft); color: var(--ok); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .tag.err { background: var(--err-soft); color: var(--err); }
 
-  .summary { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 16px; }
-  .summary div { font-size: 13px; color: var(--muted); }
-  .summary strong { display: block; font-size: 21px; color: var(--text); font-weight: 600; }
+  /* --- document library -------------------------------------------------- */
 
-  .answer { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; background: var(--panel); }
-  .answer.review { border-left: 3px solid var(--warn); }
-  .answer .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
-  .answer .qtext { font-weight: 600; margin-bottom: 10px; }
-  .answer textarea {
-    width: 100%; min-height: 220px; resize: vertical;
-    font: inherit; line-height: 1.55; padding: 12px 14px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  details.library > summary {
+    cursor: pointer; font-size: 14px; font-weight: 620; padding: 4px 0;
+    list-style: none; display: flex; align-items: center; gap: 8px;
   }
-  /* Rendered answer: the read view, so the model's emphasis and lists show as
-     formatting rather than as raw asterisks. Editing swaps in the textarea. */
-  .answer .rendered {
-    min-height: 120px; padding: 12px 14px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--bg);
+  details.library > summary::-webkit-details-marker { display: none; }
+  details.library > summary::before {
+    content: "›"; font-size: 17px; color: var(--ink-faint);
+    transition: transform .15s; display: inline-block;
   }
-  .answer .rendered p { margin: 0 0 .6em; }
-  .answer .rendered p:last-child { margin-bottom: 0; }
-  .answer .rendered ul, .answer .rendered ol { margin: .3em 0 .6em; padding-inline-start: 1.35em; }
-  .answer .rendered li { margin: .18em 0; }
-  .answer .rendered h4 { margin: .8em 0 .3em; font-size: 14px; }
-  .answer .rendered strong { font-weight: 650; }
-  .answer .rendered .empty { color: var(--muted); }
+  details.library[open] > summary::before { transform: rotate(90deg); }
 
-  /* Every block under an answer carries a label, so nothing is unexplained. */
-  .field { margin-top: 12px; }
+  .library-heading {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 10px;
+  }
+  .library-heading h4 { margin: 0; font-size: 13px; font-weight: 620; color: var(--ink-soft); }
+  .document-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 11px; }
+  .document-card {
+    display: flex; flex-direction: column; gap: 7px; min-width: 0;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 13px; background: var(--surface-sunken);
+  }
+  .document-card .doc-title { font-weight: 600; font-size: 13.5px; word-break: break-word; }
+  .document-card .doc-name { color: var(--ink-faint); font-size: 11.5px; word-break: break-all; }
+  .document-card .doc-meta { color: var(--ink-faint); font-size: 11.5px; }
+  .document-card .row { margin-top: auto; gap: 7px; }
+  .document-card button { padding: 6px 11px; font-size: 12.5px; }
+
+  /* --- results ----------------------------------------------------------- */
+
+  .summary { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat {
+    flex: 1 1 130px; background: var(--surface-sunken);
+    border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px;
+  }
+  .stat .value { display: block; font-size: 23px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
+  .stat .label { font-size: 12px; color: var(--ink-faint); }
+  .stat.review .value { color: var(--warn); }
+
+  .toolbar {
+    display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+    padding: 12px 14px; background: var(--surface-sunken);
+    border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px;
+  }
+  .toolbar .divider { width: 1px; height: 20px; background: var(--line-strong); }
+  .pdf-options { display: flex; gap: 13px; align-items: center; flex-wrap: wrap; font-size: 12.5px; }
+  .pdf-options .caption {
+    font-size: 10.5px; font-weight: 650; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .pdf-options label { color: var(--ink-soft); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+
+  /* Each question and its answer form one card; the gap and the shadow are
+     what stop a page of them reading as a single wall of text. */
+  .answer {
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+  .answer.review { border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); }
+
+  .answer-head {
+    display: flex; gap: 13px; align-items: flex-start;
+    padding: 16px 18px; background: var(--surface-sunken);
+    border-bottom: 1px solid var(--line);
+  }
+  .answer.review .answer-head { background: var(--warn-soft); }
+  .qnum {
+    flex: 0 0 auto; min-width: 27px; height: 27px; padding: 0 7px;
+    border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line-strong);
+    display: grid; place-items: center; font-size: 12.5px; font-weight: 650; color: var(--ink-soft);
+  }
+  .qbody { flex: 1; min-width: 0; }
+  .qtext { font-weight: 640; font-size: 15.5px; line-height: 1.45; letter-spacing: -.005em; }
+  .qmeta {
+    display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
+    margin-top: 6px; font-size: 11.5px; color: var(--ink-faint);
+  }
+
+  /* Confidence is a headline, not a footnote: a labelled meter beside the
+     question, sized so it reads before the answer does. */
+  .confidence { flex: 0 0 auto; width: 116px; text-align: end; }
+  .confidence .value { font-size: 19px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; }
+  .confidence .caption {
+    font-size: 10.5px; font-weight: 650; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .meter { height: 5px; border-radius: var(--radius-pill); background: var(--line); margin-top: 6px; overflow: hidden; }
+  .meter span { display: block; height: 100%; border-radius: var(--radius-pill); }
+  .confidence.high .value { color: var(--ok); }
+  .confidence.high .meter span { background: var(--ok); }
+  .confidence.medium .value { color: var(--warn); }
+  .confidence.medium .meter span { background: var(--warn); }
+  .confidence.low .value { color: var(--err); }
+  .confidence.low .meter span { background: var(--err); }
+
+  .answer-body { padding: 16px 18px 18px; }
+
+  .field { margin-top: 16px; }
+  .field:first-child { margin-top: 0; }
   .field-label {
-    display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em;
-    text-transform: uppercase; color: var(--muted); margin-bottom: 5px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 7px;
   }
+  .field-label .grow { flex: 1; }
   .field-label.accent { color: var(--accent); }
   .field-label.warn { color: var(--warn); }
 
-  .answer .rationale {
-    font-size: 13px; line-height: 1.5; color: var(--text);
-    background: var(--code-bg); border-inline-start: 3px solid var(--accent);
-    border-radius: 0 8px 8px 0; padding: 9px 12px;
+  .rendered {
+    font-size: 15px; line-height: 1.7; color: var(--ink);
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-inline-start: 3px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 16px;
   }
-  .answer .cites { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .cites-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .answer .cite { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
-                  background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; }
-  .answer .reasons {
-    font-size: 12.5px; line-height: 1.5; color: var(--warn);
-    background: var(--warn-bg); border-radius: 8px; padding: 9px 12px;
+  .answer.review .rendered { border-inline-start-color: var(--warn); }
+  .rendered p { margin: 0 0 .65em; }
+  .rendered p:last-child { margin-bottom: 0; }
+  .rendered ul, .rendered ol { margin: .35em 0 .7em; padding-inline-start: 1.35em; }
+  .rendered li { margin: .22em 0; }
+  .rendered li::marker { color: var(--ink-faint); }
+  .rendered h4 { margin: .9em 0 .35em; font-size: 14px; font-weight: 650; }
+  .rendered strong { font-weight: 680; }
+  .rendered .empty { color: var(--ink-faint); font-style: italic; }
+
+  .answer textarea {
+    width: 100%; min-height: 240px; resize: vertical;
+    font: inherit; font-size: 15px; line-height: 1.7; padding: 14px 16px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    border: 1px solid var(--line); border-inline-start: 3px solid var(--accent);
+    background: var(--surface-sunken); color: var(--ink);
   }
-  .answer .edit-toggle { float: inline-end; font-size: 12px; padding: 2px 8px; }
-  .pdf-options { gap: 14px; flex-wrap: wrap; align-items: center; }
-  .pdf-options label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
-  .answer details { margin-top: 10px; font-size: 13px; }
-  .answer details summary { cursor: pointer; color: var(--muted); }
-  .answer .ev { background: var(--code-bg); border-radius: 8px; padding: 10px; margin-top: 8px; white-space: pre-wrap; font-size: 13px; }
-  .answer .ev .src { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+
+  /* Reasoning is shown, not hidden behind a disclosure. */
+  .rationale {
+    font-size: 13.5px; line-height: 1.6; color: var(--ink-soft);
+    background: var(--accent-soft); border-inline-start: 3px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 11px 14px;
+  }
+  .reasons {
+    font-size: 13px; line-height: 1.55; color: var(--warn);
+    background: var(--warn-soft); border-radius: var(--radius-sm); padding: 11px 14px;
+  }
+
+  /* Citations: soft bubbles that open the chunk they point at. The hue says
+     where the answer came from — a policy the organisation wrote, or a
+     questionnaire it has already answered — because that changes how much
+     weight a reviewer gives it. */
+  .cites { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .cite {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.4;
+    border-radius: var(--radius-pill); padding: 5px 12px; cursor: pointer;
+    transition: background .15s, border-color .15s, transform .1s;
+    text-align: start;
+    --cite-hue: var(--accent);
+    --cite-ground: var(--accent-soft);
+    --cite-ink: var(--accent-ink);
+    background: var(--cite-ground); color: var(--cite-ink);
+    border: 1px solid color-mix(in srgb, var(--cite-hue) 24%, transparent);
+  }
+  .cite.prior_answer { --cite-hue: var(--ok); --cite-ground: var(--ok-soft); --cite-ink: var(--ok); }
+  .cite.unknown { --cite-hue: var(--ink-faint); --cite-ground: var(--surface-sunken); --cite-ink: var(--ink-soft); }
+  .cite:hover { background: color-mix(in srgb, var(--cite-hue) 15%, var(--cite-ground)); filter: none; }
+  .cite:active { transform: translateY(1px); }
+  .cite[aria-expanded="true"] {
+    border-color: var(--cite-hue);
+    background: color-mix(in srgb, var(--cite-hue) 20%, var(--cite-ground));
+  }
+  .cite .caret { opacity: .6; margin-inline-start: 6px; font-size: 10px; }
+  .cite-key { display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--ink-faint); }
+  .cite-key span { display: inline-flex; align-items: center; gap: 5px; }
+  .cite-key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .cite-key i.guideline { background: var(--accent); }
+  .cite-key i.prior_answer { background: var(--ok); }
+
+  .cite-panel {
+    margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface-sunken); overflow: hidden;
+  }
+  .cite-panel .cite-head {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 9px 13px; border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-faint); background: var(--surface);
+  }
+  .cite-panel .cite-head .who { flex: 1; min-width: 0; color: var(--ink-soft); font-weight: 550; }
+  .cite-panel .snippet {
+    margin: 0; padding: 13px; white-space: pre-wrap; overflow-wrap: anywhere;
+    font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); max-height: 340px; overflow: auto;
+  }
+
+  details.evidence { margin-top: 16px; }
+  details.evidence summary {
+    cursor: pointer; font-size: 12.5px; color: var(--ink-faint); list-style: none;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  details.evidence summary::-webkit-details-marker { display: none; }
+  details.evidence summary::before { content: "›"; font-size: 15px; transition: transform .15s; display: inline-block; }
+  details.evidence[open] summary::before { transform: rotate(90deg); }
+  .ev {
+    background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 11px 13px; margin-top: 9px; white-space: pre-wrap; font-size: 12.5px;
+    line-height: 1.6; color: var(--ink-soft); overflow-wrap: anywhere;
+  }
+  .ev .src { display: block; color: var(--ink-faint); font-size: 11.5px; margin-bottom: 6px; font-weight: 550; }
+
   [dir="rtl"] { text-align: right; }
 
-  .spinner {
-    display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-inline-end: 7px;
-    border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%;
-    animation: spin .7s linear infinite;
+  /* --- viewer dialog ----------------------------------------------------- */
+
+  dialog {
+    width: min(1060px, calc(100vw - 28px)); height: min(830px, calc(100vh - 28px));
+    padding: 0; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg);
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  dialog::backdrop { background: rgba(10, 14, 22, .55); backdrop-filter: blur(2px); }
+  .viewer-shell { height: 100%; display: flex; flex-direction: column; }
+  .viewer-header {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    padding: 16px 18px; border-bottom: 1px solid var(--line);
+  }
+  .viewer-header h2 { margin: 0; font-size: 16px; font-weight: 650; }
+  .viewer-header p { margin: 3px 0 0; color: var(--ink-faint); font-size: 12px; }
+  .viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .viewer-tabs { display: flex; gap: 8px; padding: 11px 18px; border-bottom: 1px solid var(--line); }
+  .viewer-tabs button.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .viewer-panel { flex: 1; min-height: 0; padding: 14px 18px 18px; }
+  .viewer-panel iframe {
+    width: 100%; height: 100%; border: 1px solid var(--line);
+    border-radius: var(--radius-sm); background: white;
+  }
+  .extracted-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .extracted-wrap .status { flex: 0 0 auto; }
+  pre.extracted {
+    flex: 1; min-height: 0; overflow: auto; margin: 9px 0 0; padding: 16px;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    font: 12.5px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface-sunken); color: var(--ink-soft);
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Assessment Answering Agent</h1>
-  <p>Upload your guidelines and previously answered assessments, then submit a new one to fill in — English or Arabic.</p>
-</header>
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-text">
+      <h1>Assessment Answering Agent</h1>
+      <p>Answers security questionnaires from your own policies — English and Arabic</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
+</div>
 
 <main>
-  <div class="grid">
-    <section class="card">
-      <h2>Guidelines</h2>
-      <p class="hint">Policies, standards and reference material that state your organisation's position.</p>
-      <label class="file" data-drop="guidelines">
-        <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
-        Drop PDF or DOCX files here, or click to choose
-        <span class="chosen" id="guidelinesChosen"></span>
+  <!-- Step 1 ------------------------------------------------------------ -->
+  <section class="step">
+    <div class="step-head">
+      <span class="step-number">1</span>
+      <h2>Build the knowledge base</h2>
+    </div>
+    <p class="step-hint">Everything the agent answers from. Upload your policies, and any questionnaires you have already filled in.</p>
+
+    <div class="split">
+      <div class="panel">
+        <h3>Guidelines</h3>
+        <p class="hint">Policies, standards and reference material stating your organisation's position.</p>
+        <label class="file" data-drop="guidelines">
+          <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
+          Drop PDF or DOCX files here, or click to choose
+          <span class="chosen" id="guidelinesChosen"></span>
+        </label>
+        <div class="row">
+          <button id="guidelinesBtn" disabled>Index guidelines</button>
+        </div>
+        <div class="status" id="guidelinesStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Previously answered assessments</h3>
+        <p class="hint">Completed questionnaires. Question and answer pairs are reused as the strongest signal for wording.</p>
+        <label class="file" data-drop="prior">
+          <input type="file" id="priorInput" multiple accept=".pdf,.docx" />
+          Drop PDF or DOCX files here, or click to choose
+          <span class="chosen" id="priorChosen"></span>
+        </label>
+        <div class="row">
+          <button id="priorBtn" disabled>Index previous answers</button>
+        </div>
+        <div class="status" id="priorStatus"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h3>What is indexed</h3>
+      <div class="kb-summary" id="kbSummary">Loading…</div>
+      <ul class="sources" id="kbSources"></ul>
+      <div class="row">
+        <button class="ghost" id="kbRefresh">Refresh</button>
+        <button class="ghost" id="kbClear">Clear everything</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <details class="library">
+        <summary>Documents and trial files</summary>
+        <p class="hint" style="margin-top:10px">Open an original PDF, inspect the exact text the agent read, or load a bundled trial file into an uploader.</p>
+
+        <div class="library-heading">
+          <h4>Your uploaded documents</h4>
+          <span class="status" id="uploadedDocumentsSummary" style="margin:0"></span>
+        </div>
+        <div class="document-list" id="uploadedDocuments"></div>
+
+        <div class="library-heading">
+          <h4>Bundled trial documents</h4>
+          <select id="trialFilter" title="Filter trial documents">
+            <option value="">All trial documents</option>
+            <option value="guideline">Guidelines</option>
+            <option value="prior_assessment">Completed assessments</option>
+            <option value="new_assessment">Blank assessments to answer</option>
+          </select>
+        </div>
+        <div class="document-list" id="trialDocuments"></div>
+        <div class="status" id="trialStatus"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Step 2 ------------------------------------------------------------ -->
+  <section class="step">
+    <div class="step-head">
+      <span class="step-number">2</span>
+      <h2>Answer an assessment</h2>
+    </div>
+    <p class="step-hint">Every question is extracted, matched against your knowledge base, drafted and then reviewed for grounding.</p>
+
+    <div class="panel">
+      <label class="file" data-drop="assessment">
+        <input type="file" id="assessmentInput" accept=".pdf,.docx" />
+        Drop the assessment here, or click to choose
+        <span class="chosen" id="assessmentChosen"></span>
       </label>
       <div class="row">
-        <button id="guidelinesBtn" disabled>Index guidelines</button>
+        <select id="languageSelect" title="Output language">
+          <option value="">Answer in each question's own language</option>
+          <option value="en">Force English</option>
+          <option value="ar">Force Arabic — العربية</option>
+        </select>
+        <button id="answerBtn" disabled>Answer assessment</button>
       </div>
-      <div class="status" id="guidelinesStatus"></div>
-    </section>
-
-    <section class="card">
-      <h2>Previously answered assessments</h2>
-      <p class="hint">Completed questionnaires. Question/answer pairs are extracted and reused as the strongest signal.</p>
-      <label class="file" data-drop="prior">
-        <input type="file" id="priorInput" multiple accept=".pdf,.docx" />
-        Drop PDF or DOCX files here, or click to choose
-        <span class="chosen" id="priorChosen"></span>
-      </label>
-      <div class="row">
-        <button id="priorBtn" disabled>Index previous answers</button>
-      </div>
-      <div class="status" id="priorStatus"></div>
-    </section>
-  </div>
-
-  <section class="card">
-    <h2>Knowledge base</h2>
-    <p class="hint" id="kbSummary">Loading…</p>
-    <ul class="sources" id="kbSources"></ul>
-    <div class="row">
-      <button class="ghost" id="kbRefresh">Refresh</button>
-      <button class="ghost" id="kbClear">Clear everything</button>
+      <div class="status" id="answerStatus"></div>
     </div>
   </section>
 
-  <section class="card">
-    <h2>Documents & trial files</h2>
-    <p class="hint">Open original PDFs, inspect the exact extracted text, or load a bundled trial file into an uploader.</p>
-
-    <div class="library-heading">
-      <h3>Your uploaded documents</h3>
-      <span class="status" id="uploadedDocumentsSummary" style="margin:0"></span>
+  <!-- Step 3 ------------------------------------------------------------ -->
+  <section class="step" id="resultsCard" hidden>
+    <div class="step-head">
+      <span class="step-number">3</span>
+      <h2>Review and export</h2>
     </div>
-    <div class="document-list" id="uploadedDocuments"></div>
+    <p class="step-hint">Read each answer, follow a citation to the exact clause it came from, edit anything you disagree with, then export.</p>
 
-    <div class="library-heading">
-      <h3>Bundled trial documents</h3>
-      <select id="trialFilter" title="Filter trial documents">
-        <option value="">All trial documents</option>
-        <option value="guideline">Guidelines</option>
-        <option value="prior_assessment">Completed assessments</option>
-        <option value="new_assessment">Blank assessments to answer</option>
-      </select>
-    </div>
-    <div class="document-list" id="trialDocuments"></div>
-    <div class="status" id="trialStatus"></div>
-  </section>
-
-  <section class="card">
-    <h2>Answer a new assessment</h2>
-    <p class="hint">The agent extracts every question, retrieves supporting material, drafts an answer and reviews it for grounding.</p>
-    <label class="file" data-drop="assessment">
-      <input type="file" id="assessmentInput" accept=".pdf,.docx" />
-      Drop the assessment here, or click to choose
-      <span class="chosen" id="assessmentChosen"></span>
-    </label>
-    <div class="row">
-      <select id="languageSelect" title="Output language">
-        <option value="">Answer in each question's own language</option>
-        <option value="en">Force English</option>
-        <option value="ar">Force Arabic — العربية</option>
-      </select>
-      <button id="answerBtn" disabled>Answer assessment</button>
-    </div>
-    <div class="status" id="answerStatus"></div>
-  </section>
-
-  <section class="card" id="resultsCard" hidden>
-    <h2>Answers</h2>
     <div class="summary" id="resultsSummary"></div>
-    <div class="row" style="margin-top:0;margin-bottom:6px">
+
+    <div class="toolbar">
       <button class="ghost" id="exportJson">Download JSON</button>
       <button class="ghost" id="exportCsv">Download CSV</button>
-      <button class="ghost" id="exportPdf">Download PDF</button>
-      <span class="status" style="margin:0">Edits you make below are included in the download.</span>
+      <button id="exportPdf">Download PDF</button>
+      <span class="divider"></span>
+      <div class="pdf-options">
+        <span class="caption">PDF includes</span>
+        <label><input type="checkbox" id="pdfLowConfidence"> answers flagged for review</label>
+        <label><input type="checkbox" id="pdfCitations" checked> clause citations</label>
+        <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
+      </div>
     </div>
-    <div class="row pdf-options" style="margin-top:0;margin-bottom:14px">
-      <span class="cites-label">PDF includes</span>
-      <label><input type="checkbox" id="pdfLowConfidence"> answers flagged for review</label>
-      <label><input type="checkbox" id="pdfCitations" checked> clause citations</label>
-      <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
-    </div>
+    <div class="status" style="margin-bottom:18px">Edits you make below are included in every download.</div>
+
     <div id="results"></div>
   </section>
 </main>
@@ -394,9 +696,34 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  let result = null;   // last AssessmentResult, kept so exports can pick up edits
+  let result = null;
   let documents = [];
   let currentDocument = null;
+
+  // --- theme ---------------------------------------------------------------
+
+  const THEME_KEY = "assessment-theme";
+
+  function systemPrefersDark() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") ||
+      (systemPrefersDark() ? "dark" : "light");
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    $("themeToggle").textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    try { localStorage.setItem(THEME_KEY, theme); } catch (error) { /* private mode */ }
+  }
+
+  (function initTheme() {
+    let stored = null;
+    try { stored = localStorage.getItem(THEME_KEY); } catch (error) { /* private mode */ }
+    applyTheme(stored || (systemPrefersDark() ? "dark" : "light"));
+  })();
 
   // --- helpers -------------------------------------------------------------
 
@@ -469,7 +796,7 @@
       if (!files.length) return;
 
       button.disabled = true;
-      setStatus(status, "Indexing " + files.length + " " + noun + "… extraction can take a minute per file.", "busy");
+      setStatus(status, "Indexing " + files.length + " " + noun + ". Large documents take a minute each.", "busy");
 
       const form = new FormData();
       files.forEach((file) => form.append("files", file));
@@ -499,6 +826,7 @@
         loadDocuments();
       } catch (error) {
         setStatus(status, error.message, "error");
+      } finally {
         button.disabled = false;
       }
     };
@@ -509,9 +837,10 @@
   async function loadKnowledge() {
     try {
       const stats = await request("/api/knowledge");
-      $("kbSummary").textContent = stats.total_chunks
-        ? stats.sources.length + " file(s) · " + stats.guideline_chunks + " guideline chunks · " +
-          stats.prior_answer_chunks + " previous answers"
+      $("kbSummary").innerHTML = stats.total_chunks
+        ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
+          "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
+          "<span>" + stats.prior_answer_chunks.toLocaleString() + " previous answers</span>"
         : "Nothing indexed yet. Upload guidelines or previous assessments above.";
 
       $("kbSources").innerHTML = "";
@@ -527,7 +856,7 @@
         name.textContent = source.name + " (" + source.chunks + ")";
 
         const view = document.createElement("button");
-        view.className = "link view";
+        view.className = "quiet";
         view.textContent = "view";
         view.onclick = () => openDocument({
           name: source.name,
@@ -540,7 +869,7 @@
         });
 
         const remove = document.createElement("button");
-        remove.className = "link";
+        remove.className = "quiet danger";
         remove.textContent = "remove";
         remove.onclick = async () => {
           await request("/api/knowledge/sources/" + encodeURIComponent(source.name), { method: "DELETE" });
@@ -559,10 +888,11 @@
 
   function emptyLibraryMessage(container, message) {
     container.innerHTML = "";
-    const empty = document.createElement("div");
-    empty.className = "status";
-    empty.textContent = message;
-    container.append(empty);
+    const note = document.createElement("div");
+    note.className = "status";
+    note.style.margin = "0";
+    note.textContent = message;
+    container.append(note);
   }
 
   function documentCard(doc) {
@@ -652,7 +982,7 @@
       input.files = transfer.files;
       input.dispatchEvent(new Event("change"));
 
-      const target = input.closest("section.card");
+      const target = input.closest(".panel");
       target.scrollIntoView({ behavior: "smooth", block: "center" });
       setStatus($("trialStatus"), "Loaded " + doc.name + ". Use the highlighted uploader to continue.", "ok");
     } catch (error) {
@@ -661,6 +991,8 @@
       button.disabled = false;
     }
   }
+
+  // --- document viewer -----------------------------------------------------
 
   function showViewerTab(tab) {
     const original = tab === "original";
@@ -704,151 +1036,7 @@
     $("documentViewer").close();
   }
 
-  // --- answering -----------------------------------------------------------
-
-  function renderAnswer(item, index) {
-    const card = document.createElement("div");
-    card.className = "answer" + (item.needs_review ? " review" : "");
-
-    const confidence = Math.round(item.confidence * 100);
-    const level = item.needs_review ? (item.answer ? "warn" : "err") : "ok";
-
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.innerHTML =
-      '<span class="tag ' + level + '">' + confidence + "% confidence</span>" +
-      (item.needs_review ? '<span class="tag warn">needs review</span>' : "") +
-      "<span>" + (item.question.id || index + 1) + "</span>" +
-      (item.question.section ? "<span>· " + item.question.section + "</span>" : "") +
-      "<span>· " + item.question.question_type.replace("_", " ") + "</span>" +
-      (item.attempts > 1 ? "<span>· " + item.attempts + " retrieval rounds</span>" : "");
-
-    const question = document.createElement("div");
-    question.className = "qtext";
-    question.textContent = item.question.text;
-    if (isArabic(item.question.text)) question.dir = "rtl";
-
-    card.append(meta, question, answerField(item, index));
-
-    // The clause locators, which is what an assessor asks for first.
-    if (item.citations && item.citations.length) {
-      const field = labelledField("Sources cited", "accent");
-      const cites = document.createElement("div");
-      cites.className = "cites";
-      item.citations.forEach((citation) => {
-        const chip = document.createElement("span");
-        chip.className = "cite";
-        chip.textContent = citation;
-        cites.append(chip);
-      });
-      field.append(cites);
-      card.append(field);
-    }
-
-    if (item.review_reasons && item.review_reasons.length) {
-      const field = labelledField("Why this is flagged", "warn");
-      const reasons = document.createElement("div");
-      reasons.className = "reasons";
-      reasons.textContent = item.review_reasons.join("; ");
-      field.append(reasons);
-      card.append(field);
-    }
-
-    if (item.rationale) {
-      const field = labelledField("Reasoning", "accent");
-      const rationale = document.createElement("div");
-      rationale.className = "rationale";
-      rationale.textContent = item.rationale;
-      if (isArabic(item.rationale)) rationale.dir = "rtl";
-      field.append(rationale);
-      card.append(field);
-    }
-
-    if (item.evidence && item.evidence.length) {
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = item.evidence.length + " supporting source(s)";
-      details.append(summary);
-
-      item.evidence.forEach((evidence) => {
-        const block = document.createElement("div");
-        block.className = "ev";
-        const label = document.createElement("span");
-        label.className = "src";
-        // The locator carries the clause range; the file name alone does not
-        // tell a reviewer where in a sixty-page policy to look.
-        label.textContent =
-          (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
-          " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
-        block.append(label, document.createTextNode(evidence.snippet));
-        if (isArabic(evidence.snippet)) block.dir = "rtl";
-        details.append(block);
-      });
-
-      card.append(details);
-    }
-
-    return card;
-  }
-
-  function labelledField(text, tone) {
-    const wrap = document.createElement("div");
-    wrap.className = "field";
-    const label = document.createElement("span");
-    label.className = "field-label" + (tone ? " " + tone : "");
-    label.textContent = text;
-    wrap.append(label);
-    return wrap;
-  }
-
-  /* The answer, rendered by default and editable on demand.
-
-     The model writes emphasis and lists, and a textarea can only ever show
-     those as raw asterisks. Rendering is the read view; the textarea is still
-     the edit surface, and edits go straight back onto the result object the
-     exports read. */
-  function answerField(item, index) {
-    const field = labelledField("Answer", "");
-    const rendered = document.createElement("div");
-    rendered.className = "rendered";
-    const editor = document.createElement("textarea");
-    const toggle = document.createElement("button");
-    toggle.className = "ghost edit-toggle";
-
-    const paint = () => {
-      const text = result.answers[index].answer;
-      rendered.innerHTML = "";
-      if (!text.trim()) {
-        const empty = document.createElement("p");
-        empty.className = "empty";
-        empty.textContent = "No answer was produced — see the note below.";
-        rendered.append(empty);
-      } else {
-        renderMarkdown(text).forEach((node) => rendered.append(node));
-      }
-      rendered.dir = isArabic(text) ? "rtl" : "ltr";
-    };
-
-    let editing = false;
-    const setMode = (next) => {
-      editing = next;
-      rendered.hidden = editing;
-      editor.hidden = !editing;
-      toggle.textContent = editing ? "Done" : "Edit";
-      if (editing) { editor.focus(); } else { paint(); }
-    };
-
-    editor.value = item.answer;
-    editor.hidden = true;
-    if (isArabic(item.answer)) editor.dir = "rtl";
-    editor.addEventListener("input", () => { result.answers[index].answer = editor.value; });
-    toggle.onclick = () => setMode(!editing);
-
-    field.querySelector(".field-label").append(toggle);
-    field.append(rendered, editor);
-    setMode(false);
-    return field;
-  }
+  // --- markdown ------------------------------------------------------------
 
   /* The four constructs the drafter actually writes: bold, bullets, numbered
      items and headings. Built as DOM nodes rather than an HTML string, so
@@ -903,15 +1091,326 @@
     return nodes;
   }
 
+  // --- answers -------------------------------------------------------------
+
+  function labelledField(text, tone) {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const label = document.createElement("span");
+    label.className = "field-label" + (tone ? " " + tone : "");
+    label.textContent = text;
+    wrap.append(label);
+    return wrap;
+  }
+
+  function confidenceBand(value) {
+    if (value >= 0.75) return { key: "high", word: "High confidence" };
+    if (value >= 0.5) return { key: "medium", word: "Moderate" };
+    return { key: "low", word: "Low confidence" };
+  }
+
+  /* The answer, rendered by default and editable on demand.
+
+     The model writes emphasis and lists, and a textarea can only ever show
+     those as raw asterisks. Rendering is the read view; the textarea is still
+     the edit surface, and edits go straight back onto the result object the
+     exports read. */
+  function answerField(item, index) {
+    const field = labelledField("Answer", "");
+    const rendered = document.createElement("div");
+    rendered.className = "rendered";
+    const editor = document.createElement("textarea");
+    const toggle = document.createElement("button");
+    toggle.className = "quiet";
+
+    const grow = document.createElement("span");
+    grow.className = "grow";
+    field.querySelector(".field-label").append(grow, toggle);
+
+    const paint = () => {
+      const text = result.answers[index].answer;
+      rendered.innerHTML = "";
+      if (!text.trim()) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "No answer was produced — see the note below.";
+        rendered.append(empty);
+      } else {
+        renderMarkdown(text).forEach((node) => rendered.append(node));
+      }
+      rendered.dir = isArabic(text) ? "rtl" : "ltr";
+    };
+
+    let editing = false;
+    const setMode = (next) => {
+      editing = next;
+      rendered.hidden = editing;
+      editor.hidden = !editing;
+      toggle.textContent = editing ? "Done editing" : "Edit";
+      if (editing) { editor.focus(); } else { paint(); }
+    };
+
+    editor.value = item.answer;
+    editor.hidden = true;
+    if (isArabic(item.answer)) editor.dir = "rtl";
+    editor.addEventListener("input", () => { result.answers[index].answer = editor.value; });
+    toggle.onclick = () => setMode(!editing);
+
+    field.append(rendered, editor);
+    setMode(false);
+    return field;
+  }
+
+  /* A citation is only useful if you can follow it. Each bubble opens the
+     chunk it names, matched back to the evidence the answer carries. */
+  function citationsField(item) {
+    const field = labelledField("Sources cited — click to read the clause", "accent");
+    const cites = document.createElement("div");
+    cites.className = "cites";
+    const panel = document.createElement("div");
+    panel.className = "cite-panel";
+    panel.hidden = true;
+
+    let openButton = null;
+    const sourceTypes = new Set();
+
+    item.citations.forEach((citation) => {
+      const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
+      const kind = source ? source.source_type : "unknown";
+      if (source) sourceTypes.add(kind);
+
+      const chip = document.createElement("button");
+      chip.className = "cite " + kind;
+      chip.title = kind === "prior_answer"
+        ? "From a previously answered assessment — click to read it"
+        : kind === "guideline"
+          ? "From an indexed guideline — click to read the clause"
+          : "Named in the answer; the chunk is not in the exported evidence";
+      chip.type = "button";
+      chip.setAttribute("aria-expanded", "false");
+      chip.append(document.createTextNode(citation));
+      const caret = document.createElement("span");
+      caret.className = "caret";
+      caret.textContent = "▾";
+      chip.append(caret);
+
+      chip.onclick = () => {
+        if (openButton === chip) {
+          chip.setAttribute("aria-expanded", "false");
+          panel.hidden = true;
+          openButton = null;
+          return;
+        }
+        if (openButton) openButton.setAttribute("aria-expanded", "false");
+        openButton = chip;
+        chip.setAttribute("aria-expanded", "true");
+        showChunk(panel, item, citation);
+      };
+
+      cites.append(chip);
+    });
+
+    // A two-colour scheme needs a key, but only when both colours are present.
+    if (sourceTypes.size > 1) {
+      const key = document.createElement("div");
+      key.className = "cite-key";
+      key.innerHTML =
+        '<span><i class="guideline"></i>guideline</span>' +
+        '<span><i class="prior_answer"></i>previous answer</span>';
+      cites.append(key);
+    }
+
+    field.append(cites, panel);
+    return field;
+  }
+
+  function showChunk(panel, item, citation) {
+    const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
+    panel.innerHTML = "";
+    panel.hidden = false;
+
+    const head = document.createElement("div");
+    head.className = "cite-head";
+
+    const who = document.createElement("span");
+    who.className = "who";
+    who.textContent = citation;
+    head.append(who);
+
+    if (source) {
+      const kind = document.createElement("span");
+      kind.className = "tag " + source.source_type;
+      kind.textContent = source.source_type === "prior_answer" ? "previous answer" : "guideline";
+      head.prepend(kind);
+
+      if (typeof source.score === "number") {
+        const score = document.createElement("span");
+        score.textContent = "relevance " + source.score.toFixed(2);
+        head.append(score);
+      }
+
+      const open = document.createElement("button");
+      open.className = "quiet";
+      open.textContent = "open document";
+      open.onclick = () => openDocument({
+        name: source.source_name,
+        title: source.source_name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
+        origin: "uploaded",
+        category: "uploaded",
+        label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
+        extension: source.source_name.split(".").pop().toLowerCase(),
+        size_bytes: 0,
+      });
+      head.append(open);
+    }
+
+    const body = document.createElement("pre");
+    body.className = "snippet";
+    body.textContent = source
+      ? source.snippet
+      : "This clause was named in the answer, but the chunk behind it is not in the exported evidence.";
+    if (isArabic(body.textContent)) body.dir = "rtl";
+
+    panel.append(head, body);
+  }
+
+  function renderAnswer(item, index) {
+    const card = document.createElement("div");
+    card.className = "answer" + (item.needs_review ? " review" : "");
+
+    // --- head: number, question, confidence
+    const head = document.createElement("div");
+    head.className = "answer-head";
+
+    const number = document.createElement("div");
+    number.className = "qnum";
+    number.textContent = item.question.id || String(index + 1);
+
+    const body = document.createElement("div");
+    body.className = "qbody";
+
+    const question = document.createElement("div");
+    question.className = "qtext";
+    question.textContent = item.question.text;
+    if (isArabic(item.question.text)) question.dir = "rtl";
+
+    const meta = document.createElement("div");
+    meta.className = "qmeta";
+    if (item.needs_review) {
+      const chip = document.createElement("span");
+      chip.className = "tag warn";
+      chip.textContent = "needs review";
+      meta.append(chip);
+    }
+    const bits = [];
+    if (item.question.section) bits.push(item.question.section);
+    bits.push(item.question.question_type.replace(/_/g, " "));
+    if (item.attempts > 1) bits.push(item.attempts + " retrieval rounds");
+    const detail = document.createElement("span");
+    detail.textContent = bits.join(" · ");
+    meta.append(detail);
+
+    body.append(question, meta);
+
+    const percent = Math.round(item.confidence * 100);
+    const band = confidenceBand(item.confidence);
+    const confidence = document.createElement("div");
+    confidence.className = "confidence " + band.key;
+    const value = document.createElement("div");
+    value.className = "value";
+    value.textContent = percent + "%";
+    const caption = document.createElement("div");
+    caption.className = "caption";
+    caption.textContent = band.word;
+    const meter = document.createElement("div");
+    meter.className = "meter";
+    const fill = document.createElement("span");
+    fill.style.width = percent + "%";
+    meter.append(fill);
+    confidence.append(value, caption, meter);
+
+    head.append(number, body, confidence);
+
+    // --- body: answer, citations, flags, reasoning, evidence
+    const content = document.createElement("div");
+    content.className = "answer-body";
+    content.append(answerField(item, index));
+
+    if (item.citations && item.citations.length) {
+      content.append(citationsField(item));
+    }
+
+    if (item.review_reasons && item.review_reasons.length) {
+      const field = labelledField("Why this is flagged", "warn");
+      const reasons = document.createElement("div");
+      reasons.className = "reasons";
+      reasons.textContent = item.review_reasons.join("; ");
+      field.append(reasons);
+      content.append(field);
+    }
+
+    if (item.rationale) {
+      const field = labelledField("Reasoning", "accent");
+      const rationale = document.createElement("div");
+      rationale.className = "rationale";
+      rationale.textContent = item.rationale;
+      if (isArabic(item.rationale)) rationale.dir = "rtl";
+      field.append(rationale);
+      content.append(field);
+    }
+
+    if (item.evidence && item.evidence.length) {
+      const details = document.createElement("details");
+      details.className = "evidence";
+      const summary = document.createElement("summary");
+      summary.textContent = "All " + item.evidence.length + " retrieved source(s)";
+      details.append(summary);
+
+      item.evidence.forEach((evidence) => {
+        const block = document.createElement("div");
+        block.className = "ev";
+        const label = document.createElement("span");
+        label.className = "src";
+        label.textContent =
+          (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
+          " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
+        block.append(label, document.createTextNode(evidence.snippet));
+        if (isArabic(evidence.snippet)) block.dir = "rtl";
+        details.append(block);
+      });
+
+      content.append(details);
+    }
+
+    card.append(head, content);
+    return card;
+  }
+
+  function statCard(value, label, tone) {
+    const stat = document.createElement("div");
+    stat.className = "stat" + (tone ? " " + tone : "");
+    const number = document.createElement("span");
+    number.className = "value";
+    number.textContent = value;
+    const caption = document.createElement("span");
+    caption.className = "label";
+    caption.textContent = label;
+    stat.append(number, caption);
+    return stat;
+  }
+
   function renderResult(data) {
     result = data;
 
     const reviewCount = data.answers.filter((a) => a.needs_review).length;
-    $("resultsSummary").innerHTML =
-      "<div><strong>" + data.questions_found + "</strong>questions found</div>" +
-      "<div><strong>" + data.answers.length + "</strong>answered</div>" +
-      "<div><strong>" + reviewCount + "</strong>need review</div>" +
-      "<div><strong>" + (data.language === "ar" ? "العربية" : "English") + "</strong>language</div>";
+    const summary = $("resultsSummary");
+    summary.innerHTML = "";
+    summary.append(
+      statCard(data.questions_found, "questions found"),
+      statCard(data.answers.length, "answered"),
+      statCard(reviewCount, "need review", reviewCount ? "review" : ""),
+      statCard(data.language === "ar" ? "العربية" : "English", "output language")
+    );
 
     const container = $("results");
     container.innerHTML = "";
@@ -919,6 +1418,8 @@
     $("resultsCard").hidden = false;
     $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // --- answering -----------------------------------------------------------
 
   /* The answer request does not return until every question is done, so the
      run id is generated here and sent with it: the only way to say anything
@@ -1062,6 +1563,8 @@
     download(result.source_name + ".answers.json", JSON.stringify(result, null, 2), "application/json");
   $("exportCsv").onclick = exportCsv;
   $("exportPdf").onclick = exportPdf;
+
+  $("themeToggle").onclick = () => applyTheme(currentTheme() === "dark" ? "light" : "dark");
 
   $("originalTab").onclick = () => showViewerTab("original");
   $("textTab").onclick = () => showViewerTab("text");
