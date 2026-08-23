@@ -8,6 +8,7 @@ from src.models import Evidence, SourceType
 from src.verification import (
     evidence_for,
     assess,
+    explain_confidence,
     incomplete_units,
     mentioned_clauses,
     unsupported_clauses,
@@ -313,3 +314,68 @@ def test_the_q4_case_end_to_end_is_no_longer_flagged():
     assert reasons == []
     assert needs_review is False
     assert confidence == 0.85
+
+
+# --- why the score came out low --------------------------------------------
+#
+# The mechanical checks stay silent unless something is demonstrably wrong, so
+# an answer flagged purely for scoring low reached the interface with nothing
+# to show. These cover the sentence that fills that gap.
+
+
+def _why(confidence, cited, **kwargs):
+    options = dict(grounded=True, review_threshold=0.6, verdict_reason="")
+    options.update(kwargs)
+    return explain_confidence(confidence, cited, **options)
+
+
+def test_a_confident_grounded_answer_needs_no_explanation():
+    assert _why(0.9, [ev()]) == ""
+
+
+def test_a_low_score_always_carries_an_explanation():
+    """The reported gap: flagged, but with nothing said about why."""
+    assert _why(0.55, [ev()]) != ""
+
+
+def test_no_sources_is_named_as_the_cause():
+    text = _why(0.2, [])
+    assert "Nothing in the knowledge base matched" in text
+
+
+def test_an_ungrounded_answer_says_the_review_failed():
+    text = _why(0.8, [ev()], grounded=False)
+    assert "could not trace every statement" in text
+
+
+def test_the_reviewers_own_words_are_passed_through():
+    text = _why(0.8, [ev()], grounded=False, verdict_reason="the retention period is not stated")
+    assert "the retention period is not stated" in text
+
+
+def test_a_very_low_score_says_the_sources_do_not_cover_it():
+    assert "does not answer the question directly" not in _why(0.5, [ev()])
+    assert "answers the question" in _why(0.25, [ev()])
+
+
+def test_a_middling_score_says_it_was_inferred():
+    assert "inferred by combining" in _why(0.5, [ev()])
+
+
+def test_the_source_count_is_reported_and_agrees_in_number():
+    assert "1 source." in _why(0.5, [ev()])
+    assert "2 sources." in _why(0.5, [ev(), ev()])
+
+
+def test_an_ungrounded_answer_is_explained_even_above_the_threshold():
+    """Grounding failures are flagged whatever the score, so they must explain."""
+    assert _why(0.95, [ev()], grounded=False) != ""
+
+
+def test_the_explanation_avoids_internal_vocabulary():
+    """Written for whoever fills in the form, not for whoever wrote the retriever."""
+    for confidence in (0.1, 0.35, 0.55):
+        text = _why(confidence, [ev()]).lower()
+        assert "chunk" not in text
+        assert "threshold" not in text
+        assert "embedding" not in text

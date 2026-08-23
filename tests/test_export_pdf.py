@@ -208,5 +208,141 @@ def test_a_heading_inside_an_answer_survives():
 
 
 def test_confidence_is_always_reported():
+    """Reported as a badge now: the number alone told a reader nothing."""
     text = _text(render_pdf(_with_answer("Plain answer.")))
-    assert "90% confidence" in text
+    assert "90%" in text
+    assert "High confidence" in text
+
+
+# --- Arabic layout ---------------------------------------------------------
+#
+# The reported failures, each pinned to the property that was violated rather
+# than to a screenshot.
+
+LONG_ARABIC_QUESTION = (
+    "هل يشترط استضافة وتخزين البيانات داخل المملكة العربية السعودية؟ وما هي البنود "
+    "التعاقدية الإلزامية المطلوب تضمينها في اتفاقيات مستوى الخدمة مع مزودي الخدمات "
+    "السحابية والاستضافة؟"
+)
+
+
+def _arabic_result(question: str = LONG_ARABIC_QUESTION, answer: str = ARABIC_ANSWER):
+    return AssessmentResult(
+        run_id="t", source_name="تقييم.pdf", language="ar", questions_found=1,
+        answers=[AnsweredQuestion(
+            question=Question(id="26", text=question, language="ar"),
+            answer=answer, confidence=0.8, needs_review=False,
+        )],
+    )
+
+
+def _recovered(pdf_bytes: bytes) -> str:
+    return "\n".join(to_logical_order(line) for line in _text(pdf_bytes).splitlines())
+
+
+def _words(pdf_bytes: bytes):
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        return pdf.pages[0].extract_words()
+
+
+def test_a_long_arabic_question_is_not_reordered_across_its_lines():
+    """Bidi was applied before wrapping, so the sentence started on line two.
+
+    Reordering a whole paragraph produces the single line a renderer would
+    draw; wrapping that afterwards puts its tail at the top. The opening words
+    have to survive as one contiguous run on the first line.
+    """
+    recovered = _recovered(render_pdf(_arabic_result()))
+
+    assert "هل يشترط استضافة وتخزين البيانات" in recovered
+    assert "والاستضافة؟" in recovered
+
+
+def test_the_question_number_leads_the_question():
+    """"26." belongs against the first words, not stranded after the last."""
+    recovered = _recovered(render_pdf(_arabic_result()))
+    first = next(line for line in recovered.splitlines() if "يشترط" in line)
+
+    assert first.strip().startswith(".26") or first.strip().startswith("26.")
+
+
+def test_an_arabic_list_marker_sits_on_the_right():
+    """ReportLab draws bulletText a fixed distance from the left, whatever the
+    alignment, which put every number on the far side of its own list."""
+    answer = "الشروط:\n1. موقع تخزين البيانات داخل المملكة\n2. تصنيف البيانات وتوسيمها"
+    words = _words(render_pdf(_arabic_result(answer=answer)))
+
+    markers = [w for w in words if w["text"] in ("1.", ".1", "2.", ".2")]
+    assert markers, "no list markers were drawn"
+
+    page_middle = 595 / 2
+    assert all(word["x0"] > page_middle for word in markers)
+
+
+def test_an_english_list_marker_stays_on_the_left():
+    result = _with_answer("Controls:\n1. Encryption at rest\n2. Multi-factor authentication")
+    words = _words(render_pdf(result))
+
+    markers = [w for w in words if w["text"] in ("1.", "2.")]
+    assert markers and all(word["x0"] < 595 / 2 for word in markers)
+
+
+def test_english_quoted_inside_an_arabic_sentence_keeps_its_word_order():
+    """Reordering an RTL line word by word mirrors any Latin clause inside it."""
+    answer = "يجب تخزين البيانات (Data storage location must be within the Kingdom)."
+    recovered = _recovered(render_pdf(_arabic_result(answer=answer)))
+
+    assert "Data storage location must be within the Kingdom" in recovered
+
+
+# --- glyph coverage --------------------------------------------------------
+
+
+def test_a_hyphen_the_font_lacks_is_replaced_rather_than_boxed():
+    """U+2011 is absent from Arial, so "Non-Disclosure" drew an empty box."""
+    text = _text(render_pdf(_with_answer("Include a Non‑Disclosure clause.")))
+
+    assert "Non-Disclosure" in text
+    assert "‑" not in text
+
+
+@pytest.mark.parametrize("character", ["‐", "‑", "‒"])
+def test_every_exotic_hyphen_lands_as_an_ascii_one(character):
+    text = _text(render_pdf(_with_answer(f"a{character}b")))
+    assert "a-b" in text
+
+
+def test_curly_quotes_are_normalised():
+    text = _text(render_pdf(_with_answer("“quoted” and ‘single’")))
+    assert '"quoted"' in text and "'single'" in text
+
+
+def test_a_zero_width_character_is_dropped_not_drawn():
+    text = _text(render_pdf(_with_answer("data​base")))
+    assert "database" in text
+
+
+# --- the sections a reviewer reads -----------------------------------------
+
+
+def test_a_flag_without_deterministic_reasons_still_explains_itself():
+    result = _result()
+    result.answers[2].review_reasons = []
+    text = _text(render_pdf(result, ExportOptions(include_flagged=True)))
+
+    assert "confidence is below the review threshold" in text
+
+
+def test_the_confidence_explanation_is_rendered_when_present():
+    result = _result()
+    result.answers[2].confidence_reason = "Nothing in the knowledge base matched this question."
+    text = _text(render_pdf(result, ExportOptions(include_flagged=True)))
+
+    assert "WHY THE CONFIDENCE IS LOW" in text
+    assert "Nothing in the knowledge base matched this question." in text
+
+
+def test_the_supporting_sections_are_labelled():
+    text = _text(render_pdf(_result(), ExportOptions(include_reasoning=True)))
+    assert "SOURCES" in text
+    assert "REASONING" in text

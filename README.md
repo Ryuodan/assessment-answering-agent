@@ -73,6 +73,20 @@ question and answer together. A new question then matches on question wording,
 and the answer your organisation actually gave travels with it. This is what
 makes the output sound like you rather than like a policy document.
 
+**They lead the prompt, but they do not get all of it.** Previous answers sort
+ahead of guidelines because the drafter should read them first. For a while
+that ordering also decided what fitted: the prompt was filled from the top of
+the same list, so once a previous-answers bank was indexed, a dozen entries
+scoring 0.20–0.48 pushed out policy clauses scoring 0.60, and a retrieval retry
+that added three more pushed the guideline count to zero. The clause with the
+answer had been retrieved and ranked thirteenth of thirty; the drafter never
+saw it and wrote "the documentation does not state a period". The same question
+answered correctly whenever no retry happened, which is what made it look like
+run-to-run randomness rather than a rule. Selection is now separate from
+ordering: `MAX_PRIOR_ANSWER_CHUNKS` of the `MAX_EVIDENCE_CHUNKS` slots may be
+previous answers, the rest belong to the guidelines, and either kind may use
+room the other does not need.
+
 **A question is retrieved as its parts, not as one blob.** A question that asks
 two things — "how quickly is access revoked, and how are we notified" — embeds
 as a blend of both and ranks the clause for neither first. Before retrieving,
@@ -179,7 +193,15 @@ Open <http://127.0.0.1:8000>. Upload guidelines and previously answered
 assessments, then submit a new assessment. The document library opens original
 PDFs, shows the extracted text used by the agent, and includes bundled English,
 Arabic and bilingual trial documents. Results are editable inline and download
-as JSON or CSV (UTF-8 with a BOM, so Excel opens Arabic correctly).
+as JSON, CSV (UTF-8 with a BOM, so Excel opens Arabic correctly), PDF or Word.
+
+**Prefer Word for an Arabic questionnaire.** A PDF stores glyphs, so the Arabic
+has to be shaped, bidi-reordered and hand-wrapped before it is drawn — and the
+order of those steps against line breaking is delicate enough to have gone
+wrong twice. A .docx stores the characters and a right-to-left marker, and
+Word does the layout; the text also stays selectable, searchable and editable,
+so a reviewer can finish the form in the file the agent produced. Both formats
+take the same options and apply the same rule about what to include.
 
 ### CLI
 
@@ -207,6 +229,7 @@ python -m src.cli stats
 | `POST` | `/api/assessments/answer` | Answer a new assessment |
 | `GET` | `/api/assessments/progress/{run_id}` | How far a run has got, while it is still running |
 | `POST` | `/api/assessments/export/pdf` | Render the answers as a PDF |
+| `POST` | `/api/assessments/export/docx` | Render the answers as a Word document |
 
 Interactive docs at `/docs`.
 
@@ -229,23 +252,24 @@ to change:
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| `GROQ_CHAT_MODEL` | `minimaxai/minimax-m2.7` | Used for extraction, drafting and review |
+| `GROQ_CHAT_MODEL` | `openai/gpt-oss-120b` | Used for extraction, drafting and review |
 | `DOCLING_BASE_URL` | `http://localhost:8092` | Docling host root; clear it to use the local loaders only |
 | `DOCLING_DO_OCR` | `false` | Turn on for scanned documents — much slower |
 | `DOCLING_FALLBACK_LOCAL` | `true` | Use pdfplumber/python-docx when Docling is unreachable |
 | `EXTRACTED_TEXT_DIR` | `./data/extracted` | Cache for document text shown in the interface |
 | `GROQ_BASE_URL` | `https://api.me-central-1.groqcloud.com` | ME-Central-1 region; clear it for `api.groq.com` |
-| `MAX_ANSWER_ATTEMPTS` | `2` | Draft/review rounds per question |
+| `MAX_ANSWER_ATTEMPTS` | `3` | Draft/review rounds per question |
 | `MAX_CONCURRENT_QUESTIONS` | `4` | Raise carefully — Groq rate limits apply |
 | `QUERY_EXPANSION` | `true` | Split a multi-part question into one search per part |
 | `HYBRID_SEARCH` | `false` | Fuse a BM25 pass with the dense search — see Evaluation |
 | `RERANKER_ENABLED` | `false` | Cross-encoder reranking; downloads ~2.3 GB on first use |
 | `DOCLING_DO_OCR` | `false` | Force OCR on every document — normally unnecessary |
 | `DOCLING_OCR_AUTO` | `true` | Turn OCR on by itself for a PDF with no text layer |
-| `MAX_ANSWER_ATTEMPTS` | `3` | Draft/review rounds per question |
 | `REVIEW_CONFIDENCE_THRESHOLD` | `0.6` | Below this, an answer is flagged for review |
-| `TOP_K_GUIDELINES` | `8` | Guideline chunks retrieved per search query |
+| `TOP_K_GUIDELINES` | `5` | Guideline chunks retrieved per search query |
 | `TOP_K_PRIOR_ANSWERS` | `5` | Previous answers retrieved per question |
+| `MAX_EVIDENCE_CHUNKS` | `14` | Sources shown to the drafter per question |
+| `MAX_PRIOR_ANSWER_CHUNKS` | `4` | How many of those may be previous answers |
 | `EVAL_JUDGE_MODEL` | `openai/gpt-oss-120b` | Grades `eval/`; deliberately not the drafting model |
 
 ---
@@ -345,6 +369,41 @@ because judges differ in severity far more than configurations do.
 | gpt-oss-120b | on | 74.8% | 57.0% | 5 |
 | gpt-oss-120b, after the grounding and citation fixes | on | 73.3% / 76.2% | 55.6% | 5 |
 
+Two later runs stand apart from the rows above, because they were measured
+after a previous-answers bank was added to the corpus and with the reranker
+off, which is the configuration the system now runs in. They are comparable to
+each other and to nothing else in this table:
+
+| Previous answers in the prompt | Accuracy | Fact recall | Contradictions | Calibration |
+| --- | --- | --- | --- | --- |
+| uncapped (the old behaviour) | 56.2% | 36.2% | 15 | 0.284 |
+| capped at 4 of 14 | 57.1% | **47.0%** | 12 | 0.396 |
+
+**Accuracy is flat and fact recall is not**, which is the interesting part: the
+answers changed from confidently thin to substantially complete without the
+rubric total moving much. Guideline citations went from 70 to 120 across the
+set, previous-answer citations from 51 to 26, and the number of answers
+claiming the documentation does not cover the question fell from 4 to 1.
+
+The per-case diff says where the movement came from. Splitting the 42 cases by
+whether the change actually altered what the drafter saw:
+
+| | cases | net score change |
+| --- | --- | --- |
+| sources identical — the cap did nothing | 18 | **−5** |
+| sources changed — the cap did something | 24 | **+7** |
+
+Five points of loss on cases whose input never changed is the noise floor,
+measured rather than assumed, and it is worth more than the totals: one case
+scored 5 and then 1 on byte-identical citations and a near-identical answer. So
+per-category swings on a single run of this set mean very little. `Regulatory
+Reference` fell 51.4% to 34.3%, and four of those six points are one case whose
+sources were unchanged — but not all of it, and there is a plausible mechanism
+for the rest: with ten guideline slots instead of two, lower-ranked internal
+policy chunks reach the prompt and can dilute an answer that should come from
+the regulation alone. Worth watching if regulatory questions matter most; the
+reranker addresses exactly that ordering problem.
+
 **Judge variance is about three points, so read the table with that in mind.**
 The last row is one answers file scored twice by the same judge: 73.3% and
 76.2%. Nothing about the system changed between them. Retrieval breadth shows
@@ -400,7 +459,10 @@ src/
   chunking.py     structure-aware chunking with clause ranges
   extraction.py   text -> questions, text -> Q/A pairs
   knowledge.py    Chroma store for guidelines and prior answers
-  verification.py mechanical checks on a drafted answer
+  verification.py mechanical checks, and why a score came out low
+  formatting.py   the slice of Markdown the drafter actually writes
+  export_pdf.py   PDF export, incl. Arabic shaping and line breaking
+  export_docx.py  Word export; Word lays Arabic out, so we only mark it
   prompts.py      every prompt
   graph/          LangGraph state, nodes and wiring
   service.py      the orchestration the API and CLI share
@@ -425,7 +487,7 @@ demo_data/        generator for the bundled trial corpus
 - **Scanned PDFs need OCR turned on.** Set `DOCLING_DO_OCR=true` to read them;
   with OCR off (the default) a PDF with no text layer is rejected with an
   explanatory error rather than silently indexed empty. The local fallback has
-  no OCR at all.
+  no OCR at all. Except when 
 - **Answers are drafts.** Anything flagged `needs_review` — and ideally
   everything else — should be read by a person before the form is submitted.
 - **Storage paths are anchored to the project, not the working directory.** A

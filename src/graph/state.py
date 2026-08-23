@@ -67,6 +67,52 @@ def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
     return sorted(evidence, key=sort_key)
 
 
+def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> list[Evidence]:
+    """The chunks that fit in the drafting prompt: the best of each kind.
+
+    Ordering and selection were the same operation, and that was a bug. Prior
+    answers sort ahead of guidelines because the drafter should read them
+    first — they carry the organisation's own wording. But the prompt is then
+    filled from the top of that same list, so a prior answer scoring 0.20
+    displaced a policy clause scoring 0.60, and enough of them displaced every
+    policy clause there was.
+
+    Observed on the client-data retention question: 12 prior answers and 2
+    guidelines reached the first draft, and when the reviewer asked for another
+    retrieval round three more prior answers arrived and pushed the guideline
+    count to zero. The clause stating the 60-day return and 90-day deletion had
+    been retrieved — it was sitting at rank 13 of 30 — and the drafter never saw
+    it, so the answer became "the documentation does not state a period". The
+    same question answered correctly whenever no retry happened, which is what
+    made it look like run-to-run randomness.
+
+    So prior answers keep their place at the front and lose their claim on the
+    whole budget. Whatever they do not use goes to guidelines, and vice versa:
+    a question with no useful policy material still fills up with prior answers.
+    """
+    if limit <= 0:
+        return []
+
+    def is_prior(item: Evidence) -> bool:
+        return item.source_type is SourceType.PRIOR_ANSWER
+
+    prior_positions = [index for index, item in enumerate(evidence) if is_prior(item)]
+    ranked_positions = sorted(prior_positions, key=lambda index: -evidence[index].score)
+    keep = set(ranked_positions[: max(prior_cap, 0)])
+    spare = ranked_positions[max(prior_cap, 0):]
+
+    selected = [
+        index for index, item in enumerate(evidence)
+        if not is_prior(item) or index in keep
+    ][:limit]
+
+    # Guidelines ran out before the budget did — give the room back.
+    if len(selected) < limit and spare:
+        selected = sorted(selected + spare[: limit - len(selected)])
+
+    return [evidence[index] for index in selected]
+
+
 class QuestionState(TypedDict, total=False):
     """State of the inner graph: retrieve -> draft -> review -> finalize."""
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.graph.state import merge_evidence, order_evidence
+from src.graph.state import merge_evidence, order_evidence, select_evidence
 from src.models import Evidence, SourceType
 from src.prompts import format_sources_block
 
@@ -171,3 +171,104 @@ def test_citation_list_is_deduplicated_and_ordered():
     ]
     citations = list(dict.fromkeys(item.locator for item in cited))
     assert citations == ["std.pdf [MDS-CS-STD-003] \u00a77.2.1", "std.pdf [MDS-CS-STD-003] \u00a77.4"]
+
+# --- what actually fits in the prompt --------------------------------------
+#
+# Ordering and selection used to be the same operation: prior answers sort
+# first, and the prompt was filled from the top of that list. On the real
+# corpus that meant twelve prior answers scoring 0.20-0.48 crowded out policy
+# clauses scoring 0.60, and a retrieval retry pushed the guideline count to
+# zero — the same question answering correctly or "not documented" depending
+# on whether a retry happened.
+
+
+def test_prior_answers_cannot_take_the_whole_prompt():
+    """The reported bug, in miniature: 12 weak prior answers, one strong clause."""
+    evidence = order_evidence(
+        [prior(n, score=0.2 + n / 100) for n in range(12)]
+        + [guideline(90 + n, score=0.9) for n in range(4)]
+    )
+
+    selected = select_evidence(evidence, limit=6, prior_cap=4)
+    priors = [item for item in selected if item.source_type is SourceType.PRIOR_ANSWER]
+
+    assert len(priors) == 4
+    assert len(selected) - len(priors) == 2, "no guideline reached the prompt"
+
+
+def test_the_prior_answers_kept_are_the_best_scoring_ones():
+    """Which four survive matters as much as how many."""
+    evidence = order_evidence(
+        [prior(1, score=0.2), prior(2, score=0.9), prior(3, score=0.5)]
+        + [guideline(n) for n in range(90, 99)]
+    )
+
+    selected = select_evidence(evidence, limit=10, prior_cap=1)
+    priors = [item for item in selected if item.source_type is SourceType.PRIOR_ANSWER]
+
+    assert [item.chunk for item in priors] == [2]
+
+
+def test_the_budget_is_filled_when_there_are_few_guidelines():
+    """A cap on prior answers must not shrink the prompt."""
+    evidence = order_evidence([prior(n) for n in range(8)] + [guideline(99)])
+
+    selected = select_evidence(evidence, limit=6, prior_cap=2)
+
+    assert len(selected) == 6
+
+
+def test_spare_room_goes_back_to_prior_answers_in_score_order():
+    evidence = order_evidence(
+        [prior(1, score=0.9), prior(2, score=0.8), prior(3, score=0.1)] + [guideline(99)]
+    )
+
+    selected = select_evidence(evidence, limit=3, prior_cap=1)
+    chunks = {item.chunk for item in selected}
+
+    assert 99 in chunks and 1 in chunks
+    assert 3 not in chunks, "the weakest prior answer was preferred to a better one"
+
+
+def test_guidelines_alone_still_fill_the_prompt():
+    evidence = order_evidence([guideline(n) for n in range(10)])
+    assert len(select_evidence(evidence, limit=6, prior_cap=4)) == 6
+
+
+def test_selection_preserves_the_order_it_was_given():
+    """Reranked order is relevance order; selection must not reshuffle it."""
+    evidence = [guideline(3), prior(1, score=0.9), guideline(1), guideline(2)]
+
+    selected = select_evidence(evidence, limit=4, prior_cap=4)
+
+    assert [item.chunk for item in selected] == [3, 1, 1, 2]
+
+
+def test_a_cap_of_zero_prefers_every_available_guideline():
+    evidence = order_evidence([prior(1)] + [guideline(n) for n in range(2, 8)])
+
+    selected = select_evidence(evidence, limit=5, prior_cap=0)
+
+    assert all(item.source_type is SourceType.GUIDELINE for item in selected)
+
+
+def test_the_cap_binds_only_while_guidelines_are_competing():
+    """It exists to stop displacement, not to shrink the prompt.
+
+    With guidelines to spare the ceiling holds; with none to spare the unused
+    room goes back rather than being left empty, because a prior answer in the
+    prompt beats a blank line in it.
+    """
+    priors = [prior(n, score=0.5) for n in range(6)]
+
+    contested = select_evidence(
+        order_evidence(priors + [guideline(n) for n in range(90, 96)]), limit=6, prior_cap=2)
+    uncontested = select_evidence(order_evidence(priors), limit=6, prior_cap=2)
+
+    assert sum(1 for i in contested if i.source_type is SourceType.PRIOR_ANSWER) == 2
+    assert sum(1 for i in uncontested if i.source_type is SourceType.PRIOR_ANSWER) == 6
+
+
+def test_nothing_selected_from_nothing():
+    assert select_evidence([], limit=5, prior_cap=4) == []
+    assert select_evidence([guideline(1)], limit=0, prior_cap=4) == []

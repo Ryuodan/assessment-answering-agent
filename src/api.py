@@ -6,7 +6,9 @@ Run with:  uvicorn src.api:app --reload
 from __future__ import annotations
 
 import logging
+import unicodedata
 from pathlib import Path
+from urllib.parse import quote
 
 from contextlib import asynccontextmanager
 
@@ -16,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from src import service
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
+from src.export_docx import render_docx
 from src.export_pdf import ExportError, ExportOptions, render_pdf, selected_answers
 from src.models import AssessmentResult, IngestResult, Language, SourceType
 
@@ -207,6 +210,25 @@ def assessment_progress(run_id: str) -> dict:
     return state
 
 
+def attachment_headers(filename: str) -> dict[str, str]:
+    """`Content-Disposition` for a download, safe for a non-ASCII file name.
+
+    HTTP header values are latin-1, so an Arabic assessment name raised
+    UnicodeEncodeError inside Starlette and the download failed with a 500 —
+    on precisely the corpus this system exists to serve. RFC 6266 answers it
+    with two parameters: a transliterated `filename` that any client can read,
+    and a percent-encoded `filename*` that modern browsers prefer.
+    """
+    stripped = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
+    fallback = stripped.replace('"', "").strip() or "assessment"
+    if fallback.startswith("."):
+        fallback = f"assessment{fallback}"
+    return {
+        "Content-Disposition":
+            f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename, safe="")}'
+    }
+
+
 @app.post("/api/assessments/export/pdf")
 def export_pdf(
     result: AssessmentResult,
@@ -243,7 +265,41 @@ def export_pdf(
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=attachment_headers(filename),
+    )
+
+
+@app.post("/api/assessments/export/docx")
+def export_docx(
+    result: AssessmentResult,
+    include_flagged: bool = False,
+    include_citations: bool = True,
+    include_reasoning: bool = False,
+) -> Response:
+    """Render an answered assessment as a Word document.
+
+    Same selection rule and same options as the PDF export; the difference is
+    that the reviewer can carry on editing in the file. Arabic is laid out by
+    Word rather than by us, which makes this the better format for an Arabic
+    questionnaire.
+    """
+    options = ExportOptions(
+        include_flagged=include_flagged,
+        include_citations=include_citations,
+        include_reasoning=include_reasoning,
+    )
+    if not selected_answers(result, options):
+        raise HTTPException(
+            status_code=422,
+            detail="No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+        )
+
+    content = render_docx(result, options)
+    filename = f"{Path(result.source_name).stem or 'assessment'}.answers.docx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=attachment_headers(filename),
     )
 
 

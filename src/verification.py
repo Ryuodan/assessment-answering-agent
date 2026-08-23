@@ -184,4 +184,66 @@ def assess(
         reasons.append("the reviewer did not find the answer grounded")
 
     needs_review = bool(reasons) or confidence <= review_threshold
-    return confidence, needs_review, reasons    
+    return confidence, needs_review, reasons
+
+
+# ---------------------------------------------------------------------------
+# Why the score came out where it did
+# ---------------------------------------------------------------------------
+
+# The checks above answer "is something demonstrably wrong with this answer".
+# They say nothing when the answer is merely weak, which is the common case: a
+# question flagged purely for landing under the threshold arrived with an empty
+# reason list, so the interface showed a "needs review" chip and no explanation
+# at all. A reviewer cannot act on a number. What they need is the cause in a
+# sentence — was nothing found, was it found but not trusted, or was it pieced
+# together from clauses that only touch the subject.
+
+
+def explain_confidence(
+    confidence: float,
+    cited: list[Evidence],
+    *,
+    grounded: bool,
+    review_threshold: float,
+    verdict_reason: str = "",
+) -> str:
+    """One plain sentence on why the confidence is what it is, or "" when high.
+
+    Written for the person filling in the questionnaire, not for whoever wrote
+    the retriever: no thresholds, no clause arithmetic, no talk of chunks. It
+    ends with the thing that reviewer should actually go and do.
+    """
+    if confidence > review_threshold and grounded:
+        return ""
+
+    sources = len(cited)
+    detail = verdict_reason.strip().rstrip(".")
+
+    if not sources:
+        return (
+            "Nothing in the knowledge base matched this question, so the answer is not "
+            "backed by any of your documents. Treat it as unanswered and check with the "
+            "team that owns this control."
+        )
+
+    if not grounded:
+        because = f" The reviewer's note: {detail}." if detail else ""
+        return (
+            "A second model read the answer against the sources and could not trace every "
+            f"statement in it back to them.{because} Verify each claim against the "
+            f"{sources} cited source{'s' if sources > 1 else ''} before submitting."
+        )
+
+    if confidence <= 0.3:
+        return (
+            "The sources touch on this subject but none of them answers the question "
+            "directly, so the answer is built from the closest material available. It may "
+            "be that your documents genuinely do not cover this."
+        )
+
+    return (
+        "No single clause states this outright, so the answer was inferred by combining "
+        f"related material from {sources} source{'s' if sources > 1 else ''}. The reasoning "
+        "is sound but worth a second pair of eyes."
+    )

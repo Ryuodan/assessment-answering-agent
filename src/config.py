@@ -118,6 +118,12 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150          # retained for the prose fallback only
     max_expanded_chars: int = 12000    # cap on parent-unit expansion per hit
     max_evidence_chunks: int = 14     # cap on accumulated evidence per question
+    # How many of those chunks may be previous answers. They sort first, so
+    # without a ceiling they take the whole prompt and the policies that
+    # actually answer the question never reach the drafter — see
+    # `select_evidence`. Raise it for a corpus where the previous answers are
+    # the authority; lower it to make the drafter lean on the guidelines.
+    max_prior_answer_chunks: int = Field(default=4, ge=0)
     extraction_window: int = 8000
 
     incomplete_list_confidence_cap: float = Field(default=0.5, ge=0.0, le=1.0)

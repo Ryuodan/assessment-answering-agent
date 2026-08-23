@@ -146,6 +146,10 @@ class AnsweredQuestion(BaseModel):
         default_factory=list,
         description="Why this answer was flagged: unsupported citations, partial series, ungrounded",
     )
+    confidence_reason: str = Field(
+        default="",
+        description="Plain-English cause of a low confidence score; '' when the answer scored well",
+    )
 
 
 class AssessmentResult(BaseModel):

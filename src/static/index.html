@@ -384,6 +384,7 @@
   .field-label .grow { flex: 1; }
   .field-label.accent { color: var(--accent); }
   .field-label.warn { color: var(--warn); }
+  .field-label.err { color: var(--err); }
 
   .rendered {
     font-size: 15px; line-height: 1.7; color: var(--ink);
@@ -419,7 +420,12 @@
   }
   .reasons {
     font-size: 13px; line-height: 1.55; color: var(--warn);
-    background: var(--warn-soft); border-radius: var(--radius-sm); padding: 11px 14px;
+    background: var(--warn-soft); border-inline-start: 3px solid var(--warn);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 11px 14px;
+  }
+  /* The cause of a low score, as opposed to a defect found in the answer. */
+  .reasons.why {
+    color: var(--err); background: var(--err-soft); border-inline-start-color: var(--err);
   }
 
   /* Citations: soft bubbles that open the chunk they point at. The hue says
@@ -649,9 +655,10 @@
       <button class="ghost" id="exportJson">Download JSON</button>
       <button class="ghost" id="exportCsv">Download CSV</button>
       <button id="exportPdf">Download PDF</button>
+      <button id="exportDocx">Download Word</button>
       <span class="divider"></span>
       <div class="pdf-options">
-        <span class="caption">PDF includes</span>
+        <span class="caption">PDF and Word include</span>
         <label><input type="checkbox" id="pdfLowConfidence"> answers flagged for review</label>
         <label><input type="checkbox" id="pdfCitations" checked> clause citations</label>
         <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
@@ -1103,9 +1110,12 @@
     return wrap;
   }
 
+  /* The same three bands the exports use. The lower boundary is the review
+     threshold, so "Low confidence" here and a flagged answer in the PDF always
+     mean the same thing. */
   function confidenceBand(value) {
     if (value >= 0.75) return { key: "high", word: "High confidence" };
-    if (value >= 0.5) return { key: "medium", word: "Moderate" };
+    if (value > 0.6) return { key: "medium", word: "Moderate" };
     return { key: "low", word: "Low confidence" };
   }
 
@@ -1340,12 +1350,31 @@
       content.append(citationsField(item));
     }
 
-    if (item.review_reasons && item.review_reasons.length) {
+    // A flag with no explanation is what a reviewer cannot act on. The
+    // mechanical checks only speak when something is demonstrably wrong, so an
+    // answer flagged purely for scoring low used to arrive with an empty
+    // reason list and showed nothing here at all — the one place it was most
+    // needed. Fall back to the same wording the exports use.
+    if (item.needs_review) {
+      const reasonText = (item.review_reasons && item.review_reasons.length)
+        ? item.review_reasons.join("; ")
+        : "The confidence score is below the level set for automatic acceptance.";
       const field = labelledField("Why this is flagged", "warn");
       const reasons = document.createElement("div");
       reasons.className = "reasons";
-      reasons.textContent = item.review_reasons.join("; ");
+      reasons.textContent = reasonText;
       field.append(reasons);
+      content.append(field);
+    }
+
+    // Plain-English cause of the score itself, computed server-side so the
+    // interface and both exports say exactly the same thing.
+    if (item.confidence_reason) {
+      const field = labelledField("Why the confidence is low", "err");
+      const why = document.createElement("div");
+      why.className = "reasons why";
+      why.textContent = item.confidence_reason;
+      field.append(why);
       content.append(field);
     }
 
@@ -1489,7 +1518,8 @@
   }
 
   function exportCsv() {
-    const header = ["id", "section", "question", "answer", "confidence", "needs_review", "sources"];
+    const header = ["id", "section", "question", "answer", "confidence", "needs_review",
+                    "why_flagged", "sources"];
     const rows = result.answers.map((item) => [
       item.question.id,
       item.question.section || "",
@@ -1497,6 +1527,8 @@
       item.answer,
       item.confidence,
       item.needs_review,
+      [(item.review_reasons || []).join("; "), item.confidence_reason || ""]
+        .filter(Boolean).join(" — "),
       (item.evidence || []).map((e) => e.source_name).join("; "),
     ]);
     // BOM so Excel opens Arabic as UTF-8 rather than mojibake.
@@ -1504,32 +1536,33 @@
     download(result.source_name + ".answers.csv", csv, "text/csv;charset=utf-8");
   }
 
-  async function exportPdf() {
-    // Rendered on the server: Arabic needs shaping and bidi reordering before
-    // it can be drawn into a PDF, and that engine already lives there.
+  // Both document exports are rendered on the server and differ only in the
+  // endpoint and the extension, so they share one handler.
+  async function exportDocument(format, buttonId) {
     const query = new URLSearchParams({
       include_flagged: $("pdfLowConfidence").checked,
       include_citations: $("pdfCitations").checked,
       include_reasoning: $("pdfReasoning").checked,
     });
 
-    const button = $("exportPdf");
+    const button = $(buttonId);
     button.disabled = true;
     try {
-      const response = await fetch("/api/assessments/export/pdf?" + query, {
+      const response = await fetch("/api/assessments/export/" + format + "?" + query, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(result),
       });
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
-        throw new Error(detail.detail || ("PDF export failed (" + response.status + ")"));
+        throw new Error(
+          detail.detail || (format.toUpperCase() + " export failed (" + response.status + ")"));
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = result.source_name.replace(/\.[^.]+$/, "") + ".answers.pdf";
+      link.download = result.source_name.replace(/\.[^.]+$/, "") + ".answers." + format;
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -1562,7 +1595,8 @@
   $("exportJson").onclick = () =>
     download(result.source_name + ".answers.json", JSON.stringify(result, null, 2), "application/json");
   $("exportCsv").onclick = exportCsv;
-  $("exportPdf").onclick = exportPdf;
+  $("exportPdf").onclick = () => exportDocument("pdf", "exportPdf");
+  $("exportDocx").onclick = () => exportDocument("docx", "exportDocx");
 
   $("themeToggle").onclick = () => applyTheme(currentTheme() === "dark" ? "light" : "dark");
 

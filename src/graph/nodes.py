@@ -12,11 +12,11 @@ import re
 
 from src.config import settings
 from src.extraction import extract_questions
-from src.graph.state import AssessmentState, QuestionState
+from src.graph.state import AssessmentState, QuestionState, select_evidence
 from src.llm import chat_llm, structured_llm
 from src.rerank import rerank
 from src.formatting import strip_source_markers
-from src.verification import assess, evidence_for
+from src.verification import assess, evidence_for, explain_confidence
 from src.models import (
     AnsweredQuestion,
     AnswerReview,
@@ -56,10 +56,12 @@ def _sources(state: QuestionState) -> list[Evidence]:
     [n] position and `finalize` resolves those positions, so a reviewer reading
     a differently ordered block would be checking different sources.
     """
-    ranked = state.get("ranked")
-    if ranked:
-        return ranked[: settings.max_evidence_chunks]
-    return state.get("evidence", [])[: settings.max_evidence_chunks]
+    available = state.get("ranked") or state.get("evidence", [])
+    return select_evidence(
+        available,
+        limit=settings.max_evidence_chunks,
+        prior_cap=settings.max_prior_answer_chunks,
+    )
 
 
 def _sources_block(evidence: list[Evidence]) -> str:
@@ -273,6 +275,13 @@ async def finalize(state: QuestionState) -> dict:
         confidence=confidence,
         needs_review=needs_review,
         review_reasons=review_reasons,
+        confidence_reason=explain_confidence(
+            confidence,
+            cited,
+            grounded=verdict.grounded,
+            review_threshold=settings.review_confidence_threshold,
+            verdict_reason=verdict.verdict_reason,
+        ),
         evidence=cited,
         citations=citations,
         attempts=state.get("attempt", 1),
