@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from src.config import settings
+from src.knowledge import cosine_from_relevance
 from src.models import Evidence, ExtractedQAPair, SourceType
 from tests.conftest import bare_store, build_store
 
@@ -182,13 +183,22 @@ async def test_expand_false_skips_expansion(series_doc):
 
 
 async def test_expanded_siblings_inherit_the_hit_score(series_doc):
-    """Siblings must rank with the hit, not sink below unrelated documents."""
+    """Siblings must rank with the hit, not sink below unrelated documents.
+
+    Pinned to the converted value rather than the staged one: a sibling that
+    was run through the cosine conversion a second time would still equal its
+    siblings and still pass an equality-only check, while ranking lower than
+    the hit that pulled it in.
+    """
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
     split = next(r for r in fake.records if r["metadata"]["parts"] > 1)
     fake.stage(chunk_indexes=[split["metadata"]["chunk"]], score=0.61)
 
     evidence = await store.search("alerts", SourceType.GUIDELINE, k=1)
-    assert {e.score for e in evidence} == {0.61}
+
+    expected = round(cosine_from_relevance(0.61, "l2"), 4)
+    assert {e.score for e in evidence} == {expected}
+    assert {e.raw_score for e in evidence} == {0.61}
 
 
 async def test_metadata_survives_the_round_trip(series_doc):
@@ -270,3 +280,60 @@ def test_duplicate_upload_is_reported_against_the_original():
     assert store.source_with_hash("abc", excluding="Acceptable Use Policy(1).pdf") == "Acceptable Use Policy.pdf"
     # The file already indexed under this hash must not report itself as a duplicate.
     assert store.source_with_hash("abc", excluding="Acceptable Use Policy.pdf") is None
+
+
+# --- the score the reader is shown -----------------------------------------
+#
+# Chroma's l2 space returns a SQUARED distance; LangChain's converter assumes
+# an unsquared one and divides by sqrt(2). The result is an affine squash of
+# the cosine, so a chunk matching at 0.72 was displayed as 0.60.
+
+
+@pytest.mark.parametrize(("relevance", "cosine"), [
+    (1.0, 1.0),        # identical vectors
+    (0.6006, 0.7176),  # measured against the real corpus
+    (0.4993, 0.6460),
+    (1 - 2 ** 0.5 / 2, 0.5),
+])
+def test_the_cosine_is_recovered_from_the_l2_relevance(relevance, cosine):
+    assert cosine_from_relevance(relevance, "l2") == pytest.approx(cosine, abs=1e-4)
+
+
+@pytest.mark.parametrize("space", ["cosine", "ip"])
+def test_a_similarity_metric_is_passed_through_untouched(space):
+    """Converting an already-correct similarity would be a second bug."""
+    assert cosine_from_relevance(0.6006, space) == 0.6006
+
+
+def test_the_conversion_is_strictly_increasing():
+    """Ranking must be identical either way, which is why this was invisible."""
+    values = [cosine_from_relevance(r / 100, "l2") for r in range(0, 101)]
+    assert values == sorted(values)
+    assert len(set(values)) == len(values)
+
+
+def test_the_negative_region_is_gone():
+    """The old figure went negative below cosine 0.293 and collided with the
+    0.0 seed in order_evidence; a real cosine on this corpus does not."""
+    assert cosine_from_relevance(0.034, "l2") > 0.0
+
+
+async def test_a_search_reports_cosine_and_keeps_the_raw_figure(series_doc):
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=1800)
+    fake.stage(chunk_indexes=[0], score=0.5)
+
+    evidence = await store.search("alerts", SourceType.GUIDELINE, k=1, expand=False)
+
+    assert evidence[0].raw_score == 0.5
+    assert evidence[0].score == round(cosine_from_relevance(0.5, "l2"), 4)
+    assert evidence[0].score > evidence[0].raw_score, "cosine should exceed the squashed figure"
+
+
+async def test_an_unreadable_collection_config_falls_back_to_l2(series_doc, monkeypatch):
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=1800)
+    monkeypatch.setattr(type(store), "_space", None)
+    fake.stage(chunk_indexes=[0], score=0.5)
+
+    evidence = await store.search("alerts", SourceType.GUIDELINE, k=1, expand=False)
+
+    assert evidence[0].score == round(cosine_from_relevance(0.5, "l2"), 4)

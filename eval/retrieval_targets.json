@@ -1,0 +1,1160 @@
+[
+  {
+    "test_id": "TC-001",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2-Client Data Retention and Deletion Policy.pdf",
+        "clauses": [
+          "5.1",
+          "5.2"
+        ],
+        "confidence": 0.44,
+        "clauses_indexed": [
+          "5.1",
+          "5.2"
+        ]
+      }
+    ],
+    "source_reference": "T2-Client Data Retention and Deletion Policy (T2-POL-CDRDP-2024-023), Section 5.1 Data Retrieval and Section 5.2 Data Deletion"
+  },
+  {
+    "test_id": "TC-002",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cybersecurity Event Logs and Monitoring Management Policy.pdf",
+        "clauses": [
+          "3.1.5",
+          "3.1.6",
+          "3.1.13"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.5",
+          "3.1.6",
+          "3.1.13"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cybersecurity Event Logs and Monitoring Management Policy, Sections 3.1.5, 3.1.6 and 3.1.13"
+  },
+  {
+    "test_id": "TC-003",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Backup and Recovery Policy.pdf",
+        "clauses": [
+          "3.4.1",
+          "3.4.6"
+        ],
+        "confidence": 0.33,
+        "clauses_indexed": [
+          "3.4.1",
+          "3.4.6"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Backup and Recovery Policy (T2-POL-BRP-2024-013), Sections 3.4.1 - 3.4.6"
+  },
+  {
+    "test_id": "TC-004",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Penetration Testing Policy .pdf.pdf",
+        "clauses": [
+          "3.1.1",
+          "3.1.7",
+          "3.1.19",
+          "3.1.21"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.1",
+          "3.1.7",
+          "3.1.19",
+          "3.1.21"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Penetration Testing Policy, Sections 3.1.1 - 3.1.7, 3.1.19 - 3.1.21"
+  },
+  {
+    "test_id": "TC-005",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cybersecurity Incident and Threat Management Policy.docx.pdf",
+        "clauses": [
+          "3.1.6",
+          "3.3.7"
+        ],
+        "confidence": 0.67,
+        "clauses_indexed": [
+          "3.1.6",
+          "3.3.7"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cybersecurity Incident and Threat Management Policy, Section 3.1.6, Table 1 - Cybersecurity Incidents Classification; escalation in Section 3.3.7"
+  },
+  {
+    "test_id": "TC-006",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 -   سياسة إدارة كلمات المرور..pdf",
+        "clauses": [
+          "4.3",
+          "4.5",
+          "5.1",
+          "5.2"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "4.3",
+          "4.5",
+          "5.1",
+          "5.2"
+        ]
+      }
+    ],
+    "source_reference": "Password Management Policy (Arabic - سياسة إدارة كلمات المرور), Sections 4.3, 4.5, 5.1 and 5.2"
+  },
+  {
+    "test_id": "TC-007",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cloud Computing and Hosting Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.2.1",
+          "3.2.4",
+          "3.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.1",
+          "3.2.4",
+          "3.4"
+        ]
+      },
+      {
+        "document": "T2 - Third-Party Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.2.1.2"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.1.2"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cloud Computing and Hosting Cybersecurity Policy, Sections 3.2.1, 3.2.4 and 3.4; T2 - Third-Party Cybersecurity Policy, Section 3.2.1.2"
+  },
+  {
+    "test_id": "TC-008",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Vulnerabilities Management Policy.pdf",
+        "clauses": [
+          "3.1.1",
+          "3.1.11"
+        ],
+        "confidence": 0.5,
+        "clauses_indexed": [
+          "3.1.1",
+          "3.1.11"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Vulnerabilities Management Policy, Section 3.1.1 (frequency table and footnote) and Section 3.1.11"
+  },
+  {
+    "test_id": "TC-009",
+    "category": "Direct Extraction",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cryptography Policy.pdf",
+        "clauses": [
+          "3.5.19",
+          "3.5.20",
+          "3.5.25"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.5.19",
+          "3.5.20",
+          "3.5.25"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cryptography Policy, Sections 3.5.19, 3.5.20 and 3.5.25"
+  },
+  {
+    "test_id": "TC-010",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cryptography Policy.pdf",
+        "clauses": [
+          "3.1.3",
+          "3.1.4",
+          "3.2",
+          "3.3",
+          "3.4.4",
+          "3.5"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.3",
+          "3.1.4",
+          "3.2",
+          "3.3",
+          "3.4.4",
+          "3.5"
+        ]
+      },
+      {
+        "document": "T2 - Cloud Computing and Hosting Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.1.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.4"
+        ]
+      },
+      {
+        "document": "T2 - Information Classification Policy.pdf",
+        "clauses": [
+          "4.2.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "4.2.4"
+        ]
+      },
+      {
+        "document": "T2 - Third-Party Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.7.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.7.4"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cryptography Policy, Sections 3.1.3 - 3.1.4, 3.2, 3.3, 3.4.4, 3.5; T2 - Cloud Computing and Hosting Cybersecurity Policy, Section 3.1.4; T2 - Information Classification Policy, Section 4.2.4; T2 - Third-Party Cybersecurity Policy, Section 3.7.4"
+  },
+  {
+    "test_id": "TC-011",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Human Resources Policy.pdf",
+        "clauses": [
+          "3.1.6",
+          "3.4.1",
+          "3.4.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.6",
+          "3.4.1",
+          "3.4.4"
+        ]
+      },
+      {
+        "document": "T2 - Compliance With Cybersecurity Legislation And Regulations Policy.pdf",
+        "clauses": [
+          "4.11",
+          "4.12"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "4.11",
+          "4.12"
+        ]
+      },
+      {
+        "document": "T2 - Personnel Security and Awareness Training Policy.pdf",
+        "clauses": [
+          "3.1.3"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.3"
+        ]
+      },
+      {
+        "document": "T2 - Identity and Access Management Policy.pdf",
+        "clauses": [
+          "3.1.14",
+          "5.1"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.14",
+          "5.1"
+        ]
+      },
+      {
+        "document": "T2 - Third-Party Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.4.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.4.4"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Human Resources Policy, Sections 3.1.6 and 3.4.1 - 3.4.4; T2 - Compliance With Cybersecurity Legislation And Regulations Policy, Sections 4.11 and 4.12; T2 - Personnel Security and Awareness Training Policy, Section 3.1.3; T2 - Identity and Access Management Policy, Sections 3.1.14 and 5.1; T2 - Third-Party Cybersecurity Policy, Section 3.4.4"
+  },
+  {
+    "test_id": "TC-012",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Disaster Recovery Plan Policy.pdf",
+        "clauses": [
+          "5.1",
+          "5.2",
+          "5.5",
+          "6.2.2",
+          "6.3.2"
+        ],
+        "confidence": 0.38,
+        "clauses_indexed": [
+          "5.1",
+          "5.2",
+          "5.5",
+          "6.2.2",
+          "6.3.2"
+        ]
+      },
+      {
+        "document": "T2 - Backup and Recovery Policy.pdf",
+        "clauses": [
+          "3.2.1",
+          "3.4.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.1",
+          "3.4.4"
+        ]
+      },
+      {
+        "document": "T2 - Cybersecurity Business Continuity Policy.pdf",
+        "clauses": [
+          "3.2.1",
+          "3.2.9"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.1",
+          "3.2.9"
+        ]
+      },
+      {
+        "document": "T2 - Data Cybersecurity and Privacy Policy.pdf",
+        "clauses": [
+          "3.7"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.7"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Disaster Recovery Plan Policy (T2-POL-AMP-2024-026), Sections 5.1, 5.2, 5.5, 6.2.2, 6.3.2 and Appendix 1; T2 - Backup and Recovery Policy, Sections 3.2.1 and 3.4.4; T2 - Cybersecurity Business Continuity Policy, Sections 3.2.1 - 3.2.9; T2 - Data Cybersecurity and Privacy Policy, Section 3.7"
+  },
+  {
+    "test_id": "TC-013",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Third-Party Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.1",
+          "3.2",
+          "3.3",
+          "3.4.4",
+          "3.7.3",
+          "3.8"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1",
+          "3.2",
+          "3.3",
+          "3.4.4",
+          "3.7.3",
+          "3.8"
+        ]
+      },
+      {
+        "document": "T2 - Cybersecurity Risk Management Policy.pdf",
+        "clauses": [
+          "3.2.2.1"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.2.1"
+        ]
+      },
+      {
+        "document": "T2 - Compliance With Cybersecurity Legislation And Regulations Policy.pdf",
+        "clauses": [
+          "4.10",
+          "4.11"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "4.10",
+          "4.11"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Third-Party Cybersecurity Policy, Sections 3.1, 3.2, 3.3, 3.4.4, 3.7.3 and 3.8; T2 - Cybersecurity Risk Management Policy, Section 3.2.2.1; T2 - Compliance With Cybersecurity Legislation And Regulations Policy, Sections 4.10 and 4.11"
+  },
+  {
+    "test_id": "TC-014",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Information Classification Policy.pdf",
+        "clauses": [
+          "3.2",
+          "4.1.1",
+          "4.1.6",
+          "4.2"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2",
+          "4.1.1",
+          "4.1.6",
+          "4.2"
+        ]
+      },
+      {
+        "document": "T2 - Data Cybersecurity and Privacy Policy.pdf",
+        "clauses": [
+          "3.2.2",
+          "3.2.8",
+          "3.2.9",
+          "3.2.12"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.2",
+          "3.2.8",
+          "3.2.9",
+          "3.2.12"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Information Classification Policy, Sections 3.2, 4.1.1 - 4.1.6 and 4.2; T2 - Data Cybersecurity and Privacy Policy, Sections 3.2.2, 3.2.8, 3.2.9 and 3.2.12"
+  },
+  {
+    "test_id": "TC-015",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cybersecurity Event Logs and Monitoring Management Policy.pdf",
+        "clauses": [
+          "3.1.1",
+          "3.1.13",
+          "3.1.17",
+          "3.1.22"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.1",
+          "3.1.13",
+          "3.1.17",
+          "3.1.22"
+        ]
+      },
+      {
+        "document": "T2 - Identity and Access Management Policy.pdf",
+        "clauses": [
+          "3.1.9"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.9"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cybersecurity Event Logs and Monitoring Management Policy, Sections 2, 3.1.1 - 3.1.13 and 3.1.17 - 3.1.22; T2 - Identity and Access Management Policy, Section 3.1.9"
+  },
+  {
+    "test_id": "TC-016",
+    "category": "Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Identity and Access Management Policy.pdf",
+        "clauses": [
+          "3.1.5",
+          "3.1.7",
+          "3.1.8",
+          "3.1.17",
+          "3.1.24",
+          "4.1",
+          "5.1"
+        ],
+        "confidence": 0.5,
+        "clauses_indexed": [
+          "3.1.5",
+          "3.1.7",
+          "3.1.8",
+          "3.1.17",
+          "3.1.24",
+          "4.1",
+          "5.1"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Identity and Access Management Policy, Sections 3.1.5, 3.1.7, 3.1.8, 3.1.17 - 3.1.24, 4.1 Privileged Access Management, and 5.1 Identity and Access and Privileges Management Review"
+  },
+  {
+    "test_id": "TC-017",
+    "category": "Scenario-Based",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Human Resources Policy.pdf",
+        "clauses": [
+          "3.1.6",
+          "3.4.2",
+          "3.4.3",
+          "3.4.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.6",
+          "3.4.2",
+          "3.4.3",
+          "3.4.4"
+        ]
+      },
+      {
+        "document": "T2 - Compliance With Cybersecurity Legislation And Regulations Policy.pdf",
+        "clauses": [
+          "4.12"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "4.12"
+        ]
+      },
+      {
+        "document": "T2 -   سياسة إدارة كلمات المرور..pdf",
+        "clauses": [
+          "6.1"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "6.1"
+        ]
+      },
+      {
+        "document": "T2 - Third-Party Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.4.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.4.4"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Human Resources Policy, Sections 3.1.6, 3.4.2, 3.4.3 and 3.4.4; T2 - Compliance With Cybersecurity Legislation And Regulations Policy, Section 4.12; Password Management Policy (Arabic), Section 6.1; T2 - Third-Party Cybersecurity Policy, Section 3.4.4"
+  },
+  {
+    "test_id": "TC-018",
+    "category": "Scenario-Based",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cybersecurity Incident and Threat Management Policy.docx.pdf",
+        "clauses": [
+          "3.1.4",
+          "3.1.6",
+          "3.2.5",
+          "3.2.7",
+          "3.3.2",
+          "3.3.5",
+          "3.3.9",
+          "3.3.13",
+          "3.4.5"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.4",
+          "3.1.6",
+          "3.2.5",
+          "3.2.7",
+          "3.3.2",
+          "3.3.5",
+          "3.3.9",
+          "3.3.13",
+          "3.4.5"
+        ]
+      },
+      {
+        "document": "T2 - Backup and Recovery Policy.pdf",
+        "clauses": [
+          "3.5"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.5"
+        ]
+      },
+      {
+        "document": "T2 - Disaster Recovery Plan Policy.pdf",
+        "clauses": [
+          "4.2",
+          "6.2",
+          "6.3"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "4.2",
+          "6.2",
+          "6.3"
+        ]
+      },
+      {
+        "document": "T2 - Data Cybersecurity and Privacy Policy.pdf",
+        "clauses": [
+          "3.4.5",
+          "3.4.6"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.4.5",
+          "3.4.6"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cybersecurity Incident and Threat Management Policy, Sections 3.1.4 - 3.1.6, 3.2.5 - 3.2.7, 3.3.2, 3.3.5, 3.3.9, 3.3.13 and 3.4.5; T2 - Backup and Recovery Policy, Section 3.5; T2 - Disaster Recovery Plan Policy, Sections 4.2, 6.2 and 6.3; T2 - Data Cybersecurity and Privacy Policy, Sections 3.4.5 and 3.4.6"
+  },
+  {
+    "test_id": "TC-019",
+    "category": "Scenario-Based",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Vulnerabilities Management Policy.pdf",
+        "clauses": [
+          "3.2.4",
+          "3.2.6",
+          "3.2.14"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.4",
+          "3.2.6",
+          "3.2.14"
+        ]
+      },
+      {
+        "document": "T2 - Patch Management Policy.pdf",
+        "clauses": [
+          "3.1.7"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.7"
+        ]
+      },
+      {
+        "document": "T2 - Penetration Testing Policy .pdf.pdf",
+        "clauses": [
+          "3.1.19",
+          "3.1.21"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.19",
+          "3.1.21"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Vulnerabilities Management Policy, Sections 3.2.4 and 3.2.6 - 3.2.14; T2 - Patch Management Policy, Section 3.1.7; T2 - Penetration Testing Policy, Sections 3.1.19 and 3.1.21"
+  },
+  {
+    "test_id": "TC-020",
+    "category": "Scenario-Based",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Identity and Access Management Policy.pdf",
+        "clauses": [
+          "3.1.1",
+          "3.1.5",
+          "3.1.7",
+          "3.1.10"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.1",
+          "3.1.5",
+          "3.1.7",
+          "3.1.10"
+        ]
+      },
+      {
+        "document": "T2 - Human Resources Policy.pdf",
+        "clauses": [
+          "3.2.1",
+          "3.2.4",
+          "3.4.6"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.1",
+          "3.2.4",
+          "3.4.6"
+        ]
+      },
+      {
+        "document": "T2 - Personnel Security and Awareness Training Policy.pdf",
+        "clauses": [
+          "3.1.2",
+          "3.2.1",
+          "3.3.1"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.2",
+          "3.2.1",
+          "3.3.1"
+        ]
+      },
+      {
+        "document": "T2 - Data Cybersecurity and Privacy Policy.pdf",
+        "clauses": [
+          "3.1.3",
+          "3.1.4",
+          "3.2.13"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.1.3",
+          "3.1.4",
+          "3.2.13"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Identity and Access Management Policy, Sections 3.1.1, 3.1.5 - 3.1.7 and 3.1.10; T2 - Human Resources Policy, Sections 3.2.1 - 3.2.4 and 3.4.6; T2 - Personnel Security and Awareness Training Policy, Sections 3.1.2, 3.2.1 and 3.3.1; T2 - Data Cybersecurity and Privacy Policy, Sections 3.1.3, 3.1.4 and 3.2.13"
+  },
+  {
+    "test_id": "TC-021",
+    "category": "Out of Bounds",
+    "kind": "absence",
+    "documents": [],
+    "source_reference": "Not covered in any provided policy document"
+  },
+  {
+    "test_id": "TC-022",
+    "category": "Out of Bounds",
+    "kind": "hybrid",
+    "documents": [
+      {
+        "document": "T2-ISMS - Corporate Information Security Policy.pdf",
+        "clauses": [
+          "3.5",
+          "6.1.3",
+          "2.21",
+          "2.25"
+        ],
+        "confidence": 0.4,
+        "clauses_indexed": [
+          "3.5",
+          "6.1.3",
+          "2.21",
+          "2.25"
+        ]
+      }
+    ],
+    "source_reference": "T2-ISMS - Corporate Information Security Policy (T2-POL-CIS-2024-001), Sections 3.5, 6.1.3 and 2.21 - 2.25 (scope only); certificate details not covered in any provided document"
+  },
+  {
+    "test_id": "TC-023",
+    "category": "Out of Bounds",
+    "kind": "hybrid",
+    "documents": [
+      {
+        "document": "T2 - Network Security Policy.pdf",
+        "clauses": [
+          "3.4.10"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.4.10"
+        ]
+      },
+      {
+        "document": "T2 - Web Application Protection Policy.pdf",
+        "clauses": [
+          "3.3.9"
+        ],
+        "confidence": 0.5,
+        "clauses_indexed": [
+          "3.3.9"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Network Security Policy, Section 3.4.10 and T2 - Web Application Protection Policy, Section 3.3.9 (defensive AI use only); AI governance not covered in any provided document"
+  },
+  {
+    "test_id": "TC-024",
+    "category": "Out of Bounds",
+    "kind": "absence",
+    "documents": [],
+    "source_reference": "Not covered in any provided policy document"
+  },
+  {
+    "test_id": "TC-025",
+    "category": "Cross-Lingual / Arabic",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2-Client Data Retention and Deletion Policy.pdf",
+        "clauses": [
+          "5.1",
+          "5.2"
+        ],
+        "confidence": 0.4,
+        "clauses_indexed": [
+          "5.1",
+          "5.2"
+        ]
+      }
+    ],
+    "source_reference": "T2-Client Data Retention and Deletion Policy (T2-POL-CDRDP-2024-023), Sections 5.1 and 5.2 — English-language source document"
+  },
+  {
+    "test_id": "TC-026",
+    "category": "Cross-Lingual / Arabic",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cloud Computing and Hosting Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.2.1",
+          "3.2.4",
+          "3.4"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.2.1",
+          "3.2.4",
+          "3.4"
+        ]
+      },
+      {
+        "document": "T2 - Third-Party Cybersecurity Policy.pdf",
+        "clauses": [
+          "3.2.1.2"
+        ],
+        "confidence": 0.5,
+        "clauses_indexed": [
+          "3.2.1.2"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Cloud Computing and Hosting Cybersecurity Policy, Sections 3.2.1, 3.2.4 and 3.4; T2 - Third-Party Cybersecurity Policy, Section 3.2.1.2 — English-language source documents"
+  },
+  {
+    "test_id": "TC-027",
+    "category": "Cross-Lingual / Arabic",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Identity and Access Management Policy.pdf",
+        "clauses": [
+          "3.1.18",
+          "3.1.20",
+          "3.1.21",
+          "3.1.24",
+          "4.1",
+          "5.1"
+        ],
+        "confidence": 0.6,
+        "clauses_indexed": [
+          "3.1.18",
+          "3.1.20",
+          "3.1.21",
+          "3.1.24",
+          "4.1",
+          "5.1"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Identity and Access Management Policy, Sections 3.1.18, 3.1.20, 3.1.21, 3.1.24, 4.1 and 5.1 — English-language source document"
+  },
+  {
+    "test_id": "TC-028",
+    "category": "Cross-Lingual / Arabic",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Data Cybersecurity and Privacy Policy.pdf",
+        "clauses": [
+          "3.4.5",
+          "3.4.6"
+        ],
+        "confidence": 1.0,
+        "clauses_indexed": [
+          "3.4.5",
+          "3.4.6"
+        ]
+      },
+      {
+        "document": "T2 - Cybersecurity Incident and Threat Management Policy.docx.pdf",
+        "clauses": [
+          "3.2.4",
+          "3.2.7",
+          "3.3.2"
+        ],
+        "confidence": 0.57,
+        "clauses_indexed": [
+          "3.2.4",
+          "3.2.7",
+          "3.3.2"
+        ]
+      }
+    ],
+    "source_reference": "T2 - Data Cybersecurity and Privacy Policy, Sections 3.4.5 and 3.4.6; T2 - Cybersecurity Incident and Threat Management Policy, Sections 3.2.4 - 3.2.7 and 3.3.2 — English-language source documents"
+  },
+  {
+    "test_id": "TC-029",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "PersonalDataBreachIncidents.pdf",
+        "clauses": [],
+        "confidence": 0.67,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One: SDAIA Notice"
+  },
+  {
+    "test_id": "TC-030",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "PersonalDataBreachIncidents.pdf",
+        "clauses": [],
+        "confidence": 0.8,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One, items 1-5"
+  },
+  {
+    "test_id": "TC-031",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "RulesforAppointingPersonalDataProtectionOfficer.pdf",
+        "clauses": [],
+        "confidence": 0.56,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5"
+  },
+  {
+    "test_id": "TC-032",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "RulesforAppointingPersonalDataProtectionOfficer.pdf",
+        "clauses": [],
+        "confidence": 0.5,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5 Second"
+  },
+  {
+    "test_id": "TC-033",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "Guide-to-Essential-Cybersecurity-Controls-(ECC)-Implementation-en.pdf",
+        "clauses": [],
+        "confidence": 1.0,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "Guide to Essential Cybersecurity Controls (ECC) Implementation, control 1-2-2"
+  },
+  {
+    "test_id": "TC-034",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "Guide-to-Essential-Cybersecurity-Controls-(ECC)-Implementation-en.pdf",
+        "clauses": [],
+        "confidence": 1.0,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "Guide to Essential Cybersecurity Controls (ECC) Implementation, control 1-2-3"
+  },
+  {
+    "test_id": "TC-035",
+    "category": "Regulatory Reference",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "PersonalDataDestructionAnonymizationAndEncryptionGuideline.pdf",
+        "clauses": [],
+        "confidence": 0.83,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Personal Data Destruction, Anonymization and Encryption Guideline"
+  },
+  {
+    "test_id": "TC-036",
+    "category": "Cross-Source Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "T2 - Cybersecurity Incident and Threat Management Policy.docx.pdf",
+        "clauses": [
+          "3.4.5",
+          "3.4.6"
+        ],
+        "confidence": 0.31,
+        "clauses_indexed": [
+          "3.4.5",
+          "3.4.6"
+        ]
+      }
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide (all three stages) + T2 Cybersecurity Incident and Threat Management Policy + T2 Data Cybersecurity and Privacy Policy 3.4.5-3.4.6"
+  },
+  {
+    "test_id": "TC-037",
+    "category": "Cross-Source Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "PersonalDataBreachIncidents.pdf",
+        "clauses": [],
+        "confidence": 0.8,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage Two, sections A and B"
+  },
+  {
+    "test_id": "TC-038",
+    "category": "Cross-Source Synthesis",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "RulesforAppointingPersonalDataProtectionOfficer.pdf",
+        "clauses": [],
+        "confidence": 0.56,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Articles 6 and 7"
+  },
+  {
+    "test_id": "TC-039",
+    "category": "Out of Bounds",
+    "kind": "hybrid",
+    "documents": [
+      {
+        "document": "Guide-to-Essential-Cybersecurity-Controls-(ECC)-Implementation-en.pdf",
+        "clauses": [],
+        "confidence": 0.25,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "Absence - the ECC implementation guide is present but no T2 assessment against it"
+  },
+  {
+    "test_id": "TC-040",
+    "category": "Out of Bounds",
+    "kind": "hybrid",
+    "documents": [
+      {
+        "document": "RulesGoverningIssuanceAccreditationCertificatesControllersProcessers.pdf",
+        "clauses": [],
+        "confidence": 0.18,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "Absence - SDAIA accreditation rules are present, no T2 certificate is"
+  },
+  {
+    "test_id": "TC-041",
+    "category": "Cross-Lingual / Arabic",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "PersonalDataBreachIncidents.pdf",
+        "clauses": [],
+        "confidence": 0.57,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Personal Data Breach Incidents Procedural Guide, Stage One (question asked in Arabic against English sources)"
+  },
+  {
+    "test_id": "TC-042",
+    "category": "Cross-Lingual / Arabic",
+    "kind": "sourced",
+    "documents": [
+      {
+        "document": "RulesforAppointingPersonalDataProtectionOfficer.pdf",
+        "clauses": [],
+        "confidence": 0.39,
+        "clauses_indexed": []
+      }
+    ],
+    "source_reference": "SDAIA Rules for Appointing a Personal Data Protection Officer, Article 5 First and Second (question asked in Arabic against English sources)"
+  }
+]

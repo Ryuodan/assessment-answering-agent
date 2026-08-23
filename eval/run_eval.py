@@ -29,6 +29,8 @@ from eval.dataset import DEFAULT_GOLDEN_SET, align, load_answers, load_golden_se
 from eval.history import HISTORY_PATH, format_history, load as load_history, record, save_configuration
 from eval.judge import judge_all
 from eval.report import build_report, format_comparison, format_report
+from eval.retrieval import DEFAULT_TARGETS, as_dict, build_plans, load_targets, measure_all
+from eval.retrieval import format_report as retrieval_report
 
 RESULTS_DIR = PROJECT_ROOT / "eval" / "results"
 
@@ -90,6 +92,51 @@ async def score(
         print(format_comparison(baseline, candidate))
 
 
+async def score_retrieval(
+    targets_path: Path, golden_path: Path, label: str, out: Path | None,
+    baseline: Path | None, plans_path: Path | None = None,
+) -> None:
+    """Measure retrieval on its own. No judge, no drafting, no tokens to speak of."""
+    targets = load_targets(targets_path, golden=load_golden_set(golden_path))
+    print(f"Measuring retrieval on {len(targets)} golden questions...")
+
+    # Hold the expanded queries fixed across a sweep. The planner is an LLM and
+    # rewrites them slightly every run, which moved recall by several points
+    # between two passes of an identical system — more than most of the
+    # settings worth testing.
+    plans = None
+    if plans_path:
+        if plans_path.exists():
+            plans = json.loads(plans_path.read_text(encoding="utf-8"))
+            print(f"Reusing the query plans in {plans_path}")
+        else:
+            plans = await build_plans(targets)
+            plans_path.parent.mkdir(parents=True, exist_ok=True)
+            plans_path.write_text(json.dumps(plans, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"Wrote query plans to {plans_path}")
+
+    results = await measure_all(targets, plans=plans)
+    payload = as_dict(label, results)
+    print(retrieval_report(payload["summary"], payload["categories"], results))
+
+    destination = out or (RESULTS_DIR / f"{label}.retrieval.json")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Written to {destination}")
+
+    if baseline and baseline.exists():
+        previous = json.loads(baseline.read_text(encoding="utf-8"))
+        print(f"\nagainst {previous.get('label', baseline.stem)}")
+        print("-" * 62)
+        for key in ("document_recall_pct", "clause_recall_pct",
+                    "selection_loss_documents", "never_retrieved_documents",
+                    "cases_fully_covered", "mrr"):
+            before = previous["summary"].get(key)
+            after = payload["summary"].get(key)
+            if isinstance(before, (int, float)) and isinstance(after, (int, float)):
+                print(f"  {key:32s} {before:>8} -> {after:<8} {after - before:+.3g}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eval", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -107,6 +154,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("history", help="show every recorded run")
 
+    retrieval = subparsers.add_parser(
+        "retrieval", help="score retrieval alone, without asking a model to write anything")
+    retrieval.add_argument("--targets", type=Path, default=DEFAULT_TARGETS)
+    retrieval.add_argument("--label", default="retrieval")
+    retrieval.add_argument("--out", type=Path, default=None,
+                           help="write the full per-case result here")
+    retrieval.add_argument("--baseline", type=Path, default=None,
+                           help="a previous retrieval result file to compare against")
+    retrieval.add_argument("--plans", type=Path, default=None,
+                           help="reuse (or create) a fixed set of expanded queries, so a sweep "
+                                "measures the setting rather than the planner's variation")
+
     return parser
 
 
@@ -118,6 +177,9 @@ def main() -> int:
         asyncio.run(answer_golden_set(args.golden, args.out))
     elif args.command == "history":
         print(format_history(load_history()))
+    elif args.command == "retrieval":
+        asyncio.run(score_retrieval(args.targets, args.golden, args.label, args.out,
+                                    args.baseline, args.plans))
     else:
         label = args.label or args.answers.stem
         asyncio.run(score(args.answers, args.golden, label, args.baseline, args.notes))

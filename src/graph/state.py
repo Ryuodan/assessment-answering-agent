@@ -9,6 +9,7 @@ from __future__ import annotations
 import operator
 from typing import Annotated, TypedDict
 
+from src.config import settings
 from src.models import (
     AnsweredQuestion,
     AnswerReview,
@@ -36,10 +37,38 @@ def merge_evidence(left: list[Evidence], right: list[Evidence]) -> list[Evidence
         if position is None:
             index[key] = len(merged)
             merged.append(item)
-        elif item.score > merged[position].score:
+            continue
+
+        # Agreement accumulates across rounds as well as within one: a chunk
+        # two queries found in round one and the reviewer's refined query
+        # found again in round two has been arrived at three separate ways.
+        # Carried before any replacement, or a better-scoring copy would drop
+        # the history that made it interesting.
+        hits = merged[position].query_hits + item.query_hits
+        if item.score > merged[position].score:
             merged[position] = item
+        merged[position].query_hits = hits
 
     return order_evidence(merged)
+
+
+def agreement_bonus(query_hits: int) -> float:
+    """How much to lift a chunk that several independent searches agreed on.
+
+    Query expansion issues one search per thing the question asks, plus an
+    Arabic phrasing of the key concept, and those searches are meant to
+    converge. When three of four return the same clause, that convergence is
+    evidence about the clause rather than about any one phrasing of the query
+    — and unlike a cross-encoder it costs nothing, because the searches have
+    already run.
+
+    Applied as a proportional lift rather than a fixed addition, so it can
+    reorder chunks that are already close without letting a widely-agreed but
+    weakly-matching chunk overtake a strong one. `QUERY_AGREEMENT_WEIGHT=0`
+    turns it off; with query expansion off every chunk has one hit and the
+    multiplier is 1 regardless.
+    """
+    return 1.0 + settings.query_agreement_weight * max(query_hits - 1, 0)
 
 
 def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
@@ -52,7 +81,11 @@ def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
     best: dict[tuple, float] = {}
     for item in evidence:
         group = (item.source_name, item.unit_id or f"chunk-{item.chunk}")
-        best[group] = max(best.get(group, 0.0), item.score)
+        # Seeded from the item rather than from 0.0: a genuinely poor match can
+        # score below zero on some metrics, and a floor of zero would collapse
+        # every such group into a tie broken by file name.
+        weighted = item.score * agreement_bonus(item.query_hits)
+        best[group] = max(best[group], weighted) if group in best else weighted
 
     def sort_key(item: Evidence):
         group = (item.source_name, item.unit_id or f"chunk-{item.chunk}")

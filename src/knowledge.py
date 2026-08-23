@@ -27,10 +27,46 @@ from src.chunking import chunk_document
 
 logger = logging.getLogger(__name__)
 
+_SQRT2 = 2.0 ** 0.5
+
+
+def cosine_from_relevance(relevance: float, space: str) -> float:
+    """Recover the cosine similarity from LangChain's relevance figure.
+
+    The number LangChain hands back is not the similarity it appears to be,
+    and the discrepancy is large enough to mislead a reader badly. Chroma's
+    `l2` space returns the *squared* euclidean distance, while LangChain's
+    `_euclidean_relevance_score_fn` computes `1 - distance / sqrt(2)` on the
+    assumption that the distance is an unsquared norm. For the unit-length
+    vectors BGE-M3 produces, the squared distance is `2 - 2 * cos`, so what
+    comes out is
+
+        reported = 1 - (2 - 2 cos) / sqrt(2) = sqrt(2) * cos - (sqrt(2) - 1)
+
+    — an affine squash of the cosine. Ranking is unaffected, because the
+    transform is strictly increasing, and no code in this project ever
+    compared a score against a fixed threshold. What it did affect was every
+    human reading the number: a chunk matching at cosine 0.72 was displayed as
+    0.60, which reads like a poor match rather than a good one. It also dips
+    below zero past cosine 0.293, and `order_evidence` seeds its group maximum
+    at 0.0, so a negative score would silently collapse into a tie.
+
+    Only the `l2` case needs undoing. A collection created with `cosine` or
+    `ip` is already reported as a similarity, and converting again would be a
+    second bug on top of the first — hence the space is passed in rather than
+    assumed.
+    """
+    if space != "l2":
+        return relevance
+    return 1.0 - (1.0 - relevance) * _SQRT2 / 2.0
 
 
 class KnowledgeStore:
     """Persistent store of guidelines and prior answers."""
+
+    # Declared on the class, not just assigned in `__init__`, so a store built
+    # around a stubbed collection still resolves the metric instead of raising.
+    _space: str | None = None
 
     def __init__(self) -> None:
         settings.ensure_directories()
@@ -127,13 +163,54 @@ class KnowledgeStore:
 
     # -- reading ------------------------------------------------------------
 
-    def _evidence(self, document: Document, score: float, source_type: SourceType) -> Evidence:
+    @property
+    def _distance_space(self) -> str:
+        """The metric the persisted collection was created with.
+
+        Read from the collection rather than assumed, so that re-creating it
+        with `cosine` later changes the conversion instead of breaking it.
+        """
+        if self._space is None:
+            try:
+                configuration = self._store._collection.configuration or {}
+                hnsw = configuration.get("hnsw") or configuration.get("spann") or {}
+                self._space = hnsw.get("space", "l2")
+            except Exception:  # noqa: BLE001 - an unreadable config must not fail a search
+                logger.warning("Could not read the collection's distance metric; assuming l2")
+                self._space = "l2"
+            logger.debug("Collection distance metric: %s", self._space)
+        return self._space
+
+    def _evidence(
+        self,
+        document: Document,
+        score: float,
+        source_type: SourceType,
+        *,
+        similarity: float | None = None,
+        query_hits: int = 1,
+    ) -> Evidence:
+        """Build one Evidence, converting the store's relevance figure to cosine.
+
+        `score` is what the vector store reported. `similarity` overrides the
+        conversion for chunks that no vector search scored — an expanded
+        sibling inheriting its unit's score, or a lexical-only hit — because
+        converting an already-converted number would compound the error the
+        conversion exists to undo.
+        """
         meta = document.metadata
+        cosine = (
+            cosine_from_relevance(score, self._distance_space)
+            if similarity is None
+            else similarity
+        )
         return Evidence(
             source_type=source_type,
             source_name=meta.get("source_name", "unknown"),
             snippet=document.page_content,
-            score=round(score, 4),
+            score=round(cosine, 4),
+            raw_score=round(score, 4),
+            query_hits=query_hits,
             doc_id=meta.get("doc_id", ""),
             clause=meta.get("clause", ""),
             clause_start=meta.get("clause_start", "") or meta.get("clause", ""),
@@ -191,7 +268,10 @@ class KnowledgeStore:
         for key in index.search(query, k):
             if key not in by_key and key in documents:
                 text, metadata = documents[key]
-                by_key[key] = self._evidence(Document(page_content=text, metadata=metadata), 0.0, source_type)
+                by_key[key] = self._evidence(
+                    Document(page_content=text, metadata=metadata), 0.0, source_type,
+                    similarity=0.0,  # never vector-scored; fusion ranks it by position
+                )
 
         dense_ranking = [(item.source_name, item.chunk) for item in dense]
         lexical_ranking = [key for key in index.search(query, k) if key in by_key]
@@ -261,9 +341,14 @@ class KnowledgeStore:
                 sibling = self._evidence(
                     Document(page_content=text, metadata=meta),
                     # Inherit the triggering hit's score so the completed unit
-                    # ranks together rather than sinking to the bottom.
-                    item.score,
+                    # ranks together rather than sinking to the bottom. The
+                    # cosine is inherited directly: it has already been
+                    # converted, and running it through again would deflate it
+                    # a second time.
+                    item.raw_score,
                     item.source_type,
+                    similarity=item.score,
+                    query_hits=item.query_hits,
                 )
                 expanded.append(sibling)
 

@@ -107,6 +107,30 @@ revoked retrieved 3.4.4 alone and concluded the policy specified no timeframe.
 It does — in 3.4.3, one clause away. Every chunk still records the *range* of
 clauses it covers, so a citation stays precise.
 
+**The relevance score is a cosine, and for a long time it was not.** Chroma's
+`l2` space returns the *squared* euclidean distance; LangChain's converter
+divides by `sqrt(2)` on the assumption that it is an unsquared norm. For
+unit-length BGE-M3 vectors that yields `sqrt(2) * cos - 0.414`, an affine
+squash — so a chunk matching at cosine 0.72 was displayed as 0.60, and one at
+0.65 as 0.50. Nothing ranked differently, because the transform is strictly
+increasing and no code compared a score against a fixed threshold, but every
+person reading the number was reading a good match as a mediocre one. The
+cosine is now recovered in `_evidence()` and the store's own figure kept
+alongside it as `raw_score`. Note also that absolute values are not
+comparable between embedding models: on this corpus BGE-M3 scores unrelated
+text at cosine 0.33 and gibberish at 0.27, so 0.65 is a wide margin, not a
+weak one.
+
+**Several searches agreeing on a chunk is a signal, and it is free.** Query
+expansion issues one search per thing the question asks, in both languages,
+and those searches are written to converge. A chunk three of them return
+independently has been arrived at three ways; `QUERY_AGREEMENT_WEIGHT` lifts
+it proportionally. It costs nothing — the searches have already run — and it
+is inert where it would mean nothing: with query expansion off every chunk has
+one hit and the multiplier is exactly 1, and with the reranker on the
+cross-encoder's ordering is used instead. Measured on the golden set it is a
+small effect (see below), which is worth knowing before relying on it.
+
 **A citation names the file, not just a code.** Answers cite
 `T2 - سياسة إدارة كلمات المرور..pdf [PRO-PMP-2024] §5–5.2`, because the internal
 document code alone is not something a reader can find in a folder of eighty
@@ -327,6 +351,52 @@ across the run and its correlation with the score. Confidence that does not move
 with correctness is worse than no confidence at all, because it makes the review
 queue meaningless.
 
+### Measuring retrieval, separately from the answer
+
+The judge reads the answer text and nothing else, so a low score cannot be
+attributed: "the retriever never found the clause" and "the drafter was handed
+the clause and ignored it" produce the same number. That blindness is not
+theoretical — a change that dropped the guideline count in the drafting prompt
+to *zero* on retried questions moved the graded accuracy by less than a point.
+
+```bash
+python -m eval.run_eval retrieval
+python -m eval.run_eval retrieval --plans eval/results/plans.json --label with-agreement
+python -m eval.run_eval retrieval --baseline eval/results/before.retrieval.json
+```
+
+It scores what retrieval found against `eval/retrieval_targets.json` — the
+documents and clauses the golden set's `source_reference` names — by running
+the real planning, retrieval, reranking and selection nodes. **No model grades
+anything**, so a pass costs almost nothing and is deterministic once the
+queries are fixed, which makes it the right tool for settling retrieval
+settings that the judge's three-point noise cannot resolve.
+
+Two design points are load-bearing:
+
+**The targets are resolved once, into a file you can read.** Matching a prose
+reference to a filename at scoring time would mean the metric partly measures
+the string matcher. It does: the first version of that matcher reported eleven
+broken references in the golden set, and every one of them was the matcher's
+fault — CamelCase filenames tokenising as one word, an English document title
+against an Arabic-only filename, a Jaccard variant that preferred a short
+wrong filename to a long right one. Resolved and checked once, all 149 clauses
+the golden set names were found in the corpus, in the documents it attributes
+them to. The references are sound; it was the automation around them that was
+not, which is exactly the failure that would have produced confident nonsense.
+
+**`--plans` pins the expanded queries.** The planner is an LLM and rewrites its
+searches slightly on every run, which moved document recall by several points
+between two passes of an unchanged system — more than most settings worth
+testing. Reuse one plan file across a sweep and the comparison is a comparison.
+
+Three numbers matter more than recall@k. **Prompt recall** is whether the
+material reached the drafter, which is the only place it can affect an answer.
+**Selection loss** is material that was retrieved and then cut — the failure
+the generation eval hides most completely. **Never retrieved** is the
+retriever's own miss. Cases whose expected answer is "nothing documents this"
+have nothing to retrieve and are excluded rather than counted as misses.
+
 ### Running a measurement pass
 
 Settings that change a score are read from the environment, so a pass is one
@@ -403,6 +473,77 @@ for the rest: with ten guideline slots instead of two, lower-ranked internal
 policy chunks reach the prompt and can dilute an answer that should come from
 the regulation alone. Worth watching if regulatory questions matter most; the
 reranker addresses exactly that ordering problem.
+
+### What retrieval actually does
+
+The first measurement of retrieval on its own, on the 80-document corpus with
+the reranker off. Of 69 documents the golden set says an answer needs:
+
+| | documents |
+| --- | --- |
+| reached the drafting prompt | 35 |
+| retrieved, then cut before the prompt | 7 |
+| **never retrieved at all** | **27** |
+
+Document recall into the prompt is 50.7%, clause recall 32.9%, MRR 0.62, and
+22 of 40 scorable cases had every source they needed. **The dominant failure is
+recall, not ordering** — 27 documents are never found, and no amount of
+reranking, fusion or agreement-weighting can promote a chunk that was never
+returned. That is the number to attack, and it is one the generation eval could
+never have shown, because an answer written without the right document reads
+like a drafting failure.
+
+Retrieval also degrades gracefully across categories in a way worth knowing:
+`Direct Extraction` reaches 90% document recall, while `Synthesis` and
+`Scenario-Based` — the questions that expect four or five different policies —
+sit near 27%. A 14-slot prompt filled from `k=5` searches simply cannot hold
+five documents' worth of clauses, so those questions are budget-bound rather
+than retrieval-bound.
+
+**Query agreement was measured and is close to neutral.** With the expanded
+queries pinned so the comparison is exact:
+
+| `QUERY_AGREEMENT_WEIGHT` | Document recall | Clause recall | Cases fully covered |
+| --- | --- | --- | --- |
+| 0 | 50.7% | 32.9% | 22 |
+| 0.10 / 0.20 / 0.30 | 49.3% | 34.9% | 23 |
+
+Clause recall up two points, document recall down one and a half, and the
+effect saturates immediately — 0.10, 0.20 and 0.30 produce byte-identical
+results, so only a handful of chunks are close enough for the lift to reorder
+them. It is on by default because the finer-grained measure improves and it
+costs nothing, but it is not a lever: with 37 chunks retrieved into 14 slots,
+reordering rarely changes membership.
+
+Graded end to end against a control that differs only in that weight, it looks
+much better than it is — and this is the clearest example in the project of why
+the generation eval cannot settle a retrieval question:
+
+| | Accuracy | Fact recall | Calibration |
+| --- | --- | --- | --- |
+| `QUERY_AGREEMENT_WEIGHT=0` | 57.6% | 48.7% | 0.384 |
+| `QUERY_AGREEMENT_WEIGHT=0.15` | 64.3% | 45.9% | 0.557 |
+
+A 6.7-point gain, with fact recall moving the other way. Splitting the 42 cases
+by whether the change altered the citations at all:
+
+| | cases | net score change |
+| --- | --- | --- |
+| citations identical — the weight did nothing | 21 | **+6** |
+| citations differed — the weight did something | 21 | +8 |
+
+**Six of the fourteen points came from cases the change provably did not
+touch.** One of them scored 1 and then 5 on identical citations. So the noise
+floor on this set runs to about six points in whichever direction it happens to
+fall — the prior-answer cap measured it at −5 on eighteen unchanged cases —
+and an +8 on the half that did change is not distinguishable from it. The
+honest reading is that query agreement's effect on graded accuracy is **not
+measurable here**, which is exactly what the retrieval numbers predicted.
+
+That is the argument for the retrieval harness in one table. It has no judge,
+no drafting temperature and no mixture-of-experts routing, so with the queries
+pinned it resolves a two-point change that a 42-case graded run cannot see
+through a six-point fog.
 
 **Judge variance is about three points, so read the table with that in mind.**
 The last row is one answers file scored twice by the same judge: 73.3% and

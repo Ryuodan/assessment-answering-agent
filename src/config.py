@@ -124,6 +124,14 @@ class Settings(BaseSettings):
     # `select_evidence`. Raise it for a corpus where the previous answers are
     # the authority; lower it to make the drafter lean on the guidelines.
     max_prior_answer_chunks: int = Field(default=4, ge=0)
+
+    # How much a chunk gains for each extra search that independently returned
+    # it. Query expansion runs several deliberately overlapping searches per
+    # question, so agreement between them is a relevance signal that costs
+    # nothing extra to collect. A chunk found by 3 of 4 searches is scored
+    # `1 + 2 * weight` times its similarity. 0 disables it; with query
+    # expansion off it has no effect either way. See graph/state.py.
+    query_agreement_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     extraction_window: int = 8000
 
     incomplete_list_confidence_cap: float = Field(default=0.5, ge=0.0, le=1.0)

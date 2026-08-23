@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.graph.state import merge_evidence, order_evidence, select_evidence
+from src.config import settings
+from src.graph.state import agreement_bonus, merge_evidence, order_evidence, select_evidence
 from src.models import Evidence, SourceType
 from src.prompts import format_sources_block
 
@@ -272,3 +273,77 @@ def test_the_cap_binds_only_while_guidelines_are_competing():
 def test_nothing_selected_from_nothing():
     assert select_evidence([], limit=5, prior_cap=4) == []
     assert select_evidence([guideline(1)], limit=0, prior_cap=4) == []
+
+
+# --- query agreement -------------------------------------------------------
+#
+# Expanded queries are written to overlap, so a chunk several of them return
+# independently is better evidence than one a single phrasing surfaced. The
+# signal is free, but it must not fire where it means nothing: one query, one
+# hit each, and the multiplier has to be exactly 1.
+
+
+def test_agreement_lifts_a_chunk_several_queries_found():
+    weak_but_agreed = guideline(1, score=0.60, query_hits=3)
+    strong_but_alone = guideline(2, score=0.66, query_hits=1)
+
+    ordered = order_evidence([strong_but_alone, weak_but_agreed])
+
+    assert [item.chunk for item in ordered] == [1, 2]
+
+
+def test_agreement_cannot_overturn_a_much_better_match():
+    """A lift, not an override: three weak agreements must not beat a strong hit."""
+    ordered = order_evidence([guideline(1, score=0.35, query_hits=4), guideline(2, score=0.72)])
+    assert [item.chunk for item in ordered] == [2, 1]
+
+
+def test_one_query_per_chunk_changes_nothing(monkeypatch):
+    """Query expansion off: every chunk has one hit, so the ordering is the old one."""
+    monkeypatch.setattr(settings, "query_expansion", False)
+    items = [guideline(1, score=0.4), guideline(2, score=0.9), guideline(3, score=0.6)]
+
+    assert [i.chunk for i in order_evidence(items)] == [2, 3, 1]
+
+
+def test_the_weight_can_be_turned_off(monkeypatch):
+    monkeypatch.setattr(settings, "query_agreement_weight", 0.0)
+    ordered = order_evidence([guideline(1, score=0.60, query_hits=4), guideline(2, score=0.66)])
+    assert [item.chunk for item in ordered] == [2, 1]
+
+
+@pytest.mark.parametrize(("hits", "expected"), [(0, 1.0), (1, 1.0), (2, 1.15), (4, 1.45)])
+def test_the_bonus_scales_with_agreement(hits, expected, monkeypatch):
+    monkeypatch.setattr(settings, "query_agreement_weight", 0.15)
+    assert agreement_bonus(hits) == pytest.approx(expected)
+
+
+def test_agreement_accumulates_across_retrieval_rounds():
+    """A chunk two queries found, then the refined query found again, is a 3."""
+    first = [guideline(1, score=0.5, query_hits=2)]
+    second = [guideline(1, score=0.5, query_hits=1)]
+
+    merged = merge_evidence(first, second)
+
+    assert len(merged) == 1 and merged[0].query_hits == 3
+
+
+def test_a_better_scoring_copy_keeps_the_accumulated_agreement():
+    merged = merge_evidence(
+        [guideline(1, score=0.4, query_hits=2)],
+        [guideline(1, score=0.9, query_hits=1)],
+    )
+    assert merged[0].score == 0.9
+    assert merged[0].query_hits == 3, "replacing the copy dropped the agreement history"
+
+
+def test_prior_answers_still_lead_whatever_the_agreement():
+    """Agreement reorders within a kind; it must not reorder the kinds."""
+    ordered = order_evidence([guideline(1, score=0.9, query_hits=4), prior(2, score=0.2)])
+    assert ordered[0].source_type is SourceType.PRIOR_ANSWER
+
+
+def test_a_negative_score_does_not_collapse_into_a_tie():
+    """The 0.0 seed used to flatten every below-zero group onto one value."""
+    ordered = order_evidence([guideline(1, score=-0.30), guideline(2, score=-0.05)])
+    assert [item.chunk for item in ordered] == [2, 1]

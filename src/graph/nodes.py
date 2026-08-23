@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections import Counter
 
 from src.config import settings
 from src.extraction import extract_questions
@@ -169,13 +170,28 @@ async def retrieve(state: QuestionState) -> dict:
     ]
     results = await asyncio.gather(*searches)
 
+    # How many of this round's searches independently returned each chunk.
+    # The expanded queries are written to overlap — one per thing the question
+    # asks, in both languages — so a chunk several of them agree on is a
+    # stronger candidate than one a single phrasing happened to surface. The
+    # signal is free: it falls out of retrieval that has already run.
+    agreement: Counter = Counter()
+    for batch in results:
+        agreement.update({(item.source_name, item.chunk) for item in batch})
+
+    for batch in results:
+        for item in batch:
+            item.query_hits = agreement[(item.source_name, item.chunk)]
+
     prior_answers = [item for batch in results[0::2] for item in batch]
     guidelines = [item for batch in results[1::2] for item in batch]
 
     attempt = state.get("attempt", 0) + 1
     logger.debug(
-        "Question %s attempt %d: %d queries, %d prior, %d guideline hits",
+        "Question %s attempt %d: %d queries, %d prior, %d guideline hits, "
+        "%d chunk(s) found by more than one query",
         state["question"].id, attempt, len(queries), len(prior_answers), len(guidelines),
+        sum(1 for count in agreement.values() if count > 1),
     )
     return {"evidence": prior_answers + guidelines, "attempt": attempt}
 

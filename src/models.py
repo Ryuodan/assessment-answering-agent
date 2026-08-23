@@ -56,6 +56,25 @@ class Evidence(BaseModel):
     source_name: str
     snippet: str
     score: float = 0.0
+    """Cosine similarity to the query, 0-1. What is ranked and what is shown."""
+
+    raw_score: float = 0.0
+    """The vector store's own relevance figure, before conversion to cosine.
+
+    Kept because it is what LangChain and Chroma would report if queried
+    directly, so a number seen in a debugger or a log can be reconciled with a
+    number seen in the interface. Never displayed and never ranked on — see
+    `knowledge.cosine_from_relevance` for why the two differ.
+    """
+
+    query_hits: int = 1
+    """How many of the question's searches independently returned this chunk.
+
+    Query expansion issues several searches per question, deliberately phrased
+    to overlap. A chunk that three of them agree on is a stronger candidate
+    than one a single search found, and that agreement is free — it falls out
+    of retrieval that has already happened. See `graph.state.order_evidence`.
+    """
 
     # Locator, parsed at ingest. Carried so answers can cite a clause.
     doc_id: str = ""
