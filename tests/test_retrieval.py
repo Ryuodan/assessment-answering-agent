@@ -98,7 +98,7 @@ def test_is_fragment(parts, expected):
 # --- expansion -------------------------------------------------------------
 
 
-async def test_hit_on_one_part_returns_the_whole_unit(series_doc):
+async def test_hit_on_one_part_returns_the_whole_unit(series_doc, expansion_uncapped):
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
     split = [r for r in fake.records if r["metadata"]["parts"] > 1]
     assert split, "fixture must produce a split unit"
@@ -151,7 +151,7 @@ async def test_whole_unit_hit_triggers_no_expansion_query(series_doc):
     assert fake.get_calls == [], "expanded a unit that was never split"
 
 
-async def test_expansion_query_scopes_to_source_and_unit(series_doc):
+async def test_expansion_query_scopes_to_source_and_unit(series_doc, expansion_uncapped):
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
     split = next(r for r in fake.records if r["metadata"]["parts"] > 1)
     fake.stage(chunk_indexes=[split["metadata"]["chunk"]])
@@ -337,3 +337,54 @@ async def test_an_unreadable_collection_config_falls_back_to_l2(series_doc, monk
     evidence = await store.search("alerts", SourceType.GUIDELINE, k=1, expand=False)
 
     assert evidence[0].score == round(cosine_from_relevance(0.5, "l2"), 4)
+
+
+# --- expansion has to know a series from a chapter -------------------------
+#
+# 61% of this corpus sits inside 66 units of more than six parts, the largest
+# 113 parts long — a whole standard with no internal headings to divide on.
+# Expanding one of those returned fourteen chunks from a single document and
+# left no room for any other policy.
+
+
+async def test_a_chapter_sized_unit_is_not_expanded(series_doc, monkeypatch):
+    monkeypatch.setattr(settings, "max_expanded_parts", 3)
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    split = next(r for r in fake.records if r["metadata"]["parts"] > 3)
+    fake.stage(chunk_indexes=[split["metadata"]["chunk"]])
+
+    evidence = await store.search("alerts", SourceType.GUIDELINE, k=1)
+
+    assert len(evidence) == 1, "a chapter-sized unit was expanded anyway"
+    assert fake.get_calls == [], "it should not even query for the siblings"
+
+
+async def test_a_series_sized_unit_is_still_expanded(series_doc, monkeypatch):
+    """The behaviour the cap must not break."""
+    monkeypatch.setattr(settings, "max_expanded_parts", 99)
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    split = next(r for r in fake.records if r["metadata"]["parts"] > 1)
+    fake.stage(chunk_indexes=[split["metadata"]["chunk"]])
+
+    evidence = await store.search("alerts", SourceType.GUIDELINE, k=1)
+
+    assert len(evidence) == split["metadata"]["parts"]
+
+
+async def test_the_character_budget_is_shared_across_the_whole_search(series_doc, monkeypatch):
+    """Two hits in one unit used to authorise two full budgets between them."""
+    monkeypatch.setattr(settings, "max_expanded_parts", 99)
+    monkeypatch.setattr(settings, "max_expanded_chars", 900)
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    split = sorted(
+        [r for r in fake.records if r["metadata"]["parts"] > 1],
+        key=lambda r: r["metadata"]["part"],
+    )
+    fake.stage(chunk_indexes=[r["metadata"]["chunk"] for r in split[:2]])
+
+    evidence = await store.search("alerts", SourceType.GUIDELINE, k=2)
+    added = len(evidence) - 2
+
+    total = sum(len(e.snippet) for e in evidence[2:])
+    assert total <= 900, f"expansion returned {total} chars against a 900 budget"
+    assert added >= 1, "the budget should still admit something"

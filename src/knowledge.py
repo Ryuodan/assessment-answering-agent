@@ -305,13 +305,28 @@ class KnowledgeStore:
         return built
 
     def _expand_units(self, evidence: list[Evidence]) -> list[Evidence]:
-        """Pull in the sibling parts of any split unit a hit landed in."""
+        """Pull in the sibling parts of any split unit a hit landed in.
+
+        Two limits, both learned from this corpus. Units past
+        `max_expanded_parts` are left alone — see the setting for why. And the
+        character budget is shared across the whole call rather than reset for
+        each hit, because two hits inside the same unit used to authorise two
+        full budgets and between them could return more text than either was
+        allowed.
+        """
         seen = {(item.source_name, item.chunk) for item in evidence}
         expanded: list[Evidence] = []
+        budget = settings.max_expanded_chars
 
         for item in evidence:
             expanded.append(item)
             if not item.unit_id or item.parts <= 1:
+                continue
+            if item.parts > settings.max_expanded_parts:
+                logger.debug(
+                    "Not expanding %s unit %s: %d parts is a chapter, not a series",
+                    item.source_name, item.unit_id, item.parts,
+                )
                 continue
 
             records = self._store.get(
@@ -328,13 +343,12 @@ class KnowledgeStore:
                 key=lambda pair: int(pair[1].get("part", 1)),
             )
 
-            budget = settings.max_expanded_chars
             for text, meta in siblings:
                 key = (meta.get("source_name"), int(meta.get("chunk", -1)))
                 if key in seen:
                     continue
                 if budget - len(text) < 0:
-                    logger.debug("Expansion budget exhausted for unit %s", item.unit_id)
+                    logger.debug("Expansion budget exhausted at unit %s", item.unit_id)
                     break
                 budget -= len(text)
                 seen.add(key)

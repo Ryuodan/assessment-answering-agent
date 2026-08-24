@@ -379,3 +379,39 @@ def test_the_explanation_avoids_internal_vocabulary():
         assert "chunk" not in text
         assert "threshold" not in text
         assert "embedding" not in text
+
+
+# --- the completeness check must not contradict the retriever ---------------
+
+
+def _unit(part: int, parts: int, chunk: int = 0) -> Evidence:
+    return Evidence(
+        source_type=SourceType.GUIDELINE, source_name="std.pdf", snippet="body",
+        unit_id="u1", part=part, parts=parts, chunk=chunk,
+    )
+
+
+def test_a_chapter_sized_unit_is_not_reported_incomplete():
+    """The retriever never completes these, so demanding it did is a false alarm."""
+    cited = [_unit(part=7, parts=113)]
+    assert incomplete_units(cited, cited, completable_parts=6) == []
+
+
+def test_a_series_sized_unit_is_still_reported_incomplete():
+    """The behaviour the exemption must not swallow."""
+    cited = [_unit(part=1, parts=4)]
+    assert incomplete_units(cited, cited, completable_parts=6) == ["u1"]
+
+
+def test_without_the_limit_the_old_behaviour_is_unchanged():
+    cited = [_unit(part=7, parts=113)]
+    assert incomplete_units(cited, cited) == ["u1"]
+
+
+def test_assess_passes_the_limit_through():
+    cited = [_unit(part=7, parts=113)]
+    confidence, review, reasons = assess(
+        "text", cited, 0.9, retrieved=cited, grounded=True,
+        review_threshold=0.6, incomplete_cap=0.5, completable_parts=6,
+    )
+    assert reasons == [] and review is False and confidence == 0.9

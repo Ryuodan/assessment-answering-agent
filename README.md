@@ -90,10 +90,64 @@ room the other does not need.
 **A question is retrieved as its parts, not as one blob.** A question that asks
 two things — "how quickly is access revoked, and how are we notified" — embeds
 as a blend of both and ranks the clause for neither first. Before retrieving,
-each question is split into two to four searches, one per thing it asks,
-phrased the way a policy would state it and covering both languages for the key
-concept. Set `QUERY_EXPANSION=false` to retrieve on the question's own wording
-alone.
+each question is split into several searches, one per thing it asks, phrased the
+way a policy would state it and covering both languages for the key concept. Set
+`QUERY_EXPANSION=false` to retrieve on the question's own wording alone.
+
+Two details of that decide whether it works, and both were wrong. The budget
+included the verbatim question in its count, so `MAX_SEARCH_QUERIES=4` bought
+*three* decomposed angles — and a question like "walk us through offboarding"
+needs asset return, access revocation and post-departure monitoring from five
+different policies. Measured by kind: questions expecting one document retrieve
+it 92% of the time, questions expecting three or more only 43%.
+
+And the planner was quietly defeating its own bilingual instruction. Asked for
+an Arabic query "in addition to" the English one, it wrote them on a single
+line — `asset return policy OR سياسة إرجاع الأصول`. Queries are embedded, not
+keyword-matched, so that string is searched *as itself*: a blend that means
+nothing in either language and matches neither clause, while consuming one of
+the few slots available. The prompt now forbids joining phrasings and the
+budget is six. Together those took documents never retrieved at all from 26 to
+19, and eliminated OR-merging entirely.
+
+**Expansion completes a series, not a chapter.** A retrieval hit inside a split
+unit pulls in its siblings, so the drafter never sees three items of a
+nine-item list and reports them as the list. That is right for a clause series
+and wrong for a standard with no internal headings to divide on: 79% of units
+in this corpus are a single chunk and 96% are six parts or fewer, but the
+remaining few run to 40, 100 and 113 parts, and between them hold 61% of all
+the text. One hit inside one of those returned fourteen chunks from a single
+document, filled every slot in the drafting prompt, and pushed every other
+policy out — measured at a mean of 8.7 of 14 slots going to one document, and
+all 14 on four of the golden questions. `MAX_EXPANDED_PARTS` draws the line;
+past it the hit is returned alone, which is not contextless, because every part
+repeats the unit's stem. Capping it moved document recall from 49.3% to 60.9%
+and clause recall from 34.9% to 47.7%, and took evidence lost to the prompt
+budget from eight documents to none.
+
+**A heading is not a retrievable section.** Sectioning splits on every heading,
+so a heading immediately followed by another one — "## Contents",
+"## Definitions", "## KEY TASKS" — became a unit whose entire content was its
+own title. 105 such chunks were indexed from this corpus, the shortest eleven
+characters long. They embed close to any query using the same word and consume
+a slot to say nothing.
+
+Fixing it took two changes at two levels, and the first alone was almost
+useless. Merging the heading into the section it introduces cut those chunks
+from 105 to 98 — because the unit is then divided *again* by the packer, and
+when the block after a heading is too large to fit, the packer flushed
+everything accumulated so far as its own group. The heading it had just been
+given came straight back out as "part 1 of N". Ninety-two of the ninety-eight
+survivors were that. The heading now leads the first piece of the split
+instead, which took the count to **16**, and consolidated the corpus from 3,153
+chunks to 2,940.
+
+Worth knowing before copying this: measured on its own, the chunking work cost
+about two points of document recall and three of clause recall. Larger, fewer
+chunks carry more per embedding and discriminate slightly less. It stays
+because an eleven-character chunk being ranked, cited and shown to a user as a
+source is a correctness problem rather than a tuning one, and because the query
+and budget changes below more than repaid it.
 
 **Chunks are whole sections, not single clauses — and never larger than that.**
 Retrieval units follow the document's own structure, then adjacent units are
@@ -499,6 +553,108 @@ Retrieval also degrades gracefully across categories in a way worth knowing:
 sit near 27%. A 14-slot prompt filled from `k=5` searches simply cannot hold
 five documents' worth of clauses, so those questions are budget-bound rather
 than retrieval-bound.
+
+### What the measurements changed
+
+Those numbers were the starting point. Working from them rather than from
+intuition produced this, on the same corpus with the queries pinned:
+
+| | Document recall | Clause recall | Lost to the budget | Never retrieved |
+| --- | --- | --- | --- | --- |
+| before | 47.8% | 32.2% | 11 | 25 |
+| **after** | **66.7%** | **58.4%** | 4 | **19** |
+
+Five changes, in order of how much they mattered.
+
+**Capping unit expansion** was most of it, and it was invisible until retrieval
+was measured directly: the prompt was being filled with one document's chapter.
+
+**Widening the net only helped once the leak was fixed.** Raising
+`TOP_K_GUIDELINES` on its own made things *worse* — retrieved recall rose from
+60.9% to 71.0% while prompt recall fell from 49.3% to 42.0%, because everything
+extra was cut before the drafter saw it. With expansion capped, the same change
+is a small gain. The order of operations was the whole point: a lever that
+looks harmful can be a lever whose benefit is being thrown away downstream.
+
+**Fixing the query planner** — six queries instead of four, and one phrasing
+per line — is what finally moved *never retrieved*, from 26 to 19. Nothing
+about ranking or budget can recover a document no search ever asked for.
+
+**Raising the prompt budget** to 30 chunks absorbs what the wider net finds.
+This one has to be re-derived whenever retrieval changes, and the pattern
+repeated exactly: after the planner fix, evidence lost to the budget jumped
+from 1 document to 9, and lifting the budget converted that into recall.
+
+**Capping how much of the prompt previous answers may take**, if a
+previous-answers bank is indexed — see `MAX_PRIOR_ANSWER_CHUNKS` above.
+
+Every one of those was found by measuring, and two of them looked like
+*regressions* until the stage after them was fixed. That is the argument for
+scoring retrieval in stages rather than end to end: `retrieved` and `in the
+prompt` moving in opposite directions is the signal, and a graded accuracy
+number cannot show it.
+
+What is left is a pure recall problem: 19 of 69 expected documents are never
+retrieved at all, almost all of them on questions expecting four or five
+policies at once. `HYBRID_SEARCH=true` recovers roughly one and remains off,
+having measured worse on the graded set. That is the next thing to attack, and
+it will not be fixed by ranking.
+
+### Does better retrieval produce better answers?
+
+Graded end to end against a control on the same corpus:
+
+| | Accuracy | Fact recall | Contradictions | Flagged | Sources per answer |
+| --- | --- | --- | --- | --- | --- |
+| before | 57.6% | 48.7% | 12 | 16 | 1.43 |
+| **after** | **73.3%** | **60.6%** | **4** | **11** | **1.98** |
+
+Split the usual way, by whether the change altered what the answer was built
+from:
+
+| | cases | net score change |
+| --- | --- | --- |
+| citations identical — nothing changed for this case | 11 | **+1** |
+| citations differed | 31 | **+32** |
+
+That is the shape a real improvement makes, and it is worth contrasting with
+the query-agreement change measured above, where six of fourteen points came
+from cases the change never touched. Here the untouched cases contribute +1.
+Five independent measurements agree: clause recall up 26 points, fact recall
+up 12, distinct sources per answer up 38%, contradictions down to a third, and
+answers citing nothing at all down from 7 to 3.
+
+By category, `Regulatory Reference` went 37.1% to 94.3% and `Cross-Lingual /
+Arabic` 66.7% to 90.0% — both dominated by the documents that were being
+crowded out of the prompt. `Out of Bounds` did not move, which is the right
+answer: those questions are correct when they report an absence, and nothing
+here changes whether an absence is real.
+
+Two costs, both worth stating. Given five sources where it previously had one,
+the drafter sometimes writes a broader answer and loses a specific reference —
+the dilution risk that comes with a 30-chunk prompt. And input tokens per
+question roughly doubled, for the drafting and the review call alike.
+
+**Confidence stopped correlating with correctness, and the reason is not what
+it looks like.** The correlation fell from 0.38 to about zero. Answers the
+system was confident about score 3.62 on average; answers it was *not*
+confident about score 3.67 — statistically indistinguishable. But five of the
+nine low-confidence answers are `Out of Bounds` questions, where the correct
+answer is that the documentation does not cover the topic, and the drafting
+prompt explicitly instructs a confidence at or below 0.3 for exactly that case.
+Retrieval improving meant more of those absences were identified correctly, and
+each correct one is a low-confidence, high-scoring point that flattens the
+correlation.
+
+So the number is measuring the wrong thing rather than reporting a broken
+system, and the fix is not to make the model more confident about admitting
+ignorance. A reviewer arguably *should* see "we have nothing documenting this"
+near the top of the queue before it goes back to an assessor. What the
+correlation cannot distinguish — and a human reading the queue can — is
+"uncertain because the sources are thin" from "certain that the sources are
+silent". The remaining genuine miscalibration is narrower: one answer scored 5
+at a confidence of 0.20 because the grounding reviewer judged it ungrounded
+despite three good citations.
 
 **Query agreement was measured and is close to neutral.** With the expanded
 queries pinned so the comparison is exact:

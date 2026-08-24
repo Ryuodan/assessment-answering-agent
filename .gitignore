@@ -82,3 +82,6 @@ logs/
 # Claude Code: settings.json is shared project config and stays tracked;
 # settings.local.json holds per-developer overrides.
 .claude/settings.local.json
+
+# Knowledge-base snapshots taken before a re-index. Local safety copies only.
+chroma_db.backup*/

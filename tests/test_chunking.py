@@ -389,3 +389,88 @@ def test_hard_wrap_leaves_short_text_alone():
     from src.chunking import _hard_wrap
 
     assert _hard_wrap("short enough", 100) == ["short enough"]
+
+
+# --- a heading is not a retrievable section --------------------------------
+
+
+def _texts(doc: str, size: int = 1800) -> list[str]:
+    from src.chunking import chunk_document
+    return [c.text for c in chunk_document(doc, source_name="x.pdf", chunk_size=size)]
+
+
+def test_a_heading_followed_by_a_heading_is_not_its_own_chunk():
+    """105 chunks in the real corpus were nothing but their own title."""
+    doc = (
+        "## Contents\n\n"
+        "| 1. Summary | 4 |\n|---|---|\n| 2. Scope | 6 |\n\n"
+        "## 1. Summary\n\n" + ("The position is set out as follows. " * 30) + "\n"
+    )
+    chunks = _texts(doc)
+    assert not any(c.strip().startswith("##") and len(c) < 60 for c in chunks)
+    assert any("Contents" in c and "Summary" in c for c in chunks)
+
+
+def test_an_arabic_heading_run_is_absorbed_the_same_way():
+    doc = (
+        "## المحتويات\n\n"
+        "## 1. المقدمة\n\n"
+        + ("تهدف هذه السياسة إلى تحديد المتطلبات. " * 20)
+        + "\n"
+    )
+    chunks = _texts(doc)
+    assert len(chunks) == 1
+    assert "المحتويات" in chunks[0]
+
+
+def test_a_trailing_runt_is_folded_backwards():
+    doc = ("## A\n\n" + ("Body text here. " * 120) + "\n\n## Z\n")
+    assert not any(c.strip() == "## Z" for c in _texts(doc))
+
+
+def test_a_real_short_section_is_still_kept_whole():
+    """The cap must not glue two substantial sections into one chunk."""
+    body = "Requirements are enumerated below in detail. " * 45
+    doc = f"## 1. First\n\n{body}\n\n## 2. Second\n\n{body}\n"
+    assert len(_texts(doc)) >= 2
+
+
+def test_a_heading_before_an_oversized_block_leads_it_rather_than_standing_alone():
+    """92 of 98 short chunks in the real index were 'part 1 of N': a heading
+    flushed on its own because the block after it had to be split."""
+    body = "The controller shall document each processing activity in full. " * 120
+    doc = f"## 4.1 Data\n\n{body}\n"
+    chunks = _texts(doc, size=800)
+
+    assert len(chunks) > 1, "fixture must force a split"
+    assert not any(len(c) < 150 for c in chunks), f"orphan: {[c for c in chunks if len(c) < 150]}"
+    assert chunks[0].lstrip().startswith("## 4.1 Data")
+
+
+def test_an_arabic_heading_before_an_oversized_block_behaves_the_same():
+    body = "يجب على المسؤول توثيق كل نشاط من أنشطة المعالجة بشكل كامل ومفصل. " * 60
+    doc = f"## 2.3 التعريفات\n\n{body}\n"
+    chunks = _texts(doc, size=800)
+
+    assert len(chunks) > 1
+    assert not any(len(c) < 150 for c in chunks)
+    assert "التعريفات" in chunks[0]
+
+
+def test_an_oversized_block_with_nothing_before_it_still_splits():
+    body = "Each requirement is stated once and applies to every system. " * 120
+    assert len(_texts(body, size=800)) > 1
+
+
+def test_a_nearly_full_group_is_not_folded_into_an_unsplittable_block():
+    """Rescuing a runt heading is right; folding in 1.7 KB of pending prose is
+    not — that traded an undersized chunk for a 3.5 KB one."""
+    from src.chunking import chunk_document
+
+    filler = "Each control is described in a full sentence of prose. " * 30
+    wide_row = "| " + " | ".join("a very long cell value indeed" for _ in range(40)) + " |"
+    doc = f"## 9.1.2 Controls\n\n{filler}\n\n| A | B |\n|---|---|\n{wide_row}\n"
+
+    chunks = chunk_document(doc, source_name="x.pdf", chunk_size=1800)
+    assert all(len(c.text) <= 1800 * 1.3 for c in chunks), \
+        f"oversize: {sorted(len(c.text) for c in chunks)}"

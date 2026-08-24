@@ -19,7 +19,7 @@ from tests.conftest import build_store
 SERIES_ITEMS = [f"7.2.{n}" for n in range(1, 13)]
 
 
-async def test_fragment_hit_becomes_a_complete_series_in_the_prompt(series_doc):
+async def test_fragment_hit_becomes_a_complete_series_in_the_prompt(series_doc, expansion_uncapped):
     """A retrieval hit on one part must reach the drafter as the whole series."""
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
 

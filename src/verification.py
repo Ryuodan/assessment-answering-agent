@@ -119,7 +119,12 @@ def evidence_for(answer: str, cited: list[Evidence], retrieved: list[Evidence]) 
     return chosen
 
 
-def incomplete_units(cited: list[Evidence], retrieved: list[Evidence] | None = None) -> list[str]:
+def incomplete_units(
+    cited: list[Evidence],
+    retrieved: list[Evidence] | None = None,
+    *,
+    completable_parts: int | None = None,
+) -> list[str]:
     """Units the answer relied on without the whole series being available.
 
     Retrieval splits a long table or clause run into parts that share a
@@ -137,6 +142,14 @@ def incomplete_units(cited: list[Evidence], retrieved: list[Evidence] | None = N
 
     So: flag a unit the answer *cited* whose parts are *not all present* in
     what was retrieved.
+
+    `completable_parts` mirrors the retriever's own expansion limit, and
+    without it this check contradicts the retriever. Units past that limit are
+    chapters rather than series and are deliberately never completed, so a
+    partial view of one is the intended behaviour rather than a defect. Left
+    unset the check flagged 13 of 42 answers for a gap the system had chosen —
+    capping their confidence at the incomplete-list ceiling and pushing them
+    into the review queue for nothing.
     """
     available: dict[str, set[int]] = {}
     for item in retrieved if retrieved is not None else cited:
@@ -146,6 +159,8 @@ def incomplete_units(cited: list[Evidence], retrieved: list[Evidence] | None = N
     incomplete = set()
     for item in cited:
         if not item.unit_id or item.parts <= 1:
+            continue
+        if completable_parts is not None and item.parts > completable_parts:
             continue
         if len(available.get(item.unit_id, set())) < item.parts:
             incomplete.add(item.unit_id)
@@ -161,6 +176,7 @@ def assess(
     grounded: bool,
     review_threshold: float,
     incomplete_cap: float,
+    completable_parts: int | None = None,
 ) -> tuple[float, bool, list[str]]:
     """Return adjusted confidence, whether review is needed, and the reasons why.
 
@@ -175,7 +191,7 @@ def assess(
         reasons.append("cites clauses not covered by its sources: " + ", ".join(missing))
         confidence = min(confidence, incomplete_cap)
 
-    partial = incomplete_units(cited, retrieved)
+    partial = incomplete_units(cited, retrieved, completable_parts=completable_parts)
     if partial:
         reasons.append("holds only part of a split source; the set may be incomplete")
         confidence = min(confidence, incomplete_cap)

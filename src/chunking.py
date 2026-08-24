@@ -542,14 +542,61 @@ def _coalesce(units: list[Unit], target: int) -> list[Unit]:
     merged: list[Unit] = []
     for unit in units:
         previous = merged[-1] if merged else None
-        if previous is not None and previous.length + unit.length <= target:
+        if previous is not None and _absorbs(previous, unit, target):
             previous.blocks.extend(unit.blocks)
             # The heading path stays that of the first unit: it is the wider
             # context, and the merged text carries the later headings inline.
             previous.section_clause = previous.section_clause or unit.section_clause
         else:
             merged.append(Unit(list(unit.blocks), unit.heading_path, unit.section_clause))
+
+    # A runt with nothing after it to join goes backwards instead.
+    while len(merged) > 1 and _is_runt(merged[-1]):
+        tail = merged.pop()
+        merged[-1].blocks.extend(tail.blocks)
     return merged
+
+
+# A unit this short carries no retrievable claim of its own. The threshold is
+# generous on purpose: the failure it prevents is a chunk being *ranked and
+# cited* on its own, and a hundred characters is not enough to answer anything.
+_RUNT_CHARS = 200
+
+
+def _is_heading_only(unit: Unit) -> bool:
+    return bool(unit.blocks) and all(block.kind == "heading" for block in unit.blocks)
+
+
+def _is_runt(unit: Unit) -> bool:
+    return _is_heading_only(unit) or unit.length < _RUNT_CHARS
+
+
+def _absorbs(previous: Unit, unit: Unit, target: int) -> bool:
+    """Whether `unit` should join the unit before it.
+
+    Adjacent units merge while they fit, which is the ordinary case. The two
+    exceptions both exist to stop a fragment being indexed as though it were a
+    retrievable section:
+
+    Sectioning splits on every heading, so a heading immediately followed by
+    another heading — "## Contents", "## Definitions", "## KEY TASKS" — became
+    a unit whose entire content was its own title. 105 such chunks were indexed
+    from this corpus, the shortest 11 characters long. They embed close to any
+    query using the same word, so "what are the definitions of..." retrieved a
+    chunk reading "## Definitions" and nothing else, and it consumed one of the
+    fourteen slots in the drafting prompt. A heading belongs to the section it
+    introduces, so it merges forward regardless of size; if the section is large
+    the packer will split it again afterwards, with the heading leading the
+    first part where it belongs.
+
+    A merely short unit is the same problem in weaker form, and merges when the
+    result stays within the oversize tolerance the packer already tolerates.
+    """
+    if previous.length + unit.length <= target:
+        return True
+    if _is_heading_only(previous):
+        return True
+    return _is_runt(previous) and previous.length + unit.length <= target * _OVERSIZE_TOLERANCE
 
 
 def build_units(blocks: list[Block], *, ceiling: int = 7200, target: int = 1800) -> list[Unit]:
@@ -693,8 +740,23 @@ def _pack_unit(unit: Unit, chunk_size: int) -> list[list[Block]]:
         budget = chunk_size - (prefix_cost if groups or current else 0)
 
         if block.length > budget:
-            close()
             pieces = _split_table(block, budget) if block.kind == "table" else _split_prose(block, budget)
+            # A runt that has accumulated so far leads the first piece rather
+            # than being flushed on its own. A section's heading is followed by
+            # the table or prose run it introduces; closing here made that
+            # heading part 1 of N, an eleven-character chunk that was indexed,
+            # ranked and cited by itself. Merging the heading into its unit
+            # earlier is not enough — this is where the unit is divided again,
+            # and it is where the heading was being left behind.
+            #
+            # Only a runt, though. Folding in whatever happened to be pending
+            # produced 3.5 KB chunks when a nearly full group met a table that
+            # could not be split, which trades one budget breach for another.
+            if current and pieces and used <= _RUNT_CHARS:
+                pieces[0] = current + pieces[0]
+                current, used = [], 0
+            else:
+                close()
             groups.extend(pieces)
             continue
 

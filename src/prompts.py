@@ -80,13 +80,11 @@ Grounding is the hard constraint. Every sentence has to be traceable to a source
 - Where the sources cover part of the question, answer that part and say plainly which part is not covered, rather than rounding the whole thing up or down.
 - Naming the absence is a complete answer. Say what is missing, say what related material the documentation does contain, and point the reader to the function that would know. An assessor can act on that; an invented control they cannot verify is worse than a blank.
 
-List in `used_source_ids` every source you drew on, not just the first. If a fact came from source [7], [7] belongs in the list even when most of the answer came from [2].
-
 Never put a source number in the answer text. The [n] numbering belongs to this prompt, not to the reader, who sees the answer without it — a sentence ending in a bracketed digit points at nothing they can follow. Cite the clause instead; that is a reference they can look up.
 
 Set `confidence` to how well the sources support the answer: above 0.8 when a previous answer or guideline covers it directly, 0.4-0.7 when you had to infer from adjacent material, at or below 0.3 when the sources do not really cover it.
 
-List in `used_source_ids` the bracketed numbers — [1], [2] and so on — of only the sources you actually relied on. Cite by number, not by file name: several sources usually come from the same file. Leave it empty when no source supported the answer.
+List in `used_source_ids` the bracketed numbers — [1], [2] and so on — of every source you drew on, and only those. Both halves matter: if a fact came from [7], then [7] belongs in the list even when most of the answer came from [2], and a source you did not use does not belong there at all. Cite by number, not by file name, because several sources usually come from the same file. Leave it empty when no source supported the answer.
 Keep `rationale` to one sentence, in English, for the human reviewer."""
 
 ANSWER_USER = """QUESTION
@@ -102,11 +100,14 @@ QUERY_PLAN_SYSTEM = """You turn one assessment question into the searches that w
 
 The knowledge base holds an organisation's own policies, in English and Arabic, retrieved by semantic similarity. One search per question is not enough when the question asks two things at once: "how quickly is access revoked, and how are we notified" embeds as a blend of both and reliably finds neither clause whole.
 
-Write 2 to 4 short search queries:
+Write 3 to 5 short search queries:
 - One query per distinct thing the question asks. A question asking about a timeframe AND a notification duty needs one query for each.
+- A broad question touches several policies at once. "Walk us through offboarding" is asset return, access revocation, and post-departure monitoring — three different documents, so three different queries. Err towards more: an unnecessary query costs one search, a missing one costs the whole document.
 - Phrase each the way a policy would state it, not the way an assessor asks it. Policies say "access rights are revoked upon termination", not "how quickly do you revoke access".
 - Include the domain terms a policy would use for the concept — the control name, the obligation, the regulation — rather than repeating the question's wording.
-- Cover both languages for the key concept when the term is one an Arabic policy would carry: write one query in Arabic for it, in addition to the English one. The index is bilingual and Arabic clauses are missed otherwise.
+- Cover both languages for the key concept when the term is one an Arabic policy would carry. The index is bilingual and Arabic clauses are missed otherwise.
+
+Each query is searched on its own, by meaning rather than by keyword. So write ONE phrasing per line. Never join two phrasings with OR, a slash or a comma to save a line: "asset return policy OR سياسة إرجاع الأصول" is searched as that whole string, which means something to neither language and matches neither clause. Put the English on one line and the Arabic on its own line.
 
 Keep each query under fifteen words. Do not number them or add commentary."""
 

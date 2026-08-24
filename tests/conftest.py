@@ -171,3 +171,14 @@ def series_doc() -> str:
 @pytest.fixture
 def arabic_doc() -> str:
     return ARABIC_DOC
+
+@pytest.fixture
+def expansion_uncapped(monkeypatch):
+    """Lift the parts cap for tests that exercise expansion itself.
+
+    The series fixture splits into seven parts at `chunk_size=400` — a 2.8 KB
+    unit, which is nothing like the 100-part chapters the production cap
+    exists to stop. Capping is covered by its own tests.
+    """
+    from src.config import settings
+    monkeypatch.setattr(settings, "max_expanded_parts", 99)

@@ -282,6 +282,9 @@ async def finalize(state: QuestionState) -> dict:
         grounded=verdict.grounded,
         review_threshold=settings.review_confidence_threshold,
         incomplete_cap=settings.incomplete_list_confidence_cap,
+        # The retriever never completes a unit past this, so the completeness
+        # check must not demand that it did.
+        completable_parts=settings.max_expanded_parts,
     )
 
     answered = AnsweredQuestion(

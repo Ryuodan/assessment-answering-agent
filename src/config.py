@@ -85,7 +85,11 @@ class Settings(BaseSettings):
     # Costs one extra LLM call per question; turn it off to retrieve on the
     # question's own wording alone.
     query_expansion: bool = True
-    max_search_queries: int = Field(default=4, ge=1, le=8)
+    # The verbatim question always occupies the first slot, so this is one
+    # more than the number of decomposed angles. Four left only three angles
+    # for a question needing five different policies, which is most of what
+    # multi-document recall was losing.
+    max_search_queries: int = Field(default=6, ge=1, le=8)
 
     # Fuse a BM25 pass with the dense search, to catch the exact figures
     # embeddings blur — "72 hours", "90 days", "12 characters". Off by default
@@ -116,8 +120,18 @@ class Settings(BaseSettings):
 
     chunk_size: int = 1800
     chunk_overlap: int = 150          # retained for the prose fallback only
-    max_expanded_chars: int = 12000    # cap on parent-unit expansion per hit
-    max_evidence_chunks: int = 14     # cap on accumulated evidence per question
+    max_expanded_chars: int = 12000    # cap on parent-unit expansion, per question
+    # Expansion completes a split unit so the drafter never sees three items of
+    # a nine-item series and calls it the list. That is right for a clause
+    # series; it is wrong for a chapter. 79% of units in this corpus are a
+    # single chunk and 96% are six parts or fewer, but the remaining few run to
+    # 40, 100, even 113 parts — a whole standard with no internal headings to
+    # divide on. Expanding one of those filled all fourteen prompt slots from a
+    # single document and pushed every other policy out. Above this many parts
+    # the hit is returned on its own, which is not contextless: every part
+    # repeats the unit's stem.
+    max_expanded_parts: int = Field(default=6, ge=1)
+    max_evidence_chunks: int = 30     # cap on accumulated evidence per question
     # How many of those chunks may be previous answers. They sort first, so
     # without a ceiling they take the whole prompt and the policies that
     # actually answer the question never reach the drafter — see
