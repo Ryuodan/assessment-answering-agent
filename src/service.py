@@ -18,7 +18,7 @@ from pathlib import Path
 from src import progress
 from src.config import PROJECT_ROOT, settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
-from src.extraction import extract_qa_pairs
+from src.extraction import extract_qa_pairs, extract_questions
 from src.graph import answer_one_question, assessment_graph, failed_answer
 from src.knowledge import get_store
 from src.models import (
@@ -135,16 +135,41 @@ async def answer_assessment(
     )
 
 
+async def extract_assessment_questions(path: str | Path) -> tuple[Language, list[Question]]:
+    """Pull the questions out of a document without answering any of them.
+
+    Extraction is fast and answering is minutes, so separating them lets a
+    reviewer see what was found — and correct it — before paying for a run.
+    Question extraction is the step most likely to need a human: a numbered
+    list can lose an item to a page break, and a table row that is guidance
+    rather than a question can look like one.
+    """
+    path = Path(path)
+    text = await extracted_document_text(path)
+    language, questions = await extract_questions(text)
+    logger.info("Extracted %d question(s) from %s", len(questions), path.name)
+    return language, questions
+
+
 async def answer_questions(
-    questions: list[Question], language: Language | None = None
+    questions: list[Question],
+    language: Language | None = None,
+    run_id: str | None = None,
 ) -> list[AnsweredQuestion]:
     """Answer a list of questions that did not come from a document.
 
     The same per-question graph the assessment flow fans out to, minus the
     extraction step. Used by the evaluation harness, which holds its questions
-    as data, and by any caller with a question already in hand.
+    as data, and by the interface whenever the question list was typed, edited
+    after extraction, or added to after an earlier batch was answered.
+
+    `run_id` registers the batch with `progress`, so a caller can watch it the
+    same way it watches a document run. Without one the work still happens; it
+    is simply not observable.
     """
     semaphore = asyncio.Semaphore(settings.max_concurrent_questions)
+    progress.start(run_id, stage="answering")
+    progress.set_total(run_id, len(questions))
 
     async def run(question: Question) -> AnsweredQuestion:
         async with semaphore:
@@ -157,8 +182,13 @@ async def answer_questions(
                 # forty-two question run that had nearly finished.
                 logger.exception("Failed to answer question %s", question.id)
                 return failed_answer(question, exc)
+            finally:
+                progress.advance(run_id)
 
-    return list(await asyncio.gather(*(run(question) for question in questions)))
+    try:
+        return list(await asyncio.gather(*(run(question) for question in questions)))
+    finally:
+        progress.finish(run_id)
 
 
 def run_progress(run_id: str) -> dict | None:

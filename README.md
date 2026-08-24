@@ -273,6 +273,21 @@ PDFs, shows the extracted text used by the agent, and includes bundled English,
 Arabic and bilingual trial documents. Results are editable inline and download
 as JSON, CSV (UTF-8 with a BOM, so Excel opens Arabic correctly), PDF or Word.
 
+**The question list is the unit of work, not the file.** An upload is read into
+a list of questions that can be corrected before anything is answered — which
+matters because extraction is the step most likely to need a human: a numbered
+list can lose an item to a page break, and a row of guidance can read as a
+question. Answering is minutes and extraction is seconds, so reviewing first
+costs nothing and can save a whole run.
+
+The same list takes typed questions, so a single question can be asked without
+any document at all. And it can be added to after a batch has been answered:
+only the questions still waiting are sent, so a second batch never re-answers —
+or re-charges for — the first. Deleting a question that has already been
+answered takes its answer with it, and a question that has been answered cannot
+be edited, because changing the words under an existing answer would make the
+pair a lie.
+
 **Prefer Word for an Arabic questionnaire.** A PDF stores glyphs, so the Arabic
 has to be shaped, bidi-reordered and hand-wrapped before it is drawn — and the
 order of those steps against line breaking is delicate enough to have gone
@@ -304,7 +319,9 @@ python -m src.cli stats
 | `GET` | `/api/documents/{origin}/{category}/{name}/file` | View the original file |
 | `GET` | `/api/documents/{origin}/{category}/{name}/preview` | Preview PDF or DOCX in the browser |
 | `GET` | `/api/documents/{origin}/{category}/{name}/text` | View extracted text |
-| `POST` | `/api/assessments/answer` | Answer a new assessment |
+| `POST` | `/api/assessments/answer` | Answer a new assessment (extract and answer in one call) |
+| `POST` | `/api/assessments/extract` | Extract the questions without answering them |
+| `POST` | `/api/assessments/answer-questions` | Answer a list of questions, with no document involved |
 | `GET` | `/api/assessments/progress/{run_id}` | How far a run has got, while it is still running |
 | `POST` | `/api/assessments/export/pdf` | Render the answers as a PDF |
 | `POST` | `/api/assessments/export/docx` | Render the answers as a Word document |

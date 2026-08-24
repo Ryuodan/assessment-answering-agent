@@ -6,7 +6,9 @@ Run with:  uvicorn src.api:app --reload
 from __future__ import annotations
 
 import logging
+import re
 import unicodedata
+import uuid
 from pathlib import Path
 from urllib.parse import quote
 
@@ -14,18 +16,24 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from pydantic import BaseModel, Field
 
 from src import service
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
 from src.export_docx import render_docx
 from src.export_pdf import ExportError, ExportOptions, render_pdf, selected_answers
-from src.models import AssessmentResult, IngestResult, Language, SourceType
+from src.models import AssessmentResult, IngestResult, Language, Question, QuestionType, SourceType
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Whichever script carries more of a typed question carries the answer;
+# see `_detect_language`.
+_ARABIC = re.compile(r"[؀-ۿݐ-ݿ]")
+_LATIN = re.compile(r"[A-Za-z]")
 
 
 @asynccontextmanager
@@ -199,6 +207,104 @@ async def answer_assessment(
             detail=f"No questions could be extracted from '{result.source_name}'.",
         )
     return result
+
+
+class QuestionRequest(BaseModel):
+    """A question to answer, as the interface holds it.
+
+    Deliberately narrower than `Question`: the interface is allowed to say what
+    is asked and in which language, and nothing else. Identifiers are assigned
+    here so a caller cannot collide two questions on one id, which would make
+    the answers ambiguous to match back.
+    """
+
+    text: str = Field(min_length=1)
+    section: str | None = None
+    question_type: QuestionType = QuestionType.FREE_TEXT
+    options: list[str] = Field(default_factory=list)
+    language: Language | None = None
+
+
+class AnswerQuestionsRequest(BaseModel):
+    questions: list[QuestionRequest] = Field(min_length=1, max_length=200)
+    language: Language | None = None
+    run_id: str | None = None
+    source_name: str = "questions"
+
+
+@app.post("/api/assessments/extract")
+async def extract_assessment(file: UploadFile = File(...)) -> dict:
+    """Pull the questions out of an assessment without answering them.
+
+    The first half of `/answer`, separated so the questions can be reviewed and
+    corrected before a run that costs minutes. Extraction is the step most
+    likely to need a human eye: a numbered list can lose an item to a page
+    break, and a row of guidance can read as a question.
+    """
+    _check_suffix(file.filename or "")
+    path = service.save_upload(file.filename or "assessment", await file.read())
+
+    language, questions = await service.extract_assessment_questions(path)
+    if not questions:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No questions could be extracted from '{path.name}'.",
+        )
+    return {
+        "source_name": path.name,
+        "language": language,
+        "questions": [question.model_dump() for question in questions],
+    }
+
+
+@app.post("/api/assessments/answer-questions")
+async def answer_question_list(request: AnswerQuestionsRequest) -> AssessmentResult:
+    """Answer a list of questions supplied directly, with no document involved.
+
+    Serves three cases the document endpoint cannot: questions typed by hand,
+    questions extracted from a file and then corrected, and a second batch
+    added once an earlier one has been answered. The caller keeps the answers
+    and decides how to merge them, so this returns only what it was asked for.
+    """
+    questions = [
+        Question(
+            id=str(index + 1),
+            text=item.text.strip(),
+            section=item.section,
+            question_type=item.question_type,
+            options=item.options,
+            language=item.language or _detect_language(item.text),
+        )
+        for index, item in enumerate(request.questions)
+    ]
+
+    answers = await service.answer_questions(
+        questions, language=request.language, run_id=request.run_id
+    )
+    return AssessmentResult(
+        run_id=request.run_id or uuid.uuid4().hex[:12],
+        source_name=request.source_name,
+        language=request.language or questions[0].language,
+        questions_found=len(questions),
+        answers=answers,
+    )
+
+
+def _detect_language(text: str) -> Language:
+    """Which language a typed question is in, when the caller did not say.
+
+    The document flow gets this from the extraction model, which reads a whole
+    window. A single typed question has no such context, and asking a model
+    would add a second of latency to decide something visible in the string.
+
+    Counted rather than merely detected: an English question often carries an
+    Arabic gloss — "Do you use MFA (متعدد العوامل)?" — and the presence of one
+    Arabic letter would answer the whole thing in Arabic. Whichever script
+    carries the question carries the answer.
+    """
+    arabic = len(_ARABIC.findall(text))
+    latin = len(_LATIN.findall(text))
+    return "ar" if arabic > latin else "en"
 
 
 @app.get("/api/assessments/progress/{run_id}")

@@ -374,6 +374,59 @@
 
   .answer-body { padding: 16px 18px 18px; }
 
+  /* --- the question list -------------------------------------------------
+     One row per question, editable in place. Deliberately quieter than an
+     answer card: this is a worklist to correct and add to, not a result to
+     read, and the two must not compete for the same attention. */
+  .qrow {
+    display: flex; align-items: flex-start; gap: 11px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line); background: var(--surface-sunken);
+  }
+  .qrow + .qrow { margin-top: 8px; }
+  .qrow:focus-within { border-color: var(--accent); }
+  .qrow.answered { opacity: .62; }
+  .qrow .index {
+    flex: 0 0 auto; min-width: 22px; height: 22px; padding: 0 5px;
+    border-radius: var(--radius-pill); background: var(--surface);
+    border: 1px solid var(--line-strong);
+    display: grid; place-items: center;
+    font-size: 11.5px; font-weight: 700; color: var(--ink-faint);
+  }
+  .qrow.answered .index { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .qrow textarea {
+    flex: 1; min-width: 0; resize: vertical; min-height: 40px;
+    font: inherit; font-size: 14px; line-height: 1.5;
+    border: none; background: none; color: var(--ink); padding: 1px 0;
+  }
+  .qrow textarea:focus { outline: none; }
+  .qrow textarea:disabled { color: var(--ink-soft); }
+  .qrow .qactions { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+  .qrow .tag { flex: 0 0 auto; }
+
+  .qlist-empty {
+    padding: 22px; text-align: center; color: var(--ink-faint); font-size: 13.5px;
+    border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
+  }
+
+  /* --- the composer ------------------------------------------------------
+     A second way into the same list, placed after the last answer so the work
+     continues where the reader already is instead of sending them back up the
+     page. It shows only what is still waiting; the full list stays in step 2. */
+  .composer { margin-top: 18px; border-style: dashed; }
+  .composer h3 { margin-bottom: 2px; }
+  .composer textarea {
+    width: 100%; resize: vertical; min-height: 58px; margin-top: 4px;
+    font: inherit; font-size: 14.5px; line-height: 1.55; padding: 11px 13px;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface-sunken); color: var(--ink);
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  #composerPending:not(:empty) { margin-bottom: 12px; }
+
+  /* Removing an answer belongs on the answer, not on a list further up. */
+  .answer .qdelete { flex: 0 0 auto; align-self: flex-start; }
+
   .field { margin-top: 16px; }
   .field:first-child { margin-top: 0; }
   .field-label {
@@ -619,23 +672,40 @@
   <section class="step">
     <div class="step-head">
       <span class="step-number">2</span>
-      <h2>Answer an assessment</h2>
+      <h2>Build your question list</h2>
     </div>
-    <p class="step-hint">Every question is extracted, matched against your knowledge base, drafted and then reviewed for grounding.</p>
+    <p class="step-hint">Load an assessment file, or type questions yourself. Check the list, fix anything that came out wrong, then answer it. You can add more questions later without losing the answers you already have.</p>
 
     <div class="panel">
       <label class="file" data-drop="assessment">
         <input type="file" id="assessmentInput" accept=".pdf,.docx" />
-        Drop the assessment here, or click to choose
+        Drop an assessment here, or click to choose
         <span class="chosen" id="assessmentChosen"></span>
       </label>
       <div class="row">
+        <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
+      </div>
+      <div class="status" id="extractStatus"></div>
+    </div>
+
+    <div class="panel" id="questionListPanel">
+      <div class="library-heading">
+        <h3 id="questionListTitle">Questions</h3>
+        <button class="quiet danger" id="clearQuestions">Clear all</button>
+      </div>
+      <p class="hint" id="questionListHint"></p>
+
+      <div id="questionList"></div>
+
+      <div class="row" style="margin-top:14px">
+        <button class="ghost" id="addQuestionBtn">+ Add a question</button>
+        <span class="divider"></span>
         <select id="languageSelect" title="Output language">
           <option value="">Answer in each question's own language</option>
           <option value="en">Force English</option>
           <option value="ar">Force Arabic — العربية</option>
         </select>
-        <button id="answerBtn" disabled>Answer assessment</button>
+        <button id="answerBtn" disabled>Answer questions</button>
       </div>
       <div class="status" id="answerStatus"></div>
     </div>
@@ -667,6 +737,24 @@
     <div class="status" style="margin-bottom:18px">Edits you make below are included in every download.</div>
 
     <div id="results"></div>
+
+    <div class="panel composer" id="composer">
+      <h3>Ask another question</h3>
+      <p class="hint">Answered questions stay above. Anything added here joins the same list, and only the unanswered ones are sent.</p>
+      <div id="composerPending"></div>
+      <textarea id="composerInput" rows="2" placeholder="Type a question and press Enter, or click Add"></textarea>
+      <div class="row" style="margin-top:11px">
+        <button class="ghost" id="composerAdd">+ Add to the list</button>
+        <span class="divider"></span>
+        <select id="composerLanguage" title="Output language">
+          <option value="">Answer in each question's own language</option>
+          <option value="en">Force English</option>
+          <option value="ar">Force Arabic — العربية</option>
+        </select>
+        <button id="composerAnswer" disabled>Answer questions</button>
+      </div>
+      <div class="status" id="composerStatus"></div>
+    </div>
   </section>
 </main>
 
@@ -1339,7 +1427,19 @@
     meter.append(fill);
     confidence.append(value, caption, meter);
 
-    head.append(number, body, confidence);
+    // Removing the pair belongs here, beside what it removes. Only offered for
+    // answers this session produced, since an imported result has no question
+    // row behind it to keep in step.
+    if (item.__key) {
+      const remove = document.createElement("button");
+      remove.className = "quiet danger qdelete";
+      remove.textContent = "✕";
+      remove.title = "Remove this question and its answer";
+      remove.onclick = () => discardQuestion(item.__key);
+      head.append(number, body, confidence, remove);
+    } else {
+      head.append(number, body, confidence);
+    }
 
     // --- body: answer, citations, flags, reasoning, evidence
     const content = document.createElement("div");
@@ -1428,7 +1528,7 @@
     return stat;
   }
 
-  function renderResult(data) {
+  function renderResult(data, options = {}) {
     result = data;
 
     const reviewCount = data.answers.filter((a) => a.needs_review).length;
@@ -1445,7 +1545,11 @@
     container.innerHTML = "";
     data.answers.forEach((item, index) => container.append(renderAnswer(item, index)));
     $("resultsCard").hidden = false;
-    $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    // The caller scrolls when it is appending to a list the reader is already
+    // looking at; a fresh run jumps straight to the answers.
+    if (!options.keepQuestions) {
+      $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   // --- answering -----------------------------------------------------------
@@ -1479,35 +1583,291 @@
            "</strong> — " + state.remaining + " to go" + bar;
   }
 
-  async function submitAssessment() {
+  /* --- the question list ---------------------------------------------------
+
+     One list is the unit of work, however the questions got there: read out of
+     a file, typed by hand, or added after an earlier batch was answered. Each
+     entry carries its own state, so answering twice never re-answers — and
+     never re-charges for — what is already done.
+
+     `key` is a client-side identity that survives edits and re-ordering. The
+     server assigns its own ids per request, which is why answers are matched
+     back by the key held here rather than by anything the server returns. */
+
+  let questions = [];
+  let questionSeq = 0;
+
+  function addQuestion(text = "", extra = {}) {
+    questions.push({
+      key: "q" + (++questionSeq),
+      text,
+      status: "pending",
+      section: extra.section || null,
+      question_type: extra.question_type || "free_text",
+      options: extra.options || [],
+      language: extra.language || null,
+    });
+  }
+
+  const pendingQuestions = () => questions.filter((q) => q.status === "pending" && q.text.trim());
+
+  function questionRow(entry, index) {
+    const row = document.createElement("div");
+    row.className = "qrow" + (entry.status === "answered" ? " answered" : "");
+
+    const number = document.createElement("div");
+    number.className = "index";
+    number.textContent = entry.status === "answered" ? "✓" : String(index + 1);
+    number.title = entry.status === "answered" ? "Answered" : "Not yet answered";
+
+    const text = document.createElement("textarea");
+    text.rows = 1;
+    text.value = entry.text;
+    text.placeholder = "Type a question…";
+    text.spellcheck = false;
+    if (isArabic(entry.text)) text.dir = "rtl";
+    // An answered question is kept visible for context but cannot be edited:
+    // changing the words under an existing answer would make the pair a lie.
+    text.disabled = entry.status === "answered";
+    text.title = text.disabled ? "Already answered — delete it to ask something else" : "";
+
+    const grow = () => { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; };
+    text.addEventListener("input", () => {
+      entry.text = text.value;
+      text.dir = isArabic(text.value) ? "rtl" : "ltr";
+      grow();
+      refreshAnswerButton();
+    });
+    requestAnimationFrame(grow);
+
+    const actions = document.createElement("div");
+    actions.className = "qactions";
+    // An answered question is deleted from its answer card, where the thing
+    // being thrown away is actually visible. Offering it here as well would be
+    // two buttons for one action, in two places, with different context.
+    if (entry.status !== "answered") {
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "✕";
+      remove.title = "Remove this question";
+      remove.onclick = () => discardQuestion(entry.key);
+      actions.append(remove);
+    }
+
+    row.append(number, text, actions);
+    return row;
+  }
+
+  /* Removing a question, wherever the click came from. One path, so the list,
+     the answers and the summary cannot drift apart. */
+  function discardQuestion(key) {
+    questions = questions.filter((q) => q.key !== key);
+    if (result) {
+      const kept = result.answers.filter((a) => a.__key !== key);
+      if (kept.length !== result.answers.length) {
+        result.answers = kept;
+        result.questions_found = kept.length;
+        if (kept.length) {
+          renderResult(result, { keepQuestions: true });
+        } else {
+          result = null;
+          $("results").replaceChildren();
+          $("resultsCard").hidden = true;
+        }
+      }
+    }
+    renderQuestions();
+  }
+
+  function renderQuestions(options = {}) {
+    const list = $("questionList");
+    list.replaceChildren();
+
+    if (!questions.length) {
+      const empty = document.createElement("div");
+      empty.className = "qlist-empty";
+      empty.textContent = "No questions yet. Read them from a file above, or add one.";
+      list.append(empty);
+    } else {
+      questions.forEach((entry, index) => list.append(questionRow(entry, index)));
+    }
+
+    const answered = questions.filter((q) => q.status === "answered").length;
+    const pending = pendingQuestions().length;
+    // Never hidden: the "add a question" button lives in this panel, and
+    // hiding it until a question exists left no way to add the first one
+    // without uploading a file.
+    $("questionListPanel").hidden = false;
+    $("clearQuestions").hidden = questions.length === 0;
+    $("questionListTitle").textContent = questions.length
+      ? "Questions (" + questions.length + ")" : "Questions";
+    $("questionListHint").textContent = !questions.length
+      ? "Read them from a file above, or write your own — you do not need a file to ask a question."
+      : answered
+        ? answered + " answered · " + pending + " waiting. Edit or add below, then answer the rest."
+        : "Edit anything that came out wrong, delete what is not a question, then answer.";
+    refreshAnswerButton();
+    if (!options.skipComposer) renderComposer();
+  }
+
+  /* The composer is a second view of the same list, not a second list. It
+     shows what is still waiting, so a reader at the bottom of a long run can
+     see what a click is about to send without scrolling back up. */
+  function renderComposer() {
+    const pending = pendingQuestions();
+    const box = $("composerPending");
+    box.replaceChildren();
+
+    questions.filter((q) => q.status === "pending").forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "qrow";
+
+      const badge = document.createElement("div");
+      badge.className = "index";
+      badge.textContent = String(questions.indexOf(entry) + 1);
+      badge.title = "Waiting to be answered";
+
+      const text = document.createElement("textarea");
+      text.rows = 1;
+      text.value = entry.text;
+      text.placeholder = "Type a question…";
+      text.spellcheck = false;
+      if (isArabic(entry.text)) text.dir = "rtl";
+      const grow = () => { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; };
+      text.addEventListener("input", () => {
+        entry.text = text.value;
+        text.dir = isArabic(text.value) ? "rtl" : "ltr";
+        grow();
+        // The row exists in both views; update the other one's numbering and
+        // both buttons, but do not re-render this box or the caret is lost.
+        renderQuestions({ skipComposer: true });
+      });
+      requestAnimationFrame(grow);
+
+      const actions = document.createElement("div");
+      actions.className = "qactions";
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "✕";
+      remove.title = "Remove this question";
+      remove.onclick = () => discardQuestion(entry.key);
+      actions.append(remove);
+
+      row.append(badge, text, actions);
+      box.append(row);
+    });
+
+    const button = $("composerAnswer");
+    button.disabled = pending.length === 0 || answering;
+    button.textContent = pending.length === 0
+      ? "Nothing to answer"
+      : "Answer " + pending.length + " question" + (pending.length === 1 ? "" : "s");
+  }
+
+  function refreshAnswerButton() {
+    const pending = pendingQuestions().length;
+    const button = $("answerBtn");
+    button.disabled = pending === 0 || answering;
+    button.textContent = pending === 0
+      ? "Nothing to answer"
+      : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
+    $("composerAnswer").disabled = button.disabled;
+    $("composerAnswer").textContent = button.textContent;
+  }
+
+  let answering = false;
+
+  async function extractQuestions() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
 
-    const runId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16);
-
-    $("answerBtn").disabled = true;
-    setStatus($("answerStatus"), "Reading the document and extracting questions…", "busy");
+    $("extractBtn").disabled = true;
+    setStatus($("extractStatus"), "Reading the document and extracting questions…", "busy");
 
     const form = new FormData();
     form.append("file", input.files[0]);
-    form.append("run_id", runId);
-    if ($("languageSelect").value) form.append("language", $("languageSelect").value);
+
+    try {
+      const data = await request("/api/assessments/extract", { method: "POST", body: form });
+      data.questions.forEach((q) => addQuestion(q.text, q));
+      sourceName = data.source_name || sourceName;
+      setStatus($("extractStatus"),
+        "Found " + data.questions.length + " question(s) in " + data.source_name +
+        ". Check the list before answering.", "ok");
+      renderQuestions();
+      $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (error) {
+      setStatus($("extractStatus"), error.message, "error");
+    } finally {
+      $("extractBtn").disabled = false;
+      loadDocuments();
+    }
+  }
+
+  let sourceName = "questions";
+
+  async function answerPending(statusId = "answerStatus") {
+    const batch = pendingQuestions();
+    if (!batch.length) return;
+    const status = $(statusId);
+
+    const runId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16);
+    answering = true;
+    refreshAnswerButton();
+    setStatus(status, "Answering " + batch.length + " question(s)…", "busy");
 
     const stop = watchProgress(runId, (state) => {
-      $("answerStatus").innerHTML = progressMessage(state);
-      $("answerStatus").className = "status busy";
+      status.innerHTML = progressMessage(state);
+      status.className = "status busy";
     });
 
     try {
-      const data = await request("/api/assessments/answer", { method: "POST", body: form });
-      setStatus($("answerStatus"), "Answered " + data.answers.length + " question(s).", "ok");
-      renderResult(data);
+      const data = await request("/api/assessments/answer-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questions: batch.map((q) => ({
+            text: q.text.trim(),
+            section: q.section,
+            question_type: q.question_type,
+            options: q.options,
+            language: q.language,
+          })),
+          language: $("languageSelect").value || null,
+          run_id: runId,
+          source_name: sourceName,
+        }),
+      });
+
+      // Positional: the endpoint answers the list it was given, in order. That
+      // is what lets an answer be tied back to the row it came from, so a later
+      // deletion can take its answer with it.
+      data.answers.forEach((answer, index) => {
+        const entry = batch[index];
+        if (!entry) return;
+        answer.__key = entry.key;
+        entry.status = "answered";
+      });
+
+      result = result && result.answers.length
+        ? { ...result, answers: [...result.answers, ...data.answers],
+            questions_found: result.answers.length + data.answers.length }
+        : data;
+
+      setStatus(status, "Answered " + data.answers.length + " question(s).", "ok");
+      renderQuestions();
+      renderResult(result, { keepQuestions: true });
+      // Scroll only when the request came from the top of the page; a reader
+      // who asked from the composer is already where the new answers land.
+      if (statusId === "answerStatus") {
+        $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus(status, error.message, "error");
     } finally {
       stop();
-      $("answerBtn").disabled = false;
-      loadDocuments();
+      answering = false;
+      refreshAnswerButton();
     }
   }
 
@@ -1576,14 +1936,57 @@
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
   const priorInput = fileField("priorInput", "priorChosen", "priorBtn");
-  fileField("assessmentInput", "assessmentChosen", "answerBtn");
+  fileField("assessmentInput", "assessmentChosen", "extractBtn");
 
   $("guidelinesBtn").onclick = ingestHandler(
     guidelinesInput, "/api/knowledge/guidelines", $("guidelinesBtn"), $("guidelinesStatus"), "guideline(s)");
   $("priorBtn").onclick = ingestHandler(
     priorInput, "/api/knowledge/prior-assessments", $("priorBtn"), $("priorStatus"), "assessment(s)");
 
-  $("answerBtn").onclick = submitAssessment;
+  $("answerBtn").onclick = () => answerPending("answerStatus");
+  $("composerAnswer").onclick = () => answerPending("composerStatus");
+
+  function addFromComposer() {
+    const box = $("composerInput");
+    const text = box.value.trim();
+    if (!text) { box.focus(); return; }
+    addQuestion(text);
+    box.value = "";
+    box.style.height = "";
+    renderQuestions();
+    box.focus();
+  }
+  $("composerAdd").onclick = addFromComposer;
+  $("composerInput").addEventListener("keydown", (event) => {
+    // Enter adds; Shift+Enter is a newline, because a question can be long.
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); addFromComposer(); }
+  });
+  // Two selects, one setting: whichever is nearer the reader must not disagree
+  // with the one they cannot see.
+  const syncLanguage = (from, to) => { $(to).value = $(from).value; };
+  $("languageSelect").onchange = () => syncLanguage("languageSelect", "composerLanguage");
+  $("composerLanguage").onchange = () => syncLanguage("composerLanguage", "languageSelect");
+  $("extractBtn").onclick = extractQuestions;
+  $("addQuestionBtn").onclick = () => {
+    addQuestion("");
+    renderQuestions();
+    const boxes = $("questionList").querySelectorAll("textarea:not(:disabled)");
+    if (boxes.length) boxes[boxes.length - 1].focus();
+  };
+  $("clearQuestions").onclick = () => {
+    const answered = questions.filter((q) => q.status === "answered").length;
+    const warning = answered
+      ? "Remove all " + questions.length + " questions? " + answered +
+        " already have answers, and those will go too."
+      : "Remove all " + questions.length + " questions?";
+    if (!confirm(warning)) return;
+    questions = [];
+    result = null;
+    $("results").innerHTML = "";
+    $("resultsCard").hidden = true;
+    setStatus($("answerStatus"), "");
+    renderQuestions();
+  };
   $("trialFilter").onchange = renderDocuments;
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
@@ -1613,6 +2016,7 @@
 
   loadKnowledge();
   loadDocuments();
+  renderQuestions();
 })();
 </script>
 </body>
