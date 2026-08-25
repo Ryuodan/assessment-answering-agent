@@ -25,6 +25,7 @@ from src.models import (
     Evidence,
     SourceType,
 )
+from src.relevance import filter_evidence
 from src.prompts import (
     ANSWER_SYSTEM,
     ANSWER_USER,
@@ -179,12 +180,28 @@ async def retrieve(state: QuestionState) -> dict:
     for batch in results:
         agreement.update({(item.source_name, item.chunk) for item in batch})
 
-    for batch in results:
-        for item in batch:
-            item.query_hits = agreement[(item.source_name, item.chunk)]
+    def collapse(batches: list[list[Evidence]]) -> list[Evidence]:
+        """One entry per chunk, carrying how many searches returned it.
 
-    prior_answers = [item for batch in results[0::2] for item in batch]
-    guidelines = [item for batch in results[1::2] for item in batch]
+        A chunk six queries agree on comes back in six batches. Returning all
+        six and letting the state reducer merge them counted the agreement once
+        per copy: the reducer sums `query_hits`, so six copies each stamped
+        with six accumulated to thirty-six. The multiplier that was meant to
+        top out at 1.75 reached 6.4, and ranking was decided by how many
+        phrasings found a chunk rather than by how well it matched.
+        """
+        best: dict[tuple, Evidence] = {}
+        for batch in batches:
+            for item in batch:
+                key = (item.source_name, item.chunk)
+                if key not in best or item.score > best[key].score:
+                    best[key] = item
+        for key, item in best.items():
+            item.query_hits = agreement[key]
+        return list(best.values())
+
+    prior_answers = collapse(results[0::2])
+    guidelines = collapse(results[1::2])
 
     attempt = state.get("attempt", 0) + 1
     logger.debug(
@@ -203,14 +220,20 @@ async def rerank_evidence(state: QuestionState) -> dict:
     unconditionally and the setting is the only thing that changes.
     """
     evidence = state.get("evidence", [])
-    if not settings.reranker_enabled or not evidence:
-        return {"ranked": list(evidence)}
+    if not evidence:
+        return {"ranked": []}
 
-    # Ranked against the question as asked, not the expanded search queries:
-    # the queries were written to find material, the question is what the
-    # answer has to satisfy.
-    ranked = await asyncio.to_thread(rerank, state["question"].text, evidence)
-    logger.debug("Question %s: reranked %d chunks", state["question"].id, len(evidence))
+    ranked = list(evidence)
+    if settings.reranker_enabled:
+        # Ranked against the question as asked, not the expanded search queries:
+        # the queries were written to find material, the question is what the
+        # answer has to satisfy.
+        ranked = await asyncio.to_thread(rerank, state["question"].text, ranked)
+        logger.debug("Question %s: reranked %d chunks", state["question"].id, len(evidence))
+
+    # Applied after any cross-encoder pass, so the two compose: the reranker
+    # orders by similarity, the grader demotes what is not on topic at all.
+    ranked = await filter_evidence(state["question"].text, ranked)
     return {"ranked": ranked}
 
 

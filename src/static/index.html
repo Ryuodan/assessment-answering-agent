@@ -577,6 +577,73 @@
     border: 1px solid var(--line); border-radius: var(--radius-sm);
     background: var(--surface-sunken); color: var(--ink-soft);
   }
+  /* --- chunk rendering: raw markdown, or laid out ------------------------ */
+  .view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+  .view-toggle button {
+    background: var(--surface); color: var(--ink-faint); border: 0; padding: 3px 9px;
+    font-size: 11.5px; cursor: pointer; font-weight: 550;
+  }
+  .view-toggle button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+  .view-toggle button + button { border-left: 1px solid var(--line); }
+
+  .chunk { padding: 13px; font-size: 12.5px; line-height: 1.65; color: var(--ink-soft); max-height: 340px; overflow: auto; }
+  .chunk > * + * { margin-top: 9px; }
+  .chunk h4 { margin: 0; font-size: 12.5px; font-weight: 650; color: var(--ink); }
+  .chunk h4 .clause { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .chunk p { margin: 0; }
+  .chunk ul { margin: 0; padding-inline-start: 20px; }
+  .chunk li { margin: 2px 0; }
+  .chunk .figure { font-size: 11px; color: var(--ink-faint); font-style: italic; }
+  .chunk .tablewrap { overflow-x: auto; }
+  .chunk table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+  .chunk th, .chunk td {
+    border: 1px solid var(--line); padding: 4px 7px; text-align: start; vertical-align: top;
+  }
+  .chunk thead th { background: var(--surface-sunken); font-weight: 650; color: var(--ink); }
+  .chunk tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-sunken) 45%, transparent); }
+
+  /* --- search drawer ----------------------------------------------------- */
+  .drawer-scrim {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35); opacity: 0; pointer-events: none;
+    transition: opacity .18s ease; z-index: 40;
+  }
+  .drawer-scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; inset-block: 0; inset-inline-end: 0; width: min(1180px, 96vw);
+    background: var(--surface); border-inline-start: 1px solid var(--line);
+    display: flex; flex-direction: column; z-index: 41;
+    transform: translateX(100%); transition: transform .2s ease;
+    box-shadow: -18px 0 46px rgba(0,0,0,.14);
+  }
+  [dir="rtl"] .drawer { transform: translateX(-100%); }
+  .drawer.open { transform: none; }
+  .drawer-head { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .drawer-head .row { display: flex; align-items: center; gap: 10px; }
+  .drawer-head h3 { margin: 0; font-size: 14px; flex: 1; }
+  .drawer-controls { display: flex; gap: 8px; margin-top: 11px; flex-wrap: wrap; align-items: center; }
+  .drawer-controls input[type="search"] { flex: 1 1 210px; min-width: 0; }
+  .drawer-body { flex: 1; overflow: auto; padding: 12px 16px 24px; }
+  .search-hit { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 11px; background: var(--surface); }
+  .search-hit .hit-head {
+    display: flex; gap: 9px; align-items: baseline; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); background: var(--surface-sunken); font-size: 11.5px;
+  }
+  .search-hit .hit-head .who { flex: 1; min-width: 0; color: var(--ink-soft); font-weight: 550; overflow-wrap: anywhere; }
+  .search-hit .badge {
+    font-size: 10.5px; padding: 1px 7px; border-radius: 999px; font-weight: 650;
+    background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+  }
+  .search-hit .badge.bm25 { background: color-mix(in srgb, var(--warn, #b26a00) 14%, transparent); color: var(--warn, #b26a00); }
+  .search-empty { color: var(--ink-faint); font-size: 12.5px; padding: 22px 4px; text-align: center; }
+
+  .ev-controls { display: flex; justify-content: flex-end; padding: 6px 0 10px; }
+  .ev-head { display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+  .ev-head .src { flex: 1; min-width: 0; }
+  body.answering .qrow textarea:disabled { opacity: .7; }
+  body.answering #questionListPanel, body.answering .composer { position: relative; }
+  .search-note {
+    font-size: 11.5px; color: var(--warn, #b26a00); padding: 6px 0 2px;
+  }
 </style>
 </head>
 <body>
@@ -590,6 +657,7 @@
     </div>
   </div>
   <div class="spacer"></div>
+  <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
@@ -759,6 +827,35 @@
   </section>
 </main>
 
+<div class="drawer-scrim" id="searchScrim"></div>
+<aside class="drawer" id="searchDrawer" aria-hidden="true" aria-label="Search the knowledge base">
+  <div class="drawer-head">
+    <div class="row">
+      <h3>Search the knowledge base</h3>
+      <div class="view-toggle" id="searchView" role="group" aria-label="How to show the text">
+        <button type="button" data-view="pretty" aria-pressed="true">Formatted</button>
+        <button type="button" data-view="raw" aria-pressed="false">Raw</button>
+      </div>
+      <button class="ghost" id="searchClose" title="Close">Close</button>
+    </div>
+    <div class="drawer-controls">
+      <input type="search" id="searchInput" placeholder='Search the policies —  "exact phrase"  -exclude' title='Type words to match anywhere in the text. Use "quotes" for an exact phrase and a leading minus to exclude.' />
+      <select id="searchMode" title="How to match">
+        <option value="hybrid">Both</option>
+        <option value="semantic">Meaning</option>
+        <option value="keyword">Exact text</option>
+      </select>
+      <select id="searchSource" title="Limit to one file">
+        <option value="">All files</option>
+      </select>
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="status" id="searchStatus" style="margin-top:9px"></div>
+  </div>
+  <div class="drawer-body" id="searchResults"></div>
+</aside>
+
+
 <dialog id="documentViewer">
   <div class="viewer-shell">
     <div class="viewer-header">
@@ -848,6 +945,354 @@
     link.click();
     URL.revokeObjectURL(url);
   }
+
+  // --- chunk rendering -----------------------------------------------------
+
+  /* Chunks are Markdown as the parser produced it. Raw is the honest view and
+     stays the fallback; formatted lays out the tables and headings so a person
+     can read a control table without counting pipes.
+
+     An earlier version of this dropped content: it split a row on the pipe and
+     discarded the first and last field, which is right only when the row has
+     both an opening and a closing pipe. 1,081 of 3,044 chunks lost up to 92% of
+     their words and nothing noticed, because a prettier panel still looks
+     correct. Hence renderChunk verifies itself against the source text and
+     falls back to raw if a single word went missing. */
+
+  const VIEW_KEY = "assessment-chunk-view";
+
+  function chunkView() {
+    try { return localStorage.getItem(VIEW_KEY) || "pretty"; } catch (error) { return "pretty"; }
+  }
+
+  function setChunkView(view) {
+    try { localStorage.setItem(VIEW_KEY, view); } catch (error) { /* private mode */ }
+    document.querySelectorAll("[data-view]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.view === view));
+    });
+    document.querySelectorAll("[data-chunk-source]").forEach((node) => {
+      node.replaceWith(renderChunk(node.getAttribute("data-chunk-source"), view));
+    });
+  }
+
+  function words(text) {
+    return (text || "").match(/[\p{L}\p{N}]+/gu) || [];
+  }
+
+  /* Text as a reader sees it, with element boundaries kept as whitespace.
+     `textContent` concatenates adjacent cells, so a header row of six cells
+     reading "Systems" comes back as one word "SystemsSystemsSystems...". The
+     self-check below compares word multisets, and reading it off `textContent`
+     reported a loss on 185 of 194 real chunks -- every one of them a false
+     alarm that would have disabled the formatted view entirely. */
+  function flatText(node) {
+    const parts = [];
+    const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    while (walk.nextNode()) parts.push(walk.currentNode.nodeValue);
+    return parts.join(" ");
+  }
+
+  function cells(line) {
+    let row = line.trim();
+    if (row.startsWith("|")) row = row.slice(1);
+    if (row.endsWith("|")) row = row.slice(0, -1);
+    return row.split("|").map((cell) => cell.trim());
+  }
+
+  function isSeparatorRow(line) {
+    return /^\|?[\s:|-]+\|?$/.test(line.trim()) && line.indexOf("-") >= 0;
+  }
+
+  function buildTable(rows) {
+    const table = document.createElement("table");
+    const body = document.createElement("tbody");
+    let head = null;
+
+    rows.forEach((line, index) => {
+      if (isSeparatorRow(line)) return;
+      const values = cells(line);
+      const isHead = index === 0 && rows.length > 1 && isSeparatorRow(rows[1]);
+      const row = document.createElement("tr");
+      values.forEach((value) => {
+        const cell = document.createElement(isHead ? "th" : "td");
+        cell.textContent = value;
+        if (isArabic(value)) cell.dir = "rtl";
+        row.append(cell);
+      });
+      if (isHead) {
+        head = document.createElement("thead");
+        head.append(row);
+      } else {
+        body.append(row);
+      }
+    });
+
+    if (head) table.append(head);
+    if (body.childElementCount) table.append(body);
+    const wrap = document.createElement("div");
+    wrap.className = "tablewrap";
+    wrap.append(table);
+    return wrap;
+  }
+
+  function buildPretty(text) {
+    const box = document.createElement("div");
+    box.className = "chunk";
+    const lines = String(text).split("\n");
+    let index = 0;
+    let list = null;
+
+    while (index < lines.length) {
+      const line = lines[index];
+      const trimmed = line.trim();
+
+      if (!trimmed) { list = null; index += 1; continue; }
+
+      if (trimmed.charAt(0) === "|") {
+        list = null;
+        const rows = [];
+        while (index < lines.length && lines[index].trim().charAt(0) === "|") {
+          rows.push(lines[index]);
+          index += 1;
+        }
+        box.append(buildTable(rows));
+        continue;
+      }
+
+      const heading = trimmed.match(/^#{1,6}\s+(.*)$/);
+      if (heading) {
+        list = null;
+        const element = document.createElement("h4");
+        const rest = heading[1];
+        const numbered = rest.match(/^(\d+(?:[.\-]\d+)*)\s+(.*)$/);
+        if (numbered) {
+          const clause = document.createElement("span");
+          clause.className = "clause";
+          clause.textContent = numbered[1] + " ";
+          element.append(clause, document.createTextNode(numbered[2]));
+        } else {
+          element.textContent = rest;
+        }
+        if (isArabic(rest)) element.dir = "rtl";
+        box.append(element);
+        index += 1;
+        continue;
+      }
+
+      if (/^<!--\s*image\s*-->$/.test(trimmed)) {
+        list = null;
+        const figure = document.createElement("div");
+        figure.className = "figure";
+        figure.textContent = "image";
+        box.append(figure);
+        index += 1;
+        continue;
+      }
+
+      const bullet = trimmed.match(/^[-*•]\s+(.*)$/);
+      if (bullet) {
+        if (!list) {
+          list = document.createElement("ul");
+          box.append(list);
+        }
+        const item = document.createElement("li");
+        item.textContent = bullet[1];
+        if (isArabic(bullet[1])) item.dir = "rtl";
+        list.append(item);
+        index += 1;
+        continue;
+      }
+
+      list = null;
+      const paragraph = document.createElement("p");
+      paragraph.textContent = trimmed;
+      if (isArabic(trimmed)) paragraph.dir = "rtl";
+      box.append(paragraph);
+      index += 1;
+    }
+
+    return box;
+  }
+
+  function buildRaw(text) {
+    const pre = document.createElement("pre");
+    pre.className = "snippet";
+    pre.textContent = text;
+    if (isArabic(text)) pre.dir = "rtl";
+    return pre;
+  }
+
+  /* Returns an element carrying its own source, so the view can be switched
+     later without the caller holding on to the text. */
+  function renderChunk(text, view) {
+    const source = String(text == null ? "" : text);
+    let node;
+    if ((view || chunkView()) !== "pretty") {
+      node = buildRaw(source);
+    } else {
+      node = buildPretty(source);
+      // Self-check: a formatted view that loses words is worse than an ugly
+      // one, and the loss is invisible by inspection.
+      const counts = new Map();
+      words(flatText(node)).forEach((word) => counts.set(word, (counts.get(word) || 0) + 1));
+      const lost = words(source).some((word) => {
+        const left = counts.get(word) || 0;
+        if (!left) return true;
+        counts.set(word, left - 1);
+        return false;
+      });
+      if (lost) {
+        console.warn("Formatted view dropped content; showing raw text instead.");
+        node = buildRaw(source);
+      }
+    }
+    node.setAttribute("data-chunk-source", source);
+    return node;
+  }
+
+  /* One builder for the Formatted/Raw switch, so every place that shows a
+     chunk offers the same control and they all move together. */
+  function viewToggle() {
+    const box = document.createElement("div");
+    box.className = "view-toggle";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", "How to show the text");
+    [["pretty", "Formatted"], ["raw", "Raw"]].forEach(([mode, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.view = mode;
+      button.textContent = label;
+      button.setAttribute("aria-pressed", String(chunkView() === mode));
+      button.onclick = () => setChunkView(mode);
+      box.append(button);
+    });
+    return box;
+  }
+
+  /* A chunk is only checkable if you can open the file it came from. */
+  function openDocumentButton(sourceName, sourceType) {
+    const button = document.createElement("button");
+    button.className = "quiet";
+    button.textContent = "open document";
+    button.onclick = () => openDocument({
+      name: sourceName,
+      title: sourceName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
+      origin: "uploaded",
+      category: "uploaded",
+      label: sourceType === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
+      extension: sourceName.split(".").pop().toLowerCase(),
+      size_bytes: 0,
+    });
+    return button;
+  }
+
+  // --- search drawer -------------------------------------------------------
+
+  let searchLoaded = false;
+
+  function openSearch() {
+    $("searchDrawer").classList.add("open");
+    $("searchDrawer").setAttribute("aria-hidden", "false");
+    $("searchScrim").classList.add("open");
+    $("searchInput").focus();
+    if (!searchLoaded) { searchLoaded = true; loadSearchSources(); }
+  }
+
+  function closeSearch() {
+    $("searchDrawer").classList.remove("open");
+    $("searchDrawer").setAttribute("aria-hidden", "true");
+    $("searchScrim").classList.remove("open");
+  }
+
+  /* Fill the file filter, tolerating either shape the API can hand back: the
+     knowledge panel calls the field `name`, a search result calls it
+     `source_name`, and reading only one of them left the filter empty. */
+  function fillSearchSources(names) {
+    const select = $("searchSource");
+    const already = new Set([...select.options].map((option) => option.value));
+    names.filter(Boolean).forEach((name) => {
+      if (!already.has(name)) select.append(new Option(name, name));
+    });
+  }
+
+  async function loadSearchSources() {
+    try {
+      const stats = await request("/api/knowledge");
+      fillSearchSources((stats.sources || []).map(
+        (source) => (typeof source === "string" ? source : source.name || source.source_name)));
+    } catch (error) { /* the filter is optional */ }
+  }
+
+  function renderSearchResults(body) {
+    const box = $("searchResults");
+    box.replaceChildren();
+    if (!body.results.length) {
+      const empty = document.createElement("div");
+      empty.className = "search-empty";
+      empty.textContent = body.degraded
+        ? "Meaning-based search is not responding, and no exact text matched."
+        : "Nothing in the indexed policies matched that.";
+      box.append(empty);
+      return;
+    }
+
+    if (body.degraded) {
+      // Say which half of the search ran. Otherwise an empty or thin result
+      // reads as "the corpus does not mention this", which would be a lie.
+      const note = document.createElement("div");
+      note.className = "search-note";
+      note.textContent = "Meaning-based search is not responding — showing exact-text matches only.";
+      box.append(note);
+    }
+
+    body.results.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "search-hit";
+
+      const head = document.createElement("div");
+      head.className = "hit-head";
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = item.locator || item.source_name;
+      const badge = document.createElement("span");
+      badge.className = "badge" + (item.is_lexical ? " bm25" : "");
+      // A BM25 rank normalised to the best hit and a cosine similarity are
+      // different things; saying which one this is keeps them apart.
+      badge.textContent = item.is_lexical
+        ? "exact match"
+        : "similarity " + Number(item.score).toFixed(2);
+      badge.title = item.is_lexical
+        ? "Found by keyword search: the score is its rank, not a similarity"
+        : "Cosine similarity to your query";
+      head.append(who, badge, openDocumentButton(item.source_name, item.source_type));
+
+      card.append(head, renderChunk(item.snippet));
+      box.append(card);
+    });
+  }
+
+  async function runSearch() {
+    const query = $("searchInput").value.trim();
+    if (!query) {
+      $("searchResults").replaceChildren();
+      setStatus($("searchStatus"), "", "");
+      return;
+    }
+
+    setStatus($("searchStatus"), "Searching…", "busy");
+    try {
+      const params = new URLSearchParams({
+        q: query, mode: $("searchMode").value, limit: "20", source: $("searchSource").value,
+      });
+      const body = await request("/api/search?" + params.toString());
+      fillSearchSources(body.documents || []);
+      renderSearchResults(body);
+      setStatus($("searchStatus"), body.results.length ? body.results.length + " passage(s)" : "", "");
+    } catch (error) {
+      setStatus($("searchStatus"), error.message, "error");
+    }
+  }
+
 
   function documentUrl(doc, action) {
     return "/api/documents/" + encodeURIComponent(doc.origin) + "/" +
@@ -1336,6 +1781,8 @@
     who.textContent = citation;
     head.append(who);
 
+    head.append(viewToggle());
+
     if (source) {
       const kind = document.createElement("span");
       kind.className = "tag " + source.source_type;
@@ -1363,12 +1810,9 @@
       head.append(open);
     }
 
-    const body = document.createElement("pre");
-    body.className = "snippet";
-    body.textContent = source
+    const body = renderChunk(source
       ? source.snippet
-      : "This clause was named in the answer, but the chunk behind it is not in the exported evidence.";
-    if (isArabic(body.textContent)) body.dir = "rtl";
+      : "This clause was named in the answer, but the chunk behind it is not in the exported evidence.");
 
     panel.append(head, body);
   }
@@ -1434,6 +1878,7 @@
     if (item.__key) {
       const remove = document.createElement("button");
       remove.className = "quiet danger qdelete";
+      remove.dataset.mutates = "true";
       remove.textContent = "✕";
       remove.title = "Remove this question and its answer";
       remove.onclick = () => discardQuestion(item.__key);
@@ -1480,6 +1925,7 @@
       if (item.__key) {
         const again = document.createElement("button");
         again.className = "ghost";
+        again.dataset.mutates = "true";
         again.style.marginTop = "9px";
         again.textContent = "Try this question again";
         again.onclick = () => retryQuestions([item.__key], again);
@@ -1516,6 +1962,14 @@
       summary.textContent = "All " + item.evidence.length + " retrieved source(s)";
       details.append(summary);
 
+      // The same controls as a citation bubble: this list shows the same kind
+      // of thing, and offering the switch in one place and not the other made
+      // the formatted view look like a property of some chunks and not others.
+      const evHead = document.createElement("div");
+      evHead.className = "ev-controls";
+      evHead.append(viewToggle());
+      details.append(evHead);
+
       item.evidence.forEach((evidence) => {
         const block = document.createElement("div");
         block.className = "ev";
@@ -1524,8 +1978,11 @@
         label.textContent =
           (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
           " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
-        block.append(label, document.createTextNode(evidence.snippet));
-        if (isArabic(evidence.snippet)) block.dir = "rtl";
+        const open = openDocumentButton(evidence.source_name, evidence.source_type);
+        const labelRow = document.createElement("div");
+        labelRow.className = "ev-head";
+        labelRow.append(label, open);
+        block.append(labelRow, renderChunk(evidence.snippet));
         details.append(block);
       });
 
@@ -1633,9 +2090,14 @@
 
   const pendingQuestions = () => questions.filter((q) => q.status === "pending" && q.text.trim());
 
+  /* The one row builder. The panel above the answers and the composer below
+     them are two views of the same list, and they drifted apart while each had
+     its own copy of this: editing in one left the other showing the old words,
+     because only the list you were not typing in got re-rendered. */
   function questionRow(entry, index) {
     const row = document.createElement("div");
     row.className = "qrow" + (entry.status === "answered" ? " answered" : "");
+    row.dataset.qkey = entry.key;
 
     const number = document.createElement("div");
     number.className = "index";
@@ -1647,17 +2109,24 @@
     text.value = entry.text;
     text.placeholder = "Type a question…";
     text.spellcheck = false;
+    text.dataset.qkey = entry.key;
     if (isArabic(entry.text)) text.dir = "rtl";
     // An answered question is kept visible for context but cannot be edited:
     // changing the words under an existing answer would make the pair a lie.
-    text.disabled = entry.status === "answered";
-    text.title = text.disabled ? "Already answered — delete it to ask something else" : "";
+    text.dataset.answered = String(entry.status === "answered");
+    text.disabled = entry.status === "answered" || answering;
+    text.title = entry.status === "answered"
+      ? "Already answered — delete it to ask something else"
+      : answering ? "Answering — wait for the run to finish" : "";
 
     const grow = () => { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; };
     text.addEventListener("input", () => {
       entry.text = text.value;
       text.dir = isArabic(text.value) ? "rtl" : "ltr";
       grow();
+      // Mirror into the other view rather than re-rendering it: a re-render
+      // here would throw away the caret in whichever box is being typed in.
+      syncQuestionText(entry.key, text);
       refreshAnswerButton();
     });
     requestAnimationFrame(grow);
@@ -1672,12 +2141,60 @@
       remove.className = "quiet danger";
       remove.textContent = "✕";
       remove.title = "Remove this question";
+      remove.dataset.mutates = "true";
+      remove.disabled = answering;
       remove.onclick = () => discardQuestion(entry.key);
       actions.append(remove);
     }
 
     row.append(number, text, actions);
     return row;
+  }
+
+  /* One question, two boxes. Copy the words across without disturbing either
+     caret, and keep both boxes the same height. */
+  function syncQuestionText(key, source) {
+    document.querySelectorAll('textarea[data-qkey="' + key + '"]').forEach((other) => {
+      if (other === source) return;
+      other.value = source.value;
+      other.dir = isArabic(source.value) ? "rtl" : "ltr";
+      other.style.height = "auto";
+      other.style.height = other.scrollHeight + "px";
+    });
+  }
+
+  /* Answering mutates the list the moment it returns, so nothing that changes
+     the list may run while it is in flight: a question edited mid-run would be
+     answered in its old wording, and one added would silently miss the batch. */
+  function applyLock() {
+    const locked = answering;
+    document.querySelectorAll("[data-qkey]").forEach((node) => {
+      if (node.tagName !== "TEXTAREA") return;
+      node.disabled = locked || node.dataset.answered === "true";
+      if (locked) node.title = "Answering — wait for the run to finish";
+    });
+    document.querySelectorAll("[data-mutates]").forEach((node) => { node.disabled = locked; });
+
+    // These have enable rules of their own -- "Index guidelines" is disabled
+    // until a file is chosen. Overwrite the flag while locked, then put back
+    // exactly what was there, or unlocking would enable a button whose own
+    // logic wanted it off.
+    ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
+     "composerAdd", "composerInput", "extractBtn", "assessmentInput",
+     "guidelinesBtn", "priorBtn", "kbClear", "retryFailed"].forEach((id) => {
+      const element = $(id);
+      if (!element) return;
+      if (locked) {
+        if (element.dataset.wasDisabled === undefined) {
+          element.dataset.wasDisabled = String(element.disabled);
+        }
+        element.disabled = true;
+      } else if (element.dataset.wasDisabled !== undefined) {
+        element.disabled = element.dataset.wasDisabled === "true";
+        delete element.dataset.wasDisabled;
+      }
+    });
+    document.body.classList.toggle("answering", locked);
   }
 
   /* Removing a question, wherever the click came from. One path, so the list,
@@ -1740,44 +2257,11 @@
     const box = $("composerPending");
     box.replaceChildren();
 
-    questions.filter((q) => q.status === "pending").forEach((entry) => {
-      const row = document.createElement("div");
-      row.className = "qrow";
-
-      const badge = document.createElement("div");
-      badge.className = "index";
-      badge.textContent = String(questions.indexOf(entry) + 1);
-      badge.title = "Waiting to be answered";
-
-      const text = document.createElement("textarea");
-      text.rows = 1;
-      text.value = entry.text;
-      text.placeholder = "Type a question…";
-      text.spellcheck = false;
-      if (isArabic(entry.text)) text.dir = "rtl";
-      const grow = () => { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; };
-      text.addEventListener("input", () => {
-        entry.text = text.value;
-        text.dir = isArabic(text.value) ? "rtl" : "ltr";
-        grow();
-        // The row exists in both views; update the other one's numbering and
-        // both buttons, but do not re-render this box or the caret is lost.
-        renderQuestions({ skipComposer: true });
-      });
-      requestAnimationFrame(grow);
-
-      const actions = document.createElement("div");
-      actions.className = "qactions";
-      const remove = document.createElement("button");
-      remove.className = "quiet danger";
-      remove.textContent = "✕";
-      remove.title = "Remove this question";
-      remove.onclick = () => discardQuestion(entry.key);
-      actions.append(remove);
-
-      row.append(badge, text, actions);
-      box.append(row);
-    });
+    // The same rows as the panel above, from the same builder. They were two
+    // copies of near-identical code, and the copies disagreed.
+    questions
+      .filter((entry) => entry.status === "pending")
+      .forEach((entry) => box.append(questionRow(entry, questions.indexOf(entry))));
 
     const button = $("composerAnswer");
     button.disabled = pending.length === 0 || answering;
@@ -1795,7 +2279,7 @@
       : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
     $("composerAnswer").disabled = button.disabled;
     $("composerAnswer").textContent = button.textContent;
-    if ($("retryFailed")) $("retryFailed").disabled = answering;
+    applyLock();
   }
 
   let answering = false;
@@ -1989,6 +2473,23 @@
   }
 
   // --- wiring --------------------------------------------------------------
+  // --- search drawer and chunk view ---
+  $("searchOpen").onclick = openSearch;
+  $("searchClose").onclick = closeSearch;
+  $("searchScrim").onclick = closeSearch;
+  $("searchBtn").onclick = runSearch;
+  $("searchInput").onkeydown = (event) => { if (event.key === "Enter") runSearch(); };
+  $("searchMode").onchange = () => { if ($("searchInput").value.trim()) runSearch(); };
+  $("searchSource").onchange = () => { if ($("searchInput").value.trim()) runSearch(); };
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSearch();
+  });
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.onclick = () => setChunkView(button.dataset.view);
+  });
+  setChunkView(chunkView());
+
+
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
   const priorInput = fileField("priorInput", "priorChosen", "priorBtn");
@@ -2076,5 +2577,7 @@
   renderQuestions();
 })();
 </script>
+
+
 </body>
 </html>

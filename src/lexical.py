@@ -24,6 +24,8 @@ import re
 
 from rank_bm25 import BM25Okapi
 
+from src.chunking import fold_digits
+
 logger = logging.getLogger(__name__)
 
 # Splits on anything that is not a letter or digit, which keeps Arabic words,
@@ -40,6 +42,40 @@ _RRF_K = 60
 
 def tokenize(text: str) -> list[str]:
     return _TOKEN.findall(text.casefold())
+
+
+def parse_search_query(query: str) -> tuple[list[str], list[str], list[str]]:
+    """Split a search box query into (phrases, terms, exclusions), case-folded.
+
+    The notation people already expect from a search box, and nothing more:
+
+        network access     both terms must appear
+        "least privilege"  the quoted run must appear exactly, in order
+        backup -cloud      the minus sign excludes
+
+    Case folding rather than lowercasing, because `str.lower()` leaves some
+    non-ASCII pairs unequal; digits are folded so an Arabic-Indic numeral in the
+    query finds an ASCII one in the document.
+    """
+    phrases: list[str] = []
+    terms: list[str] = []
+    excluded: list[str] = []
+
+    for quoted, bare in re.findall(r'"([^"]*)"|(\S+)', query or ""):
+        if quoted:
+            text = fold_digits(quoted).casefold().strip()
+            if text:
+                phrases.append(text)
+            continue
+        token = bare.strip()
+        if token in ("-", '"'):
+            continue
+        if token.startswith("-") and len(token) > 1:
+            excluded.append(fold_digits(token[1:]).casefold())
+        else:
+            terms.append(fold_digits(token).casefold())
+
+    return phrases, terms, excluded
 
 
 class LexicalIndex:

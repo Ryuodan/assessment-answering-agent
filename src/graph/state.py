@@ -100,6 +100,86 @@ def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
     return sorted(evidence, key=sort_key)
 
 
+def prune_weak_units(
+    evidence: list[Evidence], floor: float, minimum: int
+) -> list[Evidence]:
+    """Drop material scoring far below the best hit for this question.
+
+    A fixed evidence budget spends the same forty chunks on "what is your
+    retention period" as on a six-part synthesis, and the surplus is not
+    harmless: measured on this corpus only 16% of the chunks reaching the
+    drafter sit on a clause the question asked about, and raising the budget
+    from 38 to 48 improved recall while making answers worse. A relative floor
+    lets the question decide how much it needs.
+
+    Two details matter. The comparison uses the agreement-weighted score, so a
+    clause that several independent searches converged on survives a floor its
+    raw cosine would not. And a whole *unit* is kept or dropped together: parts
+    of one numbered series are retrieved as a set precisely so the drafter
+    never sees three items of nine and calls it the list, and pruning by chunk
+    would undo that.
+
+    Prior answers are exempt. They are capped separately by
+    `max_prior_answer_chunks` and scored on a different scale, so letting them
+    set or fail the bar would compare unlike things.
+    """
+    if floor <= 0.0 or not evidence:
+        return evidence
+
+    def group_of(item: Evidence) -> tuple:
+        return (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+
+    guidelines = [item for item in evidence if item.source_type is not SourceType.PRIOR_ANSWER]
+    if not guidelines:
+        return evidence
+
+    # Compared on raw similarity, not the agreement-weighted score used for
+    # ordering. Cosines on policy prose span only about 1.5x end to end, and the
+    # agreement multiplier spans 1.75x, so weighting the comparison let the
+    # number of query phrasings that found a chunk decide whether it cleared a
+    # *similarity* bar: at floor 0.80 that cost 21.7 points of document recall
+    # to buy 9 of precision.
+    best_in_group: dict[tuple, float] = {}
+    hits_in_group: dict[tuple, int] = {}
+    for item in guidelines:
+        group = group_of(item)
+        best_in_group[group] = max(best_in_group.get(group, item.score), item.score)
+        hits_in_group[group] = max(hits_in_group.get(group, 0), item.query_hits)
+
+    best = max(best_in_group.values())
+    if best <= 0:
+        return evidence
+
+    # Agreement rescues rather than scores: a unit that most of the question's
+    # searches independently converged on is kept even below the bar, which is
+    # what the signal is actually evidence of.
+    rescue = max(hits_in_group.values())
+    keep = {
+        group for group, score in best_in_group.items()
+        if score >= floor * best or (rescue > 1 and hits_in_group[group] >= rescue)
+    }
+    kept = [
+        item for item in evidence
+        if item.source_type is SourceType.PRIOR_ANSWER or group_of(item) in keep
+    ]
+
+    # A weak best hit would otherwise leave almost nothing. Restore the highest
+    # scoring units, whole, until the floor on count is met.
+    if sum(1 for item in kept if item.source_type is not SourceType.PRIOR_ANSWER) < minimum:
+        for group, _ in sorted(best_in_group.items(), key=lambda row: -row[1]):
+            if group in keep:
+                continue
+            keep.add(group)
+            kept = [
+                item for item in evidence
+                if item.source_type is SourceType.PRIOR_ANSWER or group_of(item) in keep
+            ]
+            if sum(1 for i in kept if i.source_type is not SourceType.PRIOR_ANSWER) >= minimum:
+                break
+
+    return kept
+
+
 def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> list[Evidence]:
     """The chunks that fit in the drafting prompt: the best of each kind.
 
@@ -125,6 +205,10 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> lis
     """
     if limit <= 0:
         return []
+
+    evidence = prune_weak_units(
+        evidence, settings.evidence_score_floor, settings.min_evidence_chunks
+    )
 
     def is_prior(item: Evidence) -> bool:
         return item.source_type is SourceType.PRIOR_ANSWER

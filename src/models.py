@@ -68,6 +68,14 @@ class Evidence(BaseModel):
     `knowledge.cosine_from_relevance` for why the two differ.
     """
 
+    is_lexical: bool = False
+    """True when this hit came from the keyword index rather than the vectors.
+
+    The search tool offers both, and `score` cannot distinguish them: a BM25
+    rank normalised to the best hit and a cosine similarity are different
+    things wearing the same units.
+    """
+
     query_hits: int = 1
     """How many of the question's searches independently returned this chunk.
 
@@ -282,3 +290,16 @@ class AnswerReview(BaseModel):
         default="",
         description="A better search query to retry with when the answer is not grounded; '' to accept as is",
     )
+
+
+class RelevanceVerdict(BaseModel):
+    """Whether one retrieved excerpt is worth showing the drafter."""
+
+    id: int = Field(description="The excerpt's number, exactly as given")
+    relevant: bool = Field(description="True when it would help answer the question")
+
+
+class RelevanceVerdicts(BaseModel):
+    """Verdicts for one batch of excerpts."""
+
+    verdicts: list[RelevanceVerdict] = Field(default_factory=list)

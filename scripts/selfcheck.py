@@ -79,11 +79,21 @@ def _splitter_removed():
     return True if not leftovers else f"still present in knowledge.py: {leftovers}"
 
 
-@check("step 1 - chunk_size raised to at least 1800")
+@check("step 1 - chunk_size holds a real series")
 def _chunk_size():
+    """The threshold is on *content*, not on the character budget.
+
+    This asked for 1800 when Markdown tables still carried Docling's alignment
+    padding, and 47% of a table chunk was whitespace -- so 1800 characters held
+    roughly 950 of text. De-padding changed what the number buys: at 1800 the
+    same budget held 1,118 characters of content, chunks became coarser than
+    the system was tuned for, and measured accuracy fell 4.4 points. 1200 is
+    what restored the granularity, and it holds *more* content than 1800 did
+    before. Asserting the old figure would now be asserting the artefact.
+    """
     from src.config import settings
 
-    if settings.chunk_size < 1800:
+    if settings.chunk_size < 1000:
         return f"chunk_size={settings.chunk_size}; a 12-item series will split unnecessarily"
     return True
 

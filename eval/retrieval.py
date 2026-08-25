@@ -32,10 +32,15 @@ from pathlib import Path
 
 from src.config import PROJECT_ROOT, settings
 from src.graph import nodes
-from src.graph.state import merge_evidence
+from src.graph.state import merge_evidence, select_evidence
 from src.models import Evidence, Question
 
 logger = logging.getLogger(__name__)
+
+# Evidence budgets the curve is reported at. Spans the settings actually
+# under consideration, so a change of MAX_EVIDENCE_CHUNKS can be read off
+# rather than measured by another full pass.
+BUDGETS = (5, 10, 15, 20, 25, 30, 38, 48, 60)
 
 DEFAULT_TARGETS = PROJECT_ROOT / "eval" / "retrieval_targets.json"
 
@@ -128,6 +133,36 @@ def finds_clause(evidence: list[Evidence], document: str, clause: str) -> bool:
     )
 
 
+def is_on_target(item: Evidence, documents: dict[str, list[str]]) -> bool:
+    """Whether one chunk is material the question actually asked for.
+
+    Two grades, because neither alone is honest. A chunk from a named document
+    may still be its glossary; a chunk covering a named clause is unambiguously
+    wanted. `documents` maps a target document to the clauses expected from it,
+    and a document with no clause list is judged at document level only.
+    """
+    clauses = documents.get(item.source_name)
+    if clauses is None:
+        return False
+    return True if not clauses else any(item.covers_clause(c) for c in clauses)
+
+
+def on_target_counts(
+    evidence: list[Evidence], documents: dict[str, list[str]]
+) -> tuple[int, int, int, int]:
+    """(document-level hits, clause-level hits, on-target chars, total chars)."""
+    doc_hits = clause_hits = on_chars = total_chars = 0
+    for item in evidence:
+        size = len(item.snippet)
+        total_chars += size
+        if item.source_name in documents:
+            doc_hits += 1
+            if is_on_target(item, documents):
+                clause_hits += 1
+                on_chars += size
+    return doc_hits, clause_hits, on_chars, total_chars
+
+
 # ---------------------------------------------------------------------------
 # One question
 # ---------------------------------------------------------------------------
@@ -157,6 +192,36 @@ class CaseResult:
     first_rank: int | None = None
     lost_documents: list[str] = field(default_factory=list)
     missed_documents: list[str] = field(default_factory=list)
+
+    # Precision. Recall alone says whether the answer *could* be written; it
+    # says nothing about how much unrelated material the drafter had to read
+    # past to write it, and raising the evidence budget improves recall while
+    # making answers worse. These measure the other side of that trade.
+    prompt_on_document: int = 0
+    prompt_on_clause: int = 0
+    prompt_chars: int = 0
+    prompt_on_target_chars: int = 0
+    curve: dict[int, tuple[int, int, int]] = field(default_factory=dict)
+    """budget -> (documents in prompt, clauses in prompt, on-clause chunks)."""
+
+    @property
+    def document_precision(self) -> float | None:
+        if not self.prompt:
+            return None
+        return self.prompt_on_document / self.prompt
+
+    @property
+    def clause_precision(self) -> float | None:
+        if not self.prompt:
+            return None
+        return self.prompt_on_clause / self.prompt
+
+    @property
+    def signal_density(self) -> float | None:
+        """Share of the prompt's characters that sit on a named clause."""
+        if not self.prompt_chars:
+            return None
+        return self.prompt_on_target_chars / self.prompt_chars
 
     @property
     def document_recall(self) -> float | None:
@@ -228,6 +293,24 @@ async def measure_case(target: Target, plans: dict[str, list[str]] | None = None
                 result.clauses_in_prompt += 1
 
     result.first_rank = min(ranks) if ranks else None
+
+    on_doc, on_clause, on_chars, total_chars = on_target_counts(prompt, target.documents)
+    result.prompt_on_document = on_doc
+    result.prompt_on_clause = on_clause
+    result.prompt_on_target_chars = on_chars
+    result.prompt_chars = total_chars
+
+    # The budget curve, from this one pass. Selection is deterministic given the
+    # ranking, so every budget can be simulated without retrieving again — which
+    # is the only affordable way to see where recall stops paying for itself.
+    for budget in BUDGETS:
+        at_k = select_evidence(state["ranked"], budget, settings.max_prior_answer_chunks)
+        documents = sum(1 for d in target.documents if finds_document(at_k, d) is not None)
+        clauses = sum(
+            1 for d, cs in target.documents.items() for c in cs if finds_clause(at_k, d, c)
+        )
+        result.curve[budget] = (documents, clauses, on_target_counts(at_k, target.documents)[1])
+
     return result
 
 
@@ -307,7 +390,39 @@ def summarise(results: list[CaseResult]) -> dict:
         "mrr": round(sum(1 / r for r in ranked) / len(scored), 3) if scored else 0.0,
         "mean_retrieved": round(sum(r.retrieved for r in scored) / len(scored), 1) if scored else 0,
         "mean_in_prompt": round(sum(r.prompt for r in scored) / len(scored), 1) if scored else 0,
+        # Precision: of what the drafter was given, how much was asked for.
+        "document_precision_pct": ratio(
+            sum(r.prompt_on_document for r in scored), sum(r.prompt for r in scored)),
+        "clause_precision_pct": ratio(
+            sum(r.prompt_on_clause for r in scored), sum(r.prompt for r in scored)),
+        "signal_density_pct": ratio(
+            sum(r.prompt_on_target_chars for r in scored), sum(r.prompt_chars for r in scored)),
+        "mean_prompt_chars": round(sum(r.prompt_chars for r in scored) / len(scored)) if scored else 0,
+        "budget_curve": budget_curve(scored),
     }
+
+
+def budget_curve(scored: list[CaseResult]) -> dict:
+    """Recall and precision at every budget, from the pass already run.
+
+    Read down the columns: recall rises with the budget and precision falls,
+    and the point where recall stops rising is the point past which a larger
+    budget only adds noise.
+    """
+    documents_expected = sum(r.documents_expected for r in scored)
+    clauses_expected = sum(r.clauses_expected for r in scored)
+    rows = {}
+    for budget in BUDGETS:
+        docs = sum(r.curve.get(budget, (0, 0, 0))[0] for r in scored)
+        clauses = sum(r.curve.get(budget, (0, 0, 0))[1] for r in scored)
+        on_clause = sum(r.curve.get(budget, (0, 0, 0))[2] for r in scored)
+        shown = sum(min(budget, r.retrieved) for r in scored)
+        rows[budget] = {
+            "document_recall_pct": round(100 * docs / documents_expected, 1) if documents_expected else 0.0,
+            "clause_recall_pct": round(100 * clauses / clauses_expected, 1) if clauses_expected else 0.0,
+            "clause_precision_pct": round(100 * on_clause / shown, 1) if shown else 0.0,
+        }
+    return rows
 
 
 def by_category(results: list[CaseResult]) -> dict[str, dict]:
@@ -333,6 +448,11 @@ def format_report(summary: dict, categories: dict, results: list[CaseResult]) ->
         f"({summary['clauses_expected']} expected)",
         f"  clause recall,   retrieved     : {summary['clause_recall_retrieved_pct']:5.1f}%",
         "",
+        f"  document precision, in prompt  : {summary['document_precision_pct']:5.1f}%",
+        f"  clause precision,   in prompt  : {summary['clause_precision_pct']:5.1f}%",
+        f"  signal density (chars on clause): {summary['signal_density_pct']:4.1f}%"
+        f"   of {summary['mean_prompt_chars']:,} chars per prompt",
+        "",
         f"  cases with every source present: {summary['cases_fully_covered']}/{summary['scored']} "
         f"({summary['cases_fully_covered_pct']}%)",
         f"  mean rank of the first hit     : {summary['mean_first_rank']}",
@@ -349,10 +469,29 @@ def format_report(summary: dict, categories: dict, results: list[CaseResult]) ->
         "  " + "-" * 60,
     ]
     for name, stats in categories.items():
+        # A category whose targets name no clauses has nothing to recall, and
+        # printing 0.0% for 0-of-0 read as total failure: all seven Regulatory
+        # Reference targets are document-level, and the report said they
+        # retrieved no clauses at all.
+        clause = (f"{stats['clause_recall_pct']:5.1f}%" if stats["clauses_expected"]
+                  else "  n/a ")
         lines.append(
             f"    {name:26s} doc {stats['document_recall_pct']:5.1f}%   "
-            f"clause {stats['clause_recall_pct']:5.1f}%   ({stats['scored']} cases)"
+            f"clause {clause}   ({stats['scored']} cases)"
         )
+
+    curve = summary.get("budget_curve") or {}
+    if curve:
+        lines += ["", "  evidence budget: what each extra chunk buys and costs",
+                  "  " + "-" * 60,
+                  f"  {'budget':>8s}{'doc recall':>13s}{'clause recall':>15s}{'precision':>12s}"]
+        best = max(row["document_recall_pct"] for row in curve.values())
+        for budget, row in curve.items():
+            mark = "  <- recall plateaus" if row["document_recall_pct"] >= best else ""
+            lines.append(
+                f"  {int(budget):>8d}{row['document_recall_pct']:>12.1f}%"
+                f"{row['clause_recall_pct']:>14.1f}%{row['clause_precision_pct']:>11.1f}%{mark}"
+            )
 
     failures = [r for r in results if r.scorable and (r.lost_documents or r.missed_documents)]
     if failures:

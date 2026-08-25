@@ -14,6 +14,7 @@ whole point of keeping the history.
 from __future__ import annotations
 
 import logging
+import threading
 from functools import lru_cache
 
 from langchain_chroma import Chroma
@@ -21,9 +22,9 @@ from langchain_core.documents import Document
 
 from src.config import settings
 from src.embeddings import get_embeddings
-from src.lexical import LexicalIndex, reciprocal_rank_fusion
+from src.lexical import LexicalIndex, parse_search_query, reciprocal_rank_fusion
 from src.models import Evidence, ExtractedQAPair, SourceType
-from src.chunking import chunk_document
+from src.chunking import chunk_document, fold_digits
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +255,107 @@ class KnowledgeStore:
 
         return self._expand_units(evidence) if expand else evidence
 
+    def lexical_search(self, query: str, source_type: SourceType, k: int) -> list[Evidence]:
+        """Keyword (BM25) hits, best first — no embedding involved.
+
+        Exposed for the search tool, where the two retrieval modes are offered
+        side by side: a person checking whether a policy says "90 days" wants
+        the literal string, and an embedding is the wrong instrument for that.
+        Scored on the same 0-1 scale as a cosine so one result list can mix
+        both, but the figure is a BM25 rank normalised to the best hit, not a
+        similarity — `is_lexical` says which it is.
+        """
+        if k <= 0 or not query.strip():
+            return []
+
+        index, documents = self._lexical(source_type)
+        if not len(index):
+            return []
+
+        keys = index.search(query, k)
+        found: list[Evidence] = []
+        for rank, key in enumerate(keys):
+            record = documents.get(key)
+            if record is None:
+                continue
+            text, metadata = record
+            item = self._evidence(
+                Document(page_content=text, metadata=metadata),
+                0.0,
+                source_type,
+                similarity=round(1.0 - rank / max(len(keys), 1), 4),
+            )
+            item.is_lexical = True
+            found.append(item)
+        return found
+
+    def text_search(self, query: str, source_type: SourceType, k: int) -> list[Evidence]:
+        """Literal text search over one collection, with search-box notation.
+
+        BM25 matches whole words, which is wrong for a person at a search box:
+        typing "net" and being told the corpus says nothing about networks is
+        an answer about the tokeniser, not about the policies. This matches
+        substrings instead, and understands the notation people already expect:
+
+            network access     every term must appear somewhere in the chunk
+            "least privilege"  the quoted run must appear exactly, in order
+            backup -cloud      the minus sign excludes
+
+        Scored by how many times the terms occur, normalised to the best hit,
+        so the figure is comparable within one result list and is never a
+        similarity — `is_lexical` marks it as such.
+        """
+        if k <= 0:
+            return []
+
+        phrases, terms, excluded = parse_search_query(query)
+        if not phrases and not terms:
+            return []
+
+        _, documents = self._lexical(source_type)
+        scored: list[tuple[float, tuple, str, dict]] = []
+
+        for key, (text, metadata) in documents.items():
+            haystack = fold_digits(text).casefold()
+            if any(bad in haystack for bad in excluded):
+                continue
+            wanted = phrases + terms
+            if not all(term in haystack for term in wanted):
+                continue
+            hits = sum(haystack.count(term) for term in wanted)
+            # A phrase is a stronger signal than a loose substring, and a hit in
+            # a short chunk is worth more than one in a long one.
+            score = (hits + 2 * sum(haystack.count(p) for p in phrases)) / (1 + len(haystack) / 4000)
+            scored.append((score, key, text, metadata))
+
+        scored.sort(key=lambda row: -row[0])
+        best = scored[0][0] if scored else 1.0
+        found = []
+        for score, _key, text, metadata in scored[:k]:
+            item = self._evidence(
+                Document(page_content=text, metadata=metadata),
+                0.0,
+                source_type,
+                similarity=round(score / best, 4) if best else 0.0,
+            )
+            item.is_lexical = True
+            found.append(item)
+        return found
+
+    def counts_by_type(self) -> dict[str, int]:
+        """Chunks per source type, so a search can skip an empty collection."""
+        records = self._store.get(include=["metadatas"])
+        counts: dict[str, int] = {}
+        for metadata in records.get("metadatas") or []:
+            key = (metadata or {}).get("source_type", "")
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def documents_indexed(self) -> list[str]:
+        """Every distinct file name in the store, sorted — for the search filter."""
+        records = self._store.get(include=["metadatas"])
+        return sorted({(m or {}).get("source_name", "") for m in records.get("metadatas") or []} - {""})
+
     def _fuse_with_lexical(
         self, query: str, dense: list[Evidence], source_type: SourceType, k: int
     ) -> list[Evidence]:
@@ -410,7 +512,29 @@ class KnowledgeStore:
         }
 
 
+_store_lock = threading.Lock()
+
+
 @lru_cache(maxsize=1)
-def get_store() -> KnowledgeStore:
-    """Return the shared store. Chroma clients are expensive and not meant to be per-request."""
+def _build_store() -> KnowledgeStore:
     return KnowledgeStore()
+
+
+def get_store() -> KnowledgeStore:
+    """Return the shared store, built exactly once.
+
+    `lru_cache` alone is not enough: it does not hold a lock while the wrapped
+    function runs, so two threads arriving together both construct a
+    `KnowledgeStore`, and Chroma's process-wide client registry is not
+    reentrant -- the second construction raced the first through
+    `SharedSystemClient` and the request died with a bare `KeyError` on the
+    persist directory. FastAPI runs sync endpoints in a threadpool, and the
+    interface opens with two independent calls that both want the store, so
+    this is the ordinary path rather than a rare one.
+    """
+    with _store_lock:
+        return _build_store()
+
+
+# Callers reset the store between tests; keep the name they already use.
+get_store.cache_clear = _build_store.cache_clear

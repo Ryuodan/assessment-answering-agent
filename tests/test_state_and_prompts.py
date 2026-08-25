@@ -9,8 +9,14 @@ from __future__ import annotations
 import pytest
 
 from src.config import settings
-from src.graph.state import agreement_bonus, merge_evidence, order_evidence, select_evidence
-from src.models import Evidence, SourceType
+from src.graph.state import (
+    agreement_bonus,
+    merge_evidence,
+    order_evidence,
+    prune_weak_units,
+    select_evidence,
+)
+from src.models import Evidence, Question, SourceType
 from src.prompts import format_sources_block
 
 
@@ -347,3 +353,108 @@ def test_a_negative_score_does_not_collapse_into_a_tie():
     """The 0.0 seed used to flatten every below-zero group onto one value."""
     ordered = order_evidence([guideline(1, score=-0.30), guideline(2, score=-0.05)])
     assert [item.chunk for item in ordered] == [2, 1]
+
+
+# --- adaptive evidence floor -----------------------------------------------
+
+
+def _chunk(name, chunk, score, unit="", hits=1, part=1):
+    return Evidence(
+        source_type=SourceType.GUIDELINE, source_name=name, snippet="x",
+        score=score, chunk=chunk, unit_id=unit, part=part, query_hits=hits,
+    )
+
+
+def test_the_floor_drops_material_far_below_the_best_hit():
+    evidence = [_chunk("a.pdf", 1, 0.80, "u1"), _chunk("b.pdf", 2, 0.40, "u2")]
+    kept = prune_weak_units(evidence, floor=0.9, minimum=1)
+
+    assert [item.source_name for item in kept] == ["a.pdf"]
+
+
+def test_a_floor_of_zero_changes_nothing():
+    evidence = [_chunk("a.pdf", 1, 0.80, "u1"), _chunk("b.pdf", 2, 0.10, "u2")]
+    assert prune_weak_units(evidence, floor=0.0, minimum=1) == evidence
+
+
+def test_agreement_rescues_a_chunk_the_raw_score_would_lose(monkeypatch):
+    """Several independent searches converging is the other free signal, and it
+    has to be able to outvote a slightly lower cosine."""
+    monkeypatch.setattr(settings, "query_agreement_weight", 0.15)
+    strong = _chunk("a.pdf", 1, 1.00, "u1", hits=1)
+    agreed = _chunk("b.pdf", 2, 0.85, "u2", hits=4)   # 0.85 * 1.45 = 1.23
+    alone = _chunk("c.pdf", 3, 0.85, "u3", hits=1)
+
+    kept = {item.source_name for item in prune_weak_units([strong, agreed, alone], 0.95, 1)}
+
+    assert "b.pdf" in kept, "four searches agreeing must count for something"
+    assert "c.pdf" not in kept, "the same score found once must not"
+
+
+def test_a_split_series_is_kept_or_dropped_whole():
+    """Parts of one unit are retrieved as a set so the drafter never sees three
+    items of nine and calls it the list; pruning by chunk would undo that."""
+    evidence = [
+        _chunk("a.pdf", 1, 0.90, "u1", part=1),
+        _chunk("a.pdf", 2, 0.20, "u1", part=2),   # weak, but same unit
+        _chunk("b.pdf", 3, 0.20, "u2"),
+    ]
+    kept = prune_weak_units(evidence, floor=0.9, minimum=1)
+
+    assert [item.chunk for item in kept] == [1, 2], "the unit must survive intact"
+
+
+def test_a_weak_best_hit_does_not_starve_the_prompt():
+    evidence = [_chunk(f"{n}.pdf", n, 0.50 - n * 0.05, f"u{n}") for n in range(6)]
+    kept = prune_weak_units(evidence, floor=0.99, minimum=4)
+
+    assert len(kept) >= 4
+
+
+def test_prior_answers_are_exempt_from_the_floor():
+    prior = Evidence(source_type=SourceType.PRIOR_ANSWER, source_name="q.pdf",
+                     snippet="x", score=0.10, chunk=9, unit_id="p1")
+    kept = prune_weak_units([_chunk("a.pdf", 1, 0.90, "u1"), prior], floor=0.9, minimum=1)
+
+    assert prior in kept, "priors are capped separately and scored differently"
+
+
+# --- agreement counting ----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_agreement_counts_searches_not_copies(monkeypatch):
+    """A chunk six queries agree on must score 6, not 36.
+
+    Each search returns its own copy of a shared chunk, and the state reducer
+    sums `query_hits` when it de-duplicates. Returning every copy therefore
+    squared the count, and `agreement_bonus` -- designed to top out at 1.75 --
+    multiplied by 6.4, so ranking was decided by how many phrasings found a
+    chunk rather than by how well it matched.
+    """
+    from src.config import settings
+    from src.graph import nodes
+
+    shared = dict(source_type=SourceType.GUIDELINE, source_name="std.pdf", snippet="s", chunk=1)
+
+    class Store:
+        async def search(self, query, source_type, k):
+            if source_type is SourceType.PRIOR_ANSWER:
+                return []
+            return [Evidence(score=0.7, **shared)]
+
+    monkeypatch.setattr(nodes, "get_store", lambda: Store(), raising=False)
+    monkeypatch.setattr("src.knowledge.get_store", lambda: Store(), raising=False)
+    monkeypatch.setattr(settings, "top_k_guidelines", 8)
+
+    queries = [f"query {n}" for n in range(6)]
+    out = await nodes.retrieve({
+        "question": Question(id="q1", text="anything"),
+        "search_queries": queries,
+    })
+
+    found = [e for e in out["evidence"] if e.source_name == "std.pdf"]
+    assert len(found) == 1, "one entry per chunk, not one per search"
+    assert found[0].query_hits == len(queries)
+    assert agreement_bonus(found[0].query_hits) == pytest.approx(
+        1 + settings.query_agreement_weight * (len(queries) - 1))

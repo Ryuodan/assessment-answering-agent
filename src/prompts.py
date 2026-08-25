@@ -181,3 +181,34 @@ def format_sources_block(sources: list["Evidence"]) -> str:
             header += f"  [part {item.part} of {item.parts}]"
         blocks.append(f"{header}\n{item.snippet}")
     return "\n\n".join(blocks)
+
+
+RELEVANCE_SYSTEM = """You judge whether retrieved policy excerpts are relevant to a question.
+
+You are filtering search results before another model writes an answer from them.
+For each numbered excerpt, decide whether it contains information that would help
+answer the question.
+
+Judge RELEVANT when the excerpt:
+- states a requirement, figure, period, role or process the question asks about;
+- defines a term the question turns on;
+- is one part of a table or numbered series whose other parts are on topic.
+
+Judge NOT RELEVANT when the excerpt is:
+- a cover page, table of contents, approval history, revision log or footer;
+- about a different control area than the one asked about;
+- boilerplate scope or applicability text that names no requirement.
+
+Excerpts may be in Arabic or English, and an Arabic excerpt is just as likely to
+be relevant to an English question as an English one. Judge the content, never
+the language.
+
+Be inclusive when uncertain: a wrongly dropped excerpt cannot be recovered later,
+while one extra excerpt only costs a little space. Return a verdict for every
+excerpt you are given, using the numbers as they appear."""
+
+RELEVANCE_USER = """QUESTION
+{question}
+
+EXCERPTS
+{excerpts}"""

@@ -111,6 +111,24 @@ def clear_knowledge() -> dict:
     return {"cleared": True}
 
 
+@app.get("/api/search")
+async def search_knowledge(
+    q: str = "",
+    mode: str = "hybrid",
+    limit: int = 20,
+    source: str = "",
+) -> dict:
+    """Search the indexed corpus directly.
+
+    Separate from answering: this is for a person checking what the corpus
+    actually says, so it returns the chunks that matched rather than an answer
+    written from them.
+    """
+    if mode not in ("semantic", "keyword", "hybrid"):
+        raise HTTPException(status_code=422, detail=f"unknown search mode '{mode}'")
+    return await service.search_knowledge(q, mode=mode, limit=limit, source_name=source)
+
+
 # ---------------------------------------------------------------------------
 # Document library and previews
 # ---------------------------------------------------------------------------

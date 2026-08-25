@@ -146,6 +146,51 @@ class Settings(BaseSettings):
     # the authority; lower it to make the drafter lean on the guidelines.
     max_prior_answer_chunks: int = Field(default=4, ge=0)
 
+    # Keep a retrieved unit only if it scores within this fraction of the best
+    # hit for the question, so a simple lookup is answered from six chunks and
+    # a synthesis question still gets forty. 0 disables it and the budget alone
+    # decides. Judged on the agreement-weighted score, so a clause several
+    # independent searches converged on survives a floor that its raw cosine
+    # would not — the two precision signals available for free, combined.
+    #
+    # Set it high or not at all: BGE-M3 cosines on policy prose bunch tightly,
+    # and on this corpus the median retrieved chunk still scores 94% of the
+    # best hit, so anything below ~0.90 discards nothing.
+    evidence_score_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Never prune below this many chunks, whatever the floor says. A question
+    # whose best hit is itself weak would otherwise be answered from one chunk.
+    min_evidence_chunks: int = Field(default=8, ge=1)
+
+    # Grade each retrieved chunk against the question with an LLM, and use the
+    # verdicts to re-order the evidence. Cosine cannot do this job on policy
+    # prose: even the five best-ranked chunks are only about a third on-target,
+    # and every threshold tried on the score itself cost two to four points of
+    # recall for each point of precision. A grader reads query and chunk
+    # together, which is the interaction an embedding discards.
+    relevance_filter_enabled: bool = False
+    # Chunks per grading call. One call per chunk would be ~2,000 calls for a
+    # 42-question run and trips Groq's rate limit; a dozen per call makes it
+    # three calls per question, issued concurrently.
+    relevance_filter_batch: int = Field(default=12, ge=1)
+    # Chunks always kept regardless of the verdicts. The grader is one more
+    # thing that can be wrong, and a false negative on the only chunk carrying
+    # the answer leaves nothing to recover from.
+    relevance_filter_keep: int = Field(default=8, ge=0)
+    # Blank uses GROQ_CHAT_MODEL. A smaller model is faster and cheaper, but
+    # verify it on Arabic before trusting it: this corpus is half Arabic, and
+    # small models degrade there first.
+    relevance_filter_model: str = ""
+    # Characters of each chunk shown to the grader. Enough to judge relevance,
+    # short enough that a dozen fit in one call.
+    relevance_filter_snippet: int = Field(default=700, ge=100)
+    # Move graded-relevant material to the front, rather than only deleting
+    # off-target material from the back. Without this the grader can never put
+    # a good chunk sitting at position 25 into the top eight -- and the drafter
+    # cites about eight sources however many it is shown, so the back of the
+    # prompt is the one place a change cannot matter. The keep floor still
+    # protects those chunks from deletion; it no longer pins them in place.
+    relevance_filter_promote: bool = True
+
     # How much a chunk gains for each extra search that independently returned
     # it. Query expansion runs several deliberately overlapping searches per
     # question, so agreement between them is a relevance signal that costs

@@ -21,9 +21,11 @@ from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs, extract_questions
 from src.graph import answer_one_question, assessment_graph, failed_answer
 from src.knowledge import get_store
+from src.lexical import reciprocal_rank_fusion
 from src.models import (
     AnsweredQuestion,
     AssessmentResult,
+    Evidence,
     IngestResult,
     Language,
     Question,
@@ -252,6 +254,100 @@ def run_progress(run_id: str) -> dict | None:
 def knowledge_stats() -> dict:
     """Counts and indexed file names, for the UI's knowledge panel."""
     return get_store().stats()
+
+
+# A person waiting at a search box will not wait a minute for a remote
+# embedding host that is not answering. The literal search needs no network.
+SEARCH_EMBED_TIMEOUT = 10.0
+
+
+async def search_knowledge(
+    query: str,
+    *,
+    mode: str = "hybrid",
+    limit: int = 20,
+    source_name: str = "",
+) -> dict:
+    """Search the indexed corpus directly, for a person rather than the drafter.
+
+    Two ways of matching, because they fail in opposite ways and someone
+    verifying a claim needs to choose. `semantic` finds material that means the
+    same thing in either language; `keyword` matches the literal text, which is
+    what you want when checking whether a policy really says "90 days", and
+    understands `"quoted phrases"` and `-exclusions`. `hybrid` fuses both by
+    reciprocal rank.
+
+    Units are deliberately not expanded here. The answering path completes a
+    split series so the drafter never mistakes a fragment for the whole list; a
+    search result should be the chunk that actually matched.
+    """
+    query = (query or "").strip()
+    if not query:
+        return {"query": "", "mode": mode, "results": [], "documents": []}
+
+    store = get_store()
+    limit = max(1, min(limit, 50))
+    # An empty collection still costs an embedding round trip to search, and
+    # the prior-answers one is usually empty.
+    counts = await asyncio.to_thread(store.counts_by_type)
+    degraded: list[str] = []
+
+    async def for_type(source_type: SourceType) -> list[Evidence]:
+        if not counts.get(source_type.value):
+            return []
+
+        dense: list[Evidence] = []
+        literal: list[Evidence] = []
+        if mode in ("semantic", "hybrid"):
+            try:
+                dense = await asyncio.wait_for(
+                    store.search(query, source_type, limit, expand=False), SEARCH_EMBED_TIMEOUT
+                )
+            except Exception as error:  # noqa: BLE001
+                # The embedding service is remote and occasionally slow to
+                # answer; a person at a search box should get the literal
+                # matches rather than a spinner or a stack trace.
+                degraded.append(str(error) or repr(error))
+                logger.warning("Semantic search unavailable, falling back to text: %s", error)
+        if mode in ("keyword", "hybrid"):
+            literal = await asyncio.to_thread(store.text_search, query, source_type, limit)
+        if not dense and degraded and mode == "semantic":
+            # Nothing to show otherwise: answer the query the one way still working.
+            literal = await asyncio.to_thread(store.text_search, query, source_type, limit)
+        if mode != "hybrid":
+            return dense or literal
+
+        # Fused on rank, not score: a text-match count and a cosine are not
+        # comparable numbers, and averaging them would silently favour
+        # whichever happens to use the wider range.
+        by_key: dict[tuple, Evidence] = {}
+        for item in dense + literal:
+            by_key.setdefault((item.source_name, item.chunk), item)
+        rankings = [
+            [(item.source_name, item.chunk) for item in dense],
+            [(item.source_name, item.chunk) for item in literal],
+        ]
+        return [by_key[key] for key in reciprocal_rank_fusion(rankings) if key in by_key]
+
+    # Both collections at once: they are independent queries and running them
+    # in sequence doubled the wait for no reason.
+    batches = await asyncio.gather(
+        *(for_type(source_type) for source_type in (SourceType.GUIDELINE, SourceType.PRIOR_ANSWER))
+    )
+    found = [item for batch in batches for item in batch]
+
+    if source_name:
+        found = [item for item in found if item.source_name == source_name]
+
+    return {
+        "query": query,
+        "mode": mode,
+        "results": [item.model_dump() for item in found[:limit]],
+        "documents": await asyncio.to_thread(store.documents_indexed),
+        # Set when meaning-based search could not run, so the interface can say
+        # so rather than implying the corpus holds nothing.
+        "degraded": bool(degraded),
+    }
 
 
 def delete_source(source_name: str) -> None:

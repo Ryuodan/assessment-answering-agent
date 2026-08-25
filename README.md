@@ -246,6 +246,84 @@ is more coherent and which therefore embed better. The lesson is about the
 metric, not the setting: unit-size statistics are a proxy, and the proxy was
 wrong.
 
+**Precision was the wrong lever, and it took four experiments to establish.**
+Recall had been measured all along; precision had not, so `eval/retrieval.py`
+now reports it alongside, alongside a budget curve computed from a single pass.
+On this corpus only 17% of the chunks reaching the drafter sit on a clause the
+question asked about, and even the five best-ranked are barely a third — so the
+prompt looked badly polluted and cutting it looked obviously right.
+
+It was not. Four ways of raising precision were measured, each scored on
+generation with three paired judge passes:
+
+| intervention | precision | accuracy |
+|---|---|---|
+| relative score floor (0.85) | +3.8 | not run: cost 8.7 recall first |
+| smaller per-query `top_k` (5) | +1.0 | not run: cost 4.7 clause recall |
+| LLM relevance grader, floor 8 | +4.2 | **-1.3** |
+| LLM relevance grader, floor 16 | +2.7 | **-1.9** |
+
+The grader bought more precision than anything else, cut the prompt by 40% with
+recall almost intact, and still lost accuracy — in six paired passes across two
+settings, never once positive. Raising the protected floor made it worse, which
+rules out "the floor was too low".
+
+The conclusion is that the drafter is not much distracted by off-target policy
+text, and that the material the metric scores as noise is doing some work: a
+definitions section, a neighbouring control, the regulation a policy
+implements. `eval/retrieval_targets.json` names only each question's *primary*
+sources, so measured precision is a lower bound, and this result says the gap
+between it and the truth is wide. Treat the precision figure as a comparator
+between configurations, never as a thing to maximise.
+
+The grader survives behind `RELEVANCE_FILTER_ENABLED`, off. It is worth
+retrying against a larger golden set, where "relevant" could be defined well
+enough for the metric to tell a useful neighbour from a useless one.
+
+**Agreement was counted once per copy, not once per search.** `retrieve` stamps
+each chunk with how many of the round's searches returned it, but a chunk six
+queries agree on comes back in six batches, and the state reducer sums
+`query_hits` when it de-duplicates: six copies each stamped with six
+accumulated to thirty-six. The multiplier meant to top out at 1.75 reached 6.4,
+and since cosines on policy prose span only 1.5x end to end, ranking was decided
+by how many phrasings found a chunk rather than by how well it matched. Fixed by
+collapsing duplicates in `retrieve`; measured afterwards, retrieval was
+unchanged, because the evidence budget is rarely the binding constraint --
+roughly 37 distinct chunks are retrieved and 38 are allowed through, so almost
+nothing was being cut and ordering had little to decide.
+
+**The search drawer, and two views of a chunk.** `GET /api/search` runs the
+same retrieval the drafter uses, but returns the passages rather than an answer
+written from them, so a person can check what the corpus actually says. Three
+modes, because the two methods fail in opposite ways: `semantic` finds material
+that means the same thing in either language, `keyword` finds the literal
+string -- which is what you want when checking whether a policy really says
+"90 days" -- and `hybrid` fuses them by reciprocal rank rather than by score,
+since a BM25 rank and a cosine are not comparable numbers. A lexical hit is
+flagged `is_lexical` so its figure is never read as a similarity. Units are not
+expanded here: the answering path completes a split series so the drafter never
+mistakes a fragment for the whole list, but a search result should be the chunk
+that actually matched.
+
+Chunks render either as the raw Markdown the parser produced or laid out, and
+the toggle sits next to the text in both the search drawer and an answer's
+citations. The formatted view earns its keep now that tables survive chunking
+intact -- but it is also where this feature failed once before, by splitting a
+row on the pipe and discarding the first and last field, which is right only
+when a row has both an opening and a closing pipe. 1,081 of 3,044 chunks lost
+up to 92% of their words and nothing caught it, because a prettier panel still
+looks correct.
+
+So `renderChunk` verifies itself: it compares the word multiset of what it
+produced against the source text and falls back to raw if one word went
+missing. Building that guard found its own bug -- reading the rendered text off
+`textContent` concatenates adjacent table cells, so a header row of six cells
+reading "Systems" came back as the single word "SystemsSystemsSystems...", and
+the check reported a loss on 185 of 194 real chunks. Every one was a false
+alarm, and left alone it would have silently disabled the formatted view
+entirely. Measured against 246 real chunks -- 136 with tables, 10 Arabic --
+after the fix: none loses a word.
+
 **A citation names the file, not just a code.** Answers cite
 `T2 - سياسة إدارة كلمات المرور..pdf [PRO-PMP-2024] §5–5.2`, because the internal
 document code alone is not something a reader can find in a folder of eighty
