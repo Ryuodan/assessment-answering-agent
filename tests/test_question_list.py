@@ -237,3 +237,115 @@ def test_extraction_rejects_an_unsupported_file():
             files={"file": ("notes.txt", b"hello", "text/plain")},
         )
     assert response.status_code == 415
+
+
+# --- a file filed under the wrong type --------------------------------------
+#
+# The two directions are not symmetric. A policy filed as previous answers
+# yields no pairs and indexes nothing, which is recoverable but was reported as
+# success. An assessment filed as a guideline indexes perfectly well, and every
+# answer in it then carries the authority of a policy.
+
+POLICY = "## 3.4 Access Control\n\n" + ("Access rights are granted on least privilege. " * 60)
+QUESTIONNAIRE = "| Question | Response |\n" + (
+    "| Do you encrypt data at rest? | Yes, AES-256. |\n"
+    "| How long are logs retained? | Twelve months. |\n" * 30)
+
+
+async def test_a_policy_filed_as_previous_answers_is_reported_not_silently_dropped(monkeypatch, tmp_path):
+    async def no_pairs(text):
+        return []
+
+    monkeypatch.setattr(service, "extract_qa_pairs", no_pairs)
+    monkeypatch.setattr(service, "extracted_document_text", lambda path: _async(POLICY))
+
+    path = tmp_path / "policy.pdf"
+    path.write_bytes(b"stub")
+    result = await service.ingest(path, service.SourceType.PRIOR_ANSWER)
+
+    assert result.chunks_indexed == 0
+    assert result.error and "guideline" in result.error
+    assert "nothing was indexed" in result.error
+
+
+async def test_a_questionnaire_filed_as_a_guideline_is_warned_about(monkeypatch, tmp_path):
+    indexed = {}
+
+    def fake_add(name, text, content_hash=""):
+        indexed["name"] = name
+        return 3
+
+    monkeypatch.setattr(service, "extracted_document_text", lambda path: _async(QUESTIONNAIRE))
+    monkeypatch.setattr(service.get_store(), "add_guideline", fake_add)
+    monkeypatch.setattr(service.get_store(), "source_with_hash", lambda *a, **k: None)
+
+    path = tmp_path / "completed.pdf"
+    path.write_bytes(b"stub")
+    result = await service.ingest(path, service.SourceType.GUIDELINE)
+
+    # It is indexed — refusing would be worse than warning — but not silently.
+    assert result.chunks_indexed == 3
+    assert result.warning and "previous answers" in result.warning
+
+
+async def test_a_real_policy_raises_no_warning(monkeypatch, tmp_path):
+    """The threshold must clear every one of the 80 indexed policies."""
+    monkeypatch.setattr(service, "extracted_document_text", lambda path: _async(POLICY))
+    monkeypatch.setattr(service.get_store(), "add_guideline", lambda *a, **k: 2)
+    monkeypatch.setattr(service.get_store(), "source_with_hash", lambda *a, **k: None)
+
+    path = tmp_path / "policy.pdf"
+    path.write_bytes(b"stub")
+    result = await service.ingest(path, service.SourceType.GUIDELINE)
+
+    assert result.warning is None
+
+
+@pytest.mark.parametrize(("text", "warned"), [
+    ("short", False),                                   # too small to judge
+    ("policy text without questions. " * 200, False),
+    ("Is this a question? " * 200, True),
+])
+def test_the_questionnaire_signal_is_measured_not_guessed(text, warned):
+    assert (service._looks_like_a_questionnaire(text, "f.pdf") is not None) is warned
+
+
+def _async(value):
+    async def run():
+        return value
+    return run()
+
+
+# --- a failure is distinguishable from a bad answer -------------------------
+
+
+def test_a_failed_question_carries_a_machine_readable_error():
+    from src.graph import failed_answer
+
+    answered = failed_answer(Question(id="1", text="q"), RuntimeError("rate limit reached"))
+
+    assert answered.error == "rate limit reached"
+    assert answered.answer == ""
+    assert answered.needs_review is True
+
+
+def test_an_error_with_no_message_still_identifies_itself():
+    from src.graph import failed_answer
+
+    assert failed_answer(Question(id="1", text="q"), TimeoutError()).error == "TimeoutError"
+
+
+def test_a_normal_answer_has_no_error(answered):
+    body = _post({"questions": [{"text": "Do you encrypt data?"}]}).json()
+    assert body["answers"][0]["error"] == ""
+
+
+def test_a_failed_answer_surfaces_its_error_through_the_api(monkeypatch):
+    async def boom(question, language):
+        raise RuntimeError("429 rate limit")
+
+    monkeypatch.setattr(service, "answer_one_question", boom)
+    body = _post({"questions": [{"text": "Do you encrypt data?"}]}).json()
+
+    assert body["answers"][0]["error"] == "429 rate limit"
+    assert body["answers"][0]["answer"] == ""

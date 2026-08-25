@@ -368,6 +368,25 @@ class KnowledgeStore:
 
         return expanded
 
+    def guideline_names(self) -> list[str]:
+        """The indexed guideline file names, cheapest form, sorted.
+
+        Used to tell the query planner what the corpus actually holds. It
+        cannot ask for a policy it does not know exists, and on this corpus
+        that is the dominant retrieval failure: a question about offboarding
+        needs the third-party policy, the planner never writes a query naming
+        third parties, and a document that ranks first at cosine 0.76 when
+        asked for directly is never asked for at all.
+        """
+        records = self._store.get(
+            where={"source_type": SourceType.GUIDELINE.value}, include=["metadatas"]
+        )
+        return sorted({
+            metadata.get("source_name", "")
+            for metadata in (records.get("metadatas") or [])
+            if metadata.get("source_name")
+        })
+
     def stats(self) -> dict:
         """Counts per source type and the list of indexed file names, for the UI."""
         records = self._store.get(include=["metadatas"])

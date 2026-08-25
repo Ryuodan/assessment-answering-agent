@@ -73,9 +73,31 @@ async def ingest(path: str | Path, source_type: SourceType) -> IngestResult:
 
         if source_type is SourceType.GUIDELINE:
             chunks = store.add_guideline(path.name, text, content_hash)
-            return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=chunks)
+            return IngestResult(
+                source_name=path.name,
+                source_type=source_type,
+                chunks_indexed=chunks,
+                warning=_looks_like_a_questionnaire(text, path.name),
+            )
 
         pairs = await extract_qa_pairs(text)
+        if not pairs:
+            # Indexing nothing and reporting success reads as "done". A policy
+            # filed here is simply absent from the knowledge base afterwards,
+            # and nothing says so.
+            logger.warning("No Q/A pairs in '%s'; it was probably not a completed assessment", path.name)
+            return IngestResult(
+                source_name=path.name,
+                source_type=source_type,
+                chunks_indexed=0,
+                qa_pairs_found=0,
+                error=(
+                    f"No question/answer pairs were found in '{path.name}', so nothing was indexed. "
+                    "Previous answers must be an assessment that has already been filled in. "
+                    "If this is a policy or standard, upload it as a guideline instead."
+                ),
+            )
+
         chunks = store.add_prior_answers(path.name, pairs, content_hash)
         return IngestResult(
             source_name=path.name,
@@ -87,6 +109,37 @@ async def ingest(path: str | Path, source_type: SourceType) -> IngestResult:
     except Exception as exc:  # noqa: BLE001 - reported per file, not fatal to the batch
         logger.exception("Failed to ingest %s", path.name)
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0, error=str(exc))
+
+
+# A questionnaire is mostly questions; a policy states things. Measured across
+# the eighty indexed policies and standards the highest density is 1.46 per
+# thousand characters, and a filled-in assessment runs above 20 — so anything
+# past this is a document of a kind that does not belong in the guidelines.
+_QUESTION_DENSITY_LIMIT = 5.0
+
+
+def _looks_like_a_questionnaire(text: str, name: str) -> str | None:
+    """Warn when a guideline upload looks like an assessment form instead.
+
+    The mistake is silent and one-directional. A policy filed as previous
+    answers yields no Q/A pairs and indexes nothing, which is recoverable. An
+    assessment filed as a guideline indexes perfectly well — and every answer
+    in it then carries the authority of a policy, so "Yes, AES-256 is applied"
+    is retrieved as though the organisation's standard said it.
+    """
+    if len(text) < 2000:
+        return None
+    density = 1000 * text.count("?") / len(text)
+    if density <= _QUESTION_DENSITY_LIMIT:
+        return None
+    logger.warning("'%s' reads like a questionnaire (%.1f ?/1k chars) but was indexed as a guideline",
+                   name, density)
+    return (
+        f"'{name}' is mostly questions, so it may be an assessment form rather than a policy. "
+        "It has been indexed as a guideline, which means its contents will be treated as "
+        "authoritative. If it is a completed assessment, remove it and upload it under "
+        "previous answers instead."
+    )
 
 
 async def answer_assessment(
@@ -427,7 +480,7 @@ def _document_info(path: Path, *, origin: str, category: str) -> dict:
 
 # Bumped whenever the extraction code changes in a way that alters its output,
 # so cached text from an older, worse extractor is not silently reused.
-_EXTRACTION_VERSION = "5"
+_EXTRACTION_VERSION = "6"
 
 
 def _extracted_text_cache_path(path: Path) -> Path:
@@ -439,6 +492,7 @@ def _extracted_text_cache_path(path: Path) -> Path:
             str(settings.docling_do_ocr),
             str(settings.docling_ocr_auto),
             settings.docling_image_export_mode,
+            str(settings.docling_heading_hierarchy),
         )
     )
     cache_key = hashlib.sha256(cache_input.encode("utf-8")).hexdigest()[:24]

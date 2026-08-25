@@ -57,6 +57,7 @@ def _conversion_options() -> dict[str, Any]:
         "to_formats": ["md"],
         "image_export_mode": settings.docling_image_export_mode,
         "do_ocr": settings.docling_do_ocr,
+        "do_pdf_heading_hierarchy": settings.docling_heading_hierarchy,
     }
 
 
@@ -78,6 +79,7 @@ async def convert_file(path: Path, *, do_ocr: bool | None = None) -> str:
         "to_formats": "md",
         "image_export_mode": settings.docling_image_export_mode,
         "do_ocr": str(settings.docling_do_ocr if do_ocr is None else do_ocr).lower(),
+        "do_pdf_heading_hierarchy": str(settings.docling_heading_hierarchy).lower(),
     }
     submitted = await _post(
         FILE_ASYNC_ENDPOINT, data=form, files={"files": (path.name, path.read_bytes())}

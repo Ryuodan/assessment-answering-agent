@@ -163,3 +163,35 @@ def test_every_setting_appears_in_the_example_env():
 
     assert not (expected - example), f"missing from .env.example: {sorted(expected - example)}"
     assert not (example - expected - secrets), f"unknown keys in .env.example: {sorted(example - expected - secrets)}"
+
+
+def test_the_example_env_agrees_with_the_code_defaults():
+    """The template and the fallback must describe the same system.
+
+    They are two answers to "what does this run by default", and for a while
+    they disagreed about the drafting model: `.env.example` said
+    openai/gpt-oss-120b, which is what every figure in eval/ and the README
+    describes, while the code default still named the model it had been
+    switched away from. Nothing broke, because a real `.env` outranks the code
+    default — but a deployment without one would have quietly served a
+    different model from the one that was measured.
+
+    Both sides are parsed through `Settings`, so "180" and 180.0, "false" and
+    False, and a relative path and its resolved form all compare equal. Only a
+    genuine disagreement fails.
+    """
+    from src.config import PROJECT_ROOT, Settings
+
+    from_example = Settings(_env_file=PROJECT_ROOT / ".env.example")
+    from_defaults = Settings(_env_file=None)
+
+    # Secrets are blank in the template by design; nothing else may differ.
+    secrets = {"groq_api_key", "embedding_api_key"}
+    disagree = {
+        name: (getattr(from_defaults, name), getattr(from_example, name))
+        for name in Settings.model_fields
+        if name not in secrets
+        and getattr(from_defaults, name) != getattr(from_example, name)
+    }
+
+    assert not disagree, f"the template and the code defaults disagree: {disagree}"

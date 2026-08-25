@@ -21,8 +21,15 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_default_groq_chat_model(monkeypatch):
+    """A deployment with no `.env` must run the model the numbers describe.
+
+    This asserted minimax-m2.7 long after the project had measured and moved
+    to gpt-oss-120b — harmless while a real `.env` outranks the default, and
+    exactly the drift `test_the_example_env_agrees_with_the_code_defaults`
+    now guards against.
+    """
     monkeypatch.delenv("GROQ_CHAT_MODEL", raising=False)
-    assert Settings(_env_file=None).groq_chat_model == "minimaxai/minimax-m2.7"
+    assert Settings(_env_file=None).groq_chat_model == "openai/gpt-oss-120b"
 
 
 # --- language detection ----------------------------------------------------

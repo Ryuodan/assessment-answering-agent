@@ -80,6 +80,7 @@ def failed_answer(question: Question, error: BaseException) -> AnsweredQuestion:
         rationale=f"Answering failed: {error}",
         confidence=0.0,
         needs_review=True,
+        error=str(error) or error.__class__.__name__,
     )
 
 

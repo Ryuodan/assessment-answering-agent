@@ -185,6 +185,67 @@ one hit and the multiplier is exactly 1, and with the reranker on the
 cross-encoder's ordering is used instead. Measured on the golden set it is a
 small effect (see below), which is worth knowing before relying on it.
 
+**Two numbering conventions, both of which have to be read.** T2's own
+policies number clauses with dots — 3.4.1. The NCA and SDAIA publications
+number controls with dashes — 1-1-1 — and the ECC implementation guide, the
+largest document in this corpus, uses nothing else: 352 dashed control ids and
+not one dotted clause. Recognising only dots left all 843 of its chunks with no
+clause identifier at all, so its citations gave a file name and no reference,
+and the mechanical check that a named clause is actually supported could not
+evaluate a single claim drawn from it. Corpus-wide only a quarter of chunks
+carried an identifier. Both notations are read now, each kept in the separator
+its own document uses, because the identifier is something a reader looks up in
+that document — and a control table's chunk carries the *range* of rows it
+holds, since citing the first of nine rows looks precise and is not.
+
+**Half of every Markdown table Docling emits is alignment padding.** Docling
+pads each cell to the width of the widest cell in its column, so a table
+carrying one 200-character definition pads all of its other rows to match.
+Across this corpus that padding is 47% of all table text -- 7.07M characters of
+table holding 3.73M characters of content, and one 18-row table measuring
+40,320 characters to hold 8,323.
+
+The cost is not cosmetic, because the padding is charged three times: against
+`CHUNK_SIZE`, so tables that fit comfortably were split anyway; into the
+embedding, so half of a table chunk's vector was runs of spaces; and again in
+the drafting prompt, where thirty evidence chunks share one context window. The
+vulnerability-scanning frequency table is the case that exposed it. It measures
+~2,000 characters padded and ~700 unpadded, so it was cut into four pieces, and
+each piece carried only row one of the table as its repeated header -- which in
+that table is Docling's flattening of a merged cell, `| | Systems | Systems |
+...`, naming no column at all. The drafter was shown six columns called
+"Systems" and no row saying which frequency belonged to which kind of system.
+
+Padding is now stripped when the table is parsed, so every stage downstream
+counts and stores content rather than whitespace. Nothing but whitespace is
+removed -- every cell, every pipe and every duplicated spanning label survives,
+asserted as a property test on the non-whitespace characters, and verified
+across all 80 documents at 0 rows dropped and 0 cells altered. Where the header
+*is* a spanned label, the rows beneath it are carried onto every piece too, up
+to the first that really names the columns.
+
+The corpus went from 3,034 chunks to 1,720 and from 2.90M characters of stored
+content to 1.92M -- which is de-duplication, not loss: a split table repeated
+its header on every piece. Measured the same way against the source text, the
+new index covers *more* of it than the old, 1.22% of source 5-grams absent
+against 2.61%.
+
+**Docling is asked for a heading hierarchy, which it does not build by
+default.** `do_pdf_heading_hierarchy` is off in Docling, and the consequence
+here was severe: 85 of 86 documents came back with every heading at one level.
+The chunker sections on heading depth, so a flat document gives it a list where
+it expects a tree, and a chapter with no sub-levels cannot be divided by its own
+subsections. Turning it on produced real trees — one policy went from 34
+headings all at level 2 to `{2: 2, 3: 6, 4: 26}`.
+
+The crude measure said this changed nothing: chunks trapped in oversized units
+moved only from 1,925 to 1,887, and on the ECC guide the count went marginally
+*up*. Measured on retrieval instead it was worth 5.8 points of document recall
+and 10.8 of clause recall, because better sectioning produces chunks whose text
+is more coherent and which therefore embed better. The lesson is about the
+metric, not the setting: unit-size statistics are a proxy, and the proxy was
+wrong.
+
 **A citation names the file, not just a code.** Answers cite
 `T2 - سياسة إدارة كلمات المرور..pdf [PRO-PMP-2024] §5–5.2`, because the internal
 document code alone is not something a reader can find in a folder of eighty
@@ -488,11 +549,24 @@ python -m eval.run_eval score eval/results/gptoss.json --label gptoss --notes "g
 Then `python -m eval.run_eval history` to see them side by side, or
 `score ... --baseline eval/results/baseline.json` for a per-case diff.
 
-Two things worth knowing before reading the numbers. Roughly 1.5 points of
-movement on a set this size is noise — the drafter runs at temperature 0.2 and
-the judge has its own variance — so differences smaller than that should be
-decided on the per-case pattern, not the total. And the reranker adds about 30
-seconds per question on CPU, so that pass takes an extra twenty minutes or so.
+Two things worth knowing before reading the numbers.
+
+**Score one answers file more than once before believing its total.** The same
+unmodified `r18_docling.json`, graded four times by the same judge against the
+same golden set, scored 79.0, 75.2, 77.6 and 77.1 — a spread of 3.8 points with
+nothing changing but the judge. A single grading of a single run is not a
+measurement at this resolution, and quoting one as though it were produces
+confident claims that the next pass contradicts.
+
+What *is* stable is the **paired** difference. Across four gradings of the same
+two files, the delta between them stayed between -4.4 and -5.7 and never
+changed sign, while each file's absolute level wandered by more than two
+points. So grade both files in the same pass, repeat the pass, and read the
+difference — never the level. Roughly 1.5 points of per-case movement also
+comes from the drafter itself, which runs at temperature 0.2.
+
+And the reranker adds about 30 seconds per question on CPU, so that pass takes
+an extra twenty minutes or so.
 
 ### What the golden set currently says
 
@@ -624,7 +698,16 @@ Graded end to end against a control on the same corpus:
 | | Accuracy | Fact recall | Contradictions | Flagged | Sources per answer |
 | --- | --- | --- | --- | --- | --- |
 | before | 57.6% | 48.7% | 12 | 16 | 1.43 |
-| **after** | **73.3%** | **60.6%** | **4** | **11** | **1.98** |
+| after the retrieval work | 73.3% | 60.6% | 4 | 11 | 1.98 |
+| **after extraction and numbering** | **79.0%** | **61.6%** | **4** | 13 | — |
+
+The last row is the heading hierarchy and the dashed control ids together, on a
+re-indexed corpus. Split the usual way: 7 cases whose citations were unchanged
+contributed **−1**, and the 35 whose citations changed contributed **+13**.
+`Scenario-Based` gained 25 points and `Cross-Source Synthesis` 20; citations
+carrying a clause reference went from 108 to 173. Confidence also began
+correlating with correctness again, from −0.02 to 0.26, having collapsed when
+absence questions came to dominate the low-confidence band.
 
 Split the usual way, by whether the change altered what the answer was built
 from:

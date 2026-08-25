@@ -474,3 +474,258 @@ def test_a_nearly_full_group_is_not_folded_into_an_unsplittable_block():
     chunks = chunk_document(doc, source_name="x.pdf", chunk_size=1800)
     assert all(len(c.text) <= 1800 * 1.3 for c in chunks), \
         f"oversize: {sorted(len(c.text) for c in chunks)}"
+
+
+# --- two numbering conventions ---------------------------------------------
+#
+# T2's policies number clauses with dots; the NCA and SDAIA publications number
+# controls with dashes. The ECC implementation guide — the largest document in
+# this corpus at 840 chunks — uses 352 dashed control ids and not one dotted
+# clause, so recognising only dots left every chunk of it with no clause at
+# all: citations gave a file name and no reference, and the check that a named
+# clause is supported could not evaluate one of them.
+
+
+def test_a_dashed_control_id_has_a_depth_and_a_parent():
+    from src.chunking import clause_depth, parent_clause
+
+    assert clause_depth("1-1-1") == 3
+    assert parent_clause("1-1-1") == "1-1"
+    assert parent_clause("1-1") == "1"
+
+
+def test_the_separator_the_document_used_is_kept():
+    """An assessor looks the identifier up in the document; 1.1.1 is not there."""
+    from src.chunking import parent_clause
+
+    assert parent_clause("3.4.1") == "3.4"
+    assert "-" in parent_clause("1-1-1")
+
+
+def test_dashed_ids_sort_numerically():
+    from src.chunking import clause_range
+
+    assert clause_range(["1-1-10", "1-1-2", "1-1-9"]) == ("1-1-2", "1-1-10")
+
+
+@pytest.mark.parametrize(("row", "expected"), [
+    ("| 1-1-1     | The entity shall document its strategy. |", "1-1-1"),
+    ("| **2-3-4** | Bold, as a converter emits it. |", "2-3-4"),
+    ("|  1-2-3-4  | Four groups. |", "1-2-3-4"),
+    ("| 2024-2025 | A year range is not a control. |", None),
+    ("| 1-2 | Two groups could be a range. |", None),
+    ("Prose mentioning 1-1-1 mid-sentence.", None),
+])
+def test_only_an_unambiguous_control_id_in_the_first_cell_counts(row, expected):
+    from src.chunking import row_control_id
+
+    assert row_control_id(row) == expected
+
+
+def test_a_control_table_chunk_carries_the_range_of_rows_it_holds():
+    """Citing the first of nine rows would look precise and not be."""
+    from src.chunking import chunk_document
+
+    rows = "\n".join(
+        f"| 1-1-{n} | The entity shall satisfy requirement number {n}. " + "Detail. " * 40 + "|"
+        for n in range(1, 10)
+    )
+    # No numbered heading, so the range comes from the rows alone. A heading
+    # that carries its own clause widens the span on purpose — see below.
+    doc = f"## Governance\n\n| Control | Requirement |\n|---|---|\n{rows}\n"
+
+    chunks = chunk_document(doc, source_name="ecc.pdf", chunk_size=1800)
+    ranged = [c for c in chunks if c.metadata.get("clause_start")]
+
+    assert ranged, "no chunk picked up a control id"
+    first = ranged[0].metadata
+    assert first["clause_start"].startswith("1-1-")
+    assert first["clause_end"].startswith("1-1-")
+    assert first["clause_start"] != first["clause_end"], "a multi-row chunk cited one row"
+
+
+def test_a_numbered_heading_does_not_narrow_the_table_it_introduces():
+    """The section is "1"; the rows are 1-1-1 upward. The chunk holding the
+    rows must be cited by the rows, not by the section they sit under."""
+    from src.chunking import chunk_document
+
+    rows = "\n".join(
+        f"| 1-1-{n} | Requirement {n}. " + "Detail. " * 40 + "|" for n in range(1, 6)
+    )
+    doc = f"## 1 Governance\n\n| Control | Requirement |\n|---|---|\n{rows}\n"
+
+    table = next(c for c in chunk_document(doc, source_name="ecc.pdf", chunk_size=1800)
+                 if c.metadata.get("kind") == "table")
+
+    assert table.metadata["clause_start"] == "1-1-1"
+    assert table.metadata["clause_end"] == "1-1-5"
+
+
+def test_a_dotted_document_is_unaffected():
+    """The corpus is mixed; adding one convention must not disturb the other."""
+    from src.chunking import chunk_document
+
+    doc = "## 3.4 Access\n\n" + "\n".join(
+        f"- 3.4.{n} Access is reviewed at defined intervals. " + "Detail. " * 20
+        for n in range(1, 8)
+    )
+    chunks = chunk_document(doc, source_name="policy.pdf", chunk_size=1800)
+    starts = [c.metadata.get("clause_start") for c in chunks if c.metadata.get("clause_start")]
+
+    assert starts and all("." in s for s in starts)
+
+
+# --- table padding ---------------------------------------------------------
+
+
+def test_alignment_padding_is_stripped_but_nothing_else():
+    """Docling pads every cell to its column's widest; that is 47% of the
+    corpus's table text, and it is charged to the chunk budget, the embedding
+    and the drafting prompt alike."""
+    from src.chunking import compact_table
+
+    raw = [
+        "| Asset Type        | All systems   | Notes                    |",
+        "|-------------------|---------------|--------------------------|",
+        "| Operating Systems | 3 Monthly     | see 3.1.1                |",
+    ]
+    out = compact_table(raw)
+
+    assert out == [
+        "| Asset Type | All systems | Notes |",
+        "| --- | --- | --- |",
+        "| Operating Systems | 3 Monthly | see 3.1.1 |",
+    ]
+    assert len(out) == len(raw), "a row must never be dropped"
+    assert [line.count("|") for line in out] == [line.count("|") for line in raw]
+
+
+def test_padding_is_all_that_a_compacted_table_loses():
+    """Asserted as a property, so the transform cannot quietly start editing
+    content: the non-whitespace characters must be identical, in order."""
+    import re
+
+    from src.chunking import compact_table
+
+    raw = [
+        "| مستوى الخطورة   | التعريف                | الوقت    |",
+        "|------------------|------------------------|----------|",
+        "| كارثي            | فشل كارثي في الخدمات   | فوري     |",
+        "| Critical (حرج)   | Gross threat -- image  | 2 hours  |",
+    ]
+    squash = lambda rows: re.sub(r"\s+", "", "".join(rows))  # noqa: E731
+
+    body_raw = [r for r in raw if "---" not in r]
+    body_new = [r for r in compact_table(raw) if set(r) - set("| -")]
+
+    assert squash(body_new) == squash(body_raw)
+
+
+def test_an_empty_cell_survives_compaction():
+    """Empty cells carry column position. Losing one shifts every later cell."""
+    from src.chunking import compact_table
+
+    out = compact_table(["|          | Systems   | Systems   |"])
+    assert out == ["|  | Systems | Systems |"]
+    assert out[0].count("|") == 4
+
+
+def test_a_table_that_only_padding_made_oversized_stays_whole():
+    """The defect this was found through: a six-row frequency table measured
+    2,000 characters padded and 700 unpadded, so it was split into four pieces
+    and the drafter never saw a whole row."""
+    header = "| Asset Type        | All systems       | Internet-facing   | Internal          |"
+    sep = "|-------------------|-------------------|-------------------|-------------------|"
+    rows = [
+        f"| {name:17s} | 3 Monthly         | Monthly           | 3 Months*         |"
+        for name in ("Operating Systems", "Databases", "Network Devices", "Applications")
+    ]
+    doc = "## 3.1 General\n\n" + "\n".join([header, sep, *rows])
+
+    chunks = chunk_document(doc, source_name="vuln.pdf", chunk_size=1800)
+    holding = [c for c in chunks if "Applications" in c.text]
+
+    assert len(holding) == 1, "the table was split despite fitting once de-padded"
+    assert "Operating Systems" in holding[0].text, "the whole table belongs together"
+
+
+def test_a_split_table_carries_the_row_that_names_the_columns():
+    """Docling flattens a merged cell by repeating it once per column spanned,
+    so row one can be `| | Systems | Systems | ... |` — which names nothing. A
+    piece carrying only that header is unreadable."""
+    rows = "\n".join(
+        f"| Row {n} | 3 Monthly | Monthly | 3 Months | " + "pad " * 30 + "|"
+        for n in range(1, 12)
+    )
+    doc = (
+        "## 3.1 General\n\n"
+        "|  | Systems | Systems | Systems | Systems |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| Asset Type | All systems | Internet-facing | Internal | Cloud |\n"
+        f"{rows}\n"
+    )
+    tables = [c for c in chunk_document(doc, source_name="v.pdf", chunk_size=900)
+              if c.metadata["kind"] == "table"]
+
+    assert len(tables) > 1, "expected the table to split"
+    assert all("Asset Type | All systems" in t.text for t in tables)
+
+
+def test_an_ordinary_header_is_not_padded_out_with_body_rows():
+    """The carry-down rule must fire only on a spanned label, or a normal table
+    would lose its first rows into every piece's header."""
+    rows = "\n".join(f"| Row{n} | value-{n} | note {n} |" for n in range(1, 40))
+    doc = "## 9.1 Matrix\n\n| Level | Handling | Retention |\n| --- | --- | --- |\n" + rows
+    tables = [c for c in chunk_document(doc, source_name="t.pdf", chunk_size=400)
+              if c.metadata["kind"] == "table"]
+
+    assert len(tables) > 1
+    assert sum(t.text.count("Row1 |") for t in tables) == 1, "a body row became a header"
+
+
+def test_a_table_is_cited_by_the_clause_that_introduces_it():
+    """The clause ending in a colon owns the table, not the nearest one.
+
+    Docling emits a floating table after the whole run of headings on its page,
+    so the vulnerability-frequency table arrived six blocks below its own
+    clause and directly beneath an unrelated one. The chunk holding it was
+    cited §3.1.7-3.1.8 -- two clauses about remediation planning -- for a table
+    of scanning frequencies.
+    """
+    from src.chunking import parse_blocks
+
+    filler = "Detail follows here for the reader. " * 8
+    doc = (
+        "### 3.1 General\n\n"
+        "#### 3.1.1 Vulnerabilities must be scanned as follows:\n\n"
+        f"#### 3.1.2 Define systems subject to assessment. {filler}\n\n"
+        f"#### 3.1.6 Remedy all vulnerabilities per their severity. {filler}\n\n"
+        "| Asset Type | All systems | Internet-facing |\n"
+        "| --- | --- | --- |\n"
+        "| Operating Systems | 3 Monthly | Monthly |\n\n"
+        f"#### 3.1.7 Develop a vulnerability management plan. {filler}\n"
+    )
+
+    table = next(b for b in parse_blocks(doc) if b.kind == "table")
+    assert table.clause == "3.1.1", "the colon clause introduces the table"
+
+    holding = next(c for c in chunk_document(doc, source_name="v.pdf", chunk_size=700)
+                   if "Operating Systems" in c.text)
+    assert holding.metadata["clause_start"] == "3.1.1"
+
+
+def test_a_control_table_labels_itself_and_is_not_reintroduced():
+    """The introducing clause must not widen a table that names its own rows."""
+    from src.chunking import _introduced_by, parse_blocks
+
+    doc = (
+        "## 1 Governance applies as follows:\n\n"
+        "| Control | Requirement |\n|---|---|\n"
+        "| 1-1-1 | The entity shall define a strategy. |\n"
+        "| 1-1-5 | The entity shall review it annually. |\n"
+    )
+    blocks = parse_blocks(doc)
+    table = next(b for b in blocks if b.kind == "table")
+
+    assert table.clause is None, "row control ids are the table's own labels"
+    assert _introduced_by(blocks, table.lines) is None

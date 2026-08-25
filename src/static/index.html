@@ -726,6 +726,7 @@
       <button class="ghost" id="exportCsv">Download CSV</button>
       <button id="exportPdf">Download PDF</button>
       <button id="exportDocx">Download Word</button>
+      <button class="ghost" id="retryFailed" hidden>Try failed questions again</button>
       <span class="divider"></span>
       <div class="pdf-options">
         <span class="caption">PDF and Word include</span>
@@ -1467,6 +1468,26 @@
       content.append(field);
     }
 
+    // A question that never produced an answer is not a weak answer — there is
+    // nothing to read, judge or edit. A rate limit or a withdrawn model is
+    // transient, so the only useful thing to offer is another go.
+    if (item.error) {
+      const field = labelledField("Could not be answered", "err");
+      const box = document.createElement("div");
+      box.className = "reasons why";
+      box.textContent = item.error;
+      field.append(box);
+      if (item.__key) {
+        const again = document.createElement("button");
+        again.className = "ghost";
+        again.style.marginTop = "9px";
+        again.textContent = "Try this question again";
+        again.onclick = () => retryQuestions([item.__key], again);
+        field.append(again);
+      }
+      content.append(field);
+    }
+
     // Plain-English cause of the score itself, computed server-side so the
     // interface and both exports say exactly the same thing.
     if (item.confidence_reason) {
@@ -1544,6 +1565,7 @@
     const container = $("results");
     container.innerHTML = "";
     data.answers.forEach((item, index) => container.append(renderAnswer(item, index)));
+    refreshRetryAll();
     $("resultsCard").hidden = false;
     // The caller scrolls when it is appending to a list the reader is already
     // looking at; a fresh run jumps straight to the answers.
@@ -1773,6 +1795,7 @@
       : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
     $("composerAnswer").disabled = button.disabled;
     $("composerAnswer").textContent = button.textContent;
+    if ($("retryFailed")) $("retryFailed").disabled = answering;
   }
 
   let answering = false;
@@ -1805,6 +1828,39 @@
   }
 
   let sourceName = "questions";
+
+  /* Answering again is the same operation as answering: the questions go back
+     to pending and the ordinary path runs. Doing it that way means a retry
+     cannot drift from a first attempt — same batching, same progress, same
+     merge — and a retry that fails again simply lands back here. */
+  async function retryQuestions(keys, button) {
+    const wanted = new Set(keys);
+    let restored = 0;
+    questions.forEach((entry) => {
+      if (wanted.has(entry.key)) { entry.status = "pending"; restored += 1; }
+    });
+    if (!restored) return;
+
+    if (result) {
+      result.answers = result.answers.filter((a) => !wanted.has(a.__key));
+      result.questions_found = result.answers.length;
+    }
+    if (button) button.disabled = true;
+    renderQuestions();
+    if (result && result.answers.length) renderResult(result, { keepQuestions: true });
+    await answerPending("answerStatus");
+  }
+
+  const failedKeys = () =>
+    (result ? result.answers.filter((a) => a.error && a.__key).map((a) => a.__key) : []);
+
+  function refreshRetryAll() {
+    const failed = failedKeys().length;
+    const button = $("retryFailed");
+    button.hidden = failed === 0;
+    button.disabled = answering;
+    button.textContent = "Try " + failed + " failed question" + (failed === 1 ? "" : "s") + " again";
+  }
 
   async function answerPending(statusId = "answerStatus") {
     const batch = pendingQuestions();
@@ -1945,6 +2001,7 @@
 
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
+  $("retryFailed").onclick = () => retryQuestions(failedKeys(), $("retryFailed"));
 
   function addFromComposer() {
     const box = $("composerInput");

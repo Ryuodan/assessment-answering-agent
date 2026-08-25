@@ -11,6 +11,7 @@ Two families live here:
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Literal
 
@@ -137,7 +138,8 @@ class Evidence(BaseModel):
             return False
 
         def key(value: str) -> tuple[int, ...]:
-            return tuple(int(p) for p in value.split(".") if p.isdigit())
+            # Dots for T2's clauses, dashes for NCA and SDAIA control ids.
+            return tuple(int(p) for p in re.split(r"[.\-٫]", value) if p.isdigit())
 
         try:
             return key(self.clause_start) <= key(clause) <= key(self.clause_end or self.clause_start)
@@ -169,6 +171,18 @@ class AnsweredQuestion(BaseModel):
         default="",
         description="Plain-English cause of a low confidence score; '' when the answer scored well",
     )
+    error: str = Field(
+        default="",
+        description="Why answering this question failed; '' when it produced an answer",
+    )
+    """Set when the question never produced an answer at all.
+
+    Distinct from a low-confidence or flagged answer, which are judgements
+    about content that exists. A rate limit, a withdrawn model or a network
+    fault leaves nothing to judge, and the only useful action is to try again —
+    which the interface can only offer if it can tell the two apart without
+    parsing an error message out of prose.
+    """
 
 
 class AssessmentResult(BaseModel):
@@ -193,6 +207,10 @@ class IngestResult(BaseModel):
     chunks_indexed: int
     qa_pairs_found: int = 0
     error: str | None = None
+    warning: str | None = Field(
+        default=None,
+        description="Indexed, but something about the file suggests it was filed as the wrong type",
+    )
     duplicate_of: str | None = Field(
         default=None,
         description="Name of an already-indexed file with identical content; set when this upload was skipped",

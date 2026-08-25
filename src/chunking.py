@@ -131,6 +131,25 @@ _ARABIC = re.compile(r"[\u0621-\u064a]")
 _DOC_ID = re.compile(r"\b([A-Z]{2,6}(?:-[A-Z]{2,6}){1,3}-\d{2,5})\b")
 
 
+# A control identifier in the first cell of a table row: "| 1-1-1 | The entity
+# shall ...". Three groups minimum, because two would also match a year range
+# or a page span, and this has to be safe on eighty documents it was not
+# designed against. Nothing else in this corpus is shaped like it.
+_ROW_CONTROL_ID = re.compile(r"^\s*\|\s*(?:\*\*|__)?\s*(\d+(?:-\d+){2,5})\s*(?:\*\*|__)?\s*\|")
+
+
+def row_control_id(line: str) -> str | None:
+    """The control identifier a table row opens with, if it has one."""
+    found = _ROW_CONTROL_ID.match(fold_digits(line))
+    return found.group(1) if found else None
+
+
+def _table_clause_range(lines: list[str]) -> tuple[str, str]:
+    """First and last control identifier among a table's rows."""
+    found = [control for control in (row_control_id(line) for line in lines) if control]
+    return clause_range(found) if found else ("", "")
+
+
 def _uses_trailing_clauses(lines: list[str]) -> bool:
     """Whether this document looks like RTL text extracted in visual order.
 
@@ -184,22 +203,41 @@ def match_heading_clause(title: str) -> str | None:
     return match_clause(title + " x")
 
 
+# Two numbering conventions live in this corpus and both have to be read.
+# T2's own policies number clauses with dots — 3.4.1. The NCA and SDAIA
+# publications number controls with dashes — 1-1-1 — and the largest document
+# here, the ECC implementation guide, uses nothing else: 352 dashed control
+# ids and not one dotted clause. Recognising only dots left all 840 of its
+# chunks with no clause at all, so its citations gave a file name and no
+# reference, and the check that a named clause is actually supported could
+# not evaluate a single one of them.
+_CLAUSE_SEPARATORS = ".-٫"
+
+
+def _clause_parts(clause: str) -> list[str]:
+    return re.split(rf"[{re.escape(_CLAUSE_SEPARATORS)}]", clause)
+
+
 def clause_depth(clause: str | None) -> int:
-    """'7' -> 1, '7.2' -> 2, '7.2.1' -> 3. Zero for no clause."""
-    return 0 if not clause else clause.count(".") + 1
+    """'7' -> 1, '7.2' -> 2, '7.2.1' -> 3, '1-1-1' -> 3. Zero for no clause."""
+    return len(_clause_parts(clause)) if clause else 0
 
 
 def parent_clause(clause: str | None) -> str:
-    """'7.2.1' -> '7.2'; '7.2' -> '7'; '7' -> ''."""
+    """'7.2.1' -> '7.2'; '1-1-1' -> '1-1'; '7' -> ''.
+
+    The separator the document used is preserved, because the identifier is
+    something a reader looks up in that document.
+    """
     if not clause:
         return ""
-    head, _, _ = clause.rpartition(".")
-    return head
+    match = re.search(rf"[{re.escape(_CLAUSE_SEPARATORS)}][^{re.escape(_CLAUSE_SEPARATORS)}]*$", clause)
+    return clause[: match.start()] if match else ""
 
 
 def _clause_sort_key(clause: str) -> tuple[int, ...]:
     """Numeric key, so 7.10 sorts after 7.9 rather than before it."""
-    return tuple(int(part) for part in clause.split(".") if part.isdigit())
+    return tuple(int(part) for part in _clause_parts(clause) if part.isdigit())
 
 
 def clause_range(clauses: list[str]) -> tuple[str, str]:
@@ -231,6 +269,75 @@ class Block:
     @property
     def length(self) -> int:
         return len(self.text)
+
+
+def compact_table(lines: list[str]) -> list[str]:
+    """Strip the column-alignment padding out of a Markdown table.
+
+    Docling pads every cell to the width of the widest cell in its column, so a
+    table carrying one 200-character definition pads all of its other rows to
+    match. Across this corpus that padding is **47% of all table text** — an
+    18-row table measured 40,320 characters holding 8,323 characters of content.
+
+    The cost is not cosmetic. Padding is counted against the chunk budget, so
+    tables that comfortably fit were split into parts; it is embedded, so half
+    of a table chunk's vector is runs of spaces; and it is spent again in the
+    drafting prompt, where thirty evidence chunks share one context window.
+
+    Nothing is removed but whitespace: every cell, every pipe and every
+    duplicated spanning label survives, so a chunk shown under Sources still
+    reflects how the document actually parsed.
+    """
+    compacted: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            compacted.append(line)
+            continue
+        # Docling never escapes a pipe inside a cell (verified across the
+        # corpus), so splitting on the delimiter cannot lose content.
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if _TABLE_SEP.match(stripped):
+            cells = ["---"] * len(cells)
+        compacted.append("| " + " | ".join(cells) + " |")
+    return compacted
+
+
+# How far back to look for the clause that introduces a table. Generous
+# enough to clear a page's worth of headings, bounded so an unrelated
+# clause on the previous page cannot claim it.
+_INTRODUCTION_WINDOW = 12
+
+
+def _introduced_by(blocks: list[Block], rows: list[str]) -> str | None:
+    """The clause a table belongs to, when the table names none itself.
+
+    A table under "3.1.1 ... as follows:" is part of 3.1.1, but nothing in its
+    own rows says so, so the chunk holding it was labelled by whatever numbered
+    text happened to share the chunk. The vulnerability-frequency table came out
+    cited as §3.1.7–3.1.8 — two clauses about remediation planning that
+    have nothing to do with scanning frequencies.
+
+    Skipped when the rows carry control identifiers of their own: those are the
+    table's real labels, and a section heading above them would only widen the
+    citation back out to the section.
+    """
+    if any(row_control_id(row) for row in rows):
+        return None
+
+    nearest = None
+    for block in reversed(blocks[-_INTRODUCTION_WINDOW:]):
+        if not block.clause:
+            continue
+        # A clause that ends in a colon is introducing what comes after it, and
+        # that is the one the table belongs to. Nearest-preceding is not enough:
+        # Docling emits a floating table after the whole run of headings on its
+        # page, so 3.1.1 "... as follows:" is six blocks above its own table
+        # while 3.1.6 sits directly on top of it.
+        if block.text.rstrip().endswith((":", "：")):
+            return block.clause
+        nearest = nearest or block.clause
+    return nearest
 
 
 def _strip_emphasis(text: str) -> str:
@@ -304,7 +411,8 @@ def parse_blocks(text: str) -> list[Block]:
                 body.append(lines[cursor])
                 cursor += 1
             if body:
-                blocks.append(Block("table", body, 0, None, page))
+                rows = compact_table(body)
+                blocks.append(Block("table", rows, 0, _introduced_by(blocks, rows), page))
             index = cursor + 1
             continue
 
@@ -315,7 +423,8 @@ def parse_blocks(text: str) -> list[Block]:
             while cursor < total and _TABLE_ROW.match(lines[cursor]):
                 body.append(lines[cursor])
                 cursor += 1
-            blocks.append(Block("table", body, 0, None, page))
+            rows = compact_table(body)
+            blocks.append(Block("table", rows, 0, _introduced_by(blocks, rows), page))
             index = cursor
             continue
 
@@ -616,13 +725,41 @@ class Chunk:
     metadata: dict
 
 
+def _cells(row: str) -> list[str]:
+    return [cell.strip() for cell in row.strip().strip("|").split("|")]
+
+
+def _spans_one_label(row: str) -> bool:
+    """Whether a row is a single heading stretched across the table.
+
+    Docling flattens a merged cell by repeating its text once per column it
+    covers, so a grouping header arrives as `| | Systems | Systems | ... |`.
+    That row names no column, and a piece of a split table that carries only it
+    is unreadable: the vulnerability-frequency table lost `Asset Type | All
+    systems | Critical systems connected to the internet | ...` to the split and
+    left the drafter six columns all called "Systems".
+    """
+    labels = {cell for cell in _cells(row) if cell}
+    return len(labels) == 1 and len(_cells(row)) > 2
+
+
 def _table_header(block: Block) -> list[str]:
     rows = [line for line in block.lines if line.strip()]
     if not rows:
         return []
-    if len(rows) > 1 and _TABLE_SEP.match(rows[1]):
-        return rows[:2]
-    return rows[:1]
+    header = rows[:2] if len(rows) > 1 and _TABLE_SEP.match(rows[1]) else rows[:1]
+
+    # Carry the rows beneath a spanned label too, up to the first that really
+    # names the columns. Bounded so a table of repeated values cannot be pulled
+    # into its own header wholesale.
+    while (
+        len(header) < len(rows)
+        and len(header) <= 3
+        and _spans_one_label(header[-1] if not _TABLE_SEP.match(header[-1]) else header[0])
+    ):
+        header.append(rows[len(header)])
+
+    return header
 
 
 def _hard_wrap(text: str, budget: int) -> list[str]:
@@ -688,12 +825,18 @@ def _split_table(block: Block, budget: int) -> list[list[Block]]:
     used = 0
     for row in rows:
         if current and used + len(row) + 1 > room:
-            pieces.append([Block("table", header + current, 0, None, block.page)])
+            pieces.append([Block(
+                "table", header + current, 0,
+                _table_clause_range(current)[0] or block.clause, block.page,
+            )])
             current, used = [], 0
         current.append(row)
         used += len(row) + 1
     if current:
-        pieces.append([Block("table", header + current, 0, None, block.page)])
+        pieces.append([Block(
+            "table", header + current, 0,
+            _table_clause_range(current)[0] or block.clause, block.page,
+        )])
     return pieces or [[block]]
 
 
@@ -832,7 +975,16 @@ def chunk_document(text: str, *, source_name: str = "", chunk_size: int = 1800) 
             if part_index > 1 and stem and not body.startswith(stem):
                 body = f"{stem}\n{body}"
 
-            start, end = clause_range([block.clause for block in group if block.clause])
+            labelled = [block.clause for block in group if block.clause]
+            # A control table numbers its rows, not its blocks: one block can
+            # hold "1-1-1" through "1-1-9", and taking the block's own label
+            # alone would cite the first of nine and look precise doing it.
+            labelled += [
+                control
+                for block in group if block.kind == "table"
+                for control in map(row_control_id, block.lines) if control
+            ]
+            start, end = clause_range(labelled)
             pages = [block.page for block in group if block.page is not None]
 
             chunks.append(

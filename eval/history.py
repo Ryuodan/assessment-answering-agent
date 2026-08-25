@@ -39,7 +39,18 @@ _TRACKED_SETTINGS = (
     "reranker_enabled",
     "reranker_model",
     "max_answer_attempts",
+    # How much evidence reaches the drafter. Left untracked until a sweep of it
+    # produced two runs whose sidecars were identical, which is exactly the
+    # confusion this list exists to prevent.
+    "max_evidence_chunks",
+    "max_prior_answer_chunks",
+    "max_expanded_parts",
+    "query_agreement_weight",
+    # Describes this process, not necessarily the index being queried: chunking
+    # settings take effect at ingest, so a run can query an index built under
+    # different ones. Re-index before trusting a comparison across a change here.
     "chunk_size",
+    "chunk_overlap",
     "review_confidence_threshold",
 )
 

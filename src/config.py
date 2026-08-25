@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # --- LLM (Groq) --------------------------------------------------------
     groq_api_key: str = ""
-    groq_chat_model: str = "minimaxai/minimax-m2.7"
+    groq_chat_model: str = "openai/gpt-oss-120b"
     # ME-Central-1 regional endpoint. Host root only — the groq client appends
     # `/openai/v1` to it. Set to "" to fall back to the global api.groq.com.
     groq_base_url: str | None = "https://api.me-central-1.groqcloud.com"
@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     # scanned upload is still read without making OCR everyone's default.
     docling_ocr_auto: bool = True
     docling_image_export_mode: str = "placeholder"
+    # Build a real heading hierarchy from bookmarks, numbering and styles.
+    # Off in Docling by default, and the consequence is severe here: 85 of 86
+    # documents came back with every heading at one level, which leaves the
+    # chunker a flat list where it expects a tree. A chapter with no
+    # sub-levels cannot be divided by its own subsections, which is how this
+    # corpus ended up with units of 40, 100 and 113 parts. See src/chunking.py.
+    docling_heading_hierarchy: bool = True
     # When Docling is unreachable, fall back to the local loaders rather than
     # failing the upload. Set false to make a broken Docling loud instead.
     docling_fallback_local: bool = True
