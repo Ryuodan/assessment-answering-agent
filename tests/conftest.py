@@ -17,6 +17,31 @@ from src.knowledge import KnowledgeStore
 from src.models import SourceType
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _no_tracing_in_tests():
+    """Never emit a trace from the test suite.
+
+    Tracing is configured at import of `src.config`, so a deployment with
+    `LANGSMITH_TRACING=true` in its `.env` would have every test that touches a
+    chain post runs to the shared project -- polluting it with fixtures, and
+    paying a network round trip per test. The live-call tests in `test_live.py`
+    are the ones that would actually send, and they are exactly the ones whose
+    traces would be least useful.
+    """
+    import os
+
+    saved = {name: os.environ.pop(name, None)
+             for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2")}
+    os.environ["LANGSMITH_TRACING"] = "false"
+    os.environ["LANGCHAIN_TRACING_V2"] = "false"
+    yield
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
 @pytest.fixture(autouse=True)
 def dense_only_retrieval():
     """Pin the lexical pass off, whatever the deployment's .env says.

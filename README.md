@@ -480,6 +480,73 @@ versa, because BGE-M3 embeds both into one space.
 
 ---
 
+## Tracing
+
+Every LLM call, retrieval and graph step can be recorded to LangSmith. It is
+**off by default and should stay off until the data question is settled**,
+because switching it on is a decision about data residency rather than about
+observability.
+
+> **Tracing sends your policy text outside Saudi Arabia.**
+> A trace carries the prompt, and the prompt carries the policy chunks
+> retrieved to answer the question. LangSmith offers an EU region and a US
+> region; **there is no Saudi region**, so any tracing at all is a cross-border
+> transfer of internal policy text and of the client questionnaires being
+> answered. For an organisation whose own corpus includes NCA and SDAIA
+> material, that is a question for whoever owns the documents — and, quite
+> possibly, one with a PDPL answer attached. Enable it only once you are
+> comfortable with it, and turn it off again when you no longer need it.
+
+The setting therefore defaults to false, and when it is on the service logs a
+warning at every start naming the project, the endpoint and the fact that the
+data leaves the country — so nobody discovers months later that a debugging
+switch was left on.
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com   # EU region
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=Cyber-Assessment-Answering-Agent
+```
+
+**Putting those four lines in `.env` is not, on its own, enough — and the way
+it fails is silent.** LangChain and the LangSmith client read `os.environ`
+directly. Settings here are loaded by pydantic-settings, which populates the
+`Settings` object and *not* the environment, and nothing in this codebase calls
+`load_dotenv`. So the values arrive in `settings.langsmith_tracing`, no library
+ever asks, and tracing looks configured while recording nothing.
+`config.configure_tracing()` is the bridge. It runs at import of `src.config`,
+so every entry point — the API, the CLI, `eval/` — is covered without each
+having to remember, and it uses `setdefault` so a variable already exported in
+the real environment beats whatever is in the file. Tracing with no API key is
+refused outright rather than half-configured, with a warning saying so.
+
+The test suite never traces. `tests/conftest.py` forces it off for the session:
+a deployment with tracing on in its `.env` would otherwise have every test that
+touches a chain post runs to the shared project, paying a network round trip
+per test to fill it with fixtures.
+
+**What a trace says.** A LangGraph run is called `LangGraph` by default and
+carries nothing to filter on, which makes a project of a few thousand runs
+useless for the one thing it is for — finding the question that went wrong. So
+each run is named for its question and tagged with the axes worth slicing by:
+
+```
+answer[12]   tags: run:9f3c1a  lang:ar  type:free_text
+             metadata: question_id, question (300 chars), language,
+                       question_type, run_id, section
+```
+
+The `run_id` tag is the batch, because the first thing anyone looking at a
+failed answer wants is the other questions from the same run. The metadata
+carries no answer text and no document text beyond the question itself — the
+prompts already carry the sources, and there is no reason to send them twice.
+
+Inside a run you get the graph as it executed — `plan → retrieve → rerank →
+draft → review → finalize`, the retry edge when the reviewer sends one back,
+and every `ChatGroq` call with its token counts, which is also how the token
+cost of a configuration change can be read off rather than estimated.
+
 ## Facing a network
 
 Three properties were established by attack rather than by reading, and the
@@ -545,6 +612,7 @@ to change:
 | Setting | Default | Notes |
 | --- | --- | --- |
 | `GROQ_CHAT_MODEL` | `openai/gpt-oss-120b` | Used for extraction, drafting and review |
+| `LANGSMITH_TRACING` | `false` | Record traces to LangSmith — **sends policy text outside Saudi Arabia**; see [Tracing](#tracing) |
 | `DOCLING_BASE_URL` | `http://localhost:8092` | Docling host root; clear it to use the local loaders only |
 | `DOCLING_DO_OCR` | `false` | Turn on for scanned documents — much slower |
 | `DOCLING_FALLBACK_LOCAL` | `true` | Use pdfplumber/python-docx when Docling is unreachable |

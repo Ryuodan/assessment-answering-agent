@@ -9,6 +9,7 @@ looks wrong.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -37,6 +38,21 @@ class Settings(BaseSettings):
     # Grading model for eval/. Deliberately not the drafting model: a system
     # should not mark its own homework.
     eval_judge_model: str = "openai/gpt-oss-120b"
+
+    # --- Tracing (LangSmith) -----------------------------------------------
+    # Every LLM call, retrieval and graph step recorded as a trace.
+    #
+    # Off unless deliberately switched on, and the reason is data residency
+    # rather than cost. A trace carries the prompt, and the prompt carries the
+    # policy chunks retrieved to answer the question. LangSmith has no Saudi
+    # region -- `langsmith_endpoint` chooses between the EU and the US -- so
+    # enabling this transfers internal policy text, and the client
+    # questionnaires being answered, outside Saudi Arabia. That is a decision
+    # for whoever owns the documents, not a default worth inheriting.
+    langsmith_tracing: bool = False
+    langsmith_endpoint: str = "https://eu.api.smith.langchain.com"
+    langsmith_api_key: str = ""
+    langsmith_project: str = "Cyber-Assessment-Answering-Agent"
 
     # --- Embeddings (BGE-M3 behind an OpenAI-compatible endpoint) ----------
     embedding_base_url: str = "https://ds.t2.sa/text_embed/v1"
@@ -238,6 +254,42 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
+def configure_tracing() -> bool:
+    """Publish the tracing settings into the environment LangChain reads.
+
+    LangChain and the LangSmith client look at `os.environ` directly. Settings
+    here come from `.env` via pydantic-settings, which populates this object and
+    *not* the environment, and nothing in the app calls `load_dotenv`. So
+    putting `LANGSMITH_TRACING=true` in `.env` and stopping there switches
+    nothing on: the value reaches `settings.langsmith_tracing` and no library
+    ever asks. This is the bridge, and it runs at import so every entry point --
+    the API, the CLI, eval/ -- is covered without each having to remember.
+
+    A variable already set in the real environment wins, so a shell export or a
+    container's own configuration is never overwritten by the file. Returns
+    whether tracing ended up on, which is what the log line reports.
+    """
+    if not settings.langsmith_tracing:
+        return False
+    if not settings.langsmith_api_key:
+        logging.getLogger(__name__).warning(
+            "LANGSMITH_TRACING is on but LANGSMITH_API_KEY is empty; traces will not be sent."
+        )
+        return False
+
+    for name, value in (
+        ("LANGSMITH_TRACING", "true"),
+        ("LANGSMITH_ENDPOINT", settings.langsmith_endpoint),
+        ("LANGSMITH_API_KEY", settings.langsmith_api_key),
+        ("LANGSMITH_PROJECT", settings.langsmith_project),
+    ):
+        os.environ.setdefault(name, value)
+    return True
+
+
+_TRACING_ON = configure_tracing()
+
+
 def configure_logging() -> None:
     """Apply the configured log level once, at process start."""
     logging.basicConfig(
@@ -247,3 +299,11 @@ def configure_logging() -> None:
     # Chroma and httpx are chatty at INFO; they only matter when debugging.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("chromadb").setLevel(logging.WARNING)
+
+    if _TRACING_ON:
+        logging.getLogger(__name__).warning(
+            "LangSmith tracing is ON — project %r at %s. Prompts, and so the "
+            "policy text retrieved to answer each question, are sent there. "
+            "LangSmith has no Saudi region, so this leaves the country.",
+            settings.langsmith_project, settings.langsmith_endpoint,
+        )

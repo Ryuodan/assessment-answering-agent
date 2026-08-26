@@ -227,7 +227,7 @@ async def test_a_failing_question_does_not_discard_the_whole_batch(monkeypatch):
     """A transient upstream error cost a nearly-finished 42-question run."""
     from src import service
 
-    async def flaky(question, language):
+    async def flaky(question, language, *, run_id=""):
         if question.id == "2":
             raise RuntimeError("model is not available in the specified region")
         return AnsweredQuestion(question=question, answer="fine", confidence=0.8, needs_review=False)

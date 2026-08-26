@@ -49,11 +49,48 @@ def question_graph():
     return builder.compile()
 
 
-async def answer_one_question(question: Question, language: Language) -> AnsweredQuestion:
+def trace_config(question: Question, language: Language, run_id: str = "") -> dict:
+    """Name and label one question's trace so a monitoring project is readable.
+
+    Without this every trace is called "LangGraph" and carries nothing to filter
+    on, which makes a project of a few thousand runs useless for the thing it
+    exists for: finding the question that went wrong. The tags are the axes
+    worth slicing by -- which batch, which language, what kind of question --
+    and the question id is carried so a trace can be matched back to the answer
+    a reviewer is looking at.
+
+    Only metadata: no answer text or document content is added here beyond what
+    the prompts already carry.
+    """
+    tags = [f"lang:{language}", f"type:{question.question_type.value}"]
+    if run_id:
+        tags.append(f"run:{run_id}")
+    return {
+        "run_name": f"answer[{question.id}]",
+        "tags": tags,
+        "metadata": {
+            "question_id": question.id,
+            "question": question.text[:300],
+            "language": language,
+            "question_type": question.question_type.value,
+            "run_id": run_id or "",
+            "section": question.section or "",
+        },
+    }
+
+
+async def answer_one_question(
+    question: Question, language: Language, *, run_id: str = ""
+) -> AnsweredQuestion:
     """Answer a single question through the inner graph.
 
     The outer graph reaches the same place via `Send`; this is the door for a
     caller who already has the question and no document to extract it from.
+
+    `run_id` is carried only so the trace can be tagged with it: without it
+    every question in a batch is an unrelated trace, and the first thing anyone
+    monitoring a failed run wants is the other questions from the same run.
+    Keyword-only and defaulted, so a caller that does not trace need not care.
     """
     result = await question_graph().ainvoke(
         {
@@ -62,7 +99,8 @@ async def answer_one_question(question: Question, language: Language) -> Answere
             "search_queries": [question.text],
             "attempt": 0,
             "evidence": [],
-        }
+        },
+        config=trace_config(question, language, run_id),
     )
     return result["answered"]
 
@@ -92,8 +130,14 @@ async def _answer_question(state: QuestionState) -> dict:
     comes back flagged for review with the error in its rationale.
     """
     question = state["question"]
+    # Built before the try, and from `.get`: `language` is optional on
+    # QuestionState, and reading it as a required key raised a KeyError that
+    # the except below then reported *instead of* the failure it was meant to
+    # contain -- an answer whose error read "'language'" rather than whatever
+    # Groq actually said.
+    config = trace_config(question, state.get("language", "en"), state.get("run_id", ""))
     try:
-        result = await question_graph().ainvoke(state)
+        result = await question_graph().ainvoke(state, config=config)
         return {"answers": [result["answered"]]}
     except Exception as exc:  # noqa: BLE001 - deliberately contained per question
         logger.exception("Failed to answer question %s", question.id)

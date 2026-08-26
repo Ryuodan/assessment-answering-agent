@@ -22,7 +22,7 @@ def answered(monkeypatch):
     """Answer every question with an echo, so the wiring is what is tested."""
     seen: list[Question] = []
 
-    async def fake(question: Question, language):
+    async def fake(question: Question, language, *, run_id=""):
         seen.append(question)
         return AnsweredQuestion(
             question=question,
@@ -142,7 +142,7 @@ def test_surrounding_whitespace_is_trimmed(answered):
 
 
 def test_one_failure_does_not_discard_the_others(monkeypatch):
-    async def flaky(question: Question, language):
+    async def flaky(question: Question, language, *, run_id=""):
         if question.text == "boom":
             raise RuntimeError("the model went away")
         return AnsweredQuestion(question=question, answer="ok", confidence=0.9, needs_review=False)
@@ -341,7 +341,7 @@ def test_a_normal_answer_has_no_error(answered):
 
 
 def test_a_failed_answer_surfaces_its_error_through_the_api(monkeypatch):
-    async def boom(question, language):
+    async def boom(question, language, *, run_id=""):
         raise RuntimeError("429 rate limit")
 
     monkeypatch.setattr(service, "answer_one_question", boom)

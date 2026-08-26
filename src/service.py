@@ -229,7 +229,8 @@ async def answer_questions(
     async def run(question: Question) -> AnsweredQuestion:
         async with semaphore:
             try:
-                return await answer_one_question(question, language or question.language)
+                return await answer_one_question(
+                    question, language or question.language, run_id=run_id or "")
             except Exception as exc:  # noqa: BLE001 - contained per question, as in the fan-out
                 # The document flow already contains a per-question failure; this
                 # path did not, so a single transient upstream error — a model
