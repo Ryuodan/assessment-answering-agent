@@ -244,10 +244,10 @@ def explain_confidence(
         )
 
     if not grounded:
-        because = f" The reviewer's note: {detail}." if detail else ""
+        because = f" The reviewer's note:\n {detail}." if detail else ""
         return (
             "A second model read the answer against the sources and could not trace every "
-            f"statement in it back to them.{because} Verify each claim against the "
+            f"statement in it back to them.{because} \nVerify each claim against the "
             f"{sources} cited source{'s' if sources > 1 else ''} before submitting."
         )
 

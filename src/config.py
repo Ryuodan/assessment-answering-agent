@@ -125,7 +125,12 @@ class Settings(BaseSettings):
     max_concurrent_questions: int = Field(default=4, ge=1, le=32)
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
-    chunk_size: int = 1800
+    # 1200, not the 1800 this carried while Markdown tables still held Docling's
+    # alignment padding. De-padding changed what the number buys: at 1800 a chunk
+    # held 1,118 characters of content instead of 950, the corpus became coarser
+    # than the retriever was tuned for, and measured accuracy fell 4.4 points.
+    # 1200 restores the granularity and still holds more content than 1800 did.
+    chunk_size: int = 1200
     chunk_overlap: int = 150          # retained for the prose fallback only
     max_expanded_chars: int = 12000    # cap on parent-unit expansion, per question
     # Expansion completes a split unit so the drafter never sees three items of
@@ -138,7 +143,11 @@ class Settings(BaseSettings):
     # the hit is returned on its own, which is not contextless: every part
     # repeats the unit's stem.
     max_expanded_parts: int = Field(default=6, ge=1)
-    max_evidence_chunks: int = 30     # cap on accumulated evidence per question
+    # Cap on accumulated evidence per question. 38 rather than 30 because the
+    # smaller chunks above put less text in each slot: at 30 the drafter saw
+    # about a fifth less material than before, and four documents per run were
+    # retrieved and then cut before reaching it.
+    max_evidence_chunks: int = 38
     # How many of those chunks may be previous answers. They sort first, so
     # without a ceiling they take the whole prompt and the policies that
     # actually answer the question never reach the drafter — see

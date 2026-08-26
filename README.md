@@ -454,6 +454,7 @@ python -m src.cli stats
 | `GET` | `/api/knowledge` | What is currently indexed |
 | `DELETE` | `/api/knowledge/sources/{name}` | Remove one file |
 | `DELETE` | `/api/knowledge` | Empty the knowledge base |
+| `GET` | `/api/search` | Search the indexed corpus directly — `mode=semantic\|keyword\|hybrid` |
 | `GET` | `/api/documents` | List uploaded and bundled trial documents |
 | `GET` | `/api/documents/{origin}/{category}/{name}/file` | View the original file |
 | `GET` | `/api/documents/{origin}/{category}/{name}/preview` | Preview PDF or DOCX in the browser |
@@ -478,6 +479,63 @@ answer an English question in Arabic from Arabic or English sources, and vice
 versa, because BGE-M3 embeds both into one space.
 
 ---
+
+## Facing a network
+
+Three properties were established by attack rather than by reading, and the
+tests that establish them are in `tests/test_hostile_input.py`.
+
+**Nothing a caller names reaches the filesystem.** `/api/documents/{origin}/
+{category}/{name}` puts three caller-controlled segments into a path.
+`resolve_document` refuses any name that is not its own basename, insists on a
+supported suffix, and compares the resolved parent against the resolved base,
+so `../../.env`, its URL-encoded and doubled forms, and the Windows-separator
+variants all end at a 400. Uploads are reduced to a basename before writing,
+which is checked by asserting that every file written lands in the upload
+directory itself rather than by trusting the reduction.
+
+**A broken dependency is a sentence, not a stack trace.** Every route here
+talks to something that can be down -- Chroma, the embedding host, Groq,
+Docling, the disk. An unhandled exception handler turns any of them into a
+clean 500 with the detail in the log, because FastAPI's default page carries
+server paths into the browser. Search goes further and degrades: literal
+matching needs no network, so when the embedding host stops answering the
+results still come back, flagged `degraded` so the interface can say which half
+ran rather than implying the corpus is empty.
+
+**Concurrency was where the real bug was.** `get_store()` was an `lru_cache`,
+which does not hold a lock while the wrapped function runs, so two threadpool
+requests both constructed a `KnowledgeStore` and raced through Chroma's
+process-wide client registry -- a bare `KeyError` on the persist directory, and
+a 500 for whichever request lost. It surfaced only when the search drawer began
+loading its file list at the same moment the page asked for knowledge stats.
+Under a lock now, and asserted by having eight threads construct it at once.
+
+## Cost of a request
+
+A 16-way concurrent burst of 48 requests took 30.8 seconds and now takes 7.8.
+Almost all of it was bookkeeping rather than work:
+
+| | before | after |
+|---|---|---|
+| search, median | 10.97 s | **2.37 s** |
+| search, p95 | 12.69 s | **2.93 s** |
+| `/api/knowledge` | 7.22 s | **2.08 s** |
+
+Three things were being recomputed that never change between writes. Counting
+chunks per source type and listing indexed file names were a full metadata scan
+each -- 216 ms and 207 ms against a search that itself takes 45 ms, so nine
+tenths of a search was overhead, and `stats()` repeated the same scan on every
+page load. They share one cached catalog now, invalidated exactly where the
+lexical index already was. Separately, the literal matcher was building a BM25
+index it never consults, 511 ms of tokenising per process for a substring
+query; the chunk map it actually wants is now cached on its own. Both builds
+are locked, so a concurrent burst builds once rather than once per thread.
+
+The caching is only as good as its invalidation, so `tests/test_store_caches.py`
+exercises every write path: a new document appears immediately, a deleted one
+disappears, a re-upload replaces rather than duplicates, and a document added
+after the first search is visible to the next one.
 
 ## Configuration
 

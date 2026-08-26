@@ -14,8 +14,8 @@ from urllib.parse import quote
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from src import service
@@ -51,6 +51,23 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+    """Turn an unexpected failure into a clean 500 rather than a traceback.
+
+    Everything below this line talks to something that can be down -- Chroma,
+    the embedding host, Groq, Docling, the disk. Without a handler FastAPI
+    returns the default error page, which carries file paths from the server
+    into the browser and tells the person nothing they can act on. The detail
+    stays in the log, where it belongs.
+    """
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Something went wrong on the server. The details are in its log."},
+    )
 
 
 def _check_suffix(filename: str) -> None:

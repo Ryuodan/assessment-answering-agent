@@ -39,7 +39,9 @@ def bare_store(fake) -> KnowledgeStore:
     """
     store = object.__new__(KnowledgeStore)
     store._store = fake
-    store._lexical_cache = {}
+    # The real initialiser's cache setup, so a cache added later cannot quietly
+    # break every test that uses a fake.
+    store._reset_caches()
     return store
 
 RLM = "\u200f"
@@ -74,6 +76,30 @@ class FakeVectorStore:
 
     async def asimilarity_search_with_relevance_scores(self, query, k, filter=None):
         return self._staged[:k]
+
+    def add_documents(self, documents, ids=None):
+        """Chroma's write path, so the ingestion routes can be exercised."""
+        for document in documents:
+            self.records.append({
+                "text": document.page_content,
+                "metadata": dict(document.metadata),
+            })
+        return ids or []
+
+    def reset_collection(self):
+        self.records = []
+
+    def delete(self, where=None, ids=None):
+        clauses = where.get("$and", [where]) if where else []
+        self.records = [
+            record
+            for record in self.records
+            if not all(
+                record["metadata"].get(key) == value
+                for clause in clauses
+                for key, value in clause.items()
+            )
+        ]
 
     def get(self, where=None, include=None):
         """Minimal Chroma `where` support: a top-level `$and` of equality clauses."""
