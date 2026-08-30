@@ -161,15 +161,26 @@ async def retrieve(state: QuestionState) -> dict:
     store = get_store()
     queries = state.get("search_queries") or [state["question"].text]
 
-    searches = [
-        store.search(query, source_type, k)
-        for query in queries
+    # A collection holding nothing still costs a full embedding round trip per
+    # query: the query is embedded before the filter is applied, so an empty
+    # prior-answers collection was spending five or six remote calls per
+    # question to return nothing. Measured at 0.17s each against the same
+    # endpoint that is the slowest thing in the pipeline and the one that
+    # intermittently times out.
+    counts = await asyncio.to_thread(store.counts_by_type)
+    wanted = [
+        (source_type, k)
         for source_type, k in (
             (SourceType.PRIOR_ANSWER, settings.top_k_prior_answers),
             (SourceType.GUIDELINE, settings.top_k_guidelines),
         )
+        if k > 0 and counts.get(source_type.value)
     ]
-    results = await asyncio.gather(*searches)
+    # One embedding per query rather than one per (query, source type): both
+    # kinds live in the same collection behind a metadata filter, so asking for
+    # each separately sent identical text to the embedding service twice.
+    found = await asyncio.gather(*(store.search_types(query, wanted) for query in queries))
+    results = [batch for per_query in found for batch in per_query.values()]
 
     # How many of this round's searches independently returned each chunk.
     # The expanded queries are written to overlap — one per thing the question
@@ -200,8 +211,14 @@ async def retrieve(state: QuestionState) -> dict:
             item.query_hits = agreement[key]
         return list(best.values())
 
-    prior_answers = collapse(results[0::2])
-    guidelines = collapse(results[1::2])
+    def batches_for(source_type: SourceType) -> list[list[Evidence]]:
+        return [per_query[source_type] for per_query in found if source_type in per_query]
+
+    # Split by what each search was for, not by its position: the old
+    # `results[0::2]` / `[1::2]` assumed every query produced exactly one search
+    # of each kind, which stops being true the moment one is skipped.
+    prior_answers = collapse(batches_for(SourceType.PRIOR_ANSWER))
+    guidelines = collapse(batches_for(SourceType.GUIDELINE))
 
     attempt = state.get("attempt", 0) + 1
     logger.debug(

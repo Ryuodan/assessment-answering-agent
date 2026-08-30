@@ -90,6 +90,14 @@ class Evidence(BaseModel):
     clause: str = ""
     heading: str = ""
     page: int = -1
+    page_end: int = -1
+    """Last page the chunk covers; equal to `page` unless it spans a break.
+
+    A chunk running over a page boundary is ordinary — a table continues, a
+    clause carries on — and citing only the page the text starts on sends a
+    reader to the wrong half of it.
+    """
+
     chunk: int = -1
 
     # Unit bookkeeping, used by expansion and by coverage-aware confidence.
@@ -134,11 +142,36 @@ class Evidence(BaseModel):
 
         start = self.clause_start or self.clause
         end = self.clause_end or start
+        clause = ""
         if start:
-            return f"{base} \u00a7{start}\u2013{end}" if end and end != start else f"{base} \u00a7{start}"
-        if self.page >= 0:
-            return f"{base} p.{self.page}"
-        return base
+            clause = (
+                f" \u00a7{start}\u2013{end}" if end and end != start else f" \u00a7{start}"
+            )
+
+        # The page is shown *alongside* the clause rather than only when there
+        # is no clause. A clause number says what to look for; the page says
+        # where to open the file, and on a 161-page standard that is the
+        # difference between a citation someone can check and one that merely
+        # identifies the text.
+        return f"{base}{clause}{self.page_label}"
+
+    @property
+    def page_label(self) -> str:
+        """`' (Page: 4)'`, `' (Pages: 4-5)'`, or empty when no page is known.
+
+        Spelled out rather than abbreviated: the locator is read by someone
+        about to open the document and find the clause, and "p." next to a
+        clause number full of dots and dashes is one more thing to decode.
+
+        Empty rather than a guess: documents extracted before page markers
+        existed carry no page, and inventing one would make a citation look
+        checkable when it is not.
+        """
+        if self.page < 0:
+            return ""
+        if self.page_end > self.page:
+            return f" (Pages: {self.page}\u2013{self.page_end})"
+        return f" (Page: {self.page})"
 
     def covers_clause(self, clause: str) -> bool:
         """Whether `clause` falls inside this chunk's span."""

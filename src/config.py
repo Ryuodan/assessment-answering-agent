@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     # scanned upload is still read without making OCR everyone's default.
     docling_ocr_auto: bool = True
     docling_image_export_mode: str = "placeholder"
+    # Docling emits Markdown with no page information at all, so a citation
+    # could name a clause but never a page. Given a placeholder it inserts one
+    # between pages, which `docling_client` then rewrites into the numbered
+    # markers the chunker already understands. Something that cannot occur in a
+    # policy: it is matched literally.
+    docling_page_break_placeholder: str = "<!-- docling-page-break -->"
     # Build a real heading hierarchy from bookmarks, numbering and styles.
     # Off in Docling by default, and the consequence is severe here: 85 of 86
     # documents came back with every heading at one level, which leaves the

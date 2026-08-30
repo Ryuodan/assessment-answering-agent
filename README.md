@@ -547,6 +547,143 @@ draft → review → finalize`, the retry edge when the reviewer sends one back,
 and every `ChatGroq` call with its token counts, which is also how the token
 cost of a configuration change can be read off rather than estimated.
 
+## One embedding per query
+
+Guidelines and prior answers are not two stores. They are one Chroma
+collection, `assessment_knowledge`, told apart by a `source_type` filter on the
+metadata. Asking for each separately therefore sent the same text to the
+embedding service twice and got the same 1024 numbers back -- with query
+expansion, two round trips per query and half of the embedding work in a run,
+against the slowest and least reliable dependency the system has.
+
+`KnowledgeStore.search_types` embeds the text once and runs one local Chroma
+query per source type against that vector. Still one query per type rather than
+a single unfiltered one, because the types have different budgets
+(`TOP_K_GUIDELINES` against `TOP_K_PRIOR_ANSWERS`): a single search returns the
+best `k` regardless of kind, and on a corpus that is almost entirely guidelines
+that means prior answers never appear at all.
+
+Two things about this were easy to get wrong, so both are pinned by tests.
+The by-vector call returns **raw distances** -- lower is nearer -- where the
+by-string call LangChain would otherwise use returns **relevance**, higher is
+nearer. Swapping one for the other without applying
+`_select_relevance_score_fn` would invert the ranking and silently corrupt the
+cosine figure shown to a reader, since `cosine_from_relevance` is calibrated
+against that exact scale. And moving the embedding out of Chroma and into this
+class meant the fake vector store the suite runs on no longer intercepted it,
+so every retrieval test started reaching the network; `_embed_query` exists as
+a seam for that reason and the fake answers it.
+
+## Page numbers
+
+Docling emits Markdown with no page information whatsoever, so until now a
+citation could name a clause but never a page. It will insert a fixed
+placeholder between pages if given one, and the local pdfplumber loader already
+emits `--- page N ---` markers that the chunker reads. `docling_client` asks for
+the placeholder and rewrites it into those markers, so page numbers reach chunk
+metadata without the chunker learning a second convention -- verified against a
+nine-page policy, where eight placeholders became nine markers and every one of
+its fourteen chunks came out with a page.
+
+Chunks record `page` and `page_end`, because running over a page break is
+ordinary -- a table continues, a clause carries on -- and citing only where the
+text starts sends a reader to the wrong half of it. The locator shows the page
+beside the clause rather than instead of it:
+
+```
+T2 - Vulnerabilities Management Policy.pdf §3.1.1 (Page: 3)
+T2 - Cybersecurity Incident and Threat Management Policy.docx.pdf §3.1.6 (Pages: 5–6)
+T2 -   سياسة إدارة كلمات المرور..pdf [PRO-PMP-2024] §5–5.2 (Page: 4)
+```
+
+A clause number says what to look for; the page says where to open the file,
+and on a 161-page standard that is the difference between a citation someone
+can check and one that merely identifies the text. Because `locator` is a
+computed field on `Evidence`, this reaches the citation chips, the retrieved
+sources list, the search drawer and both exports without any of them changing.
+A document indexed before page markers existed reports no page rather than a
+guessed one: an invented page number makes an uncheckable citation look
+checkable.
+
+This changes what extraction produces, so `_EXTRACTION_VERSION` is `7` and the
+placeholder is part of the cache key. Adopting it means re-extracting the
+corpus (Docling, about an hour) and re-indexing (embedding, about 25 minutes).
+
+## Where the time goes
+
+Measured by wrapping each graph node and each remote call, rather than
+estimated.
+
+**Answering one question: about 13 seconds, three quarters of it Groq.**
+
+| stage | median | share |
+|---|---|---|
+| plan | 4.0 s | 38% |
+| retrieve | 0.7 s | 6% |
+| rerank | 0.00 s | — (off) |
+| draft | 2.4 s | 19% |
+| review | 3.0 s | 24% |
+| finalize | 0.00 s | — |
+
+The planner is the largest single item, larger than drafting: it is a
+structured-output call, and Groq's tool-calling overhead is fixed while the
+prompt is too short to amortise it. Retrieve looks cheap and is not idle --
+54 vector searches summing to 81.9 s of service time compress into 12.8 s of
+wall clock, which is the concurrency inside that node doing its job.
+
+Retrieve was 2.24 s until an empty collection stopped being searched. The query
+is embedded *before* the source-type filter is applied, so asking a
+prior-answers collection holding zero chunks still cost a full remote round
+trip -- five or six per question, against the slowest and least reliable
+dependency in the system. `retrieve` now consults the cached per-type counts
+first. That also meant the evidence split could no longer be positional:
+`results[0::2]` and `[1::2]` assumed every query produced exactly one search of
+each kind, which is false the moment one is skipped, and would have labelled
+guideline chunks as prior answers.
+
+**Indexing is 99.8% embedding, and none of it is ours to fix.**
+
+| stage | share |
+|---|---|
+| extract (cache hit) | 0.1% |
+| chunk | 0.1% |
+| embed + store | 99.8% |
+
+293 ms per chunk. The client already batches at 64 per request, and the
+endpoint is flat at roughly 5.1 texts/s no matter how it is asked:
+
+```
+embed_documents(  1)   757 ms/text        1 parallel batch    5.1 texts/s
+embed_documents( 64)   197 ms/text        2 parallel batches  5.3 texts/s
+embed_documents(128)   198 ms/text        8 parallel batches  5.1 texts/s
+```
+
+It is serialised server-side, so neither larger batches nor more connections
+help. 2,698 chunks is about nine minutes of pure embedding; the rest of a
+24-minute re-index is per-document overhead. The only levers are fewer chunks
+or a faster embedding service.
+
+Extraction is the other order of magnitude: **0.002 s from cache against 61.6 s
+through Docling**, which is why `data/extracted` is worth keeping alongside the
+index rather than regenerating.
+
+**`MAX_CONCURRENT_QUESTIONS` buys latency and nothing else.** Twelve real
+questions, same corpus, same models:
+
+```
+concurrency 1:  121.1 s (10.1 s each)   0 errors   0 rate limits   mean confidence 0.83
+concurrency 4:   36.0 s ( 3.0 s each)   0 errors   0 rate limits   mean confidence 0.84
+```
+
+Answer order, question-to-answer mapping and citation counts are unchanged,
+because `asyncio.gather` returns in argument order regardless of completion
+order and each question owns its state. `tests/test_concurrency.py` pins that
+at 1, 2, 4 and 8 with completion order deliberately reversed -- the arrangement
+a collector that appended results as they arrived would get wrong while looking
+correct serially -- along with the cap actually being honoured, a failure
+staying contained, and the document fan-out reading the same setting through
+LangGraph's `max_concurrency`.
+
 ## Facing a network
 
 Three properties were established by attack rather than by reading, and the

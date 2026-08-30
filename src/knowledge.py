@@ -13,6 +13,7 @@ whole point of keeping the history.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from functools import lru_cache
@@ -233,6 +234,9 @@ class KnowledgeStore:
             item_count=int(meta.get("item_count", 0)),
             heading=meta.get("heading", ""),
             page=int(meta.get("page", -1)),
+            # Falls back to `page` so a chunk indexed before page ranges
+            # existed reports a single page rather than an empty range.
+            page_end=int(meta.get("page_end", meta.get("page", -1))),
             chunk=int(meta.get("chunk", -1)),
             kind=meta.get("kind", "prose"),
             unit_id=meta.get("unit_id", ""),
@@ -251,22 +255,75 @@ class KnowledgeStore:
         before returning. Retrieval ranks fragments, but the drafter must see the
         complete series or it will present a fragment as the whole set.
         """
-        if k <= 0 or not query.strip():
-            return []
+        found = await self.search_types(query, [(source_type, k)], expand=expand)
+        return found.get(source_type, [])
 
-        # Over-fetch when a lexical pass will re-rank: fusion can only promote a
-        # chunk that one of the two lists actually returned.
-        dense_k = k * 3 if settings.hybrid_search else k
-        hits = await self._store.asimilarity_search_with_relevance_scores(
-            query, k=dense_k, filter={"source_type": source_type.value}
-        )
-        evidence = [self._evidence(document, score, source_type) for document, score in hits]
+    async def _embed_query(self, query: str) -> list[float]:
+        """The query as a vector, embedded once per call to `search_types`.
 
-        if settings.hybrid_search:
-            evidence = self._fuse_with_lexical(query, evidence, source_type, k)
-        evidence = evidence[:k]
+        A method rather than an inline call so a test can hold this seam: the
+        fake vector store used throughout the suite intercepts Chroma, and
+        moving the embedding out of Chroma and into this class would otherwise
+        have made every retrieval test reach the network to run.
+        """
+        return await get_embeddings().aembed_query(query)
 
-        return self._expand_units(evidence) if expand else evidence
+    async def search_types(
+        self,
+        query: str,
+        wanted: list[tuple[SourceType, int]],
+        *,
+        expand: bool = True,
+    ) -> dict[SourceType, list[Evidence]]:
+        """Search several source types against a single embedding of `query`.
+
+        Guidelines and prior answers live in one collection, told apart by a
+        `source_type` filter, so asking for both used to send the same text to
+        the embedding service twice and get the same 1024 numbers back. With
+        query expansion that was two round trips per query and 50% of the
+        embedding work in a run -- against the slowest, least reliable
+        dependency in the system.
+
+        The text is embedded once here and each source type becomes a local
+        Chroma query against that vector. One query per type rather than one
+        overall, because the types have different budgets (`TOP_K_GUIDELINES`
+        against `TOP_K_PRIOR_ANSWERS`): a single unfiltered search would return
+        the best `k` regardless of kind, which on a corpus that is almost all
+        guidelines means prior answers never appear at all.
+        """
+        wanted = [(source_type, k) for source_type, k in wanted if k > 0]
+        if not wanted or not query.strip():
+            return {}
+
+        vector = await self._embed_query(query)
+        # The by-vector call returns raw distances -- lower is nearer -- while
+        # the by-string call LangChain would otherwise use converts them to
+        # relevance, higher is nearer. Applying the same conversion here keeps
+        # the number `_evidence` receives identical to what it received before,
+        # and `cosine_from_relevance` is calibrated against exactly that scale.
+        to_relevance = self._store._select_relevance_score_fn()
+
+        async def one(source_type: SourceType, k: int) -> list[Evidence]:
+            # Over-fetch when a lexical pass will re-rank: fusion can only
+            # promote a chunk that one of the two lists actually returned.
+            dense_k = k * 3 if settings.hybrid_search else k
+            hits = await asyncio.to_thread(
+                self._store.similarity_search_by_vector_with_relevance_scores,
+                vector,
+                dense_k,
+                {"source_type": source_type.value},
+            )
+            evidence = [
+                self._evidence(document, to_relevance(distance), source_type)
+                for document, distance in hits
+            ]
+            if settings.hybrid_search:
+                evidence = self._fuse_with_lexical(query, evidence, source_type, k)
+            evidence = evidence[:k]
+            return self._expand_units(evidence) if expand else evidence
+
+        found = await asyncio.gather(*(one(source_type, k) for source_type, k in wanted))
+        return {source_type: hits for (source_type, _), hits in zip(wanted, found)}
 
     def lexical_search(self, query: str, source_type: SourceType, k: int) -> list[Evidence]:
         """Keyword (BM25) hits, best first — no embedding involved.

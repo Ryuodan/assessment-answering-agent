@@ -438,13 +438,27 @@ async def test_agreement_counts_searches_not_copies(monkeypatch):
     shared = dict(source_type=SourceType.GUIDELINE, source_name="std.pdf", snippet="s", chunk=1)
 
     class Store:
+        def __init__(self):
+            self.searched = []
+
+        def counts_by_type(self):
+            # Only guidelines are indexed, as on the real corpus.
+            return {SourceType.GUIDELINE.value: 120}
+
+        async def search_types(self, query, wanted, *, expand=True):
+            # Mirrors the real store: one call, one result per source type.
+            return {
+                source_type: await self.search(query, source_type, k)
+                for source_type, k in wanted
+            }
+
         async def search(self, query, source_type, k):
-            if source_type is SourceType.PRIOR_ANSWER:
-                return []
+            self.searched.append(source_type)
             return [Evidence(score=0.7, **shared)]
 
-    monkeypatch.setattr(nodes, "get_store", lambda: Store(), raising=False)
-    monkeypatch.setattr("src.knowledge.get_store", lambda: Store(), raising=False)
+    store = Store()
+    monkeypatch.setattr(nodes, "get_store", lambda: store, raising=False)
+    monkeypatch.setattr("src.knowledge.get_store", lambda: store, raising=False)
     monkeypatch.setattr(settings, "top_k_guidelines", 8)
 
     queries = [f"query {n}" for n in range(6)]
@@ -458,3 +472,108 @@ async def test_agreement_counts_searches_not_copies(monkeypatch):
     assert found[0].query_hits == len(queries)
     assert agreement_bonus(found[0].query_hits) == pytest.approx(
         1 + settings.query_agreement_weight * (len(queries) - 1))
+    # An empty collection is not searched at all: the query is embedded before
+    # the filter is applied, so asking costs a remote round trip to learn nothing.
+    assert SourceType.PRIOR_ANSWER not in store.searched
+
+
+# --- retrieval skips collections that hold nothing --------------------------
+
+
+class CountingStore:
+    """Records what was searched, and reports whatever the test says is indexed."""
+
+    def __init__(self, counts):
+        self.counts = counts
+        self.searched = []
+
+    def counts_by_type(self):
+        return dict(self.counts)
+
+    async def search_types(self, query, wanted, *, expand=True):
+        # Mirrors the real store: one call, one result per source type.
+        return {
+            source_type: await self.search(query, source_type, k)
+            for source_type, k in wanted
+        }
+
+    async def search(self, query, source_type, k):
+        self.searched.append((source_type, query))
+        return [Evidence(
+            source_type=source_type, source_name=f"{source_type.value}.pdf",
+            snippet="text", chunk=1, score=0.7,
+        )]
+
+
+async def _retrieve_with(monkeypatch, counts, queries):
+    from src.graph import nodes
+
+    store = CountingStore(counts)
+    monkeypatch.setattr(nodes, "get_store", lambda: store, raising=False)
+    monkeypatch.setattr("src.knowledge.get_store", lambda: store, raising=False)
+    out = await nodes.retrieve({
+        "question": Question(id="1", text="anything"),
+        "search_queries": queries,
+    })
+    return store, out
+
+
+@pytest.mark.asyncio
+async def test_an_empty_collection_is_never_searched(monkeypatch):
+    """The query is embedded before the filter is applied, so asking an empty
+    collection costs a full remote round trip to be told nothing."""
+    store, _ = await _retrieve_with(
+        monkeypatch, {SourceType.GUIDELINE.value: 500}, ["a", "b", "c"])
+
+    kinds = {kind for kind, _ in store.searched}
+    assert kinds == {SourceType.GUIDELINE}
+    assert len(store.searched) == 3, "one search per query, not two"
+
+
+@pytest.mark.asyncio
+async def test_both_collections_are_searched_when_both_hold_something(monkeypatch):
+    store, out = await _retrieve_with(
+        monkeypatch,
+        {SourceType.GUIDELINE.value: 500, SourceType.PRIOR_ANSWER.value: 40},
+        ["a", "b"],
+    )
+
+    assert len(store.searched) == 4
+    kinds = [item.source_type for item in out["evidence"]]
+    assert SourceType.PRIOR_ANSWER in kinds and SourceType.GUIDELINE in kinds
+
+
+@pytest.mark.asyncio
+async def test_evidence_is_split_by_what_each_search_was_for(monkeypatch):
+    """The split used to be positional -- `results[0::2]` and `[1::2]` -- which
+    silently mislabels every chunk as soon as one search is skipped."""
+    _, out = await _retrieve_with(
+        monkeypatch,
+        {SourceType.GUIDELINE.value: 500, SourceType.PRIOR_ANSWER.value: 40},
+        ["a", "b"],
+    )
+
+    for item in out["evidence"]:
+        assert item.source_name == f"{item.source_type.value}.pdf", "chunk labelled as the wrong kind"
+
+
+@pytest.mark.asyncio
+async def test_nothing_indexed_at_all_returns_no_evidence_rather_than_failing(monkeypatch):
+    store, out = await _retrieve_with(monkeypatch, {}, ["a", "b"])
+
+    assert store.searched == []
+    assert out["evidence"] == []
+    assert out["attempt"] == 1
+
+
+@pytest.mark.asyncio
+async def test_prior_answers_still_lead_the_evidence(monkeypatch):
+    """Ordering is what the drafting prompt reads; skipping a search must not
+    disturb it."""
+    _, out = await _retrieve_with(
+        monkeypatch,
+        {SourceType.GUIDELINE.value: 500, SourceType.PRIOR_ANSWER.value: 40},
+        ["a"],
+    )
+
+    assert out["evidence"][0].source_type is SourceType.PRIOR_ANSWER

@@ -58,6 +58,7 @@ def _conversion_options() -> dict[str, Any]:
         "image_export_mode": settings.docling_image_export_mode,
         "do_ocr": settings.docling_do_ocr,
         "do_pdf_heading_hierarchy": settings.docling_heading_hierarchy,
+        "md_page_break_placeholder": settings.docling_page_break_placeholder,
     }
 
 
@@ -80,6 +81,7 @@ async def convert_file(path: Path, *, do_ocr: bool | None = None) -> str:
         "image_export_mode": settings.docling_image_export_mode,
         "do_ocr": str(settings.docling_do_ocr if do_ocr is None else do_ocr).lower(),
         "do_pdf_heading_hierarchy": str(settings.docling_heading_hierarchy).lower(),
+        "md_page_break_placeholder": settings.docling_page_break_placeholder,
     }
     submitted = await _post(
         FILE_ASYNC_ENDPOINT, data=form, files={"files": (path.name, path.read_bytes())}
@@ -164,4 +166,30 @@ def _markdown(payload: dict, name: str) -> str:
     if status == "partial_success":
         logger.warning("Docling partially converted %s: %s", name, payload.get("errors"))
 
-    return markdown
+    return number_pages(markdown)
+
+
+def number_pages(markdown: str) -> str:
+    """Turn Docling's page-break placeholders into numbered page markers.
+
+    Docling can insert a fixed string between pages but cannot number them, and
+    the chunker already reads `--- page N ---` because the local pdfplumber
+    loader emits exactly that. Rewriting one into the other means page numbers
+    reach chunk metadata without the chunker learning a second convention, and
+    an answer can cite a page as well as a clause.
+
+    A document Docling converted without the placeholder -- anything extracted
+    before this existed -- comes back unchanged rather than being given a
+    misleading page 1.
+    """
+    marker = settings.docling_page_break_placeholder
+    if not marker or marker not in markdown:
+        return markdown
+
+    pages = markdown.split(marker)
+    numbered = ["--- page 1 ---\n" + pages[0]]
+    numbered += [
+        f"\n--- page {number} ---\n" + body
+        for number, body in enumerate(pages[1:], start=2)
+    ]
+    return "".join(numbered)

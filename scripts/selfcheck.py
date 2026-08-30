@@ -268,11 +268,30 @@ def _sources_block():
 
 @check("step 4 - nodes passes Evidence objects to the prompt")
 def _nodes_pass_evidence():
-    from src.graph import nodes
+    """Assert the property, not a substring.
 
-    source = inspect.getsource(nodes)
-    if "source_type.value" in source and "format_sources_block" in source:
-        return "nodes still unpacks Evidence into tuples before formatting"
+    This used to fail if the word `source_type.value` appeared anywhere in
+    `nodes` at all, on the assumption that the only reason to touch it was to
+    unpack Evidence into tuples. Skipping an empty collection needs to look a
+    count up by exactly that key, and the check called a correct change a
+    regression. What actually matters is what `format_sources_block` is handed.
+    """
+    from src.graph import nodes
+    from src.models import Evidence
+
+    block = inspect.getsource(nodes._sources_block)
+    if "format_sources_block" not in block:
+        return "_sources_block no longer calls format_sources_block"
+
+    sample = Evidence(source_type="guideline", source_name="p.pdf", snippet="text", chunk=1)
+    try:
+        nodes._sources_block([sample])
+    except Exception as exc:  # noqa: BLE001 - the point is that Evidence works
+        return f"passing Evidence objects failed: {exc}"
+
+    hints = typing.get_type_hints(nodes._sources)
+    if hints.get("return") != list[Evidence]:
+        return f"_sources returns {hints.get('return')}, not list[Evidence]"
     return True
 
 

@@ -65,11 +65,32 @@ def test_covers_clause(clause, expected):
     assert spanning.covers_clause(clause) is expected
 
 
+def test_locator_shows_the_page_beside_the_clause():
+    """A clause number says what to look for; the page says where to open the
+    file. On a 161-page standard a reader needs both."""
+    assert make(clause_start="7.2.1", page=14, page_end=14).locator == (
+        "MDS-CS-STD-003-secure-configuration.pdf §7.2.1 (Page: 14)"
+    )
+
+
+def test_a_chunk_spanning_a_break_cites_both_pages():
+    """Tables and clauses run over page boundaries; citing only where the text
+    starts sends a reader to the wrong half of it."""
+    assert make(clause_start="7.2.1", page=14, page_end=15).locator == (
+        "MDS-CS-STD-003-secure-configuration.pdf §7.2.1 (Pages: 14–15)"
+    )
+
+
 def test_locator_falls_back_to_page_then_filename():
-    assert make(doc_id="MDS-CS-STD-003", page=14).locator == (
-        "MDS-CS-STD-003-secure-configuration.pdf p.14"
+    assert make(doc_id="MDS-CS-STD-003", page=14, page_end=14).locator == (
+        "MDS-CS-STD-003-secure-configuration.pdf (Page: 14)"
     )
     assert make().locator == "MDS-CS-STD-003-secure-configuration.pdf"
+
+
+def test_a_document_indexed_before_pages_existed_claims_none():
+    """Inventing a page would make an uncheckable citation look checkable."""
+    assert "(Page" not in make(clause_start="7.2.1").locator
 
 
 def test_locator_uses_filename_when_doc_id_missing():
@@ -241,6 +262,12 @@ class _RecordingStore:
     async def asimilarity_search_with_relevance_scores(self, query, k, filter=None):
         return []
 
+    def _select_relevance_score_fn(self):
+        return lambda score: score
+
+    def similarity_search_by_vector_with_relevance_scores(self, embedding, k, filter=None, **kwargs):
+        return []
+
 
 def _store_with(recorder):
     return bare_store(recorder)
@@ -388,3 +415,87 @@ async def test_the_character_budget_is_shared_across_the_whole_search(series_doc
     total = sum(len(e.snippet) for e in evidence[2:])
     assert total <= 900, f"expansion returned {total} chars against a 900 budget"
     assert added >= 1, "the budget should still admit something"
+
+
+# --- one embedding per query, not one per source type ----------------------
+
+
+@pytest.mark.asyncio
+async def test_both_source_types_share_a_single_embedding(series_doc):
+    """Guidelines and prior answers are one collection behind a metadata
+    filter, so asking for each separately embedded identical text twice --
+    two round trips to the slowest dependency for the same 1024 numbers."""
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    fake.stage(chunk_indexes=[0], score=0.7)
+
+    await store.search_types(
+        "how quickly are alerts raised",
+        [(SourceType.PRIOR_ANSWER, 5), (SourceType.GUIDELINE, 8)],
+    )
+
+    assert store.embedded == ["how quickly are alerts raised"], store.embedded
+    assert len(fake.searched_vectors) == 2, "one vector query per source type"
+    assert fake.searched_vectors[0] == fake.searched_vectors[1], "the same vector both times"
+
+
+@pytest.mark.asyncio
+async def test_each_source_type_keeps_its_own_budget(series_doc):
+    """One query for both kinds would return the best k overall, which on a
+    corpus that is almost all guidelines means prior answers never appear."""
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    fake.stage(chunk_indexes=[0, 1, 2], score=0.7)
+
+    found = await store.search_types(
+        "alerts", [(SourceType.PRIOR_ANSWER, 1), (SourceType.GUIDELINE, 3)], expand=False)
+
+    assert len(found[SourceType.PRIOR_ANSWER]) == 1
+    assert len(found[SourceType.GUIDELINE]) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_zero_budget_type_is_not_searched(series_doc):
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    fake.stage(chunk_indexes=[0], score=0.7)
+
+    found = await store.search_types(
+        "alerts", [(SourceType.PRIOR_ANSWER, 0), (SourceType.GUIDELINE, 5)])
+
+    assert SourceType.PRIOR_ANSWER not in found
+    assert len(fake.searched_vectors) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_empty_query_costs_no_embedding(series_doc):
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+
+    assert await store.search_types("   ", [(SourceType.GUIDELINE, 5)]) == {}
+    assert store.embedded == []
+
+
+@pytest.mark.asyncio
+async def test_search_still_returns_what_it_did_before(series_doc):
+    """`search` is now a one-type call through `search_types`; the contract it
+    had -- k chunks of one type, best first, units expanded -- is unchanged."""
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    fake.stage(chunk_indexes=[0, 1], score=0.7)
+
+    found = await store.search("alerts", SourceType.GUIDELINE, 2, expand=False)
+
+    assert len(found) == 2
+    assert all(item.source_type is SourceType.GUIDELINE for item in found)
+    assert store.embedded == ["alerts"], "one embedding, not one per call layer"
+
+
+@pytest.mark.asyncio
+async def test_the_relevance_conversion_is_applied_not_the_raw_distance(series_doc):
+    """The by-vector call returns distances -- lower is nearer -- while the
+    by-string call returns relevance. Dropping the conversion would invert the
+    ranking and silently break the cosine figure shown to a reader."""
+    store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
+    fake.stage(chunk_indexes=[0], score=0.42)
+
+    found = await store.search("alerts", SourceType.GUIDELINE, 1, expand=False)
+
+    # The fake's conversion is the identity, so what `_evidence` received must
+    # be exactly what the store reported rather than anything re-derived.
+    assert found[0].raw_score == pytest.approx(0.42)

@@ -998,7 +998,13 @@ def chunk_document(text: str, *, source_name: str = "", chunk_size: int = 1800) 
                         "parent_clause": parent_clause(start),
                         "section_clause": unit.section_clause or "",
                         "heading": unit.heading,
+                        # First and last page the chunk covers. A chunk that
+                        # spans a page break is common -- a table continues, a
+                        # clause runs over -- and citing only the first sends a
+                        # reader to the page where the answer starts rather
+                        # than the pages it is on.
                         "page": pages[0] if pages else -1,
+                        "page_end": pages[-1] if pages else -1,
                         "kind": _chunk_kind(group),
                         "item_count": sum(1 for block in group if block.kind in ("clause", "listitem")),
                         "unit_id": unit_id,

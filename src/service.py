@@ -577,7 +577,7 @@ def _document_info(path: Path, *, origin: str, category: str) -> dict:
 
 # Bumped whenever the extraction code changes in a way that alters its output,
 # so cached text from an older, worse extractor is not silently reused.
-_EXTRACTION_VERSION = "6"
+_EXTRACTION_VERSION = "7"
 
 
 def _extracted_text_cache_path(path: Path) -> Path:
@@ -590,6 +590,10 @@ def _extracted_text_cache_path(path: Path) -> Path:
             str(settings.docling_ocr_auto),
             settings.docling_image_export_mode,
             str(settings.docling_heading_hierarchy),
+            # Part of the key, not just the version: a text extracted without
+            # page markers and one extracted with them are different documents
+            # as far as chunk metadata is concerned.
+            settings.docling_page_break_placeholder,
         )
     )
     cache_key = hashlib.sha256(cache_input.encode("utf-8")).hexdigest()[:24]

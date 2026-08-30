@@ -64,6 +64,16 @@ def bare_store(fake) -> KnowledgeStore:
     """
     store = object.__new__(KnowledgeStore)
     store._store = fake
+
+    # The store embeds the query itself now, so the fake has to answer for the
+    # embedding service too or every retrieval test would need the network.
+    store.embedded = []
+
+    async def _embed_query(query: str) -> list[float]:
+        store.embedded.append(query)
+        return [0.1, 0.2, 0.3]
+
+    store._embed_query = _embed_query
     # The real initialiser's cache setup, so a cache added later cannot quietly
     # break every test that uses a fake.
     store._reset_caches()
@@ -92,6 +102,7 @@ class FakeVectorStore:
         self.records = records
         self._staged: list[tuple[FakeDocument, float]] = []
         self.get_calls: list[dict] = []
+        self.searched_vectors: list[list[float]] = []
 
     def stage(self, *, chunk_indexes: list[int], score: float = 0.7) -> None:
         by_chunk = {record["metadata"]["chunk"]: record for record in self.records}
@@ -100,6 +111,20 @@ class FakeVectorStore:
         ]
 
     async def asimilarity_search_with_relevance_scores(self, query, k, filter=None):
+        return self._staged[:k]
+
+    def _select_relevance_score_fn(self):
+        """Identity: `stage()` already speaks in relevance, not distance.
+
+        Chroma returns raw distances from the by-vector call and LangChain
+        converts them; staging relevance directly and converting by identity
+        keeps every test that says `score=0.7` meaning the same thing it did
+        before the store started embedding for itself.
+        """
+        return lambda score: score
+
+    def similarity_search_by_vector_with_relevance_scores(self, embedding, k, filter=None, **kwargs):
+        self.searched_vectors.append(list(embedding))
         return self._staged[:k]
 
     def add_documents(self, documents, ids=None):
