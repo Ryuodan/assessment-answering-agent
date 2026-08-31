@@ -394,6 +394,52 @@ def _chunk_sizes():
     return True
 
 
+@check("no indexed chunk is empty", required=False)
+def _chunk_substance():
+    """Scan the live index for chunks that carry nothing.
+
+    Docling marks every figure with an `<!-- image -->` placeholder, so a cover
+    page that is only a logo became a chunk whose entire body was that
+    placeholder. Four sat in this corpus: they embed to something, so searching
+    "cover page" or "logo" returned them and the interface drew an empty card.
+    The chunker filters them now, but this is the guard that says so of the
+    index actually on disk -- a document indexed by an older build, or by a
+    future change that slips past the filter, shows up here.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from src.chunking import has_substance
+    from src.config import settings
+
+    database = Path(settings.chroma_dir) / "chroma.sqlite3"
+    if not database.is_file():
+        return "no index to check"
+
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        sources = {
+            row[0]: row[1]
+            for row in connection.execute(
+                "select id, string_value from embedding_metadata where key='source_name'"
+            )
+        }
+        empty = {}
+        for identifier, document in connection.execute(
+            "select id, string_value from embedding_metadata where key='chroma:document'"
+        ):
+            if not has_substance(document or ""):
+                name = sources.get(identifier, "unknown")
+                empty[name] = empty.get(name, 0) + 1
+    finally:
+        connection.close()
+
+    if empty:
+        worst = ", ".join(f"{name} ({count})" for name, count in sorted(empty.items())[:3])
+        return f"{sum(empty.values())} chunk(s) with no text; re-index: {worst}"
+    return True
+
+
 # --- report ----------------------------------------------------------------
 
 

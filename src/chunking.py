@@ -946,6 +946,74 @@ def _chunk_kind(blocks: list[Block]) -> str:
     return "prose"
 
 
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_WORD_CHARACTER = re.compile(r"[^\W_]", re.UNICODE)
+# A heading left on its own is short. Anything longer is content.
+_STRANDED_HEADING_CHARS = 40
+
+
+def has_substance(text: str) -> bool:
+    """Whether a chunk carries anything a reader or a retriever can use.
+
+    Docling marks every figure with an `<!-- image -->` placeholder, so a cover
+    page that is nothing but a logo becomes a chunk whose entire body is that
+    placeholder. Four were indexed from this corpus, and they are not merely
+    wasteful: they embed to something, so a query like "cover page" or "logo"
+    returned them and the interface rendered an empty result card.
+    """
+    return bool(_WORD_CHARACTER.search(_HTML_COMMENT.sub(" ", text or "")))
+
+
+def _worth_indexing(groups: list[list[Block]]) -> list[list[Block]]:
+    """Drop the parts of a unit that would index nothing.
+
+    Two kinds go, and both are lossless:
+
+    * a part with no word characters at all — an image placeholder and nothing
+      else;
+    * a part that is only its unit's heading, when another part follows. The
+      stem is repeated at the head of the next part, so such a group duplicates
+      a heading that is about to arrive attached to its body. Measured on this
+      corpus: six of them, every one `part 1 of 2`, and in every case part 2
+      opened with the identical heading.
+
+    A heading-only *last* part is kept — nothing follows it to carry the
+    heading, so dropping it would lose the only record that the section exists.
+    Thin cover pages are kept for the same reason: `## Personal Data Protection
+    Law` is short, but it is the document's name and the only place it appears.
+    """
+    keep: list[list[Block]] = []
+    carried: list[Block] = []
+    for index, group in enumerate(groups):
+        group = carried + group
+        carried = []
+        text = "\n\n".join(block.text for block in group if block.text).strip()
+        if not has_substance(text):
+            continue
+
+        # Stranded-heading is judged by size, not by block kind. Docling renders
+        # a numbered clause as a heading, so whole pages of real requirements
+        # come back as heading blocks: judging by kind alone deleted 102 words
+        # of policy from a single document. A stranded heading is a few dozen
+        # characters; a clause never is.
+        stranded = (
+            all(block.kind == "heading" for block in group)
+            and len(_WORD_CHARACTER.findall(text)) < _STRANDED_HEADING_CHARS
+        )
+        if stranded and index < len(groups) - 1:
+            # Handed to the next part rather than dropped. Dropping it lost the
+            # heading outright: the part that followed carried the stem only
+            # because it was part 2, and renumbering it to part 1 stopped the
+            # stem being prepended at all.
+            carried = group
+            continue
+        keep.append(group)
+
+    if carried:
+        keep.append(carried)
+    return keep
+
+
 def chunk_document(text: str, *, source_name: str = "", chunk_size: int = 1800) -> list[Chunk]:
     """Chunk a document into structure-respecting pieces with citation metadata.
 
@@ -962,28 +1030,33 @@ def chunk_document(text: str, *, source_name: str = "", chunk_size: int = 1800) 
 
     chunks: list[Chunk] = []
     for unit_index, unit in enumerate(units):
-        groups = _pack_unit(unit, chunk_size)
+        # Filtered before the parts are numbered, so part/parts describe what
+        # was actually indexed rather than what was considered.
+        groups = _worth_indexing(_pack_unit(unit, chunk_size))
         unit_id = f"{base}:u{unit_index}"
         stem = unit.stem
 
         for part_index, group in enumerate(groups, start=1):
             body = "\n\n".join(block.text for block in group if block.text).strip()
-            if not body:
-                continue
             # Repeat the stem on continuation parts, so a bare list still says
             # what it is a list of.
             if part_index > 1 and stem and not body.startswith(stem):
                 body = f"{stem}\n{body}"
 
-            labelled = [block.clause for block in group if block.clause]
             # A control table numbers its rows, not its blocks: one block can
             # hold "1-1-1" through "1-1-9", and taking the block's own label
             # alone would cite the first of nine and look precise doing it.
-            labelled += [
+            row_controls = [
                 control
                 for block in group if block.kind == "table"
                 for control in map(row_control_id, block.lines) if control
             ]
+            # When the rows label themselves those labels are the whole answer.
+            # A section heading sharing the group would otherwise widen the
+            # citation back out to the section -- "1" instead of "1-1-1" -- and
+            # a stranded heading merged into the table makes that the ordinary
+            # case rather than a rare one.
+            labelled = row_controls or [block.clause for block in group if block.clause]
             start, end = clause_range(labelled)
             pages = [block.page for block in group if block.page is not None]
 

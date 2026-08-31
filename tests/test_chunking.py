@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from src.chunking import (
+    has_substance,
     build_units,
     chunk_document,
     clause_range,
@@ -729,3 +730,69 @@ def test_a_control_table_labels_itself_and_is_not_reintroduced():
 
     assert table.clause is None, "row control ids are the table's own labels"
     assert _introduced_by(blocks, table.lines) is None
+
+
+# --- chunks that would index nothing ---------------------------------------
+
+
+def test_a_cover_page_of_only_an_image_is_not_indexed():
+    """Docling marks every figure with a placeholder, so a cover page that is
+    nothing but a logo became a chunk whose whole body was that placeholder --
+    and it embedded to something, so searching "logo" returned an empty card."""
+    doc = "<!-- image -->\n\n<!-- image -->\n\n## 1 Scope\n\nRetention is 90 days.\n"
+    chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
+
+    assert chunks, "the real content must survive"
+    assert all(has_substance(c.text) for c in chunks)
+    assert any("90 days" in c.text for c in chunks)
+
+
+def test_a_document_of_nothing_but_images_indexes_nothing():
+    chunks = chunk_document("<!-- image -->\n\n<!-- image -->\n", source_name="p.pdf")
+    assert chunks == []
+
+
+def test_a_stranded_heading_is_merged_forward_not_dropped():
+    """Dropping it lost the heading outright: the part that followed carried the
+    stem only because it was part 2, and renumbering it to part 1 stopped the
+    stem being prepended at all."""
+    filler = "Detail follows for the reader. " * 40
+    doc = f"### 7.4 Hiring and training of employees\n\n{filler}\n"
+    chunks = chunk_document(doc, source_name="p.pdf", chunk_size=700)
+
+    joined = "\n".join(c.text for c in chunks)
+    assert "Hiring and training" in joined, "the heading must survive somewhere"
+    heading_only = [c for c in chunks if c.text.strip() == "### 7.4 Hiring and training of employees"]
+    assert not heading_only, "a heading with no body must not be its own chunk"
+
+
+def test_a_clause_rendered_as_a_heading_is_never_mistaken_for_a_stranded_one():
+    """Docling renders numbered clauses as headings, so whole pages of real
+    requirements arrive as heading blocks. Judging "heading only" by block kind
+    alone deleted 102 words of policy from one document."""
+    clauses = "\n\n".join(
+        f"### 3.1.{n} It is prohibited to bypass the protection systems, "
+        f"including anti-virus programs and firewalls, without prior authorisation."
+        for n in range(1, 9)
+    )
+    chunks = chunk_document(clauses, source_name="p.pdf", chunk_size=700)
+
+    joined = " ".join(c.text for c in chunks)
+    for n in range(1, 9):
+        assert f"3.1.{n}" in joined, f"clause 3.1.{n} was dropped"
+    assert "anti-virus" in joined
+
+
+def test_nothing_a_document_says_is_lost_to_the_filter():
+    """The property, asserted directly: every word of the source survives."""
+    import re
+
+    doc = (
+        "<!-- image -->\n\n## Policy\n\n<!-- image -->\n\n"
+        "### 1 Scope\n\n### 1.1 Retention\n\nRecords are kept for 90 days.\n\n"
+        "<!-- image -->\n\n### 1.2 Deletion\n\nRecords are destroyed after 7 years.\n"
+    )
+    chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
+
+    words = lambda t: set(re.findall(r"[^\W_]+", t.lower()))  # noqa: E731
+    assert words(doc) <= words("\n".join(c.text for c in chunks))

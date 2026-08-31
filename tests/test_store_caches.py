@@ -103,3 +103,46 @@ def test_caches_are_built_once_under_concurrency(store, monkeypatch):
 
     assert len(set(results)) == 1, "every thread must see the same corpus"
     assert len(builds) <= 2, f"the chunk map was fetched {len(builds)} times"
+
+
+# --- newly indexed documents cannot reintroduce empty chunks ----------------
+
+
+def test_indexing_a_new_document_never_stores_an_empty_chunk(store):
+    """The guarantee has to hold at the store, not only in the chunker: every
+    upload goes through `add_guideline`, and that is where a cover page of pure
+    image placeholders would otherwise become a retrievable blank."""
+    from src.chunking import has_substance
+
+    store.add_guideline(
+        "brochure.pdf",
+        "<!-- image -->\n\n<!-- image -->\n\n## 1 Scope\n\nRetention is 90 days.\n\n<!-- image -->\n",
+    )
+
+    texts = store._store.get(include=["documents"])["documents"]
+    assert texts, "the real content should have been indexed"
+    assert all(has_substance(t) for t in texts)
+
+
+def test_a_document_that_is_only_images_indexes_nothing_and_does_not_fail(store):
+    """A scanned cover sheet with no text layer must be a no-op, not a crash and
+    not a blank chunk sitting in the corpus."""
+    indexed = store.add_guideline("scan.pdf", "<!-- image -->\n\n<!-- image -->\n")
+
+    assert indexed == 0
+    assert store.documents_indexed() == []
+
+
+def test_prior_answers_are_held_to_the_same_rule(store):
+    """Both ingestion paths chunk the same way, so neither may be a back door."""
+    from src.chunking import has_substance
+
+    from src.models import ExtractedQAPair
+
+    store.add_prior_answers(
+        "filled.pdf",
+        [ExtractedQAPair(question="Do you encrypt data?", answer="Yes, AES-256.")],
+    )
+
+    texts = store._store.get(include=["documents"])["documents"]
+    assert all(has_substance(t) for t in texts)
