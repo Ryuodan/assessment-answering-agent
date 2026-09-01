@@ -142,6 +142,36 @@ survivors were that. The heading now leads the first piece of the split
 instead, which took the count to **16**, and consolidated the corpus from 3,153
 chunks to 2,940.
 
+**A figure placeholder is text to an embedding model.** Docling marks every
+figure it does not export with `<!-- image -->`. There were 1,304 of them in
+this corpus, in 841 of 2,695 chunks, and a cover page that was nothing but a
+logo became a chunk whose entire body was that placeholder — retrievable,
+citable, and drawn in the interface as an empty card.
+
+It is stripped in `parse_blocks`, before the document is parsed at all, which is
+safe because the placeholder is always alone on its line and always followed by
+a blank one. Every ingestion path reaches it, so an uploaded document is cleaned
+on the way in; `scripts/selfcheck.py` re-checks the index on disk, which is what
+catches a document indexed by an older build.
+
+Do not expect much from it, and that was the point of measuring first. The
+placeholders are 0.75% of indexed characters, and embedding 24 real chunks with
+and without them moved the vector by a median cosine of 0.997. Measured on the
+retrieval eval with the query plans held fixed, three of 42 cases moved at all:
+clause recall 61.1% → 63.1%, MRR 0.689 → 0.702, mean first rank 3.95 → 3.58,
+document recall unchanged at 72.5%. The one regression is TC-022, an
+out-of-bounds case whose target document the reference itself marks at 0.4
+confidence. The corpus went from 2,695 chunks to 2,668 — the 27 that went were
+heading-only fragments that a figure had been separating from their own body.
+No unique word was lost from any of the 80 documents.
+
+The wider question this settles: chunk cleaning is not where the headroom is.
+Every safely strippable category together — whitespace, TOC leaders, running
+titles, classification banners, page-number lines — is 2.04% of characters,
+and the table pipes and separator rows that look like noise are load-bearing
+for the formatted view. Meanwhile 83% of what reaches the drafting prompt is
+off-target. The problem is which chunks are selected, not what is inside them.
+
 Worth knowing before copying this: measured on its own, the chunking work cost
 about two points of document recall and three of clause recall. Larger, fewer
 chunks carry more per embedding and discriminate slightly less. It stays

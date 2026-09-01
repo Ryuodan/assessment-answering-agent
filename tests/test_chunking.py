@@ -795,4 +795,42 @@ def test_nothing_a_document_says_is_lost_to_the_filter():
     chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
 
     words = lambda t: set(re.findall(r"[^\W_]+", t.lower()))  # noqa: E731
-    assert words(doc) <= words("\n".join(c.text for c in chunks))
+    # Measured against the document minus its figure placeholders: those are
+    # stripped deliberately, and they are the one thing in the source that is
+    # not something the document says.
+    prose = re.sub(r"<!--\s*image\s*-->", "", doc)
+    assert words(prose) <= words("\n".join(c.text for c in chunks))
+
+
+def test_figure_placeholders_never_reach_a_chunk():
+    """Docling marks every unexported figure with `<!-- image -->`. It carries no
+    meaning, but it is text to an embedding model and it reached the reader in
+    the source cards -- so it is removed before the document is even parsed."""
+    doc = (
+        "## Policy\n\n<!-- image -->\n\n"
+        "### 1 Scope\n\nRecords are kept for 90 days.\n\n"
+        "<!--IMAGE-->\n\n   <!-- image -->   \n\n"
+        "### 2 Deletion\n\nRecords are destroyed after 7 years.\n"
+    )
+    chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
+
+    joined = "\n".join(c.text for c in chunks)
+    assert "<!--" not in joined
+    assert "image" not in joined.lower()
+    # The placeholder sat between two clauses; removing it must not have taken
+    # either of them with it, nor welded them together.
+    assert "90 days" in joined and "7 years" in joined
+
+
+def test_a_page_that_is_nothing_but_a_figure_is_not_indexed():
+    """The cover page case: a chunk whose entire body was the placeholder used to
+    be indexed, embed to something, and render as an empty card."""
+    doc = (
+        "--- page 1 ---\n\n<!-- image -->\n\n"
+        "--- page 2 ---\n\n## Access Control\n\nAccess is reviewed quarterly.\n"
+    )
+    chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
+
+    assert chunks, "the real page must survive"
+    assert all(c.text.strip() for c in chunks)
+    assert "quarterly" in "\n".join(c.text for c in chunks)

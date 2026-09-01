@@ -14,6 +14,14 @@ from __future__ import annotations
 import inspect
 import sys
 import typing
+from pathlib import Path
+
+# Launched as `python scripts/selfcheck.py`, sys.path[0] is `scripts/` and the
+# repo root is absent, so `src` resolves through whatever editable install the
+# environment happens to carry -- on one machine that was a different checkout
+# entirely, and this script cheerfully reported four failures against code it
+# was never looking at. The root goes first either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 results: list[tuple[str, str, str]] = []
@@ -394,7 +402,7 @@ def _chunk_sizes():
     return True
 
 
-@check("no indexed chunk is empty", required=False)
+@check("no indexed chunk is empty or holds a figure placeholder", required=False)
 def _chunk_substance():
     """Scan the live index for chunks that carry nothing.
 
@@ -409,7 +417,7 @@ def _chunk_substance():
     import sqlite3
     from pathlib import Path
 
-    from src.chunking import has_substance
+    from src.chunking import _IMAGE_PLACEHOLDER, has_substance
     from src.config import settings
 
     database = Path(settings.chroma_dir) / "chroma.sqlite3"
@@ -424,19 +432,28 @@ def _chunk_substance():
                 "select id, string_value from embedding_metadata where key='source_name'"
             )
         }
-        empty = {}
+        empty: dict[str, int] = {}
+        placeholders: dict[str, int] = {}
         for identifier, document in connection.execute(
             "select id, string_value from embedding_metadata where key='chroma:document'"
         ):
+            name = sources.get(identifier, "unknown")
             if not has_substance(document or ""):
-                name = sources.get(identifier, "unknown")
                 empty[name] = empty.get(name, 0) + 1
+            # The stronger statement: not merely that the chunk says something,
+            # but that no placeholder rode along inside one that does. A
+            # document uploaded against an older build lands here.
+            if any(_IMAGE_PLACEHOLDER.match(line) for line in (document or "").splitlines()):
+                placeholders[name] = placeholders.get(name, 0) + 1
     finally:
         connection.close()
 
     if empty:
         worst = ", ".join(f"{name} ({count})" for name, count in sorted(empty.items())[:3])
         return f"{sum(empty.values())} chunk(s) with no text; re-index: {worst}"
+    if placeholders:
+        worst = ", ".join(f"{name} ({count})" for name, count in sorted(placeholders.items())[:3])
+        return f"{sum(placeholders.values())} chunk(s) still hold a figure placeholder; re-index: {worst}"
     return True
 
 

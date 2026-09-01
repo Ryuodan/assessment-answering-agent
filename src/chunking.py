@@ -78,6 +78,11 @@ _TABLE_SEP = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
 _TABLE_OPEN = "[table]"
 _TABLE_CLOSE = "[/table]"
 _PAGE = re.compile(r"^-{2,}\s*page\s+(\d+)\s*-{2,}$", re.IGNORECASE)
+# Docling emits one of these for every figure it does not export. They are the
+# only HTML comment the converter produces, they always occupy a line of their
+# own, and they carry no text -- but they are text as far as an embedding model
+# is concerned, and they reach the reader as `<!-- image -->` in a source card.
+_IMAGE_PLACEHOLDER = re.compile(r"^\s*<!--\s*image\s*-->\s*$", re.IGNORECASE)
 
 _EMPHASIS = r"(?:\*\*|__|\*|_)"
 # Words that introduce a clause number in legal and regulatory drafting. With one
@@ -346,7 +351,13 @@ def _strip_emphasis(text: str) -> str:
 
 def parse_blocks(text: str) -> list[Block]:
     """Walk the document once, emitting structural blocks in reading order."""
-    lines = strip_bidi(text).splitlines()
+    # Dropped before parsing rather than after: the placeholder is always
+    # alone on its line and always followed by a blank one, so removing the
+    # line outright cannot merge or split a paragraph.
+    lines = [
+        line for line in strip_bidi(text).splitlines()
+        if not _IMAGE_PLACEHOLDER.match(line)
+    ]
     total = len(lines)
     trailing = _uses_trailing_clauses(lines)
     blocks: list[Block] = []
