@@ -31,7 +31,7 @@ def scrambled(monkeypatch):
     in_flight = 0
     peak = 0
 
-    async def answerer(question: Question, language, *, run_id=""):
+    async def answerer(question: Question, language, *, run_id="", **_):
         nonlocal in_flight, peak
         in_flight += 1
         peak = max(peak, in_flight)
@@ -88,7 +88,7 @@ async def test_the_cap_is_actually_honoured(monkeypatch, scrambled, concurrency)
 async def test_one_failure_stays_contained_at_any_concurrency(monkeypatch, concurrency):
     monkeypatch.setattr(settings, "max_concurrent_questions", concurrency)
 
-    async def flaky(question: Question, language, *, run_id=""):
+    async def flaky(question: Question, language, *, run_id="", **_):
         if question.id == "3":
             raise RuntimeError("429 rate limit")
         return AnsweredQuestion(question=question, answer="ok", confidence=0.9, needs_review=False)

@@ -14,11 +14,13 @@ from urllib.parse import quote
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
-from src import service
+from src import batches, events, forms, identity, runs, service, store, tools
+from src.identity import User
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
 from src.export_docx import render_docx
@@ -42,6 +44,27 @@ async def lifespan(_: FastAPI):
     logger.info("Chat model: %s | Embeddings: %s", settings.groq_chat_model, settings.embedding_model)
     if not settings.groq_api_key:
         logger.warning("GROQ_API_KEY is not set — answering will fail until it is.")
+
+    store.connect()  # applies the schema before the first request rather than during it
+    identity.bootstrap()
+    identity.purge_expired_sessions()
+    identity.purge_old_attempts()
+    if identity.sign_in_required():
+        logger.info(
+            "Sign-in required; %d user(s), %d admin(s).",
+            len(identity.list_users()), identity.admin_count(),
+        )
+        if not identity.admin_count():
+            logger.warning(
+                "No administrator exists, so nobody can manage access. Set "
+                "ADMIN_EMAIL and ADMIN_PASSWORD and restart."
+            )
+    else:
+        logger.warning(
+            "No users have been added — the API is open and every action will be "
+            "attributed to %s. Add someone before exposing this beyond localhost.",
+            identity.LOCAL_EMAIL,
+        )
     yield
 
 
@@ -68,6 +91,511 @@ async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
         status_code=500,
         content={"detail": "Something went wrong on the server. The details are in its log."},
     )
+
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+
+def current_user(request: Request) -> User:
+    """Who is making this request.
+
+    Falls back to the local stand-in when no allow-list is configured, so a
+    developer running the app on their own machine is not asked to sign in to a
+    single-user service. Setting `ALLOWED_EMAILS` is what turns gating on —
+    there is no second switch that could disagree with it.
+    """
+    user = identity.resolve(request.cookies.get(identity.SESSION_COOKIE))
+    if user is not None:
+        return user
+    if not identity.sign_in_required():
+        return identity.local_user()
+    raise HTTPException(status_code=401, detail="Sign in to continue.")
+
+
+class SignInRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    code: str = Field(min_length=1, max_length=200)
+
+
+def _user_payload(user: User) -> dict:
+    return {
+        "email": user.email,
+        "team": user.team_id,
+        "role": user.role,
+        "is_admin": user.is_admin,
+        "sign_in_required": identity.sign_in_required(),
+    }
+
+
+def current_admin(user: User = Depends(current_user)) -> User:
+    """Refuse anyone who is not an administrator."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Administrator access is required.")
+    return user
+
+
+@app.post("/api/auth/session")
+def sign_in(body: SignInRequest, request: Request, response: Response) -> dict:
+    """Open a session for a known address and its access code."""
+    try:
+        token, user = identity.sign_in(body.email, body.code)
+    except identity.AccessDenied as denied:
+        raise HTTPException(status_code=403, detail=str(denied)) from denied
+
+    response.set_cookie(
+        identity.SESSION_COOKIE,
+        token,
+        max_age=settings.session_ttl_days * 86400,
+        httponly=True,      # the token is never needed by page scripts
+        samesite="lax",
+        # Secure follows the connection rather than a setting. A browser
+        # silently discards a Secure cookie sent over http://, so tying this to
+        # anything else produces a sign-in that appears to succeed and then
+        # does nothing — the worst possible way for it to fail. Behind a
+        # TLS-terminating proxy, run uvicorn with --proxy-headers so the
+        # forwarded scheme is what is read here.
+        secure=request.url.scheme == "https",
+    )
+    events.record(user, events.SIGNED_IN)
+    return _user_payload(user)
+
+
+@app.get("/api/auth/session")
+def whoami(request: Request) -> dict:
+    """The current user, or who would be required to sign in.
+
+    Never 401s: the interface asks this on load to decide whether to show a
+    sign-in screen, and an error response would make "signed out" look like a
+    fault.
+    """
+    user = identity.resolve(request.cookies.get(identity.SESSION_COOKIE))
+    if user is None and not identity.sign_in_required():
+        user = identity.local_user()
+    if user is None:
+        # Same keys as the signed-in shape. A caller reading `is_admin` should
+        # not have to know that the signed-out response omits it.
+        return {
+            "email": None, "team": None, "role": None,
+            "is_admin": False, "sign_in_required": True,
+        }
+    return _user_payload(user)
+
+
+@app.delete("/api/auth/session")
+def sign_out(request: Request, response: Response) -> dict:
+    """End the current session."""
+    token = request.cookies.get(identity.SESSION_COOKIE)
+    user = identity.resolve(token)
+    identity.sign_out(token)
+    response.delete_cookie(identity.SESSION_COOKIE)
+    if user is not None:
+        events.record(user, events.SIGNED_OUT)
+    return {"signed_out": True}
+
+
+# ---------------------------------------------------------------------------
+# Administration
+#
+# Every route here changes who can reach the system, so every one records an
+# event naming the administrator who did it. Being able to see that someone was
+# added, and by whom, is the point of having a page rather than a config file.
+# ---------------------------------------------------------------------------
+
+
+class AddUserRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    team: str | None = None
+    role: str = identity.MEMBER
+
+
+class UpdateUserRequest(BaseModel):
+    team: str | None = None
+    role: str | None = None
+    disabled: bool | None = None
+
+
+class PasswordRequest(BaseModel):
+    password: str | None = Field(default=None, max_length=200)
+
+
+class TeamRequest(BaseModel):
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    name: str = Field(default="", max_length=120)
+
+
+def _guard(action) -> object:
+    """Run an administrative action, turning a refusal into a 400."""
+    try:
+        return action()
+    except identity.NotAllowed as refused:
+        raise HTTPException(status_code=400, detail=str(refused)) from refused
+
+
+@app.get("/api/admin/overview")
+def admin_overview(admin: User = Depends(current_admin)) -> dict:
+    return {
+        "users": identity.list_users(),
+        "teams": identity.list_teams(),
+        "you": _user_payload(admin),
+        "break_glass": identity.normalise(settings.admin_email) if settings.admin_email else None,
+    }
+
+
+@app.post("/api/admin/users")
+def admin_add_user(body: AddUserRequest, admin: User = Depends(current_admin)) -> dict:
+    user = _guard(lambda: identity.add_user(
+        body.email, team_id=body.team, role=body.role, added_by=admin.email
+    ))
+    events.record(
+        admin, events.USER_ADDED, subject_type="user", subject_id=user.email,
+        team=user.team_id, role=user.role,
+    )
+    return {"user": user.email, "team": user.team_id, "role": user.role}
+
+
+@app.patch("/api/admin/users/{email}")
+def admin_update_user(email: str, body: UpdateUserRequest, admin: User = Depends(current_admin)) -> dict:
+    address = identity.normalise(email)
+    if body.role == identity.MEMBER or body.disabled:
+        _refuse_last_admin(address)
+    user = _guard(lambda: identity.update_user(
+        address, team_id=body.team, role=body.role, disabled=body.disabled
+    ))
+    events.record(
+        admin, events.USER_UPDATED, subject_type="user", subject_id=address,
+        team=body.team, role=body.role, disabled=body.disabled,
+    )
+    return {"user": user.email, "team": user.team_id, "role": user.role}
+
+
+@app.delete("/api/admin/users/{email}")
+def admin_remove_user(email: str, admin: User = Depends(current_admin)) -> dict:
+    address = identity.normalise(email)
+    _refuse_last_admin(address)
+    identity.remove_user(address)
+    events.record(admin, events.USER_REMOVED, subject_type="user", subject_id=address)
+    return {"removed": address}
+
+
+def _refuse_last_admin(email: str) -> None:
+    """Stop the only administrator locking everybody out.
+
+    Recoverable via ADMIN_EMAIL / ADMIN_PASSWORD and a restart — but that needs
+    whoever runs the host, which is exactly the dependency this page exists to
+    remove.
+    """
+    user = identity.find_user_any(email)
+    if user and user.is_admin and identity.admin_count() <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="This is the only administrator. Promote someone else first.",
+        )
+
+
+@app.post("/api/admin/users/{email}/password")
+def admin_set_password(email: str, body: PasswordRequest, admin: User = Depends(current_admin)) -> dict:
+    """Give an admin their own password, or clear it back to the team code."""
+    address = identity.normalise(email)
+    if identity.find_user_any(address) is None:
+        raise HTTPException(status_code=404, detail=f"No user {address}.")
+    if address == identity.normalise(settings.admin_email):
+        raise HTTPException(
+            status_code=400,
+            detail="This account's password comes from the environment and would be "
+                   "restored on the next restart. Create a second administrator instead.",
+        )
+    identity.set_password(address, body.password or None)
+    events.record(
+        admin, events.PASSWORD_SET, subject_type="user", subject_id=address,
+        cleared=not body.password,
+    )
+    return {"user": address, "has_password": bool(body.password)}
+
+
+@app.post("/api/admin/teams")
+def admin_add_team(body: TeamRequest, admin: User = Depends(current_admin)) -> dict:
+    identity.ensure_team(body.id, name=body.name)
+    events.record(admin, events.TEAM_ADDED, subject_type="team", subject_id=body.id, name=body.name)
+    return {"team": body.id}
+
+
+@app.delete("/api/admin/teams/{team_id}")
+def admin_remove_team(team_id: str, admin: User = Depends(current_admin)) -> dict:
+    _guard(lambda: identity.delete_team(team_id))
+    events.record(admin, events.TEAM_REMOVED, subject_type="team", subject_id=team_id)
+    return {"removed": team_id}
+
+
+@app.post("/api/admin/teams/{team_id}/access-code")
+def admin_rotate_code(team_id: str, admin: User = Depends(current_admin)) -> dict:
+    """Issue a new access code. The plaintext is returned exactly once.
+
+    Everyone on the team has to be given the new one — rotating is what you do
+    when somebody leaves, so the old code ceasing to work is the feature.
+    """
+    if not any(team["id"] == team_id for team in identity.list_teams()):
+        raise HTTPException(status_code=404, detail=f"No team {team_id!r}.")
+    code = identity.set_access_code(team_id)
+    events.record(admin, events.CODE_ROTATED, subject_type="team", subject_id=team_id)
+    return {"team": team_id, "access_code": code}
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page() -> FileResponse:
+    """A deep link to the access panel, which lives inside the app itself.
+
+    The same document as `/`, because a deployment may only expose the
+    application's own address — an administrator who cannot reach a second URL
+    would otherwise have no way in. Nothing is protected by living at a separate
+    path anyway: `/api/admin/*` is what checks the role, and it does so whatever
+    page the request came from. This route exists only so the link still works
+    where that path *is* reachable.
+    """
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+# ---------------------------------------------------------------------------
+# Questionnaires
+#
+# Thin: each route resolves the caller, turns the request into a `Scope`, and
+# calls one operation in `src.tools`. Everything that decides anything lives
+# there, so the agent in a later phase reaches exactly the same behaviour
+# without going through HTTP.
+# ---------------------------------------------------------------------------
+
+
+class ScopeRequest(BaseModel):
+    """Which questions an operation applies to."""
+
+    ids: list[str] = Field(default_factory=list, max_length=2000)
+    part: str = Field(default="", max_length=200)
+    matching: str = Field(default="", max_length=200)
+    unanswered_only: bool = False
+
+    def to_scope(self) -> tools.Scope:
+        return tools.Scope(
+            ids=tuple(self.ids), part=self.part,
+            matching=self.matching, unanswered_only=self.unanswered_only,
+        )
+
+
+class AnswerBatchRequest(BaseModel):
+    scope: ScopeRequest = Field(default_factory=ScopeRequest)
+
+
+class ReviseBatchRequest(BaseModel):
+    instruction: str = Field(min_length=1, max_length=2000)
+    scope: ScopeRequest = Field(default_factory=ScopeRequest)
+
+
+class SetAnswerRequest(BaseModel):
+    question_id: str = Field(min_length=1, max_length=400)
+    text: str = Field(max_length=20000)
+
+
+def _tool(action):
+    """Run a tool call, turning its refusals into readable HTTP errors."""
+    try:
+        return action()
+    except tools.ToolError as refused:
+        raise HTTPException(status_code=400, detail=str(refused)) from refused
+    except forms.FormatError as unreadable:
+        raise HTTPException(status_code=422, detail=str(unreadable)) from unreadable
+
+
+@app.post("/api/forms")
+async def open_questionnaire(
+    file: UploadFile = File(...), user: User = Depends(current_user)
+) -> dict:
+    """Read an uploaded questionnaire and report what can be answered in it.
+
+    Nothing is answered here. The point of the separation is that a person sees
+    which sheets were used, which were skipped and why, and what each column was
+    taken to be, *before* a run that costs minutes.
+    """
+    # Checked against what `forms` can read, not against the knowledge base's
+    # list: the two accept different things. Policies come in as PDF or Word;
+    # questionnaires are mostly spreadsheets, which the knowledge-base check
+    # would have refused before the parser ever saw them.
+    name = file.filename or "questionnaire"
+    if Path(name).suffix.lower() not in forms.SUPPORTED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
+                   f"Supported: {', '.join(forms.SUPPORTED)}.",
+        )
+    path = service.save_upload(name, await file.read())
+    # In a thread: reading a workbook is a CPU-bound XML parse, and under the
+    # assisted and agent strategies it is also a network call. Either way it is
+    # not something to do on the event loop of a server answering other people.
+    batch = await run_in_threadpool(lambda: _tool(lambda: tools.open_form(user, path)))
+    return tools.inspect(user, batch.id)
+
+
+@app.get("/api/forms")
+def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> dict:
+    return {"forms": batches.recent(user.team_id, limit=limit)}
+
+
+@app.get("/api/forms/{batch_id}")
+def get_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict:
+    return _tool(lambda: tools.inspect(user, batch_id))
+
+
+@app.post("/api/forms/{batch_id}/answer")
+async def answer_questionnaire(
+    batch_id: str, request: AnswerBatchRequest, user: User = Depends(current_user)
+) -> dict:
+    """Answer a selection. Long: a large questionnaire is minutes of work.
+
+    `/api/assessments/progress/{batch_id}` reports how far it has got while this
+    request is still open — the batch id is the run id, so it can be watched
+    from the moment the call is made.
+    """
+    outcome = await _atool(tools.answer(user, batch_id, request.scope.to_scope()))
+    return {**vars(outcome), "batch": tools.inspect(user, batch_id)}
+
+
+@app.post("/api/forms/{batch_id}/revise")
+async def revise_questionnaire(
+    batch_id: str, request: ReviseBatchRequest, user: User = Depends(current_user)
+) -> dict:
+    outcome = await _atool(
+        tools.revise(user, batch_id, request.instruction, request.scope.to_scope())
+    )
+    return {**vars(outcome), "batch": tools.inspect(user, batch_id)}
+
+
+@app.post("/api/forms/{batch_id}/answers")
+def write_answer_by_hand(
+    batch_id: str, request: SetAnswerRequest, user: User = Depends(current_user)
+) -> dict:
+    _tool(lambda: tools.set_answer(user, batch_id, request.question_id, request.text))
+    return tools.inspect(user, batch_id)
+
+
+class ColumnRoleRequest(BaseModel):
+    sheet: str = Field(min_length=1, max_length=200)
+    column: str = Field(min_length=1, max_length=3, pattern=r"^[A-Za-z]{1,3}$")
+    role: str = Field(min_length=1, max_length=20)
+
+
+class QuestionChange(BaseModel):
+    id: str = Field(min_length=1, max_length=400)
+    skip: bool | None = None
+    text: str = Field(default="", max_length=4000)
+
+
+class QuestionChanges(BaseModel):
+    changes: list[QuestionChange] = Field(min_length=1, max_length=2000)
+
+
+@app.get("/api/forms/{batch_id}/columns")
+def get_column_roles(batch_id: str, user: User = Depends(current_user)) -> dict:
+    """Which column each sheet's answers go into, and why detection thinks so."""
+    return {"sheets": _tool(lambda: tools.column_roles(user, batch_id))}
+
+
+@app.post("/api/forms/{batch_id}/columns")
+def set_column_role(
+    batch_id: str, body: ColumnRoleRequest, user: User = Depends(current_user)
+) -> dict:
+    """Move a sheet's answers to a different column, or stop writing one."""
+    return _tool(lambda: tools.set_column_role(user, batch_id, body.sheet, body.column, body.role))
+
+
+@app.patch("/api/forms/{batch_id}/questions")
+def correct_questions(
+    batch_id: str, body: QuestionChanges, user: User = Depends(current_user)
+) -> dict:
+    """Set questions aside, bring them back, or correct their wording."""
+    return _tool(lambda: tools.set_questions(
+        user, batch_id, [change.model_dump(exclude_none=True) for change in body.changes]
+    ))
+
+
+@app.post("/api/forms/{batch_id}/fill")
+def fill_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict:
+    """Write the answers into a copy of the original and report what changed."""
+    filled = _tool(lambda: tools.fill(user, batch_id))
+    return {
+        "file": filled.path.name,
+        "written": filled.written,
+        "created": filled.created,
+        "replaced": filled.replaced,
+        "intact": filled.intact,
+        "skipped": filled.skipped,
+        "blank": filled.blank,
+    }
+
+
+OOXML_TYPES = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+@app.get("/api/forms/{batch_id}/file")
+def download_filled_questionnaire(batch_id: str, user: User = Depends(current_user)) -> FileResponse:
+    """The filled copy. Produced by `/fill`, which must have run first."""
+    batch = _tool(lambda: tools._require(user, batch_id))
+    filled = tools._filled_path(batch)
+    if not filled.exists():
+        raise HTTPException(status_code=404, detail="Fill the questionnaire first.")
+    # The real type, so a browser hands it to Excel or Word rather than to
+    # whatever it does with an unknown blob; `attachment_headers` still forces
+    # the download and carries the Arabic file name.
+    return FileResponse(
+        filled, filename=filled.name, headers=attachment_headers(filled.name),
+        media_type=OOXML_TYPES.get(filled.suffix.lower(), "application/octet-stream"),
+    )
+
+
+async def _atool(coroutine):
+    """`_tool`, for the operations that are asynchronous."""
+    try:
+        return await coroutine
+    except tools.ToolError as refused:
+        raise HTTPException(status_code=400, detail=str(refused)) from refused
+    except forms.FormatError as unreadable:
+        raise HTTPException(status_code=422, detail=str(unreadable)) from unreadable
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/runs")
+def list_runs(user: User = Depends(current_user), limit: int = 25) -> dict:
+    """The team's answered runs, newest first."""
+    return {"runs": [vars(summary) for summary in runs.recent(user.team_id, limit=limit)]}
+
+
+@app.get("/api/runs/{run_id}")
+def get_run(run_id: str, user: User = Depends(current_user)) -> dict:
+    """One run with its answers.
+
+    Scoped to the caller's team, so an id belonging to another team reads as
+    absent rather than forbidden.
+    """
+    stored = runs.load(run_id, team_id=user.team_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail=f"No run '{run_id}'.")
+    return {
+        **vars(stored.summary),
+        "answers": [answer.model_dump() for answer in stored.answers],
+        "history": [vars(event) for event in events.for_subject(runs.SUBJECT, run_id)],
+    }
+
+
+@app.get("/api/events")
+def list_events(user: User = Depends(current_user), limit: int = 50, kind: str | None = None) -> dict:
+    """Recent activity for the team."""
+    return {"events": [vars(event) for event in events.recent(user.team_id, limit=limit, kind=kind)]}
 
 
 def _check_suffix(filename: str) -> None:
@@ -217,11 +745,36 @@ async def view_extracted_text(origin: str, category: str, name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _persist_run(user: User, result: AssessmentResult) -> None:
+    """Save a finished run and record that it happened.
+
+    Never raises. A run costs minutes; losing the answers because the history
+    could not be written would be a far worse failure than losing the history,
+    so this logs and returns. The log is loud because silently stopping keeping
+    history is exactly the sort of thing nobody notices for a month.
+    """
+    try:
+        runs.save(user, result)
+        events.record(
+            user,
+            events.RUN_FINISHED,
+            subject_type=runs.SUBJECT,
+            subject_id=result.run_id,
+            source_name=result.source_name,
+            questions=result.questions_found,
+            needs_review=result.needs_review_count,
+            errors=sum(1 for answer in result.answers if answer.error),
+        )
+    except Exception:
+        logger.exception("Could not save run %s; the answers were still returned.", result.run_id)
+
+
 @app.post("/api/assessments/answer")
 async def answer_assessment(
     file: UploadFile = File(...),
     language: Language | None = Form(default=None),
     run_id: str | None = Form(default=None),
+    user: User = Depends(current_user),
 ) -> AssessmentResult:
     """Answer a new assessment.
 
@@ -241,6 +794,7 @@ async def answer_assessment(
             status_code=422,
             detail=f"No questions could be extracted from '{result.source_name}'.",
         )
+    _persist_run(user, result)
     return result
 
 
@@ -293,7 +847,9 @@ async def extract_assessment(file: UploadFile = File(...)) -> dict:
 
 
 @app.post("/api/assessments/answer-questions")
-async def answer_question_list(request: AnswerQuestionsRequest) -> AssessmentResult:
+async def answer_question_list(
+    request: AnswerQuestionsRequest, user: User = Depends(current_user)
+) -> AssessmentResult:
     """Answer a list of questions supplied directly, with no document involved.
 
     Serves three cases the document endpoint cannot: questions typed by hand,
@@ -316,13 +872,15 @@ async def answer_question_list(request: AnswerQuestionsRequest) -> AssessmentRes
     answers = await service.answer_questions(
         questions, language=request.language, run_id=request.run_id
     )
-    return AssessmentResult(
+    result = AssessmentResult(
         run_id=request.run_id or uuid.uuid4().hex[:12],
         source_name=request.source_name,
         language=request.language or questions[0].language,
         questions_found=len(questions),
         answers=answers,
     )
+    _persist_run(user, result)
+    return result
 
 
 def _detect_language(text: str) -> Language:

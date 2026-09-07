@@ -100,6 +100,38 @@ class Settings(BaseSettings):
     def docling_enabled(self) -> bool:
         return bool(self.docling_base_url.strip())
 
+    # --- Reading questionnaires -------------------------------------------
+    # How hard to work at understanding an uploaded questionnaire: 'rules',
+    # 'assisted', 'agent', 'hybrid' or 'guarded'. Described, measured and
+    # compared in `src.forms.reading`.
+    #
+    # 'guarded' by default -- the agent, floored by the rules. Measured over six
+    # questionnaires in shapes nobody had written a rule for, the agent read
+    # 292 of 292 against the rules' 272; measured over the nineteen we already
+    # had, it quietly dropped a whole sheet. Running both and taking the better
+    # reading per sheet costs one deterministic pass on top of the agent, which
+    # is milliseconds and nothing.
+    detection_strategy: str = "guarded"
+
+    # A sheet the rules cannot read is offered to a model, which proposes a
+    # layout the ordinary reader then extracts from -- see `forms.llm_layout`.
+    # Off by default: the rules read every sample workbook we have, so this
+    # costs a call per unreadable sheet for files we have not seen yet. The
+    # 'assisted' strategy turns it on for one reading without changing this.
+    detection_assist: bool = False
+    # A sheet where the rules found questions on fewer than this share of the
+    # rows below the header is also offered, because "7 questions on a sheet of
+    # 133 rows" is a wrong column rather than a short questionnaire. The
+    # model's reading is taken only if it finds more, so assistance can add
+    # questions but never remove them.
+    detection_assist_coverage: float = Field(default=0.25, ge=0.0, le=1.0)
+    detection_assist_min_rows: int = 20
+
+    # The Excel agent reads a workbook through tools instead, exploring it
+    # before committing to a layout. Built to be compared against the two above
+    # rather than to replace them; see `src.agents.excel_agent`.
+    excel_agent_max_steps: int = Field(default=24, ge=4, le=80)
+
     # --- Storage -----------------------------------------------------------
     chroma_dir: Path = PROJECT_ROOT / "chroma_db"
     collection_name: str = "assessment_knowledge"
@@ -235,7 +267,57 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    @field_validator("chroma_dir", "upload_dir", "extracted_text_dir")
+    # --- Identity and history (Phase 0) ------------------------------------
+    # One SQLite file holds users, teams, sessions, the event log and answered
+    # runs. SQLite rather than a server because the whole point of this store is
+    # that it is always there: no second process to start, no connection string
+    # to get wrong, and a single file to copy when someone wants a backup.
+    db_path: Path = PROJECT_ROOT / "data" / "app.db"
+
+    # Members to create on a FIRST run only, comma-separated. Access is
+    # administered on the admin page once the system is running -- this exists
+    # so a deployment that predates the admin page keeps working, and so a new
+    # one can start with its team already listed. Removing someone on the page
+    # is not undone by a restart. A plain string rather than `list[str]`
+    # deliberately: pydantic-settings tries to JSON-decode list-typed fields, so
+    # `ALLOWED_EMAILS=a@t2.sa,b@t2.sa` raises a parse error instead of doing the
+    # obvious thing. Read `allowed_emails_set`, never this.
+    allowed_emails: str = ""
+
+    # The break-glass administrator, re-applied at every startup. This is the
+    # one account the environment owns, and the way back in when a password is
+    # lost or the last admin is removed by accident -- so it is also the only
+    # account whose password cannot be changed from the admin page. Create a
+    # second admin there for everyday use.
+    admin_email: str = ""
+    admin_password: str = ""
+
+    # A shared access code is only as strong as the number of guesses allowed
+    # against it. Counted per address, because the code is shared by a team and
+    # an attacker with a proxy pool would otherwise spread guesses across it.
+    sign_in_max_attempts: int = Field(default=10, ge=1)
+    sign_in_lockout_minutes: int = Field(default=15, ge=1)
+    # Everyone who signs in joins this team until there is a reason to have two.
+    # Teams exist in the schema from the start because retrofitting a tenant
+    # column onto rows that already exist is the migration nobody enjoys.
+    default_team: str = "cybersecurity"
+    # How long a sign-in lasts. Sessions are rows, so this is also how long a
+    # revoked-by-deletion session stays revoked.
+    session_ttl_days: int = Field(default=30, ge=1)
+
+    @property
+    def allowed_emails_set(self) -> frozenset[str]:
+        """The first-run seed list, lower-cased and stripped.
+
+        Empty is the ordinary case once a system has been set up: the users
+        table is the allow-list, and this only ever plants the first entries in
+        it.
+        """
+        return frozenset(
+            part.strip().casefold() for part in self.allowed_emails.split(",") if part.strip()
+        )
+
+    @field_validator("chroma_dir", "upload_dir", "extracted_text_dir", "db_path")
     @classmethod
     def _anchor_to_project(cls, value: Path) -> Path:
         """Resolve a relative path against the project, not the process's cwd.
@@ -255,6 +337,7 @@ class Settings(BaseSettings):
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.extracted_text_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()

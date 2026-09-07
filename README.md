@@ -479,6 +479,31 @@ python -m src.cli stats
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `POST` | `/api/auth/session` | Sign in with an address and its access code |
+| `GET` | `/api/auth/session` | Who is signed in, and whether sign-in is required |
+| `DELETE` | `/api/auth/session` | Sign out |
+| `GET` | `/api/admin/overview` | Everyone, every team — the access panel's data |
+| `POST` | `/api/admin/users` | Add someone |
+| `PATCH` | `/api/admin/users/{email}` | Change their team, role, or suspend them |
+| `DELETE` | `/api/admin/users/{email}` | Remove them and end their sessions |
+| `POST` | `/api/admin/users/{email}/password` | Give an administrator their own password |
+| `POST` | `/api/admin/teams` | Add a team |
+| `DELETE` | `/api/admin/teams/{id}` | Remove an empty team |
+| `POST` | `/api/admin/teams/{id}/access-code` | Issue a new code — returned once |
+| `GET` | `/api/runs` | The team's answered runs, newest first |
+| `GET` | `/api/runs/{run_id}` | One run, its answers, and its history |
+| `GET` | `/api/events` | Recent activity for the team |
+| `POST` | `/api/forms` | Read a questionnaire and report what can be answered |
+| `GET` | `/api/forms` | The team's questionnaires |
+| `GET` | `/api/forms/{id}` | One questionnaire, its questions and answers |
+| `POST` | `/api/forms/{id}/answer` | Answer a selection |
+| `POST` | `/api/forms/{id}/revise` | Reword answers under an instruction |
+| `POST` | `/api/forms/{id}/answers` | Write one answer by hand |
+| `GET` | `/api/forms/{id}/columns` | Where each sheet's answers will be written |
+| `POST` | `/api/forms/{id}/columns` | Move a sheet's answers to another column |
+| `PATCH` | `/api/forms/{id}/questions` | Set rows aside, bring them back, fix wording |
+| `POST` | `/api/forms/{id}/fill` | Write the answers into the original file |
+| `GET` | `/api/forms/{id}/file` | Download the filled copy |
 | `POST` | `/api/knowledge/guidelines` | Index policy documents |
 | `POST` | `/api/knowledge/prior-assessments` | Index completed assessments as Q/A pairs |
 | `GET` | `/api/knowledge` | What is currently indexed |
@@ -713,6 +738,513 @@ a collector that appended results as they arrived would get wrong while looking
 correct serially -- along with the cap actually being honoured, a failure
 staying contained, and the document fan-out reading the same setting through
 LangGraph's `max_concurrency`.
+
+## Filling in a questionnaire
+
+`src/forms` reads a customer's questionnaire and writes answers back into it.
+Two functions, one module per format:
+
+```python
+form = forms.detect(path)                      # questions, and where answers go
+forms.write(path, destination, {target: text}) # a copy, with the answers in it
+```
+
+A question usually has more than one place to write: a **status** chosen from
+the file's own dropdown and a **comment** in prose. The vocabularies disagree
+between files -- one wants `Fully Implemented`, another `Fully Compliant`, a
+third `FC` -- so they are read out of the workbook rather than kept here.
+Evidence columns are left blank by default.
+
+**Some columns belong to whoever sent the form.** `Compliance (To be updated by
+BAB)` reads as an ordinary status column by every other rule, and one workbook
+declares ownership in a merged banner a row *above* its headings. Answering
+there would be worse than leaving a question blank, so ownership is checked
+first and those columns are never written.
+
+### Reading it
+
+Structure decides the layout, not wording. Vocabulary alone put the questions in
+a column headed `Questionnaire Type` -- which contains the repeated word
+"Enterprise" -- because the heading contains "question"; and it found nothing at
+all in a workbook whose fifteen sheets head their questions `HR Security`,
+`Physical Security` and so on. So the question column is the one that *behaves*
+like questions, with a matching heading as a tiebreak rather than a requirement.
+Sheets with no headings at all are read from their numbering, and everything
+inferred that way is marked as a proposal for someone to confirm.
+
+Against the eleven real workbooks it finds **831 questions where counting the
+printed item numbers by hand finds 824** -- all of them, plus seven extras.
+Erring that way is deliberate: a confirmation step can remove a row it was
+offered and cannot recover one it never saw.
+
+### Writing it
+
+Every target is an **upsert**, and which of the two happened is reported. In the
+sample files the destination was missing in three different ways: absent from
+the XML entirely, present as an empty string, and -- in the prose Word document
+-- not existing as a paragraph at all. A half-finished questionnaire is an
+ordinary upload, so the same call has to create or replace per target.
+
+Workbooks are edited as XML in place: only the sheets holding answers are
+rewritten and every other part is copied byte for byte. That is measured, not
+preferred -- a load-and-save through openpyxl dropped sixteen drawings from one
+real file and every cell comment from another, and mangled most conditional
+formatting. A cell holding a formula is refused outright, because one workbook
+scores itself from 93 formulas on a hidden sheet.
+
+Word documents go through python-docx, which re-serialises every XML part it
+loads. That reformatting is cosmetic -- nothing is lost or added, relationships
+come out identical, and every image and embedded font is byte-identical -- but
+it is a weaker guarantee than the workbook side, and worth knowing.
+
+**Detection has to survive its own output.** Filling the answer column made it
+the column with the most prose, because plenty of real questions are as short as
+`Company Name:`, so re-opening a half-finished workbook moved the questions into
+the answer column and every target with them. There is a test for that on every
+fixture shape.
+
+**A question is named the way its document names it.** Every question carries
+the place it came from, and that place is shown beside it, so a reading can be
+checked against the file rather than taken on trust. A spreadsheet row gives
+`Human Resources, row 12`. A prose Word question gives `Cybersecurity
+Governance, Q1` -- the section and the printed number, not `paragraph 142`,
+which is a count nothing in Word will show you. A Word *table* gives the
+heading printed above the table, read from the document body in order, because
+`document.tables` and `document.paragraphs` are each flattened separately and
+cannot be zipped back together; where there is no heading and no numbering
+column, it falls back to `table 2, row 5`.
+
+### Five ways to read a questionnaire
+
+The rules above read every file we had. They get there by describing shapes we
+have seen, which is exactly the thing that does not generalise -- a
+questionnaire arriving in a shape nobody wrote a rule for comes back "no column
+holds a run of questions", and a whole sheet is silently lost. So there are
+four more readers, and one call to choose between them:
+
+```python
+from src.forms.reading import read
+read(path, "rules")      # the rules alone
+read(path, "assisted")   # the rules, then one model call per sheet they lost
+read(path, "agent")      # an agent explores the workbook and reads it all
+read(path, "hybrid")     # the rules, then the agent -- shown only what they lost
+read(path, "guarded")    # the agent, floored by the rules. The default.
+```
+
+All four end at `xlsx.read_sheet`, so the question ids, the targets, the
+locations and the write-back are byte-identical between them. A difference
+between two readings is a difference in understanding and never in machinery,
+which is what makes them comparable at all.
+
+**The model is asked about structure, never about content.** It answers one
+question -- which row heads this sheet, which column asks, and what is every
+other column for -- and the ordinary reader does the rest. That split carries
+four guarantees, and they are the reason this is safe to turn on:
+
+* It cannot invent a question. Question text is read out of cells, so a
+  hallucinated question has nowhere to come from.
+* It cannot invent a place to write. Targets are built from real cell
+  references by the same code as always.
+* It cannot take the assessing bank's column. A `To be filled by ...` banner
+  still overrides whatever it said, because that is the one mistake worse than
+  leaving a question blank.
+* It is checked and it is monotone. A reading naming a column that holds
+  nothing, or a header row that does not exist, is refused; a reading that
+  yields no questions is discarded; and an assisted reading replaces the rules'
+  only when it finds *more*. Turning assistance on can rescue a sheet the rules
+  lost and cannot damage one they read correctly.
+
+Everything a model produced is marked unconfident, which puts it at the top of
+the confirmation panel with its reasoning attached.
+
+**The trigger is emptiness or thinness.** A sheet the rules found nothing on is
+offered to the model. So is one where fewer than a quarter of the rows below
+the header became questions -- seven questions on a sheet of 133 rows is a
+wrong column, not a short questionnaire, and that failure never reports itself.
+
+#### What the agent is, and what it costs
+
+`src/agents/excel_agent.py` is the alternative: an agent with five read-only
+tools over the workbook -- list the sheets, look at one, read a window of rows,
+search for text, record a reading -- that decides for itself what to look at.
+It needs no rule written for a shape before it can read it, and it can look at
+things no fixed view contains: row 400 of a sheet whose first screen is a title
+page, or a sheet that turns out to be a continuation of the one before it.
+
+Measured over the nineteen real questionnaires, where the rules are already
+right, with every reading also answered into a copy and checked for fidelity:
+
+| strategy | questions | seconds | model calls | tokens  | write failures |
+|----------|-----------|---------|-------------|---------|----------------|
+| rules    | **1601**  | 2.7     | 0           | 0       | 0 |
+| assisted | **1601**  | 27.0    | 14          | 20,166  | 0 |
+| agent    | 1598      | 190.7   | 143         | 668,765 | 0 |
+| hybrid   | **1601**  | 35.4    | 50          | 78,364  | 0 |
+
+Every one of the 76 readings was also answered into a copy and read back
+without losing a package part, so all four are equally safe to *write*. What
+separates them is what they see and what they cost.
+
+The agent is the only one that loses questions, and it loses them the way an
+agent does rather than the way a parser does: on the Zain form it read six of
+seven sheets, decided it was finished, and dropped `7. 3TG + Cobalt` (5
+questions) without noticing. It also found two questions on the Murabbah sheet
+the other three did not -- two rescues or two section headings, and only
+somebody with the file open can say which. That is the shape of the risk: not
+malformed output, which is caught, but a confident and quiet omission.
+
+Two of its failures were worth fixing and were fixed. It used to stop after
+*five* sheets on that form, losing twelve questions; it is now asked a second
+time, on a fresh conversation, naming the sheets it never recorded -- fresh
+because handing back the conversation it had just decided it was finished with
+put it straight back into the same state. And a fixed step budget was the first
+thing to break at all: 60 steps ran out halfway through the eighteen-sheet ISRA
+workbook, and the six sheets it never reached came back empty against 53
+questions the rules had found in them. The budget now scales with the sheet
+count, between a floor and a ceiling, and a run that overruns still applies
+whatever it recorded before it stopped.
+
+The cost, though, is structural and did not move. Roughly two model calls per
+sheet, each resending the conversation so far: 669,000 tokens and three minutes
+across nineteen files, against the fallback's 20,000 and the rules' nothing.
+Old tool results are cleared once a request passes 12,000 tokens -- safe here
+only because a reading is recorded outside the conversation the moment it is
+made -- and it barely dents the total, because the total is the call count and
+not the context length.
+
+`hybrid` exists because the exploring is worth keeping and the re-reading is
+not. The rules read the sheets they understand; the agent is shown only the
+ones they lost. On the ISRA workbook that is 3.3 seconds and 5,684 tokens
+against the full agent's 58 seconds and 342,000, for the same answer. Across
+all nineteen it is a ninth of the agent's tokens and finds three more
+questions, because the sheets the rules read are simply never at risk.
+
+On this corpus none of that matters, because the rules are already right on all
+nineteen files -- which is exactly why the corpus cannot settle the question.
+The measurement that decides it is the one over files nobody has written a rule
+for.
+
+#### What six unseen questionnaires settled
+
+The nineteen files above could not decide anything, because the rules are right
+on all of them. Six more arrived later, in shapes nobody had written a rule for
+-- a two-row header, a sheet whose reference column is headed `ID`, and one
+whose header row reads `Queations | Answer`, a single typo from being
+recognised at all. The item numbers printed in each were counted by hand first,
+so this is measured against a known answer rather than against agreement:
+
+| strategy | found | of 292 | seconds | model calls | tokens  | re-open failures |
+|----------|-------|--------|---------|-------------|---------|------------------|
+| rules    | 272   | 93.2%  | 0.7     | 0           | 0       | **2** |
+| assisted | 290   | 99.3%  | 9.3     | 4           | 5,686   | 0 |
+| agent    | **292** | **100%** | 24.9 | 36          | 73,926  | 0 |
+| hybrid   | 290   | 99.3%  | 8.9     | 15          | 21,312  | 0 |
+
+Everything the rules missed traces to one workbook. Its reference column is
+headed `ID`, which no rule recognised, so there was no numbering column to
+vouch for a short question -- and `Organisation name`, `Email address` and `Do
+you maintain an incident register` are all short and none ends in a question
+mark. That cost a whole sheet of nine and one question on another.
+
+`assisted` and `hybrid` recovered the lost sheet and not the single question,
+and the reason is structural rather than a matter of tuning: **a fallback fires
+only where the rules found nothing or almost nothing.** 63 of 64 is a 98%
+reading, far above any thinness threshold, so no second opinion was asked. A
+fallback can rescue a lost sheet; it cannot repair a nearly-right one. Only a
+reader that reads every sheet itself can.
+
+**The column the counts hide is the last one.** Re-opening a half-answered copy
+-- somebody fills in a questionnaire on Monday and comes back to it on Tuesday
+-- the rules read that `Queations | Answer` workbook as **0 questions, not 32**.
+Blank, its question column has 30 rows of prose and wins; once the answers are
+written the answer column has 32 and takes its place. The three model-backed
+strategies all survive it, because the rules returning nothing is exactly the
+condition that fires the fallback. All four read the blank file identically,
+and only three can pick the work back up.
+
+#### `guarded`: the agent with its one failure removed
+
+So the agent generalises best, and that is what to optimise for -- the next
+questionnaire will be in a shape nobody has seen either. But its characteristic
+mistake is not malformed output, which is caught, but a **quiet omission**: on
+the Zain workbook it read six sheets of seven, decided it was finished, and
+dropped `7. 3TG + Cobalt` and its five questions without saying so.
+
+`guarded` runs the rules as well and lets no sheet come back with fewer
+questions than they found in it. Sheet by sheet, not in total, because the
+failure being guarded against is losing a whole sheet and a total can hide one
+sheet gained against another lost. A sheet where the agent found *more* is
+kept: reading a form is not something the rules are authoritative about, and
+the agent finding rows they missed is the reason to run it at all. Only "fewer"
+is overruled, and the reading says which sheets had to be rescued.
+
+The rules cost milliseconds and no tokens, so this is the agent's price plus
+nothing. It is the default.
+
+#### Measuring it on new files
+
+```bash
+python -m scripts.compare_detection "C:/path/to/new questionnaires" --write -v
+python -m scripts.compare_detection ./new --strategies rules,hybrid --json out.json
+```
+
+It reports three separate things, because they answer different questions: how
+many questions each strategy found, **where they disagreed sheet by sheet**,
+and what each cost. The middle one is the one to read -- a sheet where one
+strategy found 13 and another found 0 is either a rescue or a hallucination,
+and only opening the file settles which. With `--write` every reading is also
+answered into a temporary copy and checked for fidelity, because a reading that
+cannot be written back is not a reading.
+
+There is no ground truth in it. These files arrive from other companies and
+nobody has counted them by hand, so it reports agreement and difference and
+leaves the judgement to a person.
+
+Which strategy the application uses is `DETECTION_STRATEGY`, default
+`guarded`, and every batch records which one read it along with the seconds and
+tokens it spent -- a bill nobody can attribute is not a decision anyone can
+revisit.
+
+One warning about running the comparison itself: with `--write` it re-reads
+every answered copy **the same way it was first read**, so an agent strategy
+runs twice per file. That check earns its cost -- it is what caught a file
+reported as `ok, wrote 32` that could not find one of those 32 answers again --
+but a four-way run over twenty files is twenty minutes, not two.
+
+### These files come from strangers
+
+A questionnaire arrives from another company, over a public endpoint, and is
+parsed before anyone has looked at it. So the parser is treated as an attack
+surface, and `tests/test_forms_hostile.py` establishes four things.
+
+**A bad file is a sentence, not a stack trace.** Not a zip, truncated, missing
+its workbook part, unparseable XML, a workbook listing no sheets -- each raises
+`forms.FormatError` with a message safe to show whoever sent it. That matters
+beyond tidiness: python-docx raises `PackageNotFoundError` carrying the **full
+server path** of the file, which is exactly the leak the rest of this service
+already guards against.
+
+**Nothing can make it do unbounded work.** A part that would decompress past
+64 MB is refused from the zip directory, before any of it is expanded -- checked
+with a timer, because refusing a bomb *after* expanding it would pass a size
+assertion and still be the vulnerability. A workbook past 400,000 cells is
+refused outright; the largest real one has 1,288.
+
+**Reading a large sheet is linear.** Detection reads the row list inside nested
+loops, and recomputing it each time made this quadratic: 4,000 rows took a
+second and 30,000 took nearly three minutes -- a denial of service with no
+attacker required. Cached, 30,000 rows take one second.
+
+**Answering a file in place does not destroy it.** `write(path, path)` is the
+obvious call for "answer this", and writing straight to the destination
+truncated the source while it was still being read: the questionnaire was gone
+and the error was a raw `BadZipFile`. Output is now assembled in memory and
+moved into place, so a crash halfway through leaves the original rather than
+half a new file.
+
+### Answering one
+
+`src/tools` is every operation the interface performs and the agent will later
+call, as plain functions taking a user and returning data -- no request, no
+response. Building them first means they can be tested with fixed inputs before
+anything non-deterministic is choosing between them.
+
+```
+open_form        a file becomes a batch of questions
+inspect          what is in a batch and how far it has got
+answer           write answers for a selection of its questions
+revise           reword answers that exist, under an instruction
+set_answer       a person overrules the system
+column_roles     where the answers are going to be written
+set_column_role  a person moves them somewhere else
+set_questions    set a row aside, bring it back, fix its wording
+fill             put the answers into the original file
+search           look something up, without touching a batch
+```
+
+A **scope** is what makes a selection expressible: all of them, the ones still
+blank, a named sheet, anything mentioning encryption. Turning a sentence into a
+scope and an instruction is the whole of the agent's job later, so it lives here
+rather than in the agent.
+
+**Answering has one prompt, and wording is `revise`'s job.** An instruction like
+"keep every answer to one sentence" used to be injected into the drafting
+prompt. Measured against rewriting a finished answer, over six real questions:
+
+|                 | injected | rewritten |
+|-----------------|----------|-----------|
+| one sentence    | 6/6      | 6/6       |
+| mean length     | 197 ch   | 144 ch    |
+| mean citations  | 4.5      | 6.3       |
+| mean time       | 6.1 s    | 6.5 s     |
+
+Both followed the instruction. The injected version cited a third fewer sources
+-- a drafter told to be brief cites less -- and on one question asserted both an
+annual review and a sign-off, where the rewrite kept the original's caveat that
+*the sources do not require an annual sign-off*. Told to be brief, a drafter
+drops hedges; a rewriter has the finished sentence in front of it and does not.
+So injection was removed outright and `src/rewrite` does the wording: one call
+over the answer and the sources it was already built from, no retrieval and no
+review loop, at about a fifth of the cost. The facts, the evidence and the
+citations come through untouched, because none of them changed.
+
+The one thing a rewrite must not lose is the answer's **position**. The status
+dropdown below is filled by reading the opening clause, and an early rewrite
+turned "Yes. We provide training..." into "T2 provides training...", which
+states nothing -- so a perfectly good answer left its compliance rating blank.
+The rewrite prompt now requires the position to survive.
+
+Status columns are answered from the file's own dropdown. The written answer
+states a position in its first clause -- yes, no, partly, not applicable -- and
+each option in the vocabulary is classified the same way, so `Fully Compliant`,
+`Fully Implemented`, `Yes` and `FC` all mean the same thing to it. Where the
+answer takes no clear position, or the file has no word for the one it takes,
+nothing is written and the reason is reported: a blank dropdown is a question
+somebody looks at, a confidently wrong one is a question nobody looks at.
+
+A **batch** outlives the request that made it. Answering 183 questions takes
+minutes, corrections come afterwards, and the file is filled in later still --
+so answers are keyed by question rather than by position, and answering twice
+merges rather than replaces. An upload of last year's submission does not
+silently overwrite reviewed work. It outlives the *page*, too: a questionnaire
+loaded earlier is offered back on the upload panel, because re-uploading the
+same file would start a second batch and orphan the answers in the first.
+
+**Detection proposes, a person disposes.** The report under the drop zone names
+every sheet, says what each column was taken for and why, and flags any reading
+that came from the shape of the sheet rather than from a heading. Each writable
+column carries a picker, so a column read wrongly is moved before anything is
+answered rather than discovered after 183 answers land in the wrong place; the
+correction moves every row on that sheet at once, is recorded against the person
+who made it, and replaces the detector's line in the report so the two cannot
+disagree. Individual rows can be **set aside** instead of deleted -- detection
+over-reports on purpose, the row still exists in the spreadsheet, and somebody
+who unticks a row often wants it back once they see the sheet filled in.
+
+### Checking a new format
+
+```bash
+python -m scripts.check_forms "path/to/questionnaires" --write
+```
+
+Reports what was found in each file and, with `--write`, answers every question
+into a temporary copy and checks the file came through intact. Worth running
+whenever a questionnaire arrives in a shape we have not seen.
+
+## Signing in, and what gets remembered
+
+Signing in takes two things: an address that has been added to the system, and
+the **access code** shared by that person's team. Neither alone is enough —
+knowing a colleague's address does not get you in, and the code without a listed
+address does not either.
+
+**Access is managed from inside the application.** That is not a convenience:
+whoever operates the host may not be whoever decides who uses the system, and an
+allow-list in `.env` can only be changed by the former. A `users` row *is* the
+allow-list. `ALLOWED_EMAILS` seeds it on a first run only, so someone removed in
+the access panel stays removed across a restart.
+
+The panel lives **inside the main page**, opened by the *Access* button that
+appears in the header for administrators, because a deployment may expose only
+the application's own address — an administrator who cannot reach a second URL
+would otherwise have no way in. `/admin` still works as a deep link and serves
+the same document. None of that is a security boundary: `/api/admin/*` checks
+the role on every request, whatever page it came from, and a path is not a
+permission.
+
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` are the exception, re-applied at every startup.
+They are the **break-glass account** — the one thing the operator sets, and the
+way back in when a password is lost or the last administrator is removed by
+mistake. Because the environment always wins for that one account, its password
+cannot be changed on the admin page; create a second administrator there for
+everyday use. Administrators sign in with a password of their own instead of the
+team code.
+
+Until somebody is added, everything runs open and is attributed to
+`local@localhost`, which is right on a laptop and wrong anywhere else. Adding
+the first user is what closes the door — there is no separate flag that could
+disagree with the user list.
+
+**What this is and is not.** It is a good door lock: it keeps strangers out of a
+publicly reachable service, it puts a name against every answer, and it can be
+revoked in a click. It is not a safe. There is no email verification, and a
+team's code is shared by everyone on it, so it identifies a group and attributes
+to a name rather than proving an individual.
+
+Codes and passwords are hashed with scrypt (RFC 7914's interactive parameters,
+16 MB) rather than the SHA-256 used for session tokens — a token is 256 random
+bits with nothing to guess, while a code someone types from memory is worth
+attacking offline. Each hash carries its own cost parameters, so they can be
+raised later without invalidating existing credentials. A generated code avoids
+the characters that get misread aloud (`I`, `L`, `O`, `U`, `0`, `1`), and is
+compared case- and dash-insensitively, because rejecting a correct code because
+it was pasted lower-case is a support call rather than security.
+
+Sign-in is throttled per address — ten failures inside fifteen minutes and that
+account waits, which is what makes a typeable shared code safe. Per address
+rather than per IP, because the thing being guessed is shared by a whole team
+and an attacker with a proxy pool would otherwise spread the guesses. A correct
+sign-in clears the count, so a typo an hour ago cannot lock someone out later.
+Every failure returns the same sentence whether the address is unknown, the
+account is suspended, or the code is simply wrong; a login form should not be a
+way to find out who has an account.
+
+**A refusal costs the same whether or not the address exists.** Returning the
+same sentence is not enough if the clock says something different: before this
+was fixed, refusing a known address took 50 ms because it reached the hash and
+an unknown one 2.7 ms because it did not. Nineteen times is a working way to
+enumerate the allow-list from outside. An unknown address is now verified
+against a decoy hash, so both paths do the same work.
+
+Sessions are rows rather than signed tokens, so deleting a row revokes access
+immediately and there is no signing secret to rotate. Only a SHA-256 of the
+token is stored. Suspending or removing someone ends their sessions in the same
+transaction, and a promotion reaches a live session because the role is read per
+request rather than frozen in at sign-in. The cookie is `HttpOnly`, and `Secure`
+follows the connection's own scheme — a browser silently discards a `Secure`
+cookie sent over `http://`, and a sign-in that appears to succeed and then does
+nothing is the worst way for this to fail. Behind a TLS-terminating proxy, run
+uvicorn with `--proxy-headers`.
+
+Every administrative action records an event naming who did it. Being able to
+see that someone was added, and by whom, is most of the reason to have a page
+rather than a config file.
+
+### Setting it up, and upgrading into it
+
+A new deployment needs one thing from whoever runs the host: `ADMIN_EMAIL` and
+`ADMIN_PASSWORD`. Sign in on the ordinary sign-in screen with those — an
+administrator types their password where everyone else types a team code — then
+open *Access*, add the team, issue its code, and add people. Nothing after that
+needs the operator again.
+
+Upgrading an installation that predates this is the case worth knowing about.
+Its users survive the migration as members, which means sign-in is already
+required — but no team has an access code yet, so on its own that would lock
+everybody out. Startup notices and issues one, printing it to the log **once**:
+
+```
+WARNING src.identity: No access code was set for team 'cybersecurity', so one
+was generated: YEKS-BZBT-VRBM-5J4X
+```
+
+Nobody is promoted to administrator automatically, because guessing which of
+several existing accounts should be able to revoke the others is not a decision
+to make silently. Set `ADMIN_EMAIL` / `ADMIN_PASSWORD` and restart; the log says
+so if no administrator exists.
+
+Everything else lands in one SQLite file at `DB_PATH`: users, teams, sessions,
+an append-only event log, and every answered run with its evidence. Storing the
+evidence is the expensive choice — a large run is a few megabytes — and it is
+the right one, because an answer whose supporting chunks were thrown away cannot
+be audited, and auditing is most of why anyone reopens a run. Runs are scoped to
+a **team**, not a person: the team shares one knowledge base, so a colleague's
+submission to the same bank is exactly what someone needs to find before writing
+a new one.
+
+Writing that history never costs answers. A run takes minutes, so a failure to
+save it is logged loudly and the answers are still returned — losing the history
+is bad, losing the work is worse.
 
 ## Facing a network
 
@@ -1232,7 +1764,25 @@ src/
   export_pdf.py   PDF export, incl. Arabic shaping and line breaking
   export_docx.py  Word export; Word lays Arabic out, so we only mark it
   prompts.py      every prompt
+  agents/         readers that explore a file rather than follow rules
+    excel_agent.py  five read-only tools over a workbook, and a step budget
   graph/          LangGraph state, nodes and wiring
+  forms/          reading questionnaires and writing answers back
+    model.py      questions, write targets, roles, and why each was decided
+    xlsx_package.py  .xlsx as a zip of XML: read cells, edit cells, keep the rest
+    xlsx.py       which sheet, which column, which row
+    docx.py       prose questions and table questions, and the two ways to write
+    llm_layout.py a model reads a sheet the rules could not; checked, monotone
+    sheet_view.py how a worksheet is shown to a model
+    reading.py    the five strategies, and the floor under the agent
+    status.py     an answer's position, mapped to a form's own dropdown words
+  tools.py        the operations the interface and the agent both call
+  batches.py      an uploaded questionnaire and the answers written for it
+  store.py        SQLite: connections, schema, migrations
+  credentials.py  scrypt hashing, and generating typeable access codes
+  identity.py     users, teams, access codes, roles and sessions
+  events.py       append-only log of what people and the system did
+  runs.py         answered runs, saved so they can be reopened
   service.py      the orchestration the API and CLI share
   api.py          FastAPI app
   cli.py          command line

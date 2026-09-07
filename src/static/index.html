@@ -385,6 +385,8 @@
   }
   .qrow + .qrow { margin-top: 8px; }
   .qrow:focus-within { border-color: var(--accent); }
+  .qrow.aside { opacity: .55; }
+  .qrow.aside textarea { text-decoration: line-through; }
   .qrow.answered { opacity: .62; }
   .qrow .index {
     flex: 0 0 auto; min-width: 22px; height: 22px; padding: 0 5px;
@@ -641,12 +643,181 @@
   .ev-head .src { flex: 1; min-width: 0; }
   body.answering .qrow textarea:disabled { opacity: .7; }
   body.answering #questionListPanel, body.answering .composer { position: relative; }
+  /* --- fill a questionnaire ---------------------------------------------- */
+  .qn-empty { color: var(--ink-faint); font-size: 13.5px; }
+  .qn-recent { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+               font-size: 12.5px; color: var(--ink-faint); margin-top: 10px; }
+  .qn-recent[hidden] { display: none; }
+  .qn-summary {
+    display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
+    padding: 12px 0 4px; font-size: 13.5px;
+  }
+  .qn-summary b { font-size: 15px; }
+  .qn-summary .name { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+
+  .qn-parts { display: grid; gap: 6px; margin: 12px 0 4px; }
+  .qn-part {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px;
+    align-items: baseline; font-size: 13px;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 9px 13px; background: var(--surface);
+  }
+  .qn-part.skipped { opacity: .72; }
+  .qn-part .tick { font-weight: 700; color: var(--ok); }
+  .qn-part.skipped .tick { color: var(--ink-faint); font-weight: 400; }
+  .qn-part .pname { font-weight: 600; overflow-wrap: anywhere; }
+  .qn-part .pcount { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
+  .qn-part .why { grid-column: 2 / -1; color: var(--ink-faint); font-size: 12px; }
+  .qn-part .why.check { color: var(--warn); }
+
+  .qn-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 16px 0 6px; }
+  .qn-controls input[type="search"] { flex: 1 1 180px; min-width: 0; }
+
+  .qn-rows { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+  .qn-row {
+    display: grid; grid-template-columns: 3.2rem 1fr; gap: 4px 12px;
+    padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--surface);
+  }
+  .qn-rows .qn-row:last-child { border-bottom: 0; }
+  .qn-row .num {
+    font-size: 11.5px; color: var(--ink-faint); font-weight: 600; padding-top: 3px;
+    overflow-wrap: anywhere;
+  }
+  .qn-row .q { font-size: 13.5px; font-weight: 550; }
+  .qn-row .sect { grid-column: 2; font-size: 11.5px; color: var(--ink-faint); }
+  .qn-row .a { grid-column: 2; }
+  .qn-row .a textarea {
+    width: 100%; min-height: 2.4em; font: inherit; font-size: 13px; padding: 7px 9px;
+    color: var(--ink); background: var(--surface-sunken);
+    border: 1px solid var(--line); border-radius: 6px; resize: vertical;
+  }
+  .qn-row .a textarea:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+  .qn-row .meta {
+    grid-column: 2; display: flex; gap: 9px; flex-wrap: wrap; align-items: center;
+    font-size: 11.5px; color: var(--ink-faint);
+  }
+  .qn-row .meta .chip {
+    padding: 1px 7px; border-radius: 999px; font-weight: 600; font-size: 10.5px;
+  }
+  .qn-row .meta .chip.review { background: var(--warn-soft); color: var(--warn); }
+  .qn-row .meta .chip.mine { background: var(--accent-soft); color: var(--accent-ink); }
+  .qn-row .meta .chip.err { background: var(--err-soft); color: var(--err); }
+  .qn-row .meta .chip.pick { background: var(--ok-soft); color: var(--ok); }
+
+  .qn-filled {
+    margin-top: 14px; padding: 13px 16px; border-radius: var(--radius-sm);
+    background: var(--ok-soft); color: var(--ok); font-size: 13.5px;
+  }
+  .qn-filled[hidden] { display: none; }
+  .qn-filled .blanks { color: var(--ink-faint); font-size: 12px; margin-top: 6px; }
+
   .search-note {
     font-size: 11.5px; color: var(--warn, #b26a00); padding: 6px 0 2px;
   }
+
+  /* --- access panel ------------------------------------------------------
+     Everything here is prefixed `adm-`: this panel lives in the same document
+     as the app, and generic names like .row, .panel and .status are already
+     taken by it. */
+  .adm-body { padding: 18px 20px 40px; }
+  .adm-section { margin-bottom: 26px; }
+  .adm-section > h4 { margin: 0 0 4px; font-size: 14px; }
+  .adm-section > p { margin: 0 0 14px; color: var(--ink-faint); font-size: 12.5px; max-width: 70ch; }
+  .adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .adm-table th, .adm-table td {
+    text-align: start; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle;
+  }
+  .adm-table th {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-faint); font-weight: 650; white-space: nowrap;
+  }
+  .adm-table tbody tr:last-child td { border-bottom: 0; }
+  .adm-table td.adm-actions { text-align: end; white-space: nowrap; }
+  .adm-table select { font-size: 12.5px; padding: 4px 7px; }
+  .adm-scroll { overflow-x: auto; }
+  .adm-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .adm-add input { flex: 1 1 200px; min-width: 0; }
+  .adm-note { font-size: 11.5px; color: var(--ink-faint); }
+  .adm-tag {
+    display: inline-block; font-size: 10.5px; font-weight: 650; padding: 1px 7px;
+    border-radius: 999px; letter-spacing: .02em;
+  }
+  .adm-tag.on { background: var(--ok-soft); color: var(--ok); }
+  .adm-tag.off { background: var(--err-soft); color: var(--err); }
+  .adm-tag.none { background: var(--surface-sunken); color: var(--ink-faint); }
+  .adm-msg { padding: 9px 12px; border-radius: var(--radius-sm); font-size: 12.5px; margin-bottom: 14px; }
+  .adm-msg[hidden] { display: none; }
+  .adm-msg.err { background: var(--err-soft); color: var(--err); }
+  .adm-msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .adm-code {
+    margin-top: 14px; padding: 14px 16px; border-radius: var(--radius-sm);
+    background: var(--accent-soft); border: 1px solid var(--accent);
+  }
+  .adm-code[hidden] { display: none; }
+  .adm-code .adm-value {
+    font: 650 20px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: .06em; color: var(--accent-ink); margin: 6px 0 8px;
+    user-select: all; word-break: break-all;
+  }
+
+  /* --- sign-in gate ------------------------------------------------------ */
+  .auth-gate {
+    position: fixed; inset: 0; z-index: 200;
+    display: grid; place-items: center; padding: 24px;
+    background: var(--surface-sunken);
+  }
+  /* A class selector outranks the browser's own `[hidden] { display: none }`,
+     so setting `display` above silently defeats the attribute — the gate stayed
+     over the page for a signed-in user. Restate it for the elements that set a
+     display of their own. */
+  .auth-gate[hidden], .whoami[hidden] { display: none; }
+  .auth-card {
+    width: min(420px, 100%);
+    background: var(--surface-raised); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg);
+    padding: 28px;
+  }
+  .auth-card h2 { margin: 0 0 6px; font-size: 19px; }
+  .auth-card p { margin: 0 0 18px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+  .auth-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .auth-card input {
+    width: 100%; padding: 10px 12px; font: inherit; font-size: 15px;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  }
+  .auth-card input:focus { outline: none; border-color: var(--accent); }
+  .auth-card button { margin-top: 14px; width: 100%; }
+  .auth-card .auth-hint { margin: 10px 0 0; font-size: 12px; color: var(--ink-faint); }
+  .auth-error {
+    margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--err-soft); color: var(--err); font-size: 13.5px;
+  }
+  .whoami {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--ink-faint);
+  }
+  .whoami b { color: var(--ink-soft); font-weight: 600; }
 </style>
 </head>
 <body>
+
+<!-- Shown only when ALLOWED_EMAILS is set and nobody is signed in. -->
+<div class="auth-gate" id="authGate" hidden>
+  <form class="auth-card" id="authForm">
+    <h2>Sign in</h2>
+    <p>Enter your address and your team's access code. Ask an administrator if
+       you do not have one.</p>
+    <label for="authEmail">Email address</label>
+    <input id="authEmail" type="email" autocomplete="email" required
+           placeholder="you@t2.sa" spellcheck="false">
+    <label for="authCode">Access code</label>
+    <input id="authCode" type="password" autocomplete="current-password" required
+           placeholder="Your team's code" spellcheck="false">
+    <p class="auth-hint">Administrators: use your own password here instead.</p>
+    <button class="primary" type="submit" id="authSubmit">Continue</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </form>
+</div>
 
 <div class="topbar">
   <div class="brand">
@@ -657,6 +828,11 @@
     </div>
   </div>
   <div class="spacer"></div>
+  <div class="whoami" id="whoami" hidden>
+    <b id="whoamiEmail"></b>
+    <button class="ghost" id="adminLink" title="Manage who can use this" hidden>Access</button>
+    <button class="ghost" id="signOut" title="End this session">Sign out</button>
+  </div>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
@@ -736,24 +912,43 @@
     </div>
   </section>
 
-  <!-- Step 2 ------------------------------------------------------------ -->
+  <!-- Step 3 ------------------------------------------------------------ -->
   <section class="step">
     <div class="step-head">
       <span class="step-number">2</span>
-      <h2>Build your question list</h2>
+      <h2>Load a questionnaire</h2>
     </div>
-    <p class="step-hint">Load an assessment file, or type questions yourself. Check the list, fix anything that came out wrong, then answer it. You can add more questions later without losing the answers you already have.</p>
+    <p class="step-hint">
+      Drop in a questionnaire — a spreadsheet, a Word form or a PDF — or type questions
+      yourself. Check what was found, fix anything that came out wrong, then answer it.
+      A spreadsheet or Word form can be filled in and downloaded with the answers written
+      back into it.
+    </p>
 
     <div class="panel">
       <label class="file" data-drop="assessment">
-        <input type="file" id="assessmentInput" accept=".pdf,.docx" />
-        Drop an assessment here, or click to choose
+        <input type="file" id="assessmentInput" accept=".xlsx,.xlsm,.docx,.pdf" />
+        Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
         <span class="chosen" id="assessmentChosen"></span>
       </label>
       <div class="row">
         <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
+        <span class="adm-note" id="formRecent"></span>
       </div>
       <div class="status" id="extractStatus"></div>
+
+      <details id="formReport" hidden>
+        <summary>What was found in the file</summary>
+        <div class="qn-parts" id="formPartsList"></div>
+
+        <div id="formColumns"></div>
+
+        <p class="hint" style="margin:10px 0 0">
+          Anything marked <em>worth checking</em> was read from the shape of the sheet
+          rather than from its headings. If a column was taken for the wrong thing, the
+          answers land in the wrong place — change it here before answering.
+        </p>
+      </details>
     </div>
 
     <div class="panel" id="questionListPanel">
@@ -795,6 +990,7 @@
       <button id="exportPdf">Download PDF</button>
       <button id="exportDocx">Download Word</button>
       <button class="ghost" id="retryFailed" hidden>Try failed questions again</button>
+      <button id="fillFormBtn" hidden title="Write the answers into the original file">Fill the original file</button>
       <span class="divider"></span>
       <div class="pdf-options">
         <span class="caption">PDF and Word include</span>
@@ -803,6 +999,12 @@
         <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
       </div>
     </div>
+    <div class="row" id="reviseRow" hidden style="margin-bottom:14px">
+      <input type="text" id="reviseInstruction" style="flex:1 1 260px;min-width:0"
+             placeholder="Reword every answer — e.g. keep it to one sentence, be more formal">
+      <button class="ghost" id="reviseBtn">Reword the answers</button>
+    </div>
+    <div class="qn-filled" id="formFilled" hidden></div>
     <div class="status" style="margin-bottom:18px">Edits you make below are included in every download.</div>
 
     <div id="results"></div>
@@ -826,6 +1028,77 @@
     </div>
   </section>
 </main>
+
+<!-- Access panel. In this page rather than at its own URL: a deployment may
+     only expose the app's own address, and the role is enforced by the API
+     rather than by which document you managed to load. -->
+<div class="drawer-scrim" id="adminScrim"></div>
+<aside class="drawer" id="adminDrawer" aria-hidden="true" aria-label="Manage access">
+  <div class="drawer-head">
+    <div class="row">
+      <h3>Access</h3>
+      <span class="adm-note" id="adminWho"></span>
+      <button class="ghost" id="adminClose" title="Close">Close</button>
+    </div>
+  </div>
+  <div class="drawer-body adm-body">
+    <div class="adm-msg err" id="adminError" hidden></div>
+    <div class="adm-msg ok" id="adminDone" hidden></div>
+
+    <div class="adm-section">
+      <h4>Teams</h4>
+      <p>
+        Everyone on a team shares one knowledge base, one answer history and one access
+        code. Rotate the code when somebody leaves — the old one stops working at once.
+      </p>
+      <div class="adm-scroll">
+        <table class="adm-table">
+          <thead><tr><th>Team</th><th>Members</th><th>Access code</th><th></th></tr></thead>
+          <tbody id="adminTeams"></tbody>
+        </table>
+      </div>
+      <div class="adm-code" id="adminCode" hidden>
+        <div style="font-size:12px;font-weight:650">New access code for <span id="adminCodeTeam"></span></div>
+        <div class="adm-value" id="adminCodeValue"></div>
+        <div class="adm-note">
+          Copy it now and give it to the team. Only a hash is stored, so this is the one
+          time it can be shown.
+        </div>
+      </div>
+      <div class="adm-add">
+        <input id="adminNewTeamId" placeholder="team-id (lower case)" style="flex:0 1 180px">
+        <input id="adminNewTeamName" placeholder="Display name" style="flex:0 1 200px">
+        <button class="ghost" id="adminAddTeam">Add team</button>
+      </div>
+    </div>
+
+    <div class="adm-section">
+      <h4>People</h4>
+      <p>
+        Adding an address lets that person sign in with their team's access code.
+        Removing one ends their sessions straight away; their answers and history stay.
+        An administrator signs in with a password of their own instead of the team code.
+      </p>
+      <div class="adm-add" style="margin: 0 0 14px">
+        <input id="adminNewEmail" type="email" placeholder="name@t2.sa" spellcheck="false">
+        <select id="adminNewTeam"></select>
+        <select id="adminNewRole">
+          <option value="member">Member</option>
+          <option value="admin">Administrator</option>
+        </select>
+        <button id="adminAddUser">Add</button>
+      </div>
+      <div class="adm-scroll">
+        <table class="adm-table">
+          <thead>
+            <tr><th>Email</th><th>Team</th><th>Role</th><th>Status</th><th>Last seen</th><th></th></tr>
+          </thead>
+          <tbody id="adminUsers"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</aside>
 
 <div class="drawer-scrim" id="searchScrim"></div>
 <aside class="drawer" id="searchDrawer" aria-hidden="true" aria-label="Search the knowledge base">
@@ -885,6 +1158,377 @@
 </dialog>
 
 <script>
+// --- sign-in -----------------------------------------------------------------
+// Its own block, ahead of the main script: whether anyone may use the page is
+// settled before anything else runs, and a failure here cannot take the rest of
+// the interface down with it.
+(function () {
+  "use strict";
+
+  const gate = document.getElementById("authGate");
+  const form = document.getElementById("authForm");
+  const email = document.getElementById("authEmail");
+  const code = document.getElementById("authCode");
+  const submit = document.getElementById("authSubmit");
+  const error = document.getElementById("authError");
+  const whoami = document.getElementById("whoami");
+  const whoamiEmail = document.getElementById("whoamiEmail");
+  const adminLink = document.getElementById("adminLink");
+
+  function fail(message) {
+    error.textContent = message;
+    error.hidden = false;
+  }
+
+  function apply(session) {
+    const signedIn = Boolean(session.email);
+    gate.hidden = signedIn || !session.sign_in_required;
+    // The address is only worth showing where more than one person can appear.
+    // On an open deployment it would always read "local@localhost", which tells
+    // nobody anything.
+    whoami.hidden = !(signedIn && session.sign_in_required);
+    if (!whoami.hidden) whoamiEmail.textContent = session.email;
+    adminLink.hidden = !session.is_admin;
+    if (!gate.hidden) email.focus();
+  }
+
+  async function load() {
+    try {
+      const response = await fetch("/api/auth/session");
+      apply(await response.json());
+    } catch (e) {
+      // The API is unreachable. Leave the page as it is rather than locking the
+      // user out of an interface that may still recover on its own.
+      console.error("Could not check the session", e);
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.value.trim(), code: code.value }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        fail(body.detail || "That did not work. Check the address and try again.");
+        return;
+      }
+      // Reload rather than just hiding the gate: the rest of the page loaded
+      // its data while signed out, so some of it is empty or stale.
+      window.location.reload();
+    } catch (e) {
+      fail("Could not reach the server.");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  document.getElementById("signOut").addEventListener("click", async () => {
+    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+    window.location.reload();
+  });
+
+  adminLink.addEventListener("click", () => window.openAccessPanel());
+
+  load();
+})();
+
+// --- access panel ------------------------------------------------------------
+// Its own block, like the sign-in gate. Managing who can use the system is a
+// separate concern from using it, and a failure here should not take the app
+// down. Every route it calls enforces the administrator role server-side; this
+// only decides what to draw.
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  let state = { users: [], teams: [], you: null, break_glass: null };
+
+  const drawer = $("adminDrawer");
+  const scrim = $("adminScrim");
+
+  function escapeText(value) {
+    const node = document.createElement("span");
+    node.textContent = value == null ? "" : String(value);
+    return node.innerHTML;
+  }
+
+  async function api(path, options) {
+    const response = await fetch(path, Object.assign({
+      headers: { "Content-Type": "application/json" },
+    }, options || {}));
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  function flash(node, message) {
+    node.textContent = message;
+    node.hidden = false;
+    if (node === $("adminDone")) setTimeout(() => { node.hidden = true; }, 4000);
+  }
+
+  async function act(work, success) {
+    $("adminError").hidden = true;
+    $("adminDone").hidden = true;
+    try {
+      await work();
+      if (success) flash($("adminDone"), success);
+      await refresh();
+    } catch (error) {
+      flash($("adminError"), error.message);
+    }
+  }
+
+  // --- rows ------------------------------------------------------------------
+
+  function teamRow(team) {
+    const tr = document.createElement("tr");
+
+    const name = document.createElement("td");
+    name.innerHTML = `<b>${escapeText(team.name)}</b>`;
+    if (team.name !== team.id) name.innerHTML += `<div class="adm-note">${escapeText(team.id)}</div>`;
+
+    const members = document.createElement("td");
+    members.textContent = team.members;
+
+    const code = document.createElement("td");
+    code.innerHTML = team.has_code
+      ? `<span class="adm-tag on">set</span> <span class="adm-note">${escapeText(team.code_set_at.slice(0, 10))}</span>`
+      : `<span class="adm-tag off">not set</span>`;
+
+    const actions = document.createElement("td");
+    actions.className = "adm-actions";
+
+    const rotate = document.createElement("button");
+    rotate.className = "quiet";
+    rotate.textContent = team.has_code ? "New code" : "Set code";
+    rotate.addEventListener("click", () => {
+      if (team.has_code && !confirm(
+        `Replace the access code for ${team.name}?\n\n` +
+        `Everyone on the team needs the new one before they can sign in again.`
+      )) return;
+      act(async () => {
+        const result = await api(`/api/admin/teams/${encodeURIComponent(team.id)}/access-code`,
+                                 { method: "POST" });
+        $("adminCodeTeam").textContent = team.name;
+        $("adminCodeValue").textContent = result.access_code;
+        $("adminCode").hidden = false;
+      });
+    });
+    actions.append(rotate);
+
+    if (!team.members) {
+      const remove = document.createElement("button");
+      remove.className = "quiet";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => act(
+        () => api(`/api/admin/teams/${encodeURIComponent(team.id)}`, { method: "DELETE" }),
+        `Removed ${team.name}.`
+      ));
+      actions.append(remove);
+    }
+
+    tr.append(name, members, code, actions);
+    return tr;
+  }
+
+  function picker(options, selected, onChange) {
+    const select = document.createElement("select");
+    options.forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === selected;
+      select.append(option);
+    });
+    select.addEventListener("change", () => onChange(select.value));
+    return select;
+  }
+
+  function userRow(user) {
+    const tr = document.createElement("tr");
+    const fromEnvironment = user.email === state.break_glass;
+
+    const email = document.createElement("td");
+    email.innerHTML = `<b>${escapeText(user.email)}</b>`;
+    const notes = [];
+    if (state.you && user.email === state.you.email) notes.push("you");
+    if (fromEnvironment) notes.push("from the environment");
+    else if (user.added_by) notes.push(`added by ${escapeText(user.added_by)}`);
+    if (notes.length) email.innerHTML += `<div class="adm-note">${notes.join(" · ")}</div>`;
+
+    const team = document.createElement("td");
+    team.append(picker(
+      state.teams.map((t) => [t.id, t.name]),
+      user.team,
+      (value) => act(
+        () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {
+          method: "PATCH", body: JSON.stringify({ team: value }),
+        }),
+        `Moved ${user.email}.`
+      )
+    ));
+
+    const role = document.createElement("td");
+    const rolePicker = picker(
+      [["member", "Member"], ["admin", "Administrator"]],
+      user.role,
+      (value) => act(
+        () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {
+          method: "PATCH", body: JSON.stringify({ role: value }),
+        }),
+        `${user.email} is now a ${value}.`
+      )
+    );
+    rolePicker.disabled = fromEnvironment;
+    role.append(rolePicker);
+
+    const status = document.createElement("td");
+    status.innerHTML = user.disabled
+      ? `<span class="adm-tag off">suspended</span>`
+      : `<span class="adm-tag ${user.role === "admin" ? "on" : "none"}">active</span>`;
+    if (user.has_password) status.innerHTML += ` <span class="adm-note">password</span>`;
+
+    const seen = document.createElement("td");
+    seen.className = "adm-note";
+    seen.textContent = (user.last_seen_at || "").slice(0, 10);
+
+    const actions = document.createElement("td");
+    actions.className = "adm-actions";
+
+    if (!fromEnvironment) {
+      const password = document.createElement("button");
+      password.className = "quiet";
+      password.textContent = user.has_password ? "Clear password" : "Set password";
+      password.addEventListener("click", () => {
+        let value = null;
+        if (!user.has_password) {
+          value = prompt(`New password for ${user.email}`);
+          if (!value) return;
+        } else if (!confirm(
+          `Clear the password for ${user.email}?\n\nThey will sign in with their team's access code instead.`
+        )) return;
+        act(
+          () => api(`/api/admin/users/${encodeURIComponent(user.email)}/password`, {
+            method: "POST", body: JSON.stringify({ password: value }),
+          }),
+          value ? `Password set for ${user.email}.` : `Password cleared for ${user.email}.`
+        );
+      });
+
+      const suspend = document.createElement("button");
+      suspend.className = "quiet";
+      suspend.textContent = user.disabled ? "Restore" : "Suspend";
+      suspend.addEventListener("click", () => act(
+        () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {
+          method: "PATCH", body: JSON.stringify({ disabled: !user.disabled }),
+        }),
+        user.disabled ? `Restored ${user.email}.` : `Suspended ${user.email}.`
+      ));
+
+      const remove = document.createElement("button");
+      remove.className = "quiet";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        if (!confirm(
+          `Remove ${user.email}?\n\nTheir sessions end immediately. Their answers and history stay.`
+        )) return;
+        act(
+          () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, { method: "DELETE" }),
+          `Removed ${user.email}.`
+        );
+      });
+
+      actions.append(password, suspend, remove);
+    }
+
+    tr.append(email, team, role, status, seen, actions);
+    return tr;
+  }
+
+  function render() {
+    $("adminTeams").replaceChildren(...state.teams.map(teamRow));
+    $("adminUsers").replaceChildren(...state.users.map(userRow));
+    $("adminNewTeam").replaceChildren(...state.teams.map((team) => {
+      const option = document.createElement("option");
+      option.value = team.id;
+      option.textContent = team.name;
+      return option;
+    }));
+    $("adminWho").textContent = state.you ? state.you.email : "";
+  }
+
+  async function refresh() {
+    state = await api("/api/admin/overview");
+    render();
+  }
+
+  // --- opening ---------------------------------------------------------------
+
+  function setOpen(open) {
+    drawer.classList.toggle("open", open);
+    scrim.classList.toggle("open", open);
+    drawer.setAttribute("aria-hidden", open ? "false" : "true");
+  }
+
+  window.openAccessPanel = async function () {
+    setOpen(true);
+    $("adminError").hidden = true;
+    try {
+      await refresh();
+    } catch (error) {
+      flash($("adminError"), error.message);
+    }
+  };
+
+  $("adminClose").addEventListener("click", () => setOpen(false));
+  scrim.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && drawer.classList.contains("open")) setOpen(false);
+  });
+
+  $("adminAddUser").addEventListener("click", () => {
+    const email = $("adminNewEmail").value.trim();
+    if (!email) return flash($("adminError"), "Enter an email address.");
+    act(
+      () => api("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          email, team: $("adminNewTeam").value, role: $("adminNewRole").value,
+        }),
+      }),
+      `Added ${email}.`
+    ).then(() => { $("adminNewEmail").value = ""; });
+  });
+
+  $("adminAddTeam").addEventListener("click", () => {
+    const id = $("adminNewTeamId").value.trim().toLowerCase();
+    if (!id) return flash($("adminError"), "Enter a team id.");
+    act(
+      () => api("/api/admin/teams", {
+        method: "POST",
+        body: JSON.stringify({ id, name: $("adminNewTeamName").value.trim() || id }),
+      }),
+      `Added ${id}.`
+    ).then(() => { $("adminNewTeamId").value = ""; $("adminNewTeamName").value = ""; });
+  });
+
+  // `/admin` serves this same page, so a deep link still opens the panel for
+  // anyone whose deployment does expose that path.
+  if (window.location.pathname.replace(/\/+$/, "").endsWith("/admin")) {
+    document.addEventListener("DOMContentLoaded", () => window.openAccessPanel());
+    window.openAccessPanel();
+  }
+})();
+
 (function () {
   "use strict";
 
@@ -2055,10 +2699,13 @@
 
   function progressMessage(state) {
     if (state.stage === "extracting") return "Reading the document and extracting questions…";
-    if (!state.total) return "Answering…";
+    // Rewording runs through the same counter, and "Answered 4 of 12" during a
+    // rewrite describes work nobody asked for.
+    const done = state.stage === "rewriting" ? "Reworded" : "Answered";
+    if (!state.total) return done === "Reworded" ? "Rewording…" : "Answering…";
     const bar =
       '<span class="progress"><span class="progress-fill" style="width:' + state.percent + '%"></span></span>';
-    return "Answered <strong>" + state.completed + "</strong> of <strong>" + state.total +
+    return done + " <strong>" + state.completed + "</strong> of <strong>" + state.total +
            "</strong> — " + state.remaining + " to go" + bar;
   }
 
@@ -2076,19 +2723,31 @@
   let questions = [];
   let questionSeq = 0;
 
+  /* Set when the uploaded file is one we can write back into -- a spreadsheet,
+     or a Word form with places for answers. The question list, the answering
+     and the review below are the same either way; a batch only adds where the
+     answers came from and where they can be put back. */
+  let formBatch = null;
+
   function addQuestion(text = "", extra = {}) {
     questions.push({
       key: "q" + (++questionSeq),
       text,
-      status: "pending",
+      status: extra.status || "pending",
       section: extra.section || null,
       question_type: extra.question_type || "free_text",
       options: extra.options || [],
       language: extra.language || null,
+      // Only set for a question that came out of a fillable form.
+      formId: extra.formId || null,
+      origin: extra.origin || "",
+      skip: Boolean(extra.skip),
+      targets: extra.targets || [],
     });
   }
 
-  const pendingQuestions = () => questions.filter((q) => q.status === "pending" && q.text.trim());
+  const pendingQuestions = () =>
+    questions.filter((q) => q.status === "pending" && q.text.trim() && !q.skip);
 
   /* The one row builder. The panel above the answers and the composer below
      them are two views of the same list, and they drifted apart while each had
@@ -2133,10 +2792,27 @@
 
     const actions = document.createElement("div");
     actions.className = "qactions";
-    // An answered question is deleted from its answer card, where the thing
-    // being thrown away is actually visible. Offering it here as well would be
-    // two buttons for one action, in two places, with different context.
-    if (entry.status !== "answered") {
+
+    /* A question that came out of a file is set aside rather than deleted: the
+       row still exists in the spreadsheet, detection over-reports on purpose,
+       and somebody who unticks a row often wants it back once they see the
+       sheet filled in. A typed question has no file behind it, so it is simply
+       removed. */
+    if (entry.formId) {
+      const aside = document.createElement("button");
+      aside.className = "quiet";
+      aside.textContent = entry.skip ? "Include" : "Set aside";
+      aside.title = entry.skip
+        ? "Answer this one after all"
+        : "Leave this one unanswered and write nothing into the file";
+      aside.dataset.mutates = "true";
+      aside.disabled = answering;
+      aside.onclick = () => setAside(entry, !entry.skip);
+      actions.append(aside);
+    } else if (entry.status !== "answered") {
+      // An answered question is deleted from its answer card, where the thing
+      // being thrown away is actually visible. Offering it here as well would
+      // be two buttons for one action, in two places, with different context.
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "✕";
@@ -2148,7 +2824,39 @@
     }
 
     row.append(number, text, actions);
+
+    // Where it came from, so a reading can be checked against the file itself.
+    if (entry.origin) {
+      const origin = document.createElement("div");
+      origin.className = "qmeta";
+      origin.textContent = entry.origin + (entry.skip ? " · set aside" : "");
+      const status = (entry.targets || []).filter((target) => target.role === "status");
+      if (status.length && status[0].vocabulary.length) {
+        origin.textContent += " · status from: " + status[0].vocabulary.join(" / ");
+      }
+      row.append(origin);
+    }
+    if (entry.skip) row.classList.add("aside");
     return row;
+  }
+
+  /* Set aside, or bring back. Saved on the server because the batch is what
+     `fill` reads: a row struck out only in the browser would still be written. */
+  async function setAside(entry, skip) {
+    if (!formBatch) return;
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes: [{ id: entry.formId, skip: skip }] }),
+      });
+      formBatch = updated;
+      entry.skip = skip;
+      renderQuestions();
+      refreshAnswerButton();
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    }
   }
 
   /* One question, two boxes. Copy the words across without disturbing either
@@ -2181,7 +2889,8 @@
     // logic wanted it off.
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
      "composerAdd", "composerInput", "extractBtn", "assessmentInput",
-     "guidelinesBtn", "priorBtn", "kbClear", "retryFailed"].forEach((id) => {
+     "guidelinesBtn", "priorBtn", "kbClear", "retryFailed",
+     "fillFormBtn", "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
       if (locked) {
@@ -2284,31 +2993,265 @@
 
   let answering = false;
 
+  const FILLABLE = [".xlsx", ".xlsm", ".docx"];
+
+  /* One door for every questionnaire. A spreadsheet or Word form is read as a
+     *fillable* form first -- questions plus the places the answers go -- and a
+     PDF, or a Word file with nowhere to write, falls back to pulling the
+     questions out as text. Either way the same list appears below and the same
+     answering runs; only the option to write the file back differs. */
   async function extractQuestions() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
+    const file = input.files[0];
+    const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
 
     $("extractBtn").disabled = true;
-    setStatus($("extractStatus"), "Reading the document and extracting questions…", "busy");
-
-    const form = new FormData();
-    form.append("file", input.files[0]);
+    setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
 
     try {
-      const data = await request("/api/assessments/extract", { method: "POST", body: form });
-      data.questions.forEach((q) => addQuestion(q.text, q));
-      sourceName = data.source_name || sourceName;
-      setStatus($("extractStatus"),
-        "Found " + data.questions.length + " question(s) in " + data.source_name +
-        ". Check the list before answering.", "ok");
-      renderQuestions();
-      $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (FILLABLE.includes(suffix) && await loadAsForm(file)) return;
+      await loadAsText(file);
     } catch (error) {
       setStatus($("extractStatus"), error.message, "error");
     } finally {
       $("extractBtn").disabled = false;
       loadDocuments();
     }
+  }
+
+  /* A questionnaire outlives the page that uploaded it: the answers are stored
+     against the file's own cells, so somebody who closes the tab halfway
+     through 183 questions should not have to start again. Uploading the same
+     file a second time would make a second batch and orphan the first. */
+  async function listRecentForms() {
+    const line = $("formRecent");
+    let forms = [];
+    try {
+      forms = (await request("/api/forms")).forms || [];
+    } catch (error) {
+      line.replaceChildren();
+      return;
+    }
+    const open = forms.filter((form) => !formBatch || form.id !== formBatch.id).slice(0, 3);
+    line.replaceChildren();
+    if (!open.length) return;
+    line.append(document.createTextNode("Or pick up: "));
+    open.forEach((form, index) => {
+      if (index) line.append(document.createTextNode(" · "));
+      const link = document.createElement("button");
+      link.className = "quiet";
+      link.textContent = form.source_name +
+        (form.answered ? " (" + form.answered + " answered)" : "");
+      link.title = "Loaded " + new Date(form.created_at).toLocaleString();
+      link.onclick = () => reopenForm(form.id);
+      line.append(link);
+    });
+  }
+
+  async function reopenForm(id) {
+    setStatus($("extractStatus"), "Opening…", "busy");
+    try {
+      await adoptBatch(await request("/api/forms/" + id));
+      await listRecentForms();
+    } catch (error) {
+      setStatus($("extractStatus"), error.message, "error");
+    }
+  }
+
+  async function loadAsForm(file) {
+    const body = new FormData();
+    body.append("file", file);
+    let batch;
+    try {
+      batch = await request("/api/forms", { method: "POST", body });
+    } catch (error) {
+      // A Word file with no answerable structure is not a failure -- it is a
+      // document to read questions out of, which is the other path.
+      return false;
+    }
+    if (!batch.counts.questions) return false;
+    await adoptBatch(batch);
+    return true;
+  }
+
+  async function adoptBatch(batch) {
+    formBatch = batch;
+    sourceName = batch.source_name || sourceName;
+    questions = [];
+    batch.questions.forEach((q) => addQuestion(q.text, {
+      section: q.section, language: q.language,
+      formId: q.id, origin: q.location, skip: q.skip, targets: q.targets,
+      status: q.answer ? "answered" : "pending",
+    }));
+
+    // Answers already in the file, or from an earlier run, come back as real
+    // answer cards -- with their sources and the reviewer's reasoning -- rather
+    // than as a number beside the question.
+    const answered = batch.questions.filter((q) => q.answered);
+    result = answered.length ? {
+      run_id: batch.id,
+      source_name: batch.source_name,
+      language: "en",
+      questions_found: answered.length,
+      answers: answered.map((q) => {
+        const entry = questions.find((row) => row.formId === q.id);
+        return Object.assign({}, q.answered, { __key: entry ? entry.key : null });
+      }),
+    } : null;
+
+    renderFormReport(batch);
+    await renderColumns(batch.id);
+    renderQuestions();
+    if (result) renderResult(result, { keepQuestions: true });
+    refreshFormControls();
+    listRecentForms();
+
+    const unsure = batch.parts.reduce(
+      (total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
+    setStatus($("extractStatus"),
+      "Found " + batch.counts.questions + " question(s) in " + batch.source_name +
+      (batch.counts.answered ? ", " + batch.counts.answered + " already answered" : "") +
+      (unsure ? " — " + unsure + " reading(s) worth checking below" : "") + ".",
+      unsure ? "warn" : "ok");
+    $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function loadAsText(file) {
+    const body = new FormData();
+    body.append("file", file);
+    const data = await request("/api/assessments/extract", { method: "POST", body });
+    formBatch = null;
+    $("formReport").hidden = true;
+    refreshFormControls();
+    data.questions.forEach((q) => addQuestion(q.text, q));
+    sourceName = data.source_name || sourceName;
+    setStatus($("extractStatus"),
+      "Found " + data.questions.length + " question(s) in " + data.source_name +
+      ". This file cannot be written back into, so the answers are exported instead.", "ok");
+    renderQuestions();
+    $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // --- what was found, and how to correct it -------------------------------
+
+  let reportedBatch = null;
+
+  function renderFormReport(batch) {
+    const report = $("formReport");
+    report.hidden = false;
+    /* Opened for a reading worth checking, but only when a different file
+       arrives. Correcting a column re-renders this, and recomputing the state
+       there closed the panel under the person working in it -- every correction
+       makes the findings more confident, so the last one shut the drawer. */
+    if (reportedBatch !== batch.id) {
+      reportedBatch = batch.id;
+      report.open = batch.parts.some((part) => part.findings.some((f) => !f.confident));
+    }
+
+    $("formPartsList").replaceChildren.apply($("formPartsList"), batch.parts.map((part) => {
+      const row = document.createElement("div");
+      row.className = "qn-part" + (part.used ? "" : " skipped");
+      const tick = document.createElement("span");
+      tick.className = "tick";
+      tick.textContent = part.used ? "✓" : "—";
+      const name = document.createElement("span");
+      name.className = "pname";
+      name.textContent = part.name;
+      const count = document.createElement("span");
+      count.className = "pcount";
+      count.textContent = part.used ? part.questions + " question(s)" : part.kind;
+      row.append(tick, name, count);
+      part.findings.forEach((finding) => {
+        const why = document.createElement("div");
+        why.className = "why" + (finding.confident ? "" : " check");
+        why.textContent = (finding.confident ? "" : "worth checking — ") +
+          finding.subject + ": " + finding.verdict + ". " + finding.because;
+        row.append(why);
+      });
+      return row;
+    }));
+  }
+
+  const ROLE_LABELS = [
+    ["answer", "the written answer"],
+    ["status", "a status from the dropdown"],
+    ["evidence", "evidence (left blank)"],
+    ["ignore", "do not write here"],
+  ];
+
+  async function renderColumns(batchId) {
+    const host = $("formColumns");
+    host.replaceChildren();
+    let sheets = [];
+    try {
+      sheets = (await request("/api/forms/" + batchId + "/columns")).sheets;
+    } catch (error) {
+      return;
+    }
+    if (!sheets.length) return;
+
+    const heading = document.createElement("p");
+    heading.className = "field-label accent";
+    heading.style.marginTop = "12px";
+    heading.textContent = "Where the answers will be written";
+    host.append(heading);
+
+    sheets.forEach((sheet) => {
+      const row = document.createElement("div");
+      row.className = "adm-add";
+      const name = document.createElement("span");
+      name.className = "pname";
+      name.style.flex = "0 0 auto";
+      name.textContent = sheet.sheet;
+      row.append(name);
+
+      sheet.columns.forEach((column) => {
+        const wrap = document.createElement("label");
+        wrap.className = "adm-note";
+        wrap.style.display = "flex";
+        wrap.style.gap = "5px";
+        wrap.style.alignItems = "center";
+        // The heading, where the file has one: "column D" alone is not something
+        // a person can recognise their spreadsheet by.
+        wrap.append(document.createTextNode(
+          "column " + column.column + (column.label ? " — " + column.label : "")));
+        const picker = document.createElement("select");
+        ROLE_LABELS.forEach(function (pair) {
+          const option = document.createElement("option");
+          option.value = pair[0];
+          option.textContent = pair[1];
+          option.selected = pair[0] === column.role;
+          picker.append(option);
+        });
+        picker.addEventListener("change", async () => {
+          try {
+            const updated = await request("/api/forms/" + batchId + "/columns", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sheet: sheet.sheet, column: column.column, role: picker.value,
+              }),
+            });
+            await adoptBatch(updated);
+            setStatus($("extractStatus"),
+              "Column " + column.column + " on " + sheet.sheet + " now holds " +
+              picker.value + ".", "ok");
+          } catch (error) {
+            setStatus($("extractStatus"), error.message, "error");
+          }
+        });
+        wrap.append(picker);
+        row.append(wrap);
+      });
+      host.append(row);
+    });
+  }
+
+  function refreshFormControls() {
+    const on = Boolean(formBatch);
+    $("fillFormBtn").hidden = !on;
+    $("reviseRow").hidden = !(on && result && result.answers.length);
   }
 
   let sourceName = "questions";
@@ -2335,6 +3278,112 @@
     await answerPending("answerStatus");
   }
 
+  /* Answer only the rows the person is looking at, by id. The batch holds every
+     question in the file; a scope is what says "these ones". */
+  async function answerThroughBatch(pending, runId) {
+    const ids = pending.map((entry) => entry.formId).filter(Boolean);
+    const outcome = await request("/api/forms/" + formBatch.id + "/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: { ids: ids } }),
+    });
+    formBatch = outcome.batch;
+    const byId = {};
+    outcome.batch.questions.forEach((question) => {
+      if (question.answered) byId[question.id] = question.answered;
+    });
+    return {
+      run_id: runId,
+      source_name: formBatch.source_name,
+      language: "en",
+      questions_found: ids.length,
+      answers: pending.map((entry) => byId[entry.formId] || {
+        question: { id: entry.formId, text: entry.text, language: entry.language || "en" },
+        answer: "", confidence: 0, needs_review: true, evidence: [], citations: [],
+        error: "This question was not answered.",
+      }),
+    };
+  }
+
+  async function fillTheForm() {
+    if (!formBatch) return;
+    const button = $("fillFormBtn");
+    button.disabled = true;
+    try {
+      const filled = await request("/api/forms/" + formBatch.id + "/fill", { method: "POST" });
+      const panel = $("formFilled");
+      panel.hidden = false;
+      const blanks = Object.keys(filled.blank || {}).length;
+      const refused = Object.keys(filled.skipped || {}).length;
+      panel.replaceChildren();
+      const line = document.createElement("div");
+      line.textContent = "Wrote " + filled.written + " value(s) into " + filled.file +
+        (filled.intact ? " — every other part of the file is untouched." : ".");
+      panel.append(line);
+      if (blanks || refused) {
+        const note = document.createElement("div");
+        note.className = "blanks";
+        note.textContent = [
+          blanks ? blanks + " left blank on purpose" : "",
+          refused ? refused + " refused" : "",
+        ].filter(Boolean).join(", ") + ".";
+        panel.append(note);
+      }
+      const download = document.createElement("button");
+      download.className = "primary";
+      download.style.marginTop = "10px";
+      download.textContent = "Download the filled file";
+      download.addEventListener("click", () => {
+        window.location.href = "/api/forms/" + formBatch.id + "/file";
+      });
+      panel.append(download);
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  /* Rewording is not answering again. It runs over the answers that exist and
+     the sources they were built from, so the facts and the citations stay put
+     and only the wording moves. */
+  async function rewordAnswers() {
+    const instruction = $("reviseInstruction").value.trim();
+    if (!formBatch) return;
+    if (!instruction) {
+      setStatus($("answerStatus"), "Say how the answers should change first.", "error");
+      return;
+    }
+    const button = $("reviseBtn");
+    const status = $("answerStatus");
+    button.disabled = true;
+    setStatus(status, "Rewording the answers…", "busy");
+
+    // Rewording a whole questionnaire is one call per answer, so it takes about
+    // as long as a run and is watched the same way, under the batch's own id.
+    const stop = watchProgress(formBatch.id, (state) => {
+      status.innerHTML = progressMessage(state);
+      status.className = "status busy";
+    });
+    try {
+      const outcome = await request("/api/forms/" + formBatch.id + "/revise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction: instruction, scope: {} }),
+      });
+      stop();
+      await adoptBatch(outcome.batch);
+      setStatus(status,
+        "Reworded " + outcome.answered + " of " + outcome.attempted + " answer(s).", "ok");
+    } catch (error) {
+      stop();
+      setStatus(status, error.message, "error");
+    } finally {
+      stop();
+      button.disabled = false;
+    }
+  }
+
   const failedKeys = () =>
     (result ? result.answers.filter((a) => a.error && a.__key).map((a) => a.__key) : []);
 
@@ -2351,7 +3400,13 @@
     if (!batch.length) return;
     const status = $(statusId);
 
-    const runId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16);
+    /* Answering through a batch is tracked under the batch's own id -- see the
+       note on POST /api/forms/{id}/answer -- so watching a freshly minted one
+       polled a run nobody had started and the progress bar sat at nothing for
+       the several minutes a large questionnaire takes. */
+    const runId = formBatch
+      ? formBatch.id
+      : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16);
     answering = true;
     refreshAnswerButton();
     setStatus(status, "Answering " + batch.length + " question(s)…", "busy");
@@ -2362,22 +3417,28 @@
     });
 
     try {
-      const data = await request("/api/assessments/answer-questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          questions: batch.map((q) => ({
-            text: q.text.trim(),
-            section: q.section,
-            question_type: q.question_type,
-            options: q.options,
-            language: q.language,
-          })),
-          language: $("languageSelect").value || null,
-          run_id: runId,
-          source_name: sourceName,
-        }),
-      });
+      /* A questionnaire we can write back into is answered through its batch,
+         so the answers are kept on the server against the places they belong.
+         A list of typed questions goes the way it always did. Both come back
+         as the same answers, and everything below this renders them the same. */
+      const data = formBatch
+        ? await answerThroughBatch(batch, runId)
+        : await request("/api/assessments/answer-questions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              questions: batch.map((q) => ({
+                text: q.text.trim(),
+                section: q.section,
+                question_type: q.question_type,
+                options: q.options,
+                language: q.language,
+              })),
+              language: $("languageSelect").value || null,
+              run_id: runId,
+              source_name: sourceName,
+            }),
+          });
 
       // Positional: the endpoint answers the list it was given, in order. That
       // is what lets an answer be tied back to the row it came from, so a later
@@ -2397,6 +3458,7 @@
       setStatus(status, "Answered " + data.answers.length + " question(s).", "ok");
       renderQuestions();
       renderResult(result, { keepQuestions: true });
+      refreshFormControls();
       // Scroll only when the request came from the top of the page; a reader
       // who asked from the composer is already where the new answers land.
       if (statusId === "answerStatus") {
@@ -2503,6 +3565,8 @@
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
   $("retryFailed").onclick = () => retryQuestions(failedKeys(), $("retryFailed"));
+  $("fillFormBtn").onclick = fillTheForm;
+  $("reviseBtn").onclick = rewordAnswers;
 
   function addFromComposer() {
     const box = $("composerInput");
@@ -2574,6 +3638,7 @@
 
   loadKnowledge();
   loadDocuments();
+  listRecentForms();
   renderQuestions();
 })();
 </script>

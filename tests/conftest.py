@@ -11,10 +11,56 @@ from __future__ import annotations
 
 import pytest
 
+from src import credentials, store
 from src.chunking import chunk_document
 from src.config import settings
 from src.knowledge import KnowledgeStore
 from src.models import SourceType
+
+
+@pytest.fixture(autouse=True)
+def isolated_storage(tmp_path, monkeypatch):
+    """Point everything the suite writes at a throwaway directory, per test.
+
+    Autouse, and deliberately not opt-in. The database came first: any test
+    reaching the API touches it, and one writing to the deployment's
+    `data/app.db` would pollute a real history without failing.
+
+    The upload directory was added after this fixture let eleven test fixtures
+    -- `vendor.xlsx`, `isra - answered.xlsx` and friends -- accumulate in
+    `data/uploads` beside a hundred real policy documents. Nothing failed;
+    a later test simply found a file an earlier one had left, and passed for
+    the wrong reason.
+
+    The allow-list is pinned empty so the API stays in its local-user mode
+    unless a test asks for gating; otherwise a developer's `.env` would decide
+    whether the suite gets 200s or 401s.
+    """
+    monkeypatch.setattr(settings, "db_path", tmp_path / "app.db")
+    monkeypatch.setattr(settings, "upload_dir", tmp_path / "uploads")
+    monkeypatch.setattr(settings, "extracted_text_dir", tmp_path / "extracted")
+    monkeypatch.setattr(settings, "allowed_emails", "")
+    monkeypatch.setattr(settings, "admin_email", "")
+    monkeypatch.setattr(settings, "admin_password", "")
+    store.reset_connection()
+    yield
+    store.reset_connection()
+
+
+@pytest.fixture(autouse=True)
+def cheap_scrypt(monkeypatch):
+    """Hash at a fraction of the production cost, for the suite only.
+
+    scrypt is deliberately slow, and the tests sign in constantly — at the real
+    parameters the suite takes over two minutes instead of twenty-five seconds,
+    which is a tax on every change to anything. Each hash stores the parameters
+    it was made with, so a cheap hash still verifies correctly and the tests
+    exercise exactly the same code path.
+
+    The one thing this must not do is hide a change to the real defaults, so
+    `test_credentials.py` asserts those separately.
+    """
+    monkeypatch.setattr(credentials, "SCRYPT_N", 2 ** 8)
 
 
 @pytest.fixture(autouse=True, scope="session")

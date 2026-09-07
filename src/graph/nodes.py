@@ -257,6 +257,11 @@ async def rerank_evidence(state: QuestionState) -> dict:
 async def draft(state: QuestionState) -> dict:
     """Write the answer from the retrieved evidence."""
     language_name = LANGUAGE_NAMES[state["language"]]
+    # One prompt, always. Wording instructions are honoured by rewriting a
+    # finished answer instead -- measured on six questions, that follows the
+    # instruction just as well, comes out shorter, and keeps every citation,
+    # where drafting briefly from scratch cited a third fewer and dropped a
+    # caveat the sources actually required.
     messages = [
         ("system", ANSWER_SYSTEM.format(language_name=language_name)),
         (

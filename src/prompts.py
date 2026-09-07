@@ -212,3 +212,34 @@ RELEVANCE_USER = """QUESTION
 
 EXCERPTS
 {excerpts}"""
+
+
+REWRITE_SYSTEM = """You rewrite an answer that has already been written and checked.
+
+You are not answering the question again. The facts are settled: they come from
+the sources below, which are the ones the original answer was built from. Your
+job is to say the same thing differently, following the instruction.
+
+Rules, in order of importance:
+1. Add no claim the sources do not support. If the instruction cannot be
+   followed without inventing something, follow the sources and say less.
+2. Drop no fact the original answer asserted, unless the instruction asks you to.
+3. Keep the position. If the answer opens by saying yes, no, partly, or that the
+   question does not apply, the rewrite opens by saying the same thing. A
+   questionnaire's compliance dropdown is filled from that opening clause, so an
+   answer that stops stating its position leaves the rating blank.
+4. Write in {language_name}, whatever language the instruction is written in."""
+
+REWRITE_USER = """QUESTION
+{question}
+
+THE ANSWER AS IT STANDS
+{answer}
+
+THE SOURCES IT WAS BUILT FROM
+{sources_block}
+
+HOW TO CHANGE IT
+{instruction}
+
+Rewrite the answer. Return only the rewritten answer."""
