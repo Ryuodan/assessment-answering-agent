@@ -1,7 +1,0 @@
-﻿Review ID,Population,Identities reviewed,Entitlements revoked,Exceptions raised,Completed,Reviewer
-ACR-2026Q1-01,All employees and contractors,412,37,2,2026-01-28,Head of Security
-ACR-2026Q1-02,Privileged vault roles (January),48,6,0,2026-01-14,Head of Security
-ACR-2026Q1-03,Privileged vault roles (February),47,3,1,2026-02-13,Head of Security
-ACR-2026Q1-04,Privileged vault roles (March),45,2,0,2026-03-13,Head of Security
-ACR-2026Q1-05,Third-party and service accounts,96,11,3,2026-03-19,Head of Security
-ACR-2026Q1-06,Segregation-of-duties conflict scan,412,4,1,2026-03-25,Internal Audit

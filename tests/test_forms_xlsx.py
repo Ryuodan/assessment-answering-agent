@@ -399,3 +399,102 @@ def test_a_column_reason_names_its_heading_once(tmp_path):
         heading, _, rest = finding.because.partition(": ")
         if heading.startswith("'"):
             assert heading not in rest, f"heading repeated in: {finding.because}"
+
+
+# --- what six unseen questionnaires cost, and bought -----------------------
+#
+# Two shapes arrived later that no rule anticipated, and between them they
+# account for every question the rules missed on that set. Both fixes are
+# narrow and both are here, because the next unfamiliar file will not be one of
+# these two.
+
+
+def test_a_reference_column_headed_id_is_a_numbering_column(tmp_path):
+    """`ID` is the commonest heading for the column holding `GE-01` or `GQ7`,
+    and without it there is no numbering column at all."""
+    form = forms.detect(shapes.reference_column_headed_id(tmp_path / "id.xlsx"))
+    verdicts = {
+        part.name: {f.subject: f.verdict for f in part.findings} for part in form.parts
+    }
+    # Per sheet: the two sheets both have a column A, and they are not the same
+    # kind of column -- one is the ID, the other the security domain.
+    assert verdicts["Vendor Info"]["column A"] == "number"
+    assert verdicts["Questionnaire"]["column B"] == "number"
+    assert verdicts["Questionnaire"]["column A"] == "context"
+
+
+def test_short_questions_are_found_once_their_numbers_are(tmp_path):
+    """This is what the numbering column buys. Without it a question has to end
+    in a question mark or run past fifty characters, and `Organisation name`,
+    `Email address` and `Do you maintain an incident register` do neither."""
+    form = forms.detect(shapes.reference_column_headed_id(tmp_path / "id.xlsx"))
+    found = {question.text for question in form.questions}
+    assert "Organisation name" in found
+    assert "Email address" in found
+    assert "Do you maintain an incident register" in found
+
+
+def test_a_short_reference_heading_is_matched_whole_and_never_inside_a_word(tmp_path):
+    """`id` sits inside `Identity and Access Management` and `no` inside
+    `Notes`. Matching these as substrings would put a whole domain column, or
+    the comment column, into the numbering role."""
+    from src.forms.xlsx import Role, _role_for
+
+    assert _role_for("ID", has_dropdown=False)[0] is Role.NUMBER
+    assert _role_for("Ref", has_dropdown=False)[0] is Role.NUMBER
+    assert _role_for("Identity and Access Management", has_dropdown=False)[0] is not Role.NUMBER
+    assert _role_for("Notes", has_dropdown=False)[0] is not Role.NUMBER
+
+
+def test_a_headless_sheet_survives_its_own_answers(tmp_path):
+    """A header row one typo from being recognised -- `Queations | Answer` --
+    so the sheet is read headless. Blank, the questions are the only prose on
+    it. Filled, the answer column holds more, and it used to take their place:
+    32 questions written, re-opened as 0.
+    """
+    path = shapes.headless_typo_header(tmp_path / "typo.xlsx")
+    before = forms.detect(path)
+    assert len(before.questions) == 10
+
+    answered = tmp_path / "answered.xlsx"
+    forms.write(path, answered, {
+        target.id: "Yes. An approved policy is in place and reviewed annually."
+        for question in before.questions for target in question.writable
+    })
+    after = forms.detect(answered)
+    assert [q.id for q in after.questions] == [q.id for q in before.questions]
+    assert after.questions[0].text == before.questions[0].text
+
+
+def test_a_column_labelled_as_the_answer_is_never_read_as_the_questions(tmp_path):
+    """Excluded rather than penalised: an answer can be arbitrarily longer than
+    the question it answers, so any score a penalty produces can be beaten."""
+    from src.forms.xlsx import _find_headless_layout
+    from src.forms.xlsx_package import Workbook
+
+    cells = {"A1": "Queations", "B1": "Answer"}
+    for row in range(2, 12):
+        cells[f"A{row}"] = f"A reasonably long question about control number {row}?"
+        cells[f"B{row}"] = "A considerably longer answer than the question it is answering, twice over."
+    path = shapes.build(tmp_path / "wordy.xlsx", [shapes.SheetSpec("S", cells)])
+
+    with Workbook(path) as workbook:
+        layout = _find_headless_layout(workbook["S"])
+    assert layout is not None and layout.question_column == "A"
+
+
+def test_a_sentence_in_the_first_row_is_data_and_not_a_label(tmp_path):
+    """The exclusion reads the top row as labels, so it has to know when the top
+    row is not labels at all. A cell of `LONG_TEXT` or more is prose."""
+    from src.forms.xlsx import _find_headless_layout
+    from src.forms.xlsx_package import Workbook
+
+    cells = {}
+    for row in range(1, 12):
+        cells[f"A{row}"] = f"Does the organisation maintain a documented control for area {row}?"
+    path = shapes.build(tmp_path / "prose.xlsx", [shapes.SheetSpec("S", cells)])
+
+    with Workbook(path) as workbook:
+        layout = _find_headless_layout(workbook["S"])
+    assert layout is not None and layout.question_column == "A", \
+        "a question beginning with a recognised word is still a question"

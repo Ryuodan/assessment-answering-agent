@@ -268,8 +268,13 @@ def test_guarded_says_which_sheets_the_rules_had_to_rescue(tmp_path, monkeypatch
 
 def test_guarded_is_what_the_application_uses_by_default():
     """Chosen deliberately: the agent generalises best, and this is the agent
-    with its one measured failure removed."""
-    from src.config import settings
+    with its one measured failure removed.
 
-    assert settings.detection_strategy == "guarded"
+    Read off the field rather than off `settings`, because the suite pins the
+    live value to `rules` -- the default runs an agent against a real model,
+    and a test that did that would be slow, billed and nondeterministic.
+    """
+    from src.config import Settings
+
+    assert Settings.model_fields["detection_strategy"].default == "guarded"
     assert "guarded" in reading_module.STRATEGIES

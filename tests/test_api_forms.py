@@ -364,3 +364,59 @@ def test_the_filled_file_is_served_as_what_it_is(client, tmp_path, answers_yes):
     assert response.headers["content-type"] == \
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     assert "attachment" in response.headers["content-disposition"]
+
+
+def test_rewording_can_be_held_to_the_answers_just_written(client, tmp_path, answers_yes,
+                                                           monkeypatch):
+    """A questionnaire is answered in sittings. The wording box beside the
+    answer button applies to that sitting only -- an earlier one may hold
+    answers somebody has since read and corrected by hand, and rewording those
+    because a later batch asked for a house style throws that work away."""
+    from src import rewrite
+
+    async def shorten(answered, instruction, language=None):
+        revised = answered.model_copy(deep=True)
+        revised.answer = "Reworded."
+        return revised
+
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    ids = [q["id"] for q in opened["questions"]]
+
+    client.post(f"/api/forms/{opened['id']}/answer", json={"scope": {"ids": ids[:2]}})
+    client.post(f"/api/forms/{opened['id']}/answers",
+                json={"question_id": ids[0], "text": "Corrected by a person."})
+    client.post(f"/api/forms/{opened['id']}/answer", json={"scope": {"ids": ids[2:]}})
+
+    monkeypatch.setattr(rewrite, "rewrite", shorten)
+    outcome = client.post(f"/api/forms/{opened['id']}/revise", json={
+        "instruction": "Keep it short.", "scope": {"ids": ids[2:]},
+    }).json()
+
+    assert outcome["attempted"] == 2
+    answers = {q["id"]: q["answer"] for q in outcome["batch"]["questions"]}
+    assert answers[ids[0]] == "Corrected by a person.", "the hand-edited answer is untouched"
+    assert answers[ids[2]] == "Reworded."
+    assert answers[ids[3]] == "Reworded."
+
+
+def test_an_edited_answer_is_what_gets_written(client, tmp_path, answers_yes):
+    """The bug this closes: an edit made on an answer card lived only in the
+    page. It went into every download and *not* into the filled spreadsheet --
+    the one place a reviewer would swear they had corrected it."""
+    opened = _upload(client, shapes.status_and_comment(tmp_path / "hr.xlsx")).json()
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+    client.post(f"/api/forms/{opened['id']}/answers", json={
+        "question_id": opened["questions"][1]["id"],
+        "text": "No, this is not in place.",
+    })
+    client.post(f"/api/forms/{opened['id']}/fill")
+
+    from src.forms.xlsx_package import Workbook
+    from src import tools as tool_module
+
+    batch = tool_module.batches.load(opened["id"])
+    with Workbook(tool_module._filled_path(batch)) as workbook:
+        sheet = workbook["Human Resources"]
+        assert sheet.value(3, "D") == "No, this is not in place."
+        assert sheet.value(3, "C") == "Non Compliant", \
+            "the status is re-read from the person's words, not left as the model's"

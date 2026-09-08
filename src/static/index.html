@@ -833,6 +833,11 @@
     <button class="ghost" id="adminLink" title="Manage who can use this" hidden>Access</button>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
   </div>
+  <!-- The assistant is a separate page rather than a mode of this one: the two
+       are different shapes, and a control that had to know which mode it was in
+       would be a control with a bug waiting in it. -->
+  <a class="ghost" href="/chat" title="Ask for this in a conversation instead"
+     style="text-decoration:none;display:inline-flex;align-items:center">Assistant →</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
@@ -888,26 +893,14 @@
 
     <div class="panel" style="margin-top:14px">
       <details class="library">
-        <summary>Documents and trial files</summary>
-        <p class="hint" style="margin-top:10px">Open an original PDF, inspect the exact text the agent read, or load a bundled trial file into an uploader.</p>
+        <summary>Your documents</summary>
+        <p class="hint" style="margin-top:10px">Open an original PDF, or inspect the exact text the agent read out of it.</p>
 
         <div class="library-heading">
-          <h4>Your uploaded documents</h4>
+          <h4>Uploaded documents</h4>
           <span class="status" id="uploadedDocumentsSummary" style="margin:0"></span>
         </div>
         <div class="document-list" id="uploadedDocuments"></div>
-
-        <div class="library-heading">
-          <h4>Bundled trial documents</h4>
-          <select id="trialFilter" title="Filter trial documents">
-            <option value="">All trial documents</option>
-            <option value="guideline">Guidelines</option>
-            <option value="prior_assessment">Completed assessments</option>
-            <option value="new_assessment">Blank assessments to answer</option>
-          </select>
-        </div>
-        <div class="document-list" id="trialDocuments"></div>
-        <div class="status" id="trialStatus"></div>
       </details>
     </div>
   </section>
@@ -970,6 +963,14 @@
         </select>
         <button id="answerBtn" disabled>Answer questions</button>
       </div>
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="answerStyle" style="flex:1 1 320px;min-width:0"
+               title="Applied as a rewording pass once the answers are written"
+               placeholder="How should they be written? — optional, e.g. one sentence each, formal, no bullet points">
+      </div>
+      <p class="hint" style="margin:6px 0 0">Left blank, answers come out in the house style. Anything
+        typed here is applied as a rewording pass once the answers are written, so the facts and the
+        citations are settled first and only the wording follows the instruction.</p>
       <div class="status" id="answerStatus"></div>
     </div>
   </section>
@@ -980,11 +981,26 @@
       <span class="step-number">3</span>
       <h2>Review and export</h2>
     </div>
-    <p class="step-hint">Read each answer, follow a citation to the exact clause it came from, edit anything you disagree with, then export.</p>
+    <p class="step-hint">Read each answer, follow a citation to the exact clause it came from, and
+      edit anything you disagree with. Rewording, filling the original file and the downloads are
+      at the bottom, past the last answer.</p>
 
     <div class="summary" id="resultsSummary"></div>
 
-    <div class="toolbar">
+    <div class="status" style="margin-bottom:18px">Edits you make here are kept, and go into
+      the filled file and every download.</div>
+
+    <div id="results"></div>
+
+    <!-- Taking the answers out comes after reading them: these sit below the
+         cards so that reaching them means having scrolled past every one. -->
+    <div class="row" id="reviseRow" hidden style="margin:22px 0 14px">
+      <input type="text" id="reviseInstruction" style="flex:1 1 260px;min-width:0"
+             placeholder="Reword every answer — e.g. keep it to one sentence, be more formal">
+      <button class="ghost" id="reviseBtn">Reword the answers</button>
+    </div>
+
+    <div class="toolbar" style="margin-top:14px">
       <button class="ghost" id="exportJson">Download JSON</button>
       <button class="ghost" id="exportCsv">Download CSV</button>
       <button id="exportPdf">Download PDF</button>
@@ -999,15 +1015,7 @@
         <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
       </div>
     </div>
-    <div class="row" id="reviseRow" hidden style="margin-bottom:14px">
-      <input type="text" id="reviseInstruction" style="flex:1 1 260px;min-width:0"
-             placeholder="Reword every answer — e.g. keep it to one sentence, be more formal">
-      <button class="ghost" id="reviseBtn">Reword the answers</button>
-    </div>
     <div class="qn-filled" id="formFilled" hidden></div>
-    <div class="status" style="margin-bottom:18px">Edits you make below are included in every download.</div>
-
-    <div id="results"></div>
 
     <div class="panel composer" id="composer">
       <h3>Ask another question</h3>
@@ -1157,6 +1165,7 @@
   </div>
 </dialog>
 
+<script src="/static/cards.js"></script>
 <script>
 // --- sign-in -----------------------------------------------------------------
 // Its own block, ahead of the main script: whether anyone may use the page is
@@ -1579,9 +1588,11 @@
     return body;
   }
 
-  function isArabic(text) {
-    return /[؀-ۿ]/.test(text || "");
-  }
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
 
   function download(filename, content, mime) {
     const url = URL.createObjectURL(new Blob([content], { type: mime }));
@@ -1605,23 +1616,23 @@
 
   const VIEW_KEY = "assessment-chunk-view";
 
-  function chunkView() {
-    try { return localStorage.getItem(VIEW_KEY) || "pretty"; } catch (error) { return "pretty"; }
-  }
 
-  function setChunkView(view) {
-    try { localStorage.setItem(VIEW_KEY, view); } catch (error) { /* private mode */ }
-    document.querySelectorAll("[data-view]").forEach((button) => {
-      button.setAttribute("aria-pressed", String(button.dataset.view === view));
-    });
-    document.querySelectorAll("[data-chunk-source]").forEach((node) => {
-      node.replaceWith(renderChunk(node.getAttribute("data-chunk-source"), view));
-    });
-  }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-  function words(text) {
-    return (text || "").match(/[\p{L}\p{N}]+/gu) || [];
-  }
+
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
+
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
 
   /* Text as a reader sees it, with element boundaries kept as whitespace.
      `textContent` concatenates adjacent cells, so a header row of six cells
@@ -1629,206 +1640,55 @@
      self-check below compares word multisets, and reading it off `textContent`
      reported a loss on 185 of 194 real chunks -- every one of them a false
      alarm that would have disabled the formatted view entirely. */
-  function flatText(node) {
-    const parts = [];
-    const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-    while (walk.nextNode()) parts.push(walk.currentNode.nodeValue);
-    return parts.join(" ");
-  }
 
-  function cells(line) {
-    let row = line.trim();
-    if (row.startsWith("|")) row = row.slice(1);
-    if (row.endsWith("|")) row = row.slice(0, -1);
-    return row.split("|").map((cell) => cell.trim());
-  }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-  function isSeparatorRow(line) {
-    return /^\|?[\s:|-]+\|?$/.test(line.trim()) && line.indexOf("-") >= 0;
-  }
 
-  function buildTable(rows) {
-    const table = document.createElement("table");
-    const body = document.createElement("tbody");
-    let head = null;
 
-    rows.forEach((line, index) => {
-      if (isSeparatorRow(line)) return;
-      const values = cells(line);
-      const isHead = index === 0 && rows.length > 1 && isSeparatorRow(rows[1]);
-      const row = document.createElement("tr");
-      values.forEach((value) => {
-        const cell = document.createElement(isHead ? "th" : "td");
-        cell.textContent = value;
-        if (isArabic(value)) cell.dir = "rtl";
-        row.append(cell);
-      });
-      if (isHead) {
-        head = document.createElement("thead");
-        head.append(row);
-      } else {
-        body.append(row);
-      }
-    });
 
-    if (head) table.append(head);
-    if (body.childElementCount) table.append(body);
-    const wrap = document.createElement("div");
-    wrap.className = "tablewrap";
-    wrap.append(table);
-    return wrap;
-  }
 
-  function buildPretty(text) {
-    const box = document.createElement("div");
-    box.className = "chunk";
-    const lines = String(text).split("\n");
-    let index = 0;
-    let list = null;
 
-    while (index < lines.length) {
-      const line = lines[index];
-      const trimmed = line.trim();
 
-      if (!trimmed) { list = null; index += 1; continue; }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-      if (trimmed.charAt(0) === "|") {
-        list = null;
-        const rows = [];
-        while (index < lines.length && lines[index].trim().charAt(0) === "|") {
-          rows.push(lines[index]);
-          index += 1;
-        }
-        box.append(buildTable(rows));
-        continue;
-      }
 
-      const heading = trimmed.match(/^#{1,6}\s+(.*)$/);
-      if (heading) {
-        list = null;
-        const element = document.createElement("h4");
-        const rest = heading[1];
-        const numbered = rest.match(/^(\d+(?:[.\-]\d+)*)\s+(.*)$/);
-        if (numbered) {
-          const clause = document.createElement("span");
-          clause.className = "clause";
-          clause.textContent = numbered[1] + " ";
-          element.append(clause, document.createTextNode(numbered[2]));
-        } else {
-          element.textContent = rest;
-        }
-        if (isArabic(rest)) element.dir = "rtl";
-        box.append(element);
-        index += 1;
-        continue;
-      }
 
-      if (/^<!--\s*image\s*-->$/.test(trimmed)) {
-        list = null;
-        const figure = document.createElement("div");
-        figure.className = "figure";
-        figure.textContent = "image";
-        box.append(figure);
-        index += 1;
-        continue;
-      }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-      const bullet = trimmed.match(/^[-*•]\s+(.*)$/);
-      if (bullet) {
-        if (!list) {
-          list = document.createElement("ul");
-          box.append(list);
-        }
-        const item = document.createElement("li");
-        item.textContent = bullet[1];
-        if (isArabic(bullet[1])) item.dir = "rtl";
-        list.append(item);
-        index += 1;
-        continue;
-      }
 
-      list = null;
-      const paragraph = document.createElement("p");
-      paragraph.textContent = trimmed;
-      if (isArabic(trimmed)) paragraph.dir = "rtl";
-      box.append(paragraph);
-      index += 1;
-    }
 
-    return box;
-  }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-  function buildRaw(text) {
-    const pre = document.createElement("pre");
-    pre.className = "snippet";
-    pre.textContent = text;
-    if (isArabic(text)) pre.dir = "rtl";
-    return pre;
-  }
 
   /* Returns an element carrying its own source, so the view can be switched
      later without the caller holding on to the text. */
-  function renderChunk(text, view) {
-    const source = String(text == null ? "" : text);
-    let node;
-    if ((view || chunkView()) !== "pretty") {
-      node = buildRaw(source);
-    } else {
-      node = buildPretty(source);
-      // Self-check: a formatted view that loses words is worse than an ugly
-      // one, and the loss is invisible by inspection.
-      const counts = new Map();
-      words(flatText(node)).forEach((word) => counts.set(word, (counts.get(word) || 0) + 1));
-      const lost = words(source).some((word) => {
-        const left = counts.get(word) || 0;
-        if (!left) return true;
-        counts.set(word, left - 1);
-        return false;
-      });
-      if (lost) {
-        console.warn("Formatted view dropped content; showing raw text instead.");
-        node = buildRaw(source);
-      }
-    }
-    node.setAttribute("data-chunk-source", source);
-    return node;
-  }
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
 
   /* One builder for the Formatted/Raw switch, so every place that shows a
      chunk offers the same control and they all move together. */
-  function viewToggle() {
-    const box = document.createElement("div");
-    box.className = "view-toggle";
-    box.setAttribute("role", "group");
-    box.setAttribute("aria-label", "How to show the text");
-    [["pretty", "Formatted"], ["raw", "Raw"]].forEach(([mode, label]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.view = mode;
-      button.textContent = label;
-      button.setAttribute("aria-pressed", String(chunkView() === mode));
-      button.onclick = () => setChunkView(mode);
-      box.append(button);
-    });
-    return box;
-  }
 
-  /* A chunk is only checkable if you can open the file it came from. */
-  function openDocumentButton(sourceName, sourceType) {
-    const button = document.createElement("button");
-    button.className = "quiet";
-    button.textContent = "open document";
-    button.onclick = () => openDocument({
-      name: sourceName,
-      title: sourceName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
-      origin: "uploaded",
-      category: "uploaded",
-      label: sourceType === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
-      extension: sourceName.split(".").pop().toLowerCase(),
-      size_bytes: 0,
-    });
-    return button;
-  }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
+
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
 
   // --- search drawer -------------------------------------------------------
 
@@ -1908,9 +1768,9 @@
       badge.title = item.is_lexical
         ? "Found by keyword search: the score is its rank, not a similarity"
         : "Cosine similarity to your query";
-      head.append(who, badge, openDocumentButton(item.source_name, item.source_type));
+      head.append(who, badge, Cards.openDocumentButton(item.source_name, item.source_type));
 
-      card.append(head, renderChunk(item.snippet));
+      card.append(head, Cards.chunk(item.snippet));
       box.append(card);
     });
   }
@@ -2106,38 +1966,18 @@
     view.onclick = () => openDocument(doc);
     actions.append(view);
 
-    if (doc.origin === "trial") {
-      const load = document.createElement("button");
-      load.textContent = doc.category === "guideline" ? "Try as guideline" :
-        doc.category === "prior_assessment" ? "Try as previous answers" : "Try assessment";
-      load.onclick = () => loadTrialDocument(doc, load);
-      actions.append(load);
-    }
-
     card.append(title, name, meta, actions);
     return card;
   }
 
   function renderDocuments() {
-    const uploaded = documents.filter((doc) => doc.origin === "uploaded");
-    const trialFilter = $("trialFilter").value;
-    const trials = documents.filter((doc) =>
-      doc.origin === "trial" && (!trialFilter || doc.category === trialFilter));
-
-    const uploadedContainer = $("uploadedDocuments");
-    uploadedContainer.innerHTML = "";
-    uploaded.forEach((doc) => uploadedContainer.append(documentCard(doc)));
-    if (!uploaded.length) {
-      emptyLibraryMessage(uploadedContainer, "No uploaded documents yet.");
+    const container = $("uploadedDocuments");
+    container.innerHTML = "";
+    documents.forEach((doc) => container.append(documentCard(doc)));
+    if (!documents.length) {
+      emptyLibraryMessage(container, "No uploaded documents yet.");
     }
-    $("uploadedDocumentsSummary").textContent = uploaded.length + " file(s)";
-
-    const trialContainer = $("trialDocuments");
-    trialContainer.innerHTML = "";
-    trials.forEach((doc) => trialContainer.append(documentCard(doc)));
-    if (!trials.length) {
-      emptyLibraryMessage(trialContainer, "No trial documents match this filter.");
-    }
+    $("uploadedDocumentsSummary").textContent = documents.length + " file(s)";
   }
 
   async function loadDocuments() {
@@ -2147,35 +1987,9 @@
       renderDocuments();
     } catch (error) {
       emptyLibraryMessage($("uploadedDocuments"), "Could not load documents: " + error.message);
-      emptyLibraryMessage($("trialDocuments"), "Could not load trial documents.");
     }
   }
 
-  async function loadTrialDocument(doc, button) {
-    button.disabled = true;
-    setStatus($("trialStatus"), "Loading " + doc.name + "…", "busy");
-    try {
-      const response = await fetch(documentUrl(doc, "file"));
-      if (!response.ok) throw new Error("Could not load the trial document (" + response.status + ")");
-      const blob = await response.blob();
-      const file = new File([blob], doc.name, { type: blob.type });
-      const transfer = new DataTransfer();
-      transfer.items.add(file);
-
-      const input = doc.category === "guideline" ? $("guidelinesInput") :
-        doc.category === "prior_assessment" ? $("priorInput") : $("assessmentInput");
-      input.files = transfer.files;
-      input.dispatchEvent(new Event("change"));
-
-      const target = input.closest(".panel");
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      setStatus($("trialStatus"), "Loaded " + doc.name + ". Use the highlighted uploader to continue.", "ok");
-    } catch (error) {
-      setStatus($("trialStatus"), error.message, "error");
-    } finally {
-      button.disabled = false;
-    }
-  }
 
   // --- document viewer -----------------------------------------------------
 
@@ -2206,7 +2020,7 @@
       const data = await request(documentUrl(doc, "text"));
       if (currentDocument !== doc) return;
       $("extractedText").textContent = data.text;
-      if (isArabic(data.text)) $("extractedText").dir = "rtl";
+      if (Cards.isArabic(data.text)) $("extractedText").dir = "rtl";
       else $("extractedText").removeAttribute("dir");
       setStatus($("extractedStatus"), data.characters.toLocaleString() + " extracted characters.", "ok");
     } catch (error) {
@@ -2226,76 +2040,28 @@
   /* The four constructs the drafter actually writes: bold, bullets, numbered
      items and headings. Built as DOM nodes rather than an HTML string, so
      model output can never inject markup. */
-  function renderMarkdown(text) {
-    const nodes = [];
-    let list = null;
 
-    const boldInto = (parent, line) => {
-      const pattern = /(\*\*|__)(?=\S)([\s\S]+?)(?<=\S)\1/g;
-      let at = 0, match;
-      while ((match = pattern.exec(line)) !== null) {
-        if (match.index > at) parent.append(line.slice(at, match.index));
-        const strong = document.createElement("strong");
-        strong.textContent = match[2];
-        parent.append(strong);
-        at = pattern.lastIndex;
-      }
-      if (at < line.length) parent.append(line.slice(at));
-    };
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-    const closeList = () => { if (list) { nodes.push(list); list = null; } };
-
-    text.split("\n").forEach((raw) => {
-      const line = raw.trim();
-      if (!line) { closeList(); return; }
-
-      const heading = line.match(/^#{1,6}\s+(.*)$/);
-      const bullet = line.match(/^[-*•]\s+(.*)$/);
-      const numbered = line.match(/^(\d{1,3})[.)]\s+(.*)$/);
-
-      if (heading) {
-        closeList();
-        const node = document.createElement("h4");
-        boldInto(node, heading[1]);
-        nodes.push(node);
-      } else if (bullet || numbered) {
-        const wanted = bullet ? "UL" : "OL";
-        if (!list || list.tagName !== wanted) { closeList(); list = document.createElement(wanted.toLowerCase()); }
-        const item = document.createElement("li");
-        boldInto(item, (bullet || numbered)[bullet ? 1 : 2]);
-        list.append(item);
-      } else {
-        closeList();
-        const node = document.createElement("p");
-        boldInto(node, line);
-        nodes.push(node);
-      }
-    });
-
-    closeList();
-    return nodes;
-  }
 
   // --- answers -------------------------------------------------------------
 
-  function labelledField(text, tone) {
-    const wrap = document.createElement("div");
-    wrap.className = "field";
-    const label = document.createElement("span");
-    label.className = "field-label" + (tone ? " " + tone : "");
-    label.textContent = text;
-    wrap.append(label);
-    return wrap;
-  }
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
 
   /* The same three bands the exports use. The lower boundary is the review
      threshold, so "Low confidence" here and a flagged answer in the PDF always
      mean the same thing. */
-  function confidenceBand(value) {
-    if (value >= 0.75) return { key: "high", word: "High confidence" };
-    if (value > 0.6) return { key: "medium", word: "Moderate" };
-    return { key: "low", word: "Low confidence" };
-  }
+
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
+
 
   /* The answer, rendered by default and editable on demand.
 
@@ -2303,352 +2069,33 @@
      those as raw asterisks. Rendering is the read view; the textarea is still
      the edit surface, and edits go straight back onto the result object the
      exports read. */
-  function answerField(item, index) {
-    const field = labelledField("Answer", "");
-    const rendered = document.createElement("div");
-    rendered.className = "rendered";
-    const editor = document.createElement("textarea");
-    const toggle = document.createElement("button");
-    toggle.className = "quiet";
 
-    const grow = document.createElement("span");
-    grow.className = "grow";
-    field.querySelector(".field-label").append(grow, toggle);
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-    const paint = () => {
-      const text = result.answers[index].answer;
-      rendered.innerHTML = "";
-      if (!text.trim()) {
-        const empty = document.createElement("p");
-        empty.className = "empty";
-        empty.textContent = "No answer was produced — see the note below.";
-        rendered.append(empty);
-      } else {
-        renderMarkdown(text).forEach((node) => rendered.append(node));
-      }
-      rendered.dir = isArabic(text) ? "rtl" : "ltr";
-    };
-
-    let editing = false;
-    const setMode = (next) => {
-      editing = next;
-      rendered.hidden = editing;
-      editor.hidden = !editing;
-      toggle.textContent = editing ? "Done editing" : "Edit";
-      if (editing) { editor.focus(); } else { paint(); }
-    };
-
-    editor.value = item.answer;
-    editor.hidden = true;
-    if (isArabic(item.answer)) editor.dir = "rtl";
-    editor.addEventListener("input", () => { result.answers[index].answer = editor.value; });
-    toggle.onclick = () => setMode(!editing);
-
-    field.append(rendered, editor);
-    setMode(false);
-    return field;
-  }
 
   /* A citation is only useful if you can follow it. Each bubble opens the
      chunk it names, matched back to the evidence the answer carries. */
-  function citationsField(item) {
-    const field = labelledField("Sources cited — click to read the clause", "accent");
-    const cites = document.createElement("div");
-    cites.className = "cites";
-    const panel = document.createElement("div");
-    panel.className = "cite-panel";
-    panel.hidden = true;
 
-    let openButton = null;
-    const sourceTypes = new Set();
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-    item.citations.forEach((citation) => {
-      const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
-      const kind = source ? source.source_type : "unknown";
-      if (source) sourceTypes.add(kind);
 
-      const chip = document.createElement("button");
-      chip.className = "cite " + kind;
-      chip.title = kind === "prior_answer"
-        ? "From a previously answered assessment — click to read it"
-        : kind === "guideline"
-          ? "From an indexed guideline — click to read the clause"
-          : "Named in the answer; the chunk is not in the exported evidence";
-      chip.type = "button";
-      chip.setAttribute("aria-expanded", "false");
-      chip.append(document.createTextNode(citation));
-      const caret = document.createElement("span");
-      caret.className = "caret";
-      caret.textContent = "▾";
-      chip.append(caret);
 
-      chip.onclick = () => {
-        if (openButton === chip) {
-          chip.setAttribute("aria-expanded", "false");
-          panel.hidden = true;
-          openButton = null;
-          return;
-        }
-        if (openButton) openButton.setAttribute("aria-expanded", "false");
-        openButton = chip;
-        chip.setAttribute("aria-expanded", "true");
-        showChunk(panel, item, citation);
-      };
 
-      cites.append(chip);
-    });
 
-    // A two-colour scheme needs a key, but only when both colours are present.
-    if (sourceTypes.size > 1) {
-      const key = document.createElement("div");
-      key.className = "cite-key";
-      key.innerHTML =
-        '<span><i class="guideline"></i>guideline</span>' +
-        '<span><i class="prior_answer"></i>previous answer</span>';
-      cites.append(key);
-    }
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-    field.append(cites, panel);
-    return field;
-  }
 
-  function showChunk(panel, item, citation) {
-    const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
-    panel.innerHTML = "";
-    panel.hidden = false;
 
-    const head = document.createElement("div");
-    head.className = "cite-head";
+  /* The answer card, and everything it draws with, live in cards.js --
+     the chat page renders the same cards and two copies would drift. The
+     hooks below are the three things a card does that differ per page. */
 
-    const who = document.createElement("span");
-    who.className = "who";
-    who.textContent = citation;
-    head.append(who);
-
-    head.append(viewToggle());
-
-    if (source) {
-      const kind = document.createElement("span");
-      kind.className = "tag " + source.source_type;
-      kind.textContent = source.source_type === "prior_answer" ? "previous answer" : "guideline";
-      head.prepend(kind);
-
-      if (typeof source.score === "number") {
-        const score = document.createElement("span");
-        score.textContent = "relevance " + source.score.toFixed(2);
-        head.append(score);
-      }
-
-      const open = document.createElement("button");
-      open.className = "quiet";
-      open.textContent = "open document";
-      open.onclick = () => openDocument({
-        name: source.source_name,
-        title: source.source_name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
-        origin: "uploaded",
-        category: "uploaded",
-        label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
-        extension: source.source_name.split(".").pop().toLowerCase(),
-        size_bytes: 0,
-      });
-      head.append(open);
-    }
-
-    const body = renderChunk(source
-      ? source.snippet
-      : "This clause was named in the answer, but the chunk behind it is not in the exported evidence.");
-
-    panel.append(head, body);
-  }
-
-  function renderAnswer(item, index) {
-    const card = document.createElement("div");
-    card.className = "answer" + (item.needs_review ? " review" : "");
-
-    // --- head: number, question, confidence
-    const head = document.createElement("div");
-    head.className = "answer-head";
-
-    const number = document.createElement("div");
-    number.className = "qnum";
-    number.textContent = item.question.id || String(index + 1);
-
-    const body = document.createElement("div");
-    body.className = "qbody";
-
-    const question = document.createElement("div");
-    question.className = "qtext";
-    question.textContent = item.question.text;
-    if (isArabic(item.question.text)) question.dir = "rtl";
-
-    const meta = document.createElement("div");
-    meta.className = "qmeta";
-    if (item.needs_review) {
-      const chip = document.createElement("span");
-      chip.className = "tag warn";
-      chip.textContent = "needs review";
-      meta.append(chip);
-    }
-    const bits = [];
-    if (item.question.section) bits.push(item.question.section);
-    bits.push(item.question.question_type.replace(/_/g, " "));
-    if (item.attempts > 1) bits.push(item.attempts + " retrieval rounds");
-    const detail = document.createElement("span");
-    detail.textContent = bits.join(" · ");
-    meta.append(detail);
-
-    body.append(question, meta);
-
-    const percent = Math.round(item.confidence * 100);
-    const band = confidenceBand(item.confidence);
-    const confidence = document.createElement("div");
-    confidence.className = "confidence " + band.key;
-    const value = document.createElement("div");
-    value.className = "value";
-    value.textContent = percent + "%";
-    const caption = document.createElement("div");
-    caption.className = "caption";
-    caption.textContent = band.word;
-    const meter = document.createElement("div");
-    meter.className = "meter";
-    const fill = document.createElement("span");
-    fill.style.width = percent + "%";
-    meter.append(fill);
-    confidence.append(value, caption, meter);
-
-    // Removing the pair belongs here, beside what it removes. Only offered for
-    // answers this session produced, since an imported result has no question
-    // row behind it to keep in step.
-    if (item.__key) {
-      const remove = document.createElement("button");
-      remove.className = "quiet danger qdelete";
-      remove.dataset.mutates = "true";
-      remove.textContent = "✕";
-      remove.title = "Remove this question and its answer";
-      remove.onclick = () => discardQuestion(item.__key);
-      head.append(number, body, confidence, remove);
-    } else {
-      head.append(number, body, confidence);
-    }
-
-    // --- body: answer, citations, flags, reasoning, evidence
-    const content = document.createElement("div");
-    content.className = "answer-body";
-    content.append(answerField(item, index));
-
-    if (item.citations && item.citations.length) {
-      content.append(citationsField(item));
-    }
-
-    // A flag with no explanation is what a reviewer cannot act on. The
-    // mechanical checks only speak when something is demonstrably wrong, so an
-    // answer flagged purely for scoring low used to arrive with an empty
-    // reason list and showed nothing here at all — the one place it was most
-    // needed. Fall back to the same wording the exports use.
-    if (item.needs_review) {
-      const reasonText = (item.review_reasons && item.review_reasons.length)
-        ? item.review_reasons.join("; ")
-        : "The confidence score is below the level set for automatic acceptance.";
-      const field = labelledField("Why this is flagged", "warn");
-      const reasons = document.createElement("div");
-      reasons.className = "reasons";
-      reasons.textContent = reasonText;
-      field.append(reasons);
-      content.append(field);
-    }
-
-    // A question that never produced an answer is not a weak answer — there is
-    // nothing to read, judge or edit. A rate limit or a withdrawn model is
-    // transient, so the only useful thing to offer is another go.
-    if (item.error) {
-      const field = labelledField("Could not be answered", "err");
-      const box = document.createElement("div");
-      box.className = "reasons why";
-      box.textContent = item.error;
-      field.append(box);
-      if (item.__key) {
-        const again = document.createElement("button");
-        again.className = "ghost";
-        again.dataset.mutates = "true";
-        again.style.marginTop = "9px";
-        again.textContent = "Try this question again";
-        again.onclick = () => retryQuestions([item.__key], again);
-        field.append(again);
-      }
-      content.append(field);
-    }
-
-    // Plain-English cause of the score itself, computed server-side so the
-    // interface and both exports say exactly the same thing.
-    if (item.confidence_reason) {
-      const field = labelledField("Why the confidence is low", "err");
-      const why = document.createElement("div");
-      why.className = "reasons why";
-      why.textContent = item.confidence_reason;
-      field.append(why);
-      content.append(field);
-    }
-
-    if (item.rationale) {
-      const field = labelledField("Reasoning", "accent");
-      const rationale = document.createElement("div");
-      rationale.className = "rationale";
-      rationale.textContent = item.rationale;
-      if (isArabic(item.rationale)) rationale.dir = "rtl";
-      field.append(rationale);
-      content.append(field);
-    }
-
-    if (item.evidence && item.evidence.length) {
-      const details = document.createElement("details");
-      details.className = "evidence";
-      const summary = document.createElement("summary");
-      summary.textContent = "All " + item.evidence.length + " retrieved source(s)";
-      details.append(summary);
-
-      // The same controls as a citation bubble: this list shows the same kind
-      // of thing, and offering the switch in one place and not the other made
-      // the formatted view look like a property of some chunks and not others.
-      const evHead = document.createElement("div");
-      evHead.className = "ev-controls";
-      evHead.append(viewToggle());
-      details.append(evHead);
-
-      item.evidence.forEach((evidence) => {
-        const block = document.createElement("div");
-        block.className = "ev";
-        const label = document.createElement("span");
-        label.className = "src";
-        label.textContent =
-          (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
-          " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
-        const open = openDocumentButton(evidence.source_name, evidence.source_type);
-        const labelRow = document.createElement("div");
-        labelRow.className = "ev-head";
-        labelRow.append(label, open);
-        block.append(labelRow, renderChunk(evidence.snippet));
-        details.append(block);
-      });
-
-      content.append(details);
-    }
-
-    card.append(head, content);
-    return card;
-  }
-
-  function statCard(value, label, tone) {
-    const stat = document.createElement("div");
-    stat.className = "stat" + (tone ? " " + tone : "");
-    const number = document.createElement("span");
-    number.className = "value";
-    number.textContent = value;
-    const caption = document.createElement("span");
-    caption.className = "label";
-    caption.textContent = label;
-    stat.append(number, caption);
-    return stat;
-  }
 
   function renderResult(data, options = {}) {
     result = data;
@@ -2657,15 +2104,15 @@
     const summary = $("resultsSummary");
     summary.innerHTML = "";
     summary.append(
-      statCard(data.questions_found, "questions found"),
-      statCard(data.answers.length, "answered"),
-      statCard(reviewCount, "need review", reviewCount ? "review" : ""),
-      statCard(data.language === "ar" ? "العربية" : "English", "output language")
+      Cards.stat(data.questions_found, "questions found"),
+      Cards.stat(data.answers.length, "answered"),
+      Cards.stat(reviewCount, "need review", reviewCount ? "review" : ""),
+      Cards.stat(data.language === "ar" ? "العربية" : "English", "output language")
     );
 
     const container = $("results");
     container.innerHTML = "";
-    data.answers.forEach((item, index) => container.append(renderAnswer(item, index)));
+    data.answers.forEach((item, index) => container.append(Cards.render(item, index)));
     refreshRetryAll();
     $("resultsCard").hidden = false;
     // The caller scrolls when it is appending to a list the reader is already
@@ -2769,7 +2216,7 @@
     text.placeholder = "Type a question…";
     text.spellcheck = false;
     text.dataset.qkey = entry.key;
-    if (isArabic(entry.text)) text.dir = "rtl";
+    if (Cards.isArabic(entry.text)) text.dir = "rtl";
     // An answered question is kept visible for context but cannot be edited:
     // changing the words under an existing answer would make the pair a lie.
     text.dataset.answered = String(entry.status === "answered");
@@ -2781,7 +2228,7 @@
     const grow = () => { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; };
     text.addEventListener("input", () => {
       entry.text = text.value;
-      text.dir = isArabic(text.value) ? "rtl" : "ltr";
+      text.dir = Cards.isArabic(text.value) ? "rtl" : "ltr";
       grow();
       // Mirror into the other view rather than re-rendering it: a re-render
       // here would throw away the caret in whichever box is being typed in.
@@ -2843,19 +2290,24 @@
   /* Set aside, or bring back. Saved on the server because the batch is what
      `fill` reads: a row struck out only in the browser would still be written. */
   async function setAside(entry, skip) {
-    if (!formBatch) return;
+    if (!formBatch) return false;
     try {
       const updated = await request("/api/forms/" + formBatch.id + "/questions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ changes: [{ id: entry.formId, skip: skip }] }),
       });
-      formBatch = updated;
-      entry.skip = skip;
-      renderQuestions();
-      refreshAnswerButton();
+      // Rebuilt from what the server now holds, rather than patched in place:
+      // setting a row aside also takes its answer card away, and bringing it
+      // back returns the card with the answer it already had.
+      await adoptBatch(updated, { quiet: true });
+      setStatus($("answerStatus"), skip
+        ? "Set aside. Nothing will be written into that row."
+        : "Back in. Its answer will be written into the file.", "ok");
+      return true;
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
+      return false;
     }
   }
 
@@ -2865,7 +2317,7 @@
     document.querySelectorAll('textarea[data-qkey="' + key + '"]').forEach((other) => {
       if (other === source) return;
       other.value = source.value;
-      other.dir = isArabic(source.value) ? "rtl" : "ltr";
+      other.dir = Cards.isArabic(source.value) ? "rtl" : "ltr";
       other.style.height = "auto";
       other.style.height = other.scrollHeight + "px";
     });
@@ -2906,10 +2358,48 @@
     document.body.classList.toggle("answering", locked);
   }
 
+  /* An edit on a card is the person overruling the system, and it has to reach
+     the file. Held only in the page, it went into the downloads and *not* into
+     the filled spreadsheet -- the one place a reviewer would swear they had
+     corrected. So a finished edit is written to the batch, against the cell the
+     answer belongs in, and recorded with their name on it. */
+  const storedEdits = {};
+
+  async function storeEditedAnswer(item, index, text) {
+    if (result && result.answers[index]) result.answers[index].answer = text;
+    const entry = questions.find((q) => q.key === item.__key);
+    if (!formBatch || !entry || !entry.formId) return;
+    if (storedEdits[entry.formId] === text) return;
+
+    const status = $("answerStatus");
+    try {
+      await request("/api/forms/" + formBatch.id + "/answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: entry.formId, text: text }),
+      });
+      storedEdits[entry.formId] = text;
+      setStatus(status, "Your edit is saved, and is what will be written into the file.", "ok");
+    } catch (error) {
+      setStatus(status, "That edit could not be saved: " + error.message, "error");
+    }
+  }
+
   /* Removing a question, wherever the click came from. One path, so the list,
      the answers and the summary cannot drift apart. */
-  function discardQuestion(key) {
+  async function discardQuestion(key) {
+    const entry = questions.find((q) => q.key === key);
+
+    /* A row read out of a file is set aside rather than deleted. The row is
+       still in the spreadsheet whatever this page does, so the only meaning
+       "remove" can have is *write nothing here* -- and that has to be said to
+       the server, or the answer stays in the batch and `fill` writes it out. */
+    if (formBatch && entry && entry.formId) {
+      await setAside(entry, true);
+      return;   // `adoptBatch` has already rebuilt the list, the cards and the summary
+    }
     questions = questions.filter((q) => q.key !== key);
+
     if (result) {
       const kept = result.answers.filter((a) => a.__key !== key);
       if (kept.length !== result.answers.length) {
@@ -2925,6 +2415,7 @@
       }
     }
     renderQuestions();
+    refreshFormControls();
   }
 
   function renderQuestions(options = {}) {
@@ -3075,29 +2566,52 @@
     return true;
   }
 
-  async function adoptBatch(batch) {
+  /* `quiet` is for a correction rather than a load: the batch is rebuilt and
+     everything re-rendered, but the page does not announce a file it already
+     announced or scroll away from the control that was just used. */
+  async function adoptBatch(batch, { quiet = false } = {}) {
+    if (!formBatch || formBatch.id !== batch.id) {
+      // What was written for the last file says nothing about this one.
+      Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+    }
+    const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
     sourceName = batch.source_name || sourceName;
+
+    /* Questions somebody typed into the list beside the file's own rows are
+       kept. The batch does not know about them -- they have no cell in the
+       spreadsheet -- so rebuilding the list from it alone deleted the row while
+       its answer card stayed on the page, leaving a card with nothing behind
+       it. They only survive a reload of the *same* file; opening a different
+       one starts a different list. */
+    const typed = sameFile ? questions.filter((q) => !q.formId) : [];
+    const typedAnswers = (result ? result.answers : []).filter(
+      (answer) => typed.some((q) => q.key === answer.__key));
+
     questions = [];
     batch.questions.forEach((q) => addQuestion(q.text, {
       section: q.section, language: q.language,
       formId: q.id, origin: q.location, skip: q.skip, targets: q.targets,
       status: q.answer ? "answered" : "pending",
     }));
+    questions = questions.concat(typed);
 
     // Answers already in the file, or from an earlier run, come back as real
     // answer cards -- with their sources and the reviewer's reasoning -- rather
     // than as a number beside the question.
-    const answered = batch.questions.filter((q) => q.answered);
-    result = answered.length ? {
+    // A row set aside keeps its answer -- bringing it back should not cost the
+    // work -- but shows no card, because a card is an answer going into the file.
+    const answered = batch.questions.filter((q) => q.answered && !q.skip);
+    const cards = answered.map((q) => {
+      const entry = questions.find((row) => row.formId === q.id);
+      return Object.assign({}, q.answered, { __key: entry ? entry.key : null });
+    }).concat(typedAnswers);
+    result = cards.length ? {
       run_id: batch.id,
       source_name: batch.source_name,
       language: "en",
-      questions_found: answered.length,
-      answers: answered.map((q) => {
-        const entry = questions.find((row) => row.formId === q.id);
-        return Object.assign({}, q.answered, { __key: entry ? entry.key : null });
-      }),
+      questions_found: cards.length,
+      answers: cards,
     } : null;
 
     renderFormReport(batch);
@@ -3107,6 +2621,7 @@
     refreshFormControls();
     listRecentForms();
 
+    if (quiet) return;
     const unsure = batch.parts.reduce(
       (total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
     setStatus($("extractStatus"),
@@ -3233,7 +2748,7 @@
                 sheet: sheet.sheet, column: column.column, role: picker.value,
               }),
             });
-            await adoptBatch(updated);
+            await adoptBatch(updated, { quiet: true });
             setStatus($("extractStatus"),
               "Column " + column.column + " on " + sheet.sheet + " now holds " +
               picker.value + ".", "ok");
@@ -3249,9 +2764,10 @@
   }
 
   function refreshFormControls() {
-    const on = Boolean(formBatch);
-    $("fillFormBtn").hidden = !on;
-    $("reviseRow").hidden = !(on && result && result.answers.length);
+    // Filling needs a file to fill. Rewording only needs answers, and works the
+    // same on a list of typed questions as it does on a questionnaire.
+    $("fillFormBtn").hidden = !formBatch;
+    $("reviseRow").hidden = !(result && result.answers.length);
   }
 
   let sourceName = "questions";
@@ -3281,28 +2797,90 @@
   /* Answer only the rows the person is looking at, by id. The batch holds every
      question in the file; a scope is what says "these ones". */
   async function answerThroughBatch(pending, runId) {
-    const ids = pending.map((entry) => entry.formId).filter(Boolean);
-    const outcome = await request("/api/forms/" + formBatch.id + "/answer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: { ids: ids } }),
-    });
-    formBatch = outcome.batch;
-    const byId = {};
-    outcome.batch.questions.forEach((question) => {
-      if (question.answered) byId[question.id] = question.answered;
-    });
+    /* A questionnaire's own rows go through the batch, so their answers are
+       stored against the cells they belong in. A question typed into the list
+       beside them has no cell to go into -- somebody noticed the form was
+       missing something and asked anyway -- so it goes the way any typed
+       question goes, and is exported rather than written back. Sending it to
+       the batch instead produced an answer for a question the batch had never
+       heard of, and the page fell over rendering it. */
+    const own = pending.filter((entry) => entry.formId);
+    const typed = pending.filter((entry) => !entry.formId);
+    const byKey = {};
+
+    if (own.length) {
+      const outcome = await request("/api/forms/" + formBatch.id + "/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: { ids: own.map((entry) => entry.formId) } }),
+      });
+      formBatch = outcome.batch;
+      const byId = {};
+      outcome.batch.questions.forEach((question) => {
+        if (question.answered) byId[question.id] = question.answered;
+      });
+      own.forEach((entry) => {
+        if (byId[entry.formId]) byKey[entry.key] = byId[entry.formId];
+      });
+    }
+
+    if (typed.length) {
+      const loose = await answerLooseQuestions(typed, runId);
+      typed.forEach((entry, index) => { byKey[entry.key] = loose.answers[index]; });
+    }
+
     return {
       run_id: runId,
       source_name: formBatch.source_name,
       language: "en",
-      questions_found: ids.length,
-      answers: pending.map((entry) => byId[entry.formId] || {
-        question: { id: entry.formId, text: entry.text, language: entry.language || "en" },
-        answer: "", confidence: 0, needs_review: true, evidence: [], citations: [],
-        error: "This question was not answered.",
-      }),
+      questions_found: pending.length,
+      answers: pending.map((entry) => byKey[entry.key] || failedAnswer(entry)),
     };
+  }
+
+  /* The shape the cards render, for a question that produced nothing. Written
+     out in full because a card reads every field: a half-built stand-in threw
+     on the first one it was missing, and took the whole render down with it. */
+  function failedAnswer(entry) {
+    return {
+      question: {
+        id: String(entry.formId || entry.key),
+        text: entry.text,
+        section: entry.section || null,
+        question_type: entry.question_type || "free_text",
+        options: entry.options || [],
+        language: entry.language || "en",
+      },
+      answer: "",
+      rationale: "",
+      confidence: 0,
+      needs_review: true,
+      evidence: [],
+      attempts: 1,
+      citations: [],
+      review_reasons: [],
+      confidence_reason: "",
+      error: "This question was not answered.",
+    };
+  }
+
+  function answerLooseQuestions(pending, runId) {
+    return request("/api/assessments/answer-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        questions: pending.map((q) => ({
+          text: q.text.trim(),
+          section: q.section,
+          question_type: q.question_type,
+          options: q.options,
+          language: q.language,
+        })),
+        language: $("languageSelect").value || null,
+        run_id: runId,
+        source_name: sourceName,
+      }),
+    });
   }
 
   async function fillTheForm() {
@@ -3349,37 +2927,15 @@
      and only the wording moves. */
   async function rewordAnswers() {
     const instruction = $("reviseInstruction").value.trim();
-    if (!formBatch) return;
     if (!instruction) {
       setStatus($("answerStatus"), "Say how the answers should change first.", "error");
       return;
     }
     const button = $("reviseBtn");
-    const status = $("answerStatus");
     button.disabled = true;
-    setStatus(status, "Rewording the answers…", "busy");
-
-    // Rewording a whole questionnaire is one call per answer, so it takes about
-    // as long as a run and is watched the same way, under the batch's own id.
-    const stop = watchProgress(formBatch.id, (state) => {
-      status.innerHTML = progressMessage(state);
-      status.className = "status busy";
-    });
     try {
-      const outcome = await request("/api/forms/" + formBatch.id + "/revise", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: instruction, scope: {} }),
-      });
-      stop();
-      await adoptBatch(outcome.batch);
-      setStatus(status,
-        "Reworded " + outcome.answered + " of " + outcome.attempted + " answer(s).", "ok");
-    } catch (error) {
-      stop();
-      setStatus(status, error.message, "error");
+      await applyWording(instruction, null, $("answerStatus"));
     } finally {
-      stop();
       button.disabled = false;
     }
   }
@@ -3423,22 +2979,7 @@
          as the same answers, and everything below this renders them the same. */
       const data = formBatch
         ? await answerThroughBatch(batch, runId)
-        : await request("/api/assessments/answer-questions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              questions: batch.map((q) => ({
-                text: q.text.trim(),
-                section: q.section,
-                question_type: q.question_type,
-                options: q.options,
-                language: q.language,
-              })),
-              language: $("languageSelect").value || null,
-              run_id: runId,
-              source_name: sourceName,
-            }),
-          });
+        : await answerLooseQuestions(batch, runId);
 
       // Positional: the endpoint answers the list it was given, in order. That
       // is what lets an answer be tied back to the row it came from, so a later
@@ -3459,6 +3000,25 @@
       renderQuestions();
       renderResult(result, { keepQuestions: true });
       refreshFormControls();
+
+      /* A wording instruction given before the run is applied after it, as a
+         rewording pass over the answers just written. It is not injected into
+         the drafting prompt: measured against rewriting, injection followed the
+         instruction just as well but cited a third fewer sources and dropped a
+         caveat the sources required -- a drafter told to be brief cites less and
+         hedges less. So the facts and the citations are settled first, and the
+         instruction only moves the wording. */
+      const style = $("answerStyle").value.trim();
+      if (style) {
+        /* Only over what was just written. A questionnaire is answered in
+           sittings, and an earlier sitting may hold answers somebody has since
+           read and corrected by hand -- rewording those because a later batch
+           asked for a house style would quietly throw that work away. The box
+           under the cards is the one that says "all of them", and it says so
+           while the person is looking at them. */
+        await applyWording(style, data.answers, status,
+          { ids: batch.map((entry) => entry.formId).filter(Boolean) });
+      }
       // Scroll only when the request came from the top of the page; a reader
       // who asked from the composer is already where the new answers land.
       if (statusId === "answerStatus") {
@@ -3472,6 +3032,88 @@
       refreshAnswerButton();
     }
   }
+
+  /* Rewording, wherever it was asked for: the box beside the answer button
+     before a run, or the box under the cards afterwards. A questionnaire goes
+     through its batch so the reworded text reaches the cells it belongs in; a
+     list of typed questions has no cells, so the answers go out and come back.
+     Both run the same rewrite over the answer and the sources it was built
+     from, so nothing is retrieved or reviewed again. */
+  async function applyWording(instruction, answers, status, scope) {
+    const covering = answers || (result ? result.answers : []);
+    // Split the same way answering does: a questionnaire's own rows go through
+    // the batch, so the reworded text reaches the cells; a question typed
+    // beside them has no cell, so its answer goes out and comes back.
+    const loose = covering.filter((answer) => {
+      const entry = questions.find((q) => q.key === answer.__key);
+      return answer.answer && !answer.error && !(formBatch && entry && entry.formId);
+    });
+    const throughBatch = formBatch &&
+      covering.some((answer) => !loose.includes(answer) && answer.answer && !answer.error);
+
+    if (!loose.length && !throughBatch) {
+      setStatus(status, "There are no answers to reword yet.", "error");
+      return 0;
+    }
+
+    setStatus(status, "Rewording the answers…", "busy");
+    const stop = watchProgress(formBatch ? formBatch.id : rewordRunId(), (state) => {
+      status.innerHTML = progressMessage(state);
+      status.className = "status busy";
+    });
+    let done = 0;
+    try {
+      if (loose.length) {
+        const reply = await request("/api/assessments/revise", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            answers: loose.map((answer) => {
+              const { __key, ...rest } = answer;
+              return rest;
+            }),
+            instruction: instruction,
+            language: $("languageSelect").value || null,
+            run_id: rewordRunId(),
+          }),
+        });
+        // Positional, the same contract the answering endpoint keeps: the keys
+        // ride back onto the answers so the cards stay tied to their rows.
+        reply.answers.forEach((revised, index) => {
+          const original = loose[index];
+          if (original) Object.assign(original, revised, { __key: original.__key });
+        });
+        done += reply.answers.length;
+      }
+
+      if (throughBatch) {
+        const outcome = await request("/api/forms/" + formBatch.id + "/revise", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction: instruction, scope: scope || {} }),
+        });
+        // `adoptBatch` rebuilds from the file's rows and carries the typed
+        // questions and their answers across, so the reworded loose answers
+        // above are still there afterwards.
+        await adoptBatch(outcome.batch, { quiet: true });
+        done += outcome.answered;
+      }
+
+      stop();
+      renderResult(result, { keepQuestions: true });
+      setStatus(status, "Reworded " + done + " answer(s).", "ok");
+      return done;
+    } catch (error) {
+      setStatus(status, error.message, "error");
+      return done;
+    } finally {
+      stop();
+    }
+  }
+
+  let _rewordRun = "";
+  const rewordRunId = () => (_rewordRun = _rewordRun ||
+    (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16));
 
   // --- exports -------------------------------------------------------------
 
@@ -3547,9 +3189,9 @@
     if (event.key === "Escape") closeSearch();
   });
   document.querySelectorAll("[data-view]").forEach((button) => {
-    button.onclick = () => setChunkView(button.dataset.view);
+    button.onclick = () => Cards.setView(button.dataset.view);
   });
-  setChunkView(chunkView());
+  Cards.setView(Cards.view());
 
 
 
@@ -3609,7 +3251,6 @@
     setStatus($("answerStatus"), "");
     renderQuestions();
   };
-  $("trialFilter").onchange = renderDocuments;
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
     if (!confirm("Delete every indexed guideline and previous answer?")) return;
@@ -3635,6 +3276,14 @@
     currentDocument = null;
     $("documentFrame").src = "about:blank";
   });
+
+  Cards.onDiscard = discardQuestion;
+  Cards.onRetry = retryQuestions;
+  Cards.onOpenDocument = openDocument;
+  Cards.onEdit = (item, index, text) => { result.answers[index].answer = text; };
+  Cards.onEditDone = storeEditedAnswer;
+  Cards.answerText = (item, index) =>
+    (result && result.answers[index] ? result.answers[index].answer : item.answer) || "";
 
   loadKnowledge();
   loadDocuments();

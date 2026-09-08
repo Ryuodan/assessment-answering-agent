@@ -19,23 +19,18 @@ def _temporary_document_storage(monkeypatch, tmp_path):
     return upload_dir, extracted_dir
 
 
-def test_document_catalog_lists_uploads_and_bundled_trials(monkeypatch, tmp_path):
+def test_the_catalog_lists_what_was_uploaded_and_nothing_else(monkeypatch, tmp_path):
+    """It used to bundle a set of invented policies for a first run. They were
+    scaffolding, and they left a document list where half the entries were
+    fictional documents nobody should have been citing."""
     upload_dir, _ = _temporary_document_storage(monkeypatch, tmp_path)
     (upload_dir / "customer-policy.pdf").write_bytes(b"test pdf")
     (upload_dir / "ignore.txt").write_text("not supported")
 
     documents = service.list_documents()
 
-    assert any(
-        document["name"] == "customer-policy.pdf" and document["origin"] == "uploaded"
-        for document in documents
-    )
-    assert any(
-        document["name"] == "vendor_security_assessment_2026.docx"
-        and document["category"] == "new_assessment"
-        for document in documents
-    )
-    assert all(document["name"] != "ignore.txt" for document in documents)
+    assert [document["name"] for document in documents] == ["customer-policy.pdf"]
+    assert documents[0]["origin"] == "uploaded"
 
 
 def test_document_resolution_rejects_traversal(monkeypatch, tmp_path):
@@ -115,7 +110,6 @@ def test_document_api_serves_original_and_extracted_text(monkeypatch, tmp_path):
 
     assert catalog.status_code == 200
     assert catalog.json()["uploaded_count"] == 1
-    assert catalog.json()["trial_count"] >= 3
     assert original.status_code == 200
     assert original.content == b"synthetic pdf bytes"
     assert original.headers["content-disposition"].startswith("inline")
@@ -138,17 +132,25 @@ def test_document_api_rejects_unknown_locations(monkeypatch, tmp_path):
     assert missing.status_code == 404
 
 
-def test_trial_word_document_is_extracted_through_the_api(monkeypatch, tmp_path):
-    _temporary_document_storage(monkeypatch, tmp_path)
+def test_an_uploaded_word_document_is_previewed_and_extracted(monkeypatch, tmp_path):
+    """The preview is rendered HTML in a locked-down frame, and the extracted
+    text is what the answering pipeline actually read -- the two together are
+    how somebody checks a citation against the document it names."""
+    from docx import Document
+
+    upload_dir, _ = _temporary_document_storage(monkeypatch, tmp_path)
     monkeypatch.setattr(settings, "docling_base_url", "")
+    document = Document()
+    document.add_heading("Vendor Security Assessment 2026", level=1)
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Question"
+    table.cell(0, 1).text = "Answer"
+    table.cell(1, 0).text = "Is there an approved information security policy?"
+    document.save(upload_dir / "assessment.docx")
 
     with TestClient(app) as client:
-        preview = client.get(
-            "/api/documents/trial/new_assessment/vendor_security_assessment_2026.docx/preview"
-        )
-        response = client.get(
-            "/api/documents/trial/new_assessment/vendor_security_assessment_2026.docx/text"
-        )
+        preview = client.get("/api/documents/uploaded/uploaded/assessment.docx/preview")
+        response = client.get("/api/documents/uploaded/uploaded/assessment.docx/text")
 
     assert preview.status_code == 200
     assert preview.headers["content-type"].startswith("text/html")
@@ -156,7 +158,6 @@ def test_trial_word_document_is_extracted_through_the_api(monkeypatch, tmp_path)
     assert "Vendor Security Assessment 2026" in preview.text
     assert "<table>" in preview.text
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["characters"] > 1_000
-    assert "Vendor Security Assessment 2026" in payload["text"]
-    assert "[table]" in payload["text"]
+    text = response.json()["text"]
+    assert "Vendor Security Assessment 2026" in text
+    assert "approved information security policy" in text

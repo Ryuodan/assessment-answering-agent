@@ -301,3 +301,67 @@ def two_row_header(path: Path) -> Path:
         "A9": "2.1", "B9": "Is multi-factor authentication enforced for remote access?",
         "A10": "2.2", "B10": "Are privileged accounts reviewed quarterly?",
     }, merges=("C4:D4",), validations=(("C6:C10", '"Yes,No,Partial"'),))])
+
+def reference_column_headed_id(path: Path) -> Path:
+    """The reference column is headed `ID`, and the questions are short.
+
+    Two sheets of one real workbook, and one root cause. Without `ID` in the
+    reference-column headings there is no numbering column, and a question is
+    only recognised when it ends in a question mark or runs past fifty
+    characters -- so `Organisation name` and `Email address` are lost entirely,
+    and so is `Do you maintain an incident register`, at thirty-six characters
+    with a full stop.
+
+    The second sheet also carries the two-row header the same workbook uses:
+    the group names on row 1, the fields themselves on row 2.
+    """
+    return build(path, [
+        SheetSpec("Vendor Info", {
+            "A1": "Please complete the below questions.",
+            "A3": "ID", "B3": "Question", "F3": "Answer", "G3": "Notes",
+            "A4": "GQ1", "B4": "Organisation name",
+            "A5": "GQ2", "B5": "Year established",
+            "A6": "GQ3", "B6": "Office locations and Country",
+            "A7": "GQ4", "B7": "Email address",
+            "A8": "GQ5", "B8": "Contact Number",
+        }),
+        SheetSpec("Questionnaire", {
+            "A1": "Security Domain", "B1": "ID", "C1": "Question", "D1": "Main Response",
+            "C2": "Description", "D2": "Response", "E2": "Further Guidance",
+            "A3": "General", "B3": "GE-01",
+            "C3": "Are the services that your organisation provides located in the Kingdom?",
+            "A4": "Incident Response", "B4": "IR-01",
+            "C4": "Do you have an incident management policy or crisis management plan?",
+            "B5": "IR-03", "C5": "Do you maintain an incident register",
+            "B6": "IR-04", "C6": "Do you undertake a post incident review?",
+        }),
+    ])
+
+
+def headless_typo_header(path: Path) -> Path:
+    """A header row one typo away from being recognised, and no numbering.
+
+    `Queations | Answer`: only one of the two headings is a word any rule knows,
+    so the row does not qualify as a header and the sheet is read headless. That
+    is survivable while the answer column is empty -- the questions are the only
+    prose on the sheet. Once it is filled it holds *more* prose than they do,
+    takes their place, and the half-answered file re-opens with nothing in it.
+
+    Measured on the real workbook: 32 questions written, re-opened as 0.
+    """
+    cells = {"A1": "Queations", "B1": "Answer"}
+    questions = [
+        "What is the name of the vendor?",
+        "Who is the internal owner responsible for this relationship?",
+        "Provide a brief description of the product or service supplied.",
+        "What is the PII data collection?",
+        "How does the vendor ensure data minimization?",
+        "What is the retention period for each data category?",
+        "Describe the data deletion or anonymization process in place.",
+        "Does the vendor support Single Sign-On and Multi-Factor Authentication?",
+        "When did the vendor last carry out penetration testing?",
+        "Describe the incident management process for a data breach.",
+    ]
+    for index, text in enumerate(questions, start=2):
+        cells[f"A{index}"] = text
+    return build(path, [SheetSpec("Sheet1", cells)])

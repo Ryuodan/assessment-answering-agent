@@ -5,6 +5,7 @@ Run with:  uvicorn src.api:app --reload
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import unicodedata
@@ -16,16 +17,24 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from src import batches, events, forms, identity, runs, service, store, tools
+from src import (
+    batches, conversations, events, forms, identity, progress, rewrite, runs, service,
+    store, tools,
+)
+from src.agents import assistant
 from src.identity import User
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
 from src.export_docx import render_docx
 from src.export_pdf import ExportError, ExportOptions, render_pdf, selected_answers
-from src.models import AssessmentResult, IngestResult, Language, Question, QuestionType, SourceType
+from src.models import (
+    AnsweredQuestion, AssessmentResult, IngestResult, Language, Question, QuestionType,
+    SourceType,
+)
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -681,13 +690,9 @@ async def search_knowledge(
 
 @app.get("/api/documents")
 def get_documents() -> dict:
-    """List uploaded files and the bundled documents available for trial runs."""
+    """The documents somebody has uploaded, for the interface to open."""
     documents = service.list_documents()
-    return {
-        "documents": documents,
-        "uploaded_count": sum(document["origin"] == "uploaded" for document in documents),
-        "trial_count": sum(document["origin"] == "trial" for document in documents),
-    }
+    return {"documents": documents, "uploaded_count": len(documents)}
 
 
 def _resolve_document(origin: str, category: str, name: str) -> Path:
@@ -883,6 +888,45 @@ async def answer_question_list(
     return result
 
 
+class ReviseAnswersRequest(BaseModel):
+    """Answers to reword, handed straight back rather than stored."""
+
+    answers: list[AnsweredQuestion] = Field(min_length=1, max_length=200)
+    instruction: str = Field(min_length=1, max_length=2000)
+    language: Language | None = None
+    run_id: str | None = None
+
+
+@app.post("/api/assessments/revise")
+async def revise_answer_list(
+    request: ReviseAnswersRequest, user: User = Depends(current_user)
+) -> dict:
+    """Reword answers the caller is holding, with no questionnaire behind them.
+
+    The batch route does this for a file, keyed to the cells the answers belong
+    in. Questions typed by hand have no cells and no batch, so the answers come
+    in and go back out; the caller keeps them, exactly as it does for
+    `/answer-questions`. Both routes run the same rewrite, so an instruction
+    behaves the same whichever list it is given.
+    """
+    run_id = request.run_id or uuid.uuid4().hex[:12]
+    progress.start(run_id, stage="rewriting")
+    progress.set_total(run_id, len(request.answers))
+
+    async def one(answered: AnsweredQuestion) -> AnsweredQuestion:
+        try:
+            return await rewrite.rewrite(answered, request.instruction, request.language)
+        finally:
+            progress.advance(run_id)
+
+    try:
+        revised = list(await asyncio.gather(*(one(a) for a in request.answers)))
+    finally:
+        progress.finish(run_id)
+
+    return {"run_id": run_id, "answers": [answer.model_dump() for answer in revised]}
+
+
 def _detect_language(text: str) -> Language:
     """Which language a typed question is in, when the caller did not say.
 
@@ -1003,6 +1047,131 @@ def export_docx(
 
 
 # ---------------------------------------------------------------------------
+# The assistant
+# ---------------------------------------------------------------------------
+
+
+class SayRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=8000)
+    conversation_id: str = Field(default="", max_length=64)
+
+
+def _conversation(conversation_id: str, user: User):
+    conversation = conversations.load(conversation_id, team_id=user.team_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="That conversation no longer exists.")
+    return conversation
+
+
+def _turn_response(turn, conversation, user: User) -> dict:
+    return {
+        "reply": turn.reply,
+        "conversation_id": conversation.id,
+        "title": conversation.title,
+        "batch_id": turn.batch_id,
+        "steps": turn.steps,
+        "refreshed": turn.refreshed,
+        "stopped_early": turn.stopped_early,
+        "seconds": round(turn.seconds, 1),
+        "tokens": turn.input_tokens + turn.output_tokens,
+        "answers": assistant.answers_for(user, conversation) if turn.refreshed else None,
+    }
+
+
+@app.get("/api/chat")
+def list_conversations(user: User = Depends(current_user), limit: int = 30) -> dict:
+    return {"conversations": conversations.recent(user.team_id, limit=limit)}
+
+
+@app.post("/api/chat")
+async def say_to_assistant(request: SayRequest, user: User = Depends(current_user)) -> dict:
+    """One exchange with the assistant.
+
+    Long: a message can mean "answer 183 questions", which is minutes of work.
+    The conversation is saved by the assistant itself before this returns, so a
+    request that times out at a proxy has still recorded what it did.
+    """
+    if not assistant.configured():
+        raise HTTPException(status_code=503, detail="No model is configured for the assistant.")
+    conversation = (
+        _conversation(request.conversation_id, user) if request.conversation_id
+        else assistant.start(user, request.message)
+    )
+    turn = await assistant.say(user, conversation, request.message)
+    return _turn_response(turn, conversation, user)
+
+
+@app.post("/api/chat/upload")
+async def say_with_a_file(
+    message: str = Form(""),
+    conversation_id: str = Form(""),
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+) -> dict:
+    """A message with a questionnaire attached.
+
+    Separate from the plain message route because it is multipart, not because
+    it does anything different: the file is saved, the assistant is told it is
+    there, and it decides to open it like any other operation.
+    """
+    if not assistant.configured():
+        raise HTTPException(status_code=503, detail="No model is configured for the assistant.")
+    name = file.filename or "questionnaire"
+    if Path(name).suffix.lower() not in forms.SUPPORTED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
+                   f"Supported: {', '.join(forms.SUPPORTED)}.",
+        )
+    path = service.save_upload(name, await file.read())
+    conversation = (
+        _conversation(conversation_id, user) if conversation_id
+        else assistant.start(user, message or f"Read {name}")
+    )
+    turn = await assistant.say(
+        user, conversation, message or f"Read {name} and tell me what is in it.", upload=path
+    )
+    return _turn_response(turn, conversation, user)
+
+
+@app.get("/api/chat/{conversation_id}")
+def get_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict:
+    """One conversation, as a transcript plus whatever answers it has produced.
+
+    The stored messages are LangChain's, tool calls included, because the agent
+    resumes from them. What comes back here is the readable half of that -- who
+    said what -- because a person scrolling their own conversation has no use
+    for a serialised tool call.
+    """
+    conversation = _conversation(conversation_id, user)
+    transcript = []
+    for message in conversation.messages:
+        kind = getattr(message, "type", "")
+        if kind == "human":
+            transcript.append({"role": "you", "text": str(message.content)})
+        elif kind == "ai" and not getattr(message, "tool_calls", None):
+            text = message.content
+            if isinstance(text, list):
+                text = "".join(b.get("text", "") for b in text if isinstance(b, dict))
+            if str(text).strip():
+                transcript.append({"role": "assistant", "text": str(text).strip()})
+    return {
+        "id": conversation.id,
+        "title": conversation.title,
+        "batch_id": conversation.batch_id,
+        "messages": transcript,
+        "answers": assistant.answers_for(user, conversation),
+    }
+
+
+@app.delete("/api/chat/{conversation_id}")
+def forget_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict:
+    _conversation(conversation_id, user)
+    conversations.delete(conversation_id)
+    return {"deleted": conversation_id}
+
+
+# ---------------------------------------------------------------------------
 # Frontend
 # ---------------------------------------------------------------------------
 
@@ -1012,6 +1181,25 @@ def health() -> dict:
     return {"status": "ok", "model": settings.groq_chat_model}
 
 
+# The pages were single files with everything inline until the answer card had
+# to be shared between two of them. `/static` serves that one script and
+# whatever else the pages come to share; the directory holds nothing else.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/chat", include_in_schema=False)
+def chat_page() -> FileResponse:
+    """The assistant, on its own page.
+
+    A separate document rather than a mode inside the other one. The two are
+    different shapes -- one is a workbench with every control on it, the other
+    is a conversation -- and interleaving them would mean every control needing
+    to know which mode it was in. They share the answer cards, which is the part
+    worth sharing, and a link in each header.
+    """
+    return FileResponse(STATIC_DIR / "chat.html")

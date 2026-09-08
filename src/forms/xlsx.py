@@ -36,6 +36,20 @@ logger = logging.getLogger(__name__)
 # matter; order *between* roles does, and lives in `_role_for`.
 
 _NUMBER = ("s.no", "s. no", "sr.no", "sr. no", "no.", "s#", "#", "serial", "item no")
+_NUMBER_EXACT = ("id", "ref", "no", "sn", "s/n", "sl", "q.no", "q. no", "q no", "code", "رقم")
+"""Reference-column headings matched whole, never as a substring.
+
+`ID` is the commonest heading for the column holding `GE-01`, `IAM-01`, `GQ7`,
+and it has to be recognised: without it there is no numbering column, and
+`_looks_like_a_question` falls back to "ends in a question mark, or runs past
+fifty characters". That cost a real workbook two whole readings -- nine
+questions on a sheet whose questions are `Organisation name` and `Email
+address`, and one more, `Do you maintain an incident register`, which is
+thirty-six characters and ends in a full stop.
+
+Matched exactly because these are too short to be safe as substrings: `id`
+appears inside `Identity and Access Management`, and `no` inside `Notes`.
+"""
 _QUESTION = (
     "question", "inquiry", "requirement", "control", "due diligence", "criteria",
     "checklist", "assessment area", "سؤال", "استبيان", "المتطلب",
@@ -141,7 +155,7 @@ def _role_for(heading: str, *, has_dropdown: bool) -> tuple[Role, str]:
         return Role.QUESTION, f"heading mentions {_matches(text, _QUESTION)!r}"
     if _matches(text, _ANSWER):
         return Role.ANSWER, f"heading mentions {_matches(text, _ANSWER)!r}"
-    if text in _NUMBER or _matches(text, _NUMBER):
+    if text in _NUMBER or text in _NUMBER_EXACT or _matches(text, _NUMBER):
         return Role.NUMBER, "heading is a numbering column"
     if _matches(text, _CONTEXT):
         return Role.CONTEXT, f"heading mentions {_matches(text, _CONTEXT)!r}"
@@ -236,14 +250,40 @@ def _find_headless_layout(sheet: Sheet) -> Layout | None:
         ),
         None,
     )
+    # A row that fails to qualify as a header can still name its columns, and
+    # that name is the only thing in the file that survives being answered.
+    # One workbook heads its two columns `Queations` and `Answer`: a single
+    # typo away from a header row, so the whole sheet is read headless -- and
+    # once the answer column has been filled it holds 32 rows of prose against
+    # the questions' 30, takes their place, and re-opening the half-finished
+    # file finds nothing at all.
+    #
+    # So a column whose own label says it is the answer is excluded rather than
+    # penalised: an answer column can hold arbitrarily more text than the
+    # questions it answers, and any penalty can be out-scored by a wordy enough
+    # answer. Only short labels count -- a cell of `LONG_TEXT` or more is prose,
+    # and prose in the first row is data, not a heading.
+    labels = sheet.row_values(sheet.rows[0]) if sheet.rows else {}
+
+    def theirs_to_write(column: str) -> bool:
+        label = labels.get(column, "")
+        if not label or len(label) >= LONG_TEXT:
+            return False
+        role, _ = _role_for(label, has_dropdown=False)
+        return role in (Role.ANSWER, Role.STATUS, Role.EVIDENCE, Role.THEIRS)
+
     if numbering is not None:
         after = [c for c in sheet.columns if column_number(c) > column_number(numbering)]
         for column in after:
+            if theirs_to_write(column):
+                continue
             if sum(1 for row in sheet.rows if sheet.value(row, column)) >= MIN_QUESTION_ROWS:
                 return Layout(header_row=0, question_column=column, headed=False)
 
     best: tuple[float, str] | None = None
     for column in sheet.columns:
+        if theirs_to_write(column):
+            continue
         prose = [row for row in sheet.rows if len(sheet.value(row, column)) >= LONG_TEXT]
         if len(prose) < MIN_QUESTION_ROWS:
             continue

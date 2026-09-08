@@ -145,6 +145,31 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (batch_id, question_id)
     );
     """,
+    # 4 -- a conversation with the assistant.
+    #
+    # Kept for the same reason a batch is: the work outlives the request. A
+    # person says "read this file", waits four minutes for 183 answers, comes
+    # back after lunch and says "now make the governance ones shorter" -- and
+    # the second sentence only means anything if the first is still there.
+    #
+    # Messages are stored as LangChain serialised them, tool calls included,
+    # rather than as a tidy transcript. The agent has to *resume*, and it can
+    # only do that from what it actually said and saw; a display transcript
+    # would lose which tool returned what, which is exactly the part a
+    # follow-up instruction depends on.
+    """
+    CREATE TABLE conversations (
+        conversation_id TEXT PRIMARY KEY,
+        team_id         TEXT NOT NULL,
+        actor_email     TEXT NOT NULL,
+        title           TEXT NOT NULL DEFAULT '',
+        batch_id        TEXT REFERENCES form_batches(batch_id) ON DELETE SET NULL,
+        messages        TEXT NOT NULL DEFAULT '[]',
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    );
+    CREATE INDEX conversations_team_time ON conversations(team_id, updated_at DESC);
+    """,
 ]
 
 _local = threading.local()

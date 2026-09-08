@@ -35,6 +35,14 @@ def isolated_storage(tmp_path, monkeypatch):
     The allow-list is pinned empty so the API stays in its local-user mode
     unless a test asks for gating; otherwise a developer's `.env` would decide
     whether the suite gets 200s or 401s.
+
+    The reading strategy is pinned to the rules for the same reason, and it is
+    the one that bites hardest. The application's default is `guarded`, which
+    runs an agent against a real model -- so every test that opened a
+    questionnaire was making a network call: four seconds each, billed, and
+    **nondeterministic**, which is the one thing a test may not be. The
+    strategies have their own tests, which ask for them by name, and
+    `scripts/compare_detection.py` measures them for real.
     """
     monkeypatch.setattr(settings, "db_path", tmp_path / "app.db")
     monkeypatch.setattr(settings, "upload_dir", tmp_path / "uploads")
@@ -42,6 +50,7 @@ def isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "allowed_emails", "")
     monkeypatch.setattr(settings, "admin_email", "")
     monkeypatch.setattr(settings, "admin_password", "")
+    monkeypatch.setattr(settings, "detection_strategy", "rules")
     store.reset_connection()
     yield
     store.reset_connection()

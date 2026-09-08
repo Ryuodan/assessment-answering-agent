@@ -59,7 +59,7 @@ def test_no_document_name_escapes_its_directory(client, name):
 
 @pytest.mark.parametrize(("origin", "category"), [
     ("uploaded", "secrets"),
-    ("trial", "uploaded"),
+    ("trial", "uploaded"),          # an origin that no longer exists
     ("..", ".."),
     ("trial", "../../.."),
 ])

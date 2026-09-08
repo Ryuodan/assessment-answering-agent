@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 
 from src import progress
-from src.config import PROJECT_ROOT, settings
+from src.config import settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs, extract_questions
 from src.graph import answer_one_question, assessment_graph, failed_answer
@@ -34,18 +34,7 @@ from src.models import (
 
 logger = logging.getLogger(__name__)
 
-TRIAL_DOCUMENT_DIRS: dict[str, Path] = {
-    "guideline": PROJECT_ROOT / "demo_data" / "guidelines",
-    "prior_assessment": PROJECT_ROOT / "demo_data" / "prior_assessments",
-    "new_assessment": PROJECT_ROOT / "demo_data" / "new_assessments",
-}
-
-_DOCUMENT_LABELS = {
-    "guideline": "Trial guideline",
-    "prior_assessment": "Trial completed assessment",
-    "new_assessment": "Trial blank assessment",
-    "uploaded": "Uploaded document",
-}
+_DOCUMENT_LABELS = {"uploaded": "Uploaded document"}
 
 _ARABIC_TEXT = re.compile(r"[؀-ۿ]")
 
@@ -374,21 +363,13 @@ def save_upload(filename: str, content: bytes) -> Path:
 
 
 def list_documents() -> list[dict]:
-    """Return uploaded and bundled trial documents available to the web UI."""
+    """The documents somebody has uploaded, for the interface to open."""
     settings.ensure_directories()
-    documents: list[dict] = []
-
-    for path in _document_files(settings.upload_dir):
-        documents.append(_document_info(path, origin="uploaded", category="uploaded"))
-
-    for category, directory in TRIAL_DOCUMENT_DIRS.items():
-        for path in _document_files(directory):
-            documents.append(_document_info(path, origin="trial", category=category))
-
-    return sorted(
-        documents,
-        key=lambda document: (document["origin"] != "uploaded", document["category"], document["name"]),
-    )
+    documents = [
+        _document_info(path, origin="uploaded", category="uploaded")
+        for path in _document_files(settings.upload_dir)
+    ]
+    return sorted(documents, key=lambda document: document["name"])
 
 
 def resolve_document(origin: str, category: str, name: str) -> Path:
@@ -396,12 +377,9 @@ def resolve_document(origin: str, category: str, name: str) -> Path:
     if not name or name != Path(name).name or Path(name).suffix.lower() not in SUPPORTED_SUFFIXES:
         raise ValueError("Invalid document name.")
 
-    if origin == "uploaded" and category == "uploaded":
-        directory = settings.upload_dir
-    elif origin == "trial" and category in TRIAL_DOCUMENT_DIRS:
-        directory = TRIAL_DOCUMENT_DIRS[category]
-    else:
+    if origin != "uploaded" or category != "uploaded":
         raise ValueError("Invalid document location.")
+    directory = settings.upload_dir
 
     base = directory.resolve()
     path = (base / name).resolve()

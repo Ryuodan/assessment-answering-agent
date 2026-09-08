@@ -497,12 +497,18 @@ python -m src.cli stats
 | `GET` | `/api/forms` | The team's questionnaires |
 | `GET` | `/api/forms/{id}` | One questionnaire, its questions and answers |
 | `POST` | `/api/forms/{id}/answer` | Answer a selection |
-| `POST` | `/api/forms/{id}/revise` | Reword answers under an instruction |
+| `POST` | `/api/forms/{id}/revise` | Reword a questionnaire's answers under an instruction |
+| `POST` | `/api/assessments/revise` | Reword a list of answers with no file behind them |
 | `POST` | `/api/forms/{id}/answers` | Write one answer by hand |
 | `GET` | `/api/forms/{id}/columns` | Where each sheet's answers will be written |
 | `POST` | `/api/forms/{id}/columns` | Move a sheet's answers to another column |
 | `PATCH` | `/api/forms/{id}/questions` | Set rows aside, bring them back, fix wording |
 | `POST` | `/api/forms/{id}/fill` | Write the answers into the original file |
+| `GET` | `/api/chat` | The team's conversations, most recent first |
+| `POST` | `/api/chat` | One exchange with the assistant |
+| `POST` | `/api/chat/upload` | The same, with a questionnaire attached |
+| `GET` | `/api/chat/{id}` | One conversation, and the answers it produced |
+| `DELETE` | `/api/chat/{id}` | Forget a conversation |
 | `GET` | `/api/forms/{id}/file` | Download the filled copy |
 | `POST` | `/api/knowledge/guidelines` | Index policy documents |
 | `POST` | `/api/knowledge/prior-assessments` | Index completed assessments as Q/A pairs |
@@ -962,6 +968,44 @@ strategies all survive it, because the rules returning nothing is exactly the
 condition that fires the fallback. All four read the blank file identically,
 and only three can pick the work back up.
 
+#### And then the rules were fixed
+
+The table above is the measurement, taken before anything was changed, and it
+stays as it is: it is the only evidence about generalisation there will ever be
+for these six files, and re-running it after fixing the rules would measure
+nothing. What follows is what the measurement bought.
+
+Everything the rules missed traced to two causes, and both are narrow enough to
+fix without inventing a rule for one customer's spreadsheet:
+
+**A reference column headed `ID`.** `_NUMBER_EXACT` now recognises `ID`, `Ref`,
+`No`, `Code` and a few others, matched *whole* rather than as substrings --
+`id` sits inside `Identity and Access Management` and `no` inside `Notes`, and
+matching those loosely would put a domain column into the numbering role. With
+a numbering column present, a short question no longer has to end in a question
+mark to be recognised, which is what `Organisation name`, `Email address` and
+`Do you maintain an incident register` needed.
+
+**A header row one typo from being recognised.** `Queations | Answer` has only
+one heading any rule knows, so the row does not qualify as a header and the
+sheet is read headless. The headless reader now consults that row anyway: a
+column whose own short label reads as the answer is *excluded* from being the
+question column, not merely penalised, because an answer can be arbitrarily
+longer than the question it answers and any penalty can be out-scored. Only
+labels shorter than `LONG_TEXT` count -- a sentence in the first row is data.
+
+After both: the rules read **292 of 292** on the six unseen files, and the whole
+corpus of 25 files comes through at **1,893 questions, 0 write-back failures**,
+including the re-open check that the typo workbook used to fail 32-to-0.
+
+Both shapes are in `tests/forms_fixtures.py` as `reference_column_headed_id`
+and `headless_typo_header`, because the customer files cannot be committed and
+a fix without a fixture is a fix that comes back.
+
+This changes nothing about the default. The rules now handle these two shapes;
+the seventh unfamiliar questionnaire will be a third shape, and the argument
+for reading it with an agent is exactly the argument that was true before.
+
 #### `guarded`: the agent with its one failure removed
 
 So the agent generalises best, and that is what to optimise for -- the next
@@ -1094,6 +1138,37 @@ turned "Yes. We provide training..." into "T2 provides training...", which
 states nothing -- so a perfectly good answer left its compliance rating blank.
 The rewrite prompt now requires the position to survive.
 
+**A wording instruction is offered before the run, not only after it.** Being
+allowed to say how the answers should read only once they existed made the
+mechanism look like an afterthought, when it is how anybody actually works:
+decide the house style, then answer. So the instruction is asked for beside the
+answer button -- and it still runs as a rewording pass once the answers are
+written, because that is the version that measured better. Nothing about the
+drafting prompt changed; the field is a different moment to type into, not a
+different mechanism.
+
+It applies **only to the answers that run produced**. A questionnaire is
+answered in sittings, and an earlier sitting may hold answers somebody has since
+read and corrected by hand; rewording those because a later batch asked for a
+house style would quietly throw that work away. The box under the cards is the
+one that means *all of them*, and it says so while the reader is looking at them.
+
+Questions typed by hand have no cells and no batch, so `POST
+/api/assessments/revise` rewords a list the caller is holding and hands it
+straight back, the way `/answer-questions` does. Both routes run the same
+rewrite, so an instruction behaves the same whichever list it is given.
+
+**A list can be both at once.** Somebody reads a questionnaire, notices it asks
+nothing about penetration testing, and types the question in beside the file's
+own rows. That question has no cell to be written into, so it goes the way any
+typed question goes -- answered by the list route, reworded by the list route,
+exported rather than written back -- while the rows around it go through the
+batch. Sending it to the batch instead produced an answer for a question the
+batch had never heard of, and the page fell over rendering it. Rebuilding the
+list from the batch used to delete such a row while leaving its answer card on
+the page; the rows and their answers now survive every rebuild of the file they
+sit beside.
+
 Status columns are answered from the file's own dropdown. The written answer
 states a position in its first clause -- yes, no, partly, not applicable -- and
 each option in the vocabulary is classified the same way, so `Fully Compliant`,
@@ -1109,6 +1184,18 @@ merges rather than replaces. An upload of last year's submission does not
 silently overwrite reviewed work. It outlives the *page*, too: a questionnaire
 loaded earlier is offered back on the upload panel, because re-uploading the
 same file would start a second batch and orphan the answers in the first.
+
+**A person's edit has to reach the file.** An edit made on an answer card used
+to live only in the page: it went into every download and *not* into the filled
+spreadsheet -- the one place a reviewer would swear they had corrected it. A
+finished edit is now written to the batch, against the cell the answer belongs
+in, with their name on it, and the status dropdown is re-read from *their*
+words: correcting an answer to "No, this is not in place" moves the rating to
+`Non Compliant` rather than leaving the model's `Fully Compliant` beside it.
+Deleting an answer card sets its row aside for the same reason -- the row is
+still in the spreadsheet whatever the page does, so the only thing "remove" can
+mean is *write nothing here*, and that has to be said to the server. Both work
+the same in Word.
 
 **Detection proposes, a person disposes.** The report under the drop zone names
 every sheet, says what each column was taken for and why, and flags any reading
@@ -1130,6 +1217,117 @@ python -m scripts.check_forms "path/to/questionnaires" --write
 Reports what was found in each file and, with `--write`, answers every question
 into a temporary copy and checks the file came through intact. Worth running
 whenever a questionnaire arrives in a shape we have not seen.
+
+## Talking to it
+
+There are two interfaces and they are separate pages, not two modes of one.
+`/` is the workbench: every control on screen, nothing hidden, a person doing
+the work themselves. `/chat` is the assistant: a conversation, and the answer
+cards it produces beside it. Each links to the other in its header.
+
+Separate because they are different shapes. Interleaving them would mean every
+control needing to know which mode it was in, which is a control with a bug
+waiting in it. What they *do* share is the thing worth sharing: `cards.js`
+holds the answer card and everything it draws with -- the citation panels, the
+clause text, the reviewer's reasoning, the Formatted/Raw switch -- and both
+pages load it. It was extracted from the workbench rather than rewritten, so a
+card looks the same in both, and the three things a card does that differ by
+page (discard a question, retry a failed one, open a source document) are hooks
+the page assigns.
+
+### What the assistant is
+
+`src/agents/assistant.py`, and it is mostly a system prompt and nine tool
+wrappers. That is the point: every operation it performs already existed and
+was already tested. `src.tools` was written for this from the beginning --
+plain functions taking a user and returning data, no request and no response --
+so that when an agent arrived it would be *choosing* between operations rather
+than being the only thing that knows how to perform them.
+
+```
+open_questionnaire   read an uploaded file and find its questions
+describe_form        what is in it, and how far it has got
+list_questions       the questions a scope selects, with their ids. Free
+answer_questions     answer some or all of them, from the policy corpus
+reword_answers       change how existing answers are worded, not what they say
+write_one_answer     replace one answer with words a person dictated
+set_aside            leave questions out, or bring them back in
+propose_fill         report what filling the file would write. It does NOT write
+search_policies      look something up in the organisation's own documents
+```
+
+**Three things are absent rather than discouraged**, and all three were decided
+long before there was an agent to decide them for. A prompt that says "do not
+fill the file" is a request; a missing tool is a guarantee.
+
+* **It cannot write to a file.** `fill` always stopped for confirmation and
+  showed what would change. `propose_fill` reports what would be written; the
+  button beside the answers does the writing. An agent that could quietly
+  overwrite a customer's spreadsheet would be a worse tool than the one it
+  replaced.
+* **It cannot manage the knowledge base.** Indexing and removing policy
+  documents is the corpus every answer is grounded in, not a task to do by
+  conversation. It lives behind a side panel with a list and a delete button.
+  Searching it is a different thing, and it can do that.
+* **It cannot record feedback on an answer.** Feedback belongs on the answer
+  card, where the thing being judged is visible.
+
+Compound instructions are the point. "Read this, answer only the governance
+questions, and keep every answer to one sentence" is three calls and a scope,
+and turning that sentence into `answer_questions(part="governance")` followed
+by `reword_answers("one sentence", part="governance")` is the whole job. The
+same is true in Arabic, and the reply comes back in the language it was asked
+in while the questions in the file keep their own.
+
+A conversation outlives the request that made it, for the same reason a batch
+does: somebody says "read this file", waits four minutes for 183 answers, comes
+back after lunch and says "now make the governance ones shorter". The stored
+history is LangChain's own, tool calls included, because the agent resumes from
+it -- a tidy display transcript would lose which tool returned what, which is
+exactly what the follow-up depends on.
+
+### Measuring it
+
+```bash
+python -m scripts.eval_assistant --repeat 3 -v
+```
+
+`tests/test_assistant.py` tests the machinery a model's choices land on, with
+the model stubbed: that a sentence turns into the right scope, that a forbidden
+operation is absent, that a turn which fails part way through still records
+what it did. Deterministic, free, and it runs in the suite.
+
+Whether the model picks the right tool is a different question and cannot be
+tested that way -- an agent asked the same thing twice may do it two ways and
+both may be right. So the eval asserts the things that would be wrong whichever
+route was taken: tools that must have been called, tools that must **not** have
+been, how many questions end up answered, the language of the reply, and for
+the cases where the answer is a fact rather than a tool call, what the reply
+has to say. Fourteen cases, English and Arabic, run as many times as asked so
+that variance is visible.
+
+It earns its cost. The first run scored 98% and the failure was the worst kind
+available: asked to answer everything and keep each answer to one sentence, the
+assistant answered, never called `reword_answers`, and **reported that it had**
+-- "Answered all 4 questions with a single short sentence each". Three runs at
+92% then found two more, both consistent rather than flaky, and both the same
+root cause: it had no way to see the questions. It passed
+`matching="training OR awareness"` as one literal string, matched nothing, and
+concluded the file had no training questions; and it could not get a question
+id, so `set_aside` was unusable and it guessed `'1'`.
+
+The fixes were a tool and two prompt rules -- `list_questions`, a statement
+that `matching` is a substring and not a query language, and a rule that
+`answer_questions` ignores wording completely so an instruction about length is
+still outstanding when it returns. Also a rule against claiming work that no
+tool did. **14 cases x 3 runs: 100%, no variance.**
+
+One more came from driving it by hand rather than from the eval, which is worth
+recording as an argument for doing both: asked in Arabic how many questions
+were left, it read "1 answered" off a four-question file and replied "one
+remaining". `describe_form` now says "1 answered, 3 still blank" rather than
+leaving the subtraction to be done, and there are cases for it in both
+languages.
 
 ## Signing in, and what gets remembered
 
@@ -1764,8 +1962,9 @@ src/
   export_pdf.py   PDF export, incl. Arabic shaping and line breaking
   export_docx.py  Word export; Word lays Arabic out, so we only mark it
   prompts.py      every prompt
-  agents/         readers that explore a file rather than follow rules
+  agents/         the model-driven parts, kept apart from the rules
     excel_agent.py  five read-only tools over a workbook, and a step budget
+    assistant.py    the conversation: nine tools, and what it may not do
   graph/          LangGraph state, nodes and wiring
   forms/          reading questionnaires and writing answers back
     model.py      questions, write targets, roles, and why each was decided
@@ -1776,6 +1975,7 @@ src/
     sheet_view.py how a worksheet is shown to a model
     reading.py    the five strategies, and the floor under the agent
     status.py     an answer's position, mapped to a form's own dropdown words
+  conversations.py a chat, kept so the work outlives the request
   tools.py        the operations the interface and the agent both call
   batches.py      an uploaded questionnaire and the answers written for it
   store.py        SQLite: connections, schema, migrations
@@ -1786,9 +1986,11 @@ src/
   service.py      the orchestration the API and CLI share
   api.py          FastAPI app
   cli.py          command line
-  static/         the web interface
+  static/
+    index.html    the workbench
+    chat.html     the assistant
+    cards.js      the answer card, shared by both
 eval/             golden-set runner, LLM judge and scoring report
-demo_data/        generator for the bundled trial corpus
 ```
 
 ---

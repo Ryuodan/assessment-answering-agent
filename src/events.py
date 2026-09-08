@@ -46,6 +46,9 @@ BATCH_REVISED = "batch_revised"
 ROLES_CORRECTED = "roles_corrected"
 QUESTIONS_CORRECTED = "questions_corrected"
 
+ASSISTANT_STARTED = "assistant_started"
+ASSISTANT_TURN = "assistant_turn"
+
 
 @dataclass(frozen=True)
 class Event:
