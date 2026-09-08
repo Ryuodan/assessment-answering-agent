@@ -189,6 +189,26 @@ def edited_by(batch_id: str) -> dict[str, str]:
     return {row["question_id"]: row["edited_by"] for row in rows}
 
 
+def forget_answer(batch_id: str, question_id: str) -> None:
+    """Drop one stored answer, leaving the question as if it had never been answered.
+
+    Not the same as storing an empty one: an empty answer is a decision to
+    write nothing into the cell, and this is the undo of that decision. What
+    the file itself arrived with is untouched either way -- it lives in the
+    detected form, not in this table.
+    """
+    conn = store.connect()
+    with conn:
+        conn.execute(
+            "DELETE FROM batch_answers WHERE batch_id = ? AND question_id = ?",
+            (batch_id, question_id),
+        )
+        conn.execute(
+            "UPDATE form_batches SET updated_at = ? WHERE batch_id = ?",
+            (store.utcnow(), batch_id),
+        )
+
+
 def delete(batch_id: str) -> None:
     """Forget a batch and its answers. The uploaded file is left alone."""
     conn = store.connect()

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import unicodedata
 import uuid
 from pathlib import Path
@@ -16,7 +15,7 @@ from urllib.parse import quote
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -29,6 +28,7 @@ from src.agents import assistant
 from src.identity import User
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
+from src.extraction import detect_question_language
 from src.export_docx import render_docx
 from src.export_pdf import ExportError, ExportOptions, render_pdf, selected_answers
 from src.models import (
@@ -41,10 +41,10 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-# Whichever script carries more of a typed question carries the answer;
-# see `_detect_language`.
-_ARABIC = re.compile(r"[؀-ۿݐ-ݿ]")
-_LATIN = re.compile(r"[A-Za-z]")
+# Whichever script carries more of a typed question carries the answer. The
+# rule moved to `src.extraction` when the assistant needed it too; the name is
+# kept because it is what this module and its tests call it.
+_detect_language = detect_question_language
 
 
 @asynccontextmanager
@@ -393,6 +393,14 @@ class ScopeRequest(BaseModel):
 class AnswerBatchRequest(BaseModel):
     scope: ScopeRequest = Field(default_factory=ScopeRequest)
 
+    replace_existing: bool = False
+    """Answer questions that already have an answer, replacing what is there.
+
+    Off unless the caller says otherwise, so that no scope, however broad, can
+    quietly overwrite an answer the security team wrote into the file or a
+    reviewer approved here.
+    """
+
 
 class ReviseBatchRequest(BaseModel):
     instruction: str = Field(min_length=1, max_length=2000)
@@ -463,7 +471,10 @@ async def answer_questionnaire(
     request is still open — the batch id is the run id, so it can be watched
     from the moment the call is made.
     """
-    outcome = await _atool(tools.answer(user, batch_id, request.scope.to_scope()))
+    outcome = await _atool(tools.answer(
+        user, batch_id, request.scope.to_scope(),
+        replace_existing=request.replace_existing,
+    ))
     return {**vars(outcome), "batch": tools.inspect(user, batch_id)}
 
 
@@ -499,6 +510,29 @@ class QuestionChange(BaseModel):
 
 class QuestionChanges(BaseModel):
     changes: list[QuestionChange] = Field(min_length=1, max_length=2000)
+
+
+class BlankAnswerRequest(BaseModel):
+    """Which question to leave blank, or to stop leaving blank."""
+
+    question_id: str = Field(min_length=1, max_length=400)
+    blank: bool = True
+
+
+@app.post("/api/forms/{batch_id}/blank")
+def leave_an_answer_blank(
+    batch_id: str, request: BlankAnswerRequest, user: User = Depends(current_user)
+) -> dict:
+    """Leave a question deliberately blank rather than unanswered, or undo that.
+
+    The id travels in the body rather than the path: a question's id is the
+    file's own -- `Human Resources!4` -- and a sheet name may contain anything
+    a spreadsheet allows, slashes included.
+    """
+    _tool(lambda: tools.blank_answer(
+        user, batch_id, request.question_id, blank=request.blank,
+    ))
+    return tools.inspect(user, batch_id)
 
 
 @app.get("/api/forms/{batch_id}/columns")
@@ -537,6 +571,7 @@ def fill_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dic
         "intact": filled.intact,
         "skipped": filled.skipped,
         "blank": filled.blank,
+        "because": filled.because,
     }
 
 
@@ -927,23 +962,6 @@ async def revise_answer_list(
     return {"run_id": run_id, "answers": [answer.model_dump() for answer in revised]}
 
 
-def _detect_language(text: str) -> Language:
-    """Which language a typed question is in, when the caller did not say.
-
-    The document flow gets this from the extraction model, which reads a whole
-    window. A single typed question has no such context, and asking a model
-    would add a second of latency to decide something visible in the string.
-
-    Counted rather than merely detected: an English question often carries an
-    Arabic gloss — "Do you use MFA (متعدد العوامل)?" — and the presence of one
-    Arabic letter would answer the whole thing in Arabic. Whichever script
-    carries the question carries the answer.
-    """
-    arabic = len(_ARABIC.findall(text))
-    latin = len(_LATIN.findall(text))
-    return "ar" if arabic > latin else "en"
-
-
 @app.get("/api/assessments/progress/{run_id}")
 def assessment_progress(run_id: str) -> dict:
     """How far a run has got: questions found, answered, and left to answer."""
@@ -1055,6 +1073,14 @@ class SayRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: str = Field(default="", max_length=64)
 
+    run_id: str = Field(default="", max_length=64)
+    """A name the caller picked for this turn, so it can watch it happen.
+
+    Minted by the page rather than here, because a first turn -- the slow one,
+    where a file is read and answered -- has no conversation and no batch yet
+    to be named after. `/api/assessments/progress/{run_id}` reports on it.
+    """
+
 
 def _conversation(conversation_id: str, user: User):
     conversation = conversations.load(conversation_id, team_id=user.team_id)
@@ -1070,6 +1096,7 @@ def _turn_response(turn, conversation, user: User) -> dict:
         "title": conversation.title,
         "batch_id": turn.batch_id,
         "steps": turn.steps,
+        "sources": turn.sources,
         "refreshed": turn.refreshed,
         "stopped_early": turn.stopped_early,
         "seconds": round(turn.seconds, 1),
@@ -1097,7 +1124,9 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
         _conversation(request.conversation_id, user) if request.conversation_id
         else assistant.start(user, request.message)
     )
-    turn = await assistant.say(user, conversation, request.message)
+    turn = await assistant.say(
+        user, conversation, request.message, run_id=request.run_id,
+    )
     return _turn_response(turn, conversation, user)
 
 
@@ -1105,6 +1134,7 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
 async def say_with_a_file(
     message: str = Form(""),
     conversation_id: str = Form(""),
+    run_id: str = Form(""),
     file: UploadFile = File(...),
     user: User = Depends(current_user),
 ) -> dict:
@@ -1129,7 +1159,8 @@ async def say_with_a_file(
         else assistant.start(user, message or f"Read {name}")
     )
     turn = await assistant.say(
-        user, conversation, message or f"Read {name} and tell me what is in it.", upload=path
+        user, conversation, message or f"Read {name} and tell me what is in it.",
+        upload=path, run_id=run_id,
     )
     return _turn_response(turn, conversation, user)
 
@@ -1148,13 +1179,22 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
     for message in conversation.messages:
         kind = getattr(message, "type", "")
         if kind == "human":
-            transcript.append({"role": "you", "text": str(message.content)})
+            # Their own words, without the note that told the agent a file had
+            # arrived -- that is not something anybody said.
+            transcript.append({"role": "you", "text": assistant.spoken(str(message.content))})
         elif kind == "ai" and not getattr(message, "tool_calls", None):
             text = message.content
             if isinstance(text, list):
                 text = "".join(b.get("text", "") for b in text if isinstance(b, dict))
             if str(text).strip():
-                transcript.append({"role": "assistant", "text": str(text).strip()})
+                # What the turn did, stored on the reply itself when it was made.
+                drawn = (message.additional_kwargs or {}).get(assistant.UI_KEY) or {}
+                transcript.append({
+                    "role": "assistant",
+                    "text": str(text).strip(),
+                    "steps": drawn.get("steps", []),
+                    "sources": drawn.get("sources", []),
+                })
     return {
         "id": conversation.id,
         "title": conversation.title,
@@ -1189,17 +1229,27 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
+    """The assistant, and the front door.
+
+    A separate document from the workbench rather than a mode inside it. The
+    two are different shapes -- one is a conversation, the other a workbench
+    with every control on it -- and interleaving them would mean every control
+    needing to know which mode it was in. They share the answer cards, which is
+    the part worth sharing, and a link in each header.
+
+    The conversation is what a person should meet first: it needs nothing
+    explained, and everything the workbench does can be asked for in a
+    sentence. The workbench is where you go when you want the controls.
+    """
+    return FileResponse(STATIC_DIR / "chat.html")
+
+
+@app.get("/workbench", include_in_schema=False)
+def workbench_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/chat", include_in_schema=False)
-def chat_page() -> FileResponse:
-    """The assistant, on its own page.
-
-    A separate document rather than a mode inside the other one. The two are
-    different shapes -- one is a workbench with every control on it, the other
-    is a conversation -- and interleaving them would mean every control needing
-    to know which mode it was in. They share the answer cards, which is the part
-    worth sharing, and a link in each header.
-    """
-    return FileResponse(STATIC_DIR / "chat.html")
+def chat_page() -> RedirectResponse:
+    """Where the assistant used to live. Kept so old links and bookmarks work."""
+    return RedirectResponse("/", status_code=308)

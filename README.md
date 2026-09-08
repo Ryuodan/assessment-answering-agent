@@ -1221,23 +1221,48 @@ whenever a questionnaire arrives in a shape we have not seen.
 ## Talking to it
 
 There are two interfaces and they are separate pages, not two modes of one.
-`/` is the workbench: every control on screen, nothing hidden, a person doing
-the work themselves. `/chat` is the assistant: a conversation, and the answer
-cards it produces beside it. Each links to the other in its header.
+`/` is the assistant: a conversation, and the answer cards it produces beside
+it. `/workbench` is the workbench: every control on screen, nothing hidden, a
+person doing the work themselves. Each links to the other in its header, and
+`/chat` -- where the assistant used to live -- redirects to `/`, because
+somebody has it bookmarked.
+
+The conversation is the front door because it is the one that needs nothing
+explained. Everything the workbench does can be asked for in a sentence, and a
+person who wants the controls will go and find them; a person meeting a wall of
+controls has to be taught before they can start.
 
 Separate because they are different shapes. Interleaving them would mean every
 control needing to know which mode it was in, which is a control with a bug
-waiting in it. What they *do* share is the thing worth sharing: `cards.js`
-holds the answer card and everything it draws with -- the citation panels, the
-clause text, the reviewer's reasoning, the Formatted/Raw switch -- and both
-pages load it. It was extracted from the workbench rather than rewritten, so a
-card looks the same in both, and the three things a card does that differ by
-page (discard a question, retry a failed one, open a source document) are hooks
-the page assigns.
+waiting in it. What they *do* share is the thing worth sharing: `cards.js` and
+`cards.css` hold the answer card and everything it draws with -- the citation
+panels, the clause text, the reviewer's reasoning, the Formatted/Raw switch --
+plus the design tokens both pages are built from, so dark mode is one
+definition rather than two. Both were lifted out of the workbench rather than
+rewritten, so a card looks the same in both, and the four things a card does
+that differ by page (discard a question, retry a failed one, open a source
+document, edit an answer) are hooks the page assigns.
+
+Sharing the stylesheet is worth doing and worth doing carefully. The first cut
+of it swept up the workbench's question list and its composer, which collided
+on class name: the chat page's composer inherited a dashed border and a 58px
+minimum height from a control it has nothing to do with. A shared stylesheet
+should hold what is actually shared and not a line more.
+
+The chat page is three panes -- conversations on the left, the exchange in the
+middle, the answers on the right -- and the outer two open and close, because
+somebody reading 183 answer cards wants the width and somebody typing does not.
+A long turn shows the pipeline's own progress, watched under the batch id, the
+same figure the workbench watches; a spinner and a guess would be worse on work
+that takes minutes. Policy clauses the assistant looked up are drawn under the
+reply as the same citation bubbles an answer card uses, so a claim about what
+the policies say can be opened and checked rather than taken on trust -- and
+they are stored on the reply message itself, so reopening a conversation
+redraws the evidence and not only the words.
 
 ### What the assistant is
 
-`src/agents/assistant.py`, and it is mostly a system prompt and nine tool
+`src/agents/assistant.py`, and it is mostly a system prompt and eleven tool
 wrappers. That is the point: every operation it performs already existed and
 was already tested. `src.tools` was written for this from the beginning --
 plain functions taking a user and returning data, no request and no response --
@@ -1245,16 +1270,65 @@ so that when an agent arrived it would be *choosing* between operations rather
 than being the only thing that knows how to perform them.
 
 ```
-open_questionnaire   read an uploaded file and find its questions
+open_questionnaire   read a file attached to a message
 describe_form        what is in it, and how far it has got
 list_questions       the questions a scope selects, with their ids. Free
+read_existing        what a question already said when the file arrived
 answer_questions     answer some or all of them, from the policy corpus
 reword_answers       change how existing answers are worded, not what they say
 write_one_answer     replace one answer with words a person dictated
 set_aside            leave questions out, or bring them back in
 propose_fill         report what filling the file would write. It does NOT write
 search_policies      look something up in the organisation's own documents
+answer_directly      answer a question asked in the conversation, with no file
 ```
+
+**A question can be asked without a file.** "Do we encrypt customer data at
+rest?" is a fair thing to ask, and making somebody build a spreadsheet to find
+out would be absurd. `answer_directly` runs the same pipeline a questionnaire
+row goes through -- retrieval, drafting, review, citations -- over a question
+somebody typed, and the assistant relays the draft verbatim with the clauses
+folded under it. It stores nothing: no cells, no cards, nothing to come back
+to, which is why it takes five questions at most. A longer list is a
+questionnaire and belongs in a file, and it says so.
+
+**The two interfaces do not share a working session, on purpose.** A batch is
+visible to the whole team either way -- it is one `batches` table -- but the
+conversation does not reach across and pick up what the workbench has open. It
+was built and then taken out: continuing on one page work that was started on
+the other reads as one session and is not one, and every difference between
+them (which questions are selected, what the last run answered, what is still
+being edited) becomes a surprise. A file is opened where it is worked on.
+
+### Answers that already exist are not ours to overwrite
+
+**A questionnaire usually arrives already answered** -- last year's submission,
+or the security team's own draft. Those answers are worth *more* than a fresh
+one, not less: they were written by the people who own the subject and know
+what was actually agreed with this assessor. The absence of a citation beside
+one says nothing about it, and treating them as unverified placeholders is
+exactly the mistake to avoid.
+
+Two things were wrong, in the same way, and neither was in the model.
+
+The **count** looked only at answers *we* had written, so a completed
+submission was reported as having none. The file's own answers live on the
+targets, as the text already in the cell: `describe_form` reports them
+separately, `list_questions` marks them "in file", `read_existing` quotes them,
+and the workbench shows the sentence itself under the question it answers.
+
+The **guard** did not exist. `unanswered_only` was a narrowing option a caller
+had to remember, and "answer this questionnaire" is the most natural
+instruction there is -- so a broad scope over 183 reviewed answers replaced
+every one of them. It is no longer a matter of remembering: `tools.answer`
+refuses to overwrite an answer that already exists -- ours or the file's --
+unless the caller passes `replace_existing`, and it reports how many it left
+alone rather than saying "nothing matched". Naming the questions by id does not
+lift it, because listing a sheet and passing every id back is not the same as
+being asked to redo them. Saying so is: "this answer is out of date, write a
+new one" gets the flag, and on the workbench the row itself offers
+*Answer it again*, one question at a time, with what it would replace shown
+above the button.
 
 **Three things are absent rather than discouraged**, and all three were decided
 long before there was an agent to decide them for. A prompt that says "do not
@@ -1328,6 +1402,116 @@ were left, it read "1 answered" off a four-question file and replied "one
 remaining". `describe_form` now says "1 answered, 3 still blank" rather than
 leaving the subtraction to be done, and there are cases for it in both
 languages.
+
+The set has grown to nineteen as the interface has, and it keeps earning its
+cost. Adding cases for the answers a file arrives with, for what the file
+already said, and a ceiling on how often one tool may be called turned up three
+more faults in a single run: it announced *"let me
+run propose_fill"* and ended the turn having called nothing; it answered an
+Arabic instruction in English; and one of the new checks was itself wrong,
+rejecting "**Two** of the questions already have answers" because it compared
+case-sensitively. Two prompt rules and one test fix later: **19 cases x 3 runs,
+99%**, with one case that reworded on two runs of three.
+
+**Twenty-two cases, and the clearest argument yet for running all of them.**
+Two of the new ones are the overwrite guard from both sides -- told "answer
+this questionnaire" on a file the security team had half-filled, it must answer
+the blanks and leave theirs; told one answer is out of date, it must actually
+redo that one. Both passed first time. Everything that broke that round broke
+somewhere else, and each break was caused by fixing the one before it.
+
+*Adding `answer_directly` cost two search cases twenty-five points each.*
+"What does our policy say about password length?" started drawing a full
+drafted answer -- twelve seconds, ten thousand tokens -- where the person had
+asked to be shown the clause. The boundary is now drawn by the shape of the
+question rather than its topic: *what the documents say* is a search, *what our
+answer is* is a draft, and when it is genuinely both, search first because it
+is cheap.
+
+*Fixing that cost `will-not-fill-a-file` half its score, on both runs.* Asked to
+write the answers into the file, the assistant replied in prose and called
+nothing. The bullet had always said "You cannot fill a file" first and named
+`propose_fill` second, and twenty lines of new text between it and the rule
+against announcing a call instead of making it was enough to tip the reading
+from *here is what to do* into *here is what to decline*. It now leads with the
+action -- "fill it in", "save it" -> **call `propose_fill`** -- and says what
+not calling it costs: no report, no button, and no idea what would have gone
+into which cell.
+
+*And fixing that broke the rewording case, in a new way.* Told "make them all
+more formal", it proposed filling the file. Strengthening the fill rule had
+made `propose_fill` more salient without bounding it, so it began reaching for
+it to round a run off. The bullet now carries its own limit -- those
+instructions and nothing else -- and the case, which had been failing
+intermittently for two rounds before any of this, has been clean since.
+**22 cases x 2 runs: 100%, no variance.**
+
+The lesson arrived three times in one afternoon: a system prompt is not a set
+of true statements, it is a document with an order, and adding a true statement
+in the middle of it changes what the statements around it mean. None of the
+three faults was anywhere near the feature being built, and none would have
+been found by testing that feature.
+
+**Twenty-four cases now.** The last two are the plain-language overrides --
+"just show me the clause" on a question shaped for drafting, "answer it
+properly, the way we would put it to an assessor" on one shaped for a lookup.
+They are the escape hatch out of the search/draft boundary, and putting them in
+the suite is the argument against making people learn a command for it: the
+words they would use anyway are guaranteed to work, rather than happening to.
+
+A failing case prints the tools it called *and what it said*, neither needing
+`--verbose`. "It did not call X" is not a finding -- what it called instead is
+-- and "replied in ar, got en" does not say whether the assistant was wrong or
+the counting was, which is a question that came up and could not be answered
+because the reply was gone. On the same theme, `--verbose` itself used to die
+with a UnicodeEncodeError on a Windows console: the one flag for diagnosing an
+Arabic failure could not print Arabic.
+
+And the suite clears up after itself now. It left a batch and a conversation
+behind per case, sixty a run, and they surfaced in the interface -- "Or pick
+up" and the conversation list filling with fixture questionnaires nobody had
+uploaded, until 177 rows had to be deleted by hand. A test that dirties the
+thing it is testing is not finished.
+
+**A fill that writes nothing is not a quiet success.** "Wrote 0 value(s) into
+the file -- every other part of it is untouched" is a true sentence that reads
+like it worked, which is the worst possible way for somebody who has just
+watched a run finish to learn that nothing reached their file. Zero has causes
+and they are different problems, so `fill` reports which: nothing has been
+answered yet, every answered row is set aside, or -- the one that is not a
+problem at all -- the answers were already in the file when it arrived and
+there was genuinely nothing to add. Neither interface offers a download for a
+file it did not write.
+
+**A turn you can watch.** The assistant's progress bar only ever appeared on
+later turns: it was watched under the batch id, and the turn that uploads a
+file has no batch yet -- so the one turn long enough to need a bar was the one
+turn that never had one. The page now names the turn itself and passes that
+name with the request, and the assistant reports each step under it as it
+starts: *Reading the file*, *Working out which questions that means*, then a
+counted bar while answering. Three dots keep moving throughout, because the
+label can only ever be as fresh as the last poll and "Working" for ninety
+seconds is indistinguishable from a page that has frozen.
+
+A deliberately blank answer is its own state, distinct from a question nobody
+has answered yet -- the two look identical from outside and are opposites, one
+a decision and the other work outstanding. `fill` writes an empty cell for it
+rather than skipping the question, because the file may already hold last
+year's answer and "leave this blank" has to be able to clear it; and
+`unanswered_only` treats it as settled, so "finish the rest" does not offer it
+back. Taking it back is an undo rather than a reversal: the stored answer is
+forgotten and the question is unanswered again, because storing something in
+its place would only be a second decision made on the person's behalf.
+
+**A question typed beside a spreadsheet's rows has no cell to go into.** It is
+answered like any other and leaves through the exports, which is useful --
+somebody notices the form is missing something and asks anyway -- but the one
+moment to find that out is not after opening the filled file. The row says so
+while it is being typed, and the fill report says so again. Reading a **PDF**
+while a spreadsheet is open is the sharper version of the same thing: a PDF has
+no cells at all, so it used to drop the batch on the floor and leave every row
+from the spreadsheet pointing at a questionnaire the page no longer held. It
+now asks first, and says where the work went.
 
 ## Signing in, and what gets remembered
 
@@ -1990,6 +2174,7 @@ src/
     index.html    the workbench
     chat.html     the assistant
     cards.js      the answer card, shared by both
+    cards.css     the design tokens and the card's styles, likewise
 eval/             golden-set runner, LLM judge and scoring report
 ```
 

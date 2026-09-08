@@ -365,3 +365,23 @@ def headless_typo_header(path: Path) -> Path:
     for index, text in enumerate(questions, start=2):
         cells[f"A{index}"] = text
     return build(path, [SheetSpec("Sheet1", cells)])
+
+
+def already_answered(path: Path) -> Path:
+    """A questionnaire that arrives filled in.
+
+    Last year's submission, or a colleague's draft. Told it had no answers --
+    which is what the interface said before the count learned to look at the
+    file as well as at what we had written -- somebody would answer all of it
+    again and overwrite work that was already reviewed.
+    """
+    return build(path, [SheetSpec("Human Resources", {
+        "B1": "HR Security", "C1": "Compliance Status", "D1": "Additional Comments",
+        "A2": "1.0", "B2": "Has the human resources process been defined and approved?",
+        "C2": "Fully Compliant",
+        "D2": "Yes. The HR process is documented and was approved in March.",
+        "A3": "2.0", "B3": "Do employees receive regular cybersecurity awareness training?",
+        "C3": "Partially Compliant",
+        "A4": "3.0", "B4": "Are access rights revoked immediately on termination?",
+        "A5": "4.0", "B5": "Do you perform background checks before hiring?",
+    }, validations=(("C2:C5", '"Fully Compliant,Partially Compliant,Non Compliant"'),))])

@@ -19,6 +19,44 @@ from src.config import settings
 # --- schema ----------------------------------------------------------------
 
 
+def test_the_upload_note_is_trimmed_out_of_old_titles():
+    """Migration 5. A message with a file attached carries a note telling the
+    agent the file is there; it was leaking into the conversation's title, so a
+    person's own history read as a list of plumbing. The note is cut to three
+    different lengths by the title's own length limit, and the repair has to
+    catch all of them."""
+    conn = store.connect()
+    now = store.utcnow()
+    leaked = [
+        ("c1", "Read this file. [A file has been uploaded to this conversation: HR…"),
+        ("c2", "Read this and answer all of it. [A file has been uploaded to this…"),
+        ("c3", "Answer the training question. [A file has been…"),
+        ("c4", "A title nobody broke"),
+    ]
+    for cid, title in leaked:
+        conn.execute(
+            "INSERT INTO conversations (conversation_id, team_id, actor_email, title,"
+            " messages, created_at, updated_at) VALUES (?, 't', 'a@b', ?, '[]', ?, ?)",
+            (cid, title, now, now),
+        )
+    conn.commit()
+    conn.executescript(store.MIGRATIONS[4])
+
+    titles = dict(conn.execute("SELECT conversation_id, title FROM conversations"))
+    assert titles["c1"] == "Read this file."
+    assert titles["c2"] == "Read this and answer all of it."
+    assert titles["c3"] == "Answer the training question."
+    assert titles["c4"] == "A title nobody broke", "it only touches what carries the note"
+
+
+def test_the_repair_runs_on_an_existing_database():
+    """Applied by connecting, like every other migration."""
+    conn = store.connect()
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == len(store.MIGRATIONS)
+
+
+
+
 def test_connect_creates_the_schema():
     conn = store.connect()
     tables = {

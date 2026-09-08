@@ -69,6 +69,27 @@ def start(run_id: str | None, stage: str = "extracting") -> None:
         _expire(now)
 
 
+def note(run_id: str | None, stage: str) -> None:
+    """Say what is happening now, with no count behind it.
+
+    An agent's turn is a sequence of short operations -- reading a file,
+    listing questions, searching -- and only one of them has a denominator.
+    Naming them is the difference between a person watching progress and a
+    person watching the word "Working" and wondering whether it has frozen.
+
+    The count is cleared, because it belonged to whatever finished: leaving it
+    would draw a full bar beside a label about something that has not started.
+    """
+    if not run_id:
+        return
+    with _LOCK:
+        run = _RUNS.setdefault(run_id, Run())
+        run.stage = stage
+        run.total = 0
+        run.completed = 0
+        run.updated_at = time.monotonic()
+
+
 def set_total(run_id: str | None, total: int) -> None:
     """Record how many questions were found, once extraction has run."""
     if not run_id:

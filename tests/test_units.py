@@ -32,6 +32,33 @@ def test_default_groq_chat_model(monkeypatch):
     assert Settings(_env_file=None).groq_chat_model == "openai/gpt-oss-120b"
 
 
+# --- progress: what is happening now ---------------------------------------
+
+
+def test_a_note_replaces_the_count_it_follows():
+    """A turn is a sequence of operations and only one of them has a
+    denominator. Leaving the last one's count in place would draw a full bar
+    beside a label about something that has not started."""
+    from src import progress
+
+    progress.start("watch-me", stage="Thinking…")
+    progress.set_total("watch-me", 4)
+    progress.advance("watch-me")
+    assert progress.snapshot("watch-me")["percent"] == 25
+
+    progress.note("watch-me", "Searching the policies…")
+    state = progress.snapshot("watch-me")
+    assert state["stage"] == "Searching the policies…"
+    assert state["total"] == 0 and state["completed"] == 0 and state["percent"] == 0
+
+
+def test_a_note_for_a_run_nobody_started_is_harmless():
+    from src import progress
+
+    progress.note("", "Thinking…")
+    progress.note(None, "Thinking…")
+
+
 # --- language detection ----------------------------------------------------
 
 

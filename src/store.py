@@ -170,6 +170,24 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX conversations_team_time ON conversations(team_id, updated_at DESC);
     """,
+    # 5 -- take the plumbing back out of the titles it leaked into.
+    #
+    # A message with a file attached carries a note telling the agent the file
+    # is there. It belongs in the stored message, because that history is what
+    # the agent re-reads -- but it was also going into the conversation's
+    # title, so a person's own history read as a list of
+    # "Read this file. [A file has been uploaded to this conversation: HR…"
+    # rather than a list of what they had asked for.
+    #
+    # Fixed at the source, and repaired here for the conversations that already
+    # have it: those titles are display text and nothing reads them back, so
+    # trimming is safe. The note is truncated to three different lengths by the
+    # title's own length limit, and every one of them starts the same way.
+    """
+    UPDATE conversations
+       SET title = RTRIM(SUBSTR(title, 1, INSTR(title, '[A file has been') - 1))
+     WHERE INSTR(title, '[A file has been') > 0;
+    """,
 ]
 
 _local = threading.local()

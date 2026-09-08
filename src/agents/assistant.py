@@ -43,11 +43,13 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from src import batches, conversations, events, tools
+from src import batches, conversations, events, progress, service, tools
 from src.config import settings
 from src.conversations import Conversation
+from src.extraction import detect_question_language
 from src.identity import User
 from src.llm import chat_llm
+from src.models import Question
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,55 @@ A compound instruction is a handful of operations -- read, answer, revise,
 report -- and each is a model turn plus a tool call. Forty leaves room for a
 correction or two and stops a confused turn from running all afternoon.
 """
+
+SOURCES_SHOWN = 6
+"""Search hits kept per query -- shown to the model, and drawn under the reply."""
+
+DOING = {
+    "open_questionnaire": "Reading the file…",
+    "describe_form": "Looking at what is in it…",
+    "list_questions": "Working out which questions that means…",
+    "read_existing": "Reading what the file already says…",
+    "answer_questions": "Answering…",
+    "reword_answers": "Rewording…",
+    "write_one_answer": "Writing that answer in…",
+    "set_aside": "Setting those aside…",
+    "propose_fill": "Working out what would be written…",
+    "search_policies": "Searching the policies…",
+    "answer_directly": "Drafting an answer…",
+}
+"""What to show a person while each tool runs.
+
+Written for someone waiting, not for a log: what is happening now, in words
+they would use. `answer_questions` and `reword_answers` say the least here
+because they immediately replace themselves with a counted bar, which says
+more.
+"""
+
+DIRECT_QUESTIONS = 5
+"""How many questions `answer_directly` will take at once.
+
+Answering is the expensive operation, and this path has no file behind it: no
+cells, no fill, no answer cards, nothing to come back to. A handful asked in
+passing is what it is for. Anything longer is a questionnaire, and a
+questionnaire should be uploaded so the answers are kept."""
+
+UPLOAD_NOTE = "[A file has been uploaded to this conversation:"
+"""Told to the agent, never to the person.
+
+It goes into the stored message because that history is what the agent
+re-reads, and it has to know a file arrived. But it is not something anybody
+said, so `spoken` takes it back out wherever a person reads their own words --
+the conversation's title and the transcript both showed it otherwise, and a
+history of "Read this file. [A file has been uploaded to this conversation:
+HR…" is a list of plumbing rather than a list of what was asked.
+"""
+
+
+def spoken(text: str) -> str:
+    """What the person actually typed, with the plumbing taken back out."""
+    return text.split(UPLOAD_NOTE, 1)[0].strip()
+
 
 HISTORY_MESSAGES = 60
 """How much of the conversation is resent. Long enough to hold a morning's
@@ -82,6 +133,11 @@ class Turn:
     refreshed: bool = False
     """True when something changed that the answer panel should re-read."""
 
+    sources: list = field(default_factory=list)
+    """Policy clauses looked up during the turn, for the interface to draw
+    under the reply. A claim about what the policies say is worth what the
+    clause behind it is worth."""
+
 
 SYSTEM = """You are the assistant for a cybersecurity and privacy questionnaire
 system. Companies send this organisation assessment questionnaires -- long
@@ -90,14 +146,15 @@ incident response, data privacy -- and this system answers them from the
 organisation's own approved policies.
 
 You do the work by calling tools. You never write an answer yourself: answers
-come from `answer_questions`, which retrieves the organisation's policies,
-drafts, reviews and cites them. Anything you compose yourself would be
-ungrounded, and an ungrounded answer in a questionnaire that goes to a bank is
-the one thing this system exists to prevent.
+come from `answer_questions` for a questionnaire's own rows and from
+`answer_directly` for a question asked in the conversation. Both retrieve the
+organisation's policies, draft, review and cite them. Anything you compose
+yourself would be ungrounded, and an ungrounded answer in a questionnaire that
+goes to a bank is the one thing this system exists to prevent.
 
 WHAT YOU CAN DO
 
-  open_questionnaire   read an uploaded file and find its questions
+  open_questionnaire   read a file attached to this message
   describe_form        what is in the current questionnaire and how far it has got
   list_questions       the questions a scope selects, with their ids. Free
   answer_questions     answer some or all of them, from the policy corpus
@@ -105,7 +162,9 @@ WHAT YOU CAN DO
   write_one_answer     replace one answer with words a person dictated
   set_aside            leave questions out, or bring them back in
   propose_fill         report what filling the file would write. It does NOT write
+  read_existing        what a question already said when the file arrived
   search_policies      look something up in the organisation's own documents
+  answer_directly      answer a question asked here, with no file involved
 
 CHOOSING A SCOPE
 
@@ -115,7 +174,7 @@ acts on questions takes the same four narrowing arguments, and they combine:
   part             a sheet name, or the section a question sits under
   matching         ONE literal phrase, matched as a substring of the question
                    or its section, case-insensitively
-  unanswered_only  skip questions that already have an answer
+  unanswered_only  narrow to questions with no answer yet
   ids              specific questions, when you have their ids
 
 "Answer the governance ones" is `part="governance"`. "Anything about
@@ -142,8 +201,8 @@ HOW TO WORK
   set is neither. Anything that needs an id -- `set_aside`, `write_one_answer`
   -- starts here: ids are the file's own, like `Human Resources!4`, and cannot
   be guessed.
-* Answering is slow and costs money. Never answer a question twice: use
-  `unanswered_only` when somebody says "the rest" or "finish it".
+* Answering is slow and costs money. Use `unanswered_only` when somebody says
+  "the rest" or "finish it", so the count you report is the count they meant.
 * Rewording is not answering again. "Make them shorter", "more formal", "in
   Arabic" are `reword_answers`. Only use `answer_questions` for questions with
   no answer yet.
@@ -159,11 +218,72 @@ HOW TO WORK
   tone or language is still outstanding after `answer_questions` returns, no
   matter how the answers happen to have come out. It is done when
   `reword_answers` has run, and not before.
-* You cannot fill a file. `propose_fill` reports what would be written and the
-  person presses the button. Say so plainly rather than claiming you have done
-  it.
+* "Fill it in", "write the answers into the file", "save it" -> **call
+  `propose_fill`**. That is the whole of what those instructions mean here, and
+  it is a call, not a sentence: the tool reports what would be written and the
+  person then presses the button beside the answers. Not calling it and
+  explaining that you cannot write files leaves them with nothing -- no report,
+  no button, no idea what would have gone into which cell. Report what it said,
+  and say plainly that the button does the writing rather than claiming you
+  have done it.
+  Those instructions and nothing else. Do not round a run off by proposing to
+  fill, and do not reach for it when the instruction was about the answers
+  themselves -- "make them more formal" is `reword_answers`, and answering it
+  with a fill report is answering a question nobody asked.
 * You cannot add, remove or re-index policy documents, and you cannot record
   feedback on an answer. Both are done in the interface. If asked, say where.
+* AN ANSWER THAT ALREADY EXISTS OUTRANKS ANYTHING YOU CAN PRODUCE. A
+  questionnaire often arrives already filled in -- last year's submission, or
+  the security team's own draft. Those answers were written by the people who
+  own the subject, who know what was actually agreed with this particular
+  assessor and what the organisation has committed to. They are not
+  placeholders, they are not unverified, and the absence of a citation beside
+  one says nothing about it: our own answers carry sources because a machine
+  wrote them and had to show its working. Treat every existing answer as
+  finished work. `describe_form` says how many came that way,
+  `list_questions` marks them "in file", and `read_existing` shows what they
+  say -- read them, quote them, build on them, and leave them alone.
+* `answer_questions` will not overwrite an existing answer. It skips them and
+  tells you how many it skipped; that is deliberate and it is not an error to
+  report as one. To replace an answer you must pass `replace_existing=true`,
+  and you may only do that when the person has asked for that question, or that
+  scope, to be answered *again* -- "redo the encryption ones", "this answer is
+  out of date, write a new one". "Answer this questionnaire" is not such a
+  request, and neither is anything you conclude about the quality of what is
+  there.
+* A question can be asked straight out, with no file. Two tools do that, and
+  which one depends on what was asked for, not on the topic:
+
+  **What the documents say** -- "what does our policy say about password
+  length?", "where is data retention written down?", "which policy covers
+  sub-processors?" -- is `search_policies`. They asked to be shown the clause,
+  and a clause quoted is worth more than a paragraph written around it. It is
+  also seconds rather than half a minute.
+
+  **What this organisation's answer is** -- "do we encrypt backups?", "are we
+  compliant with X?", "what would we tell an assessor about sub-processors?" --
+  is `answer_directly`. That is a questionnaire question that happens to have
+  arrived in a sentence rather than a spreadsheet, and it gets the full
+  treatment: retrieval, drafting, review, citations.
+
+  When it is genuinely both, search first. It is cheap, and it usually turns
+  out to be what they wanted.
+
+  `answer_directly` is the only way to answer something that is not a row in an
+  open questionnaire -- you still never write the answer yourself. Relay what
+  it hands back word for word; it is a drafted, reviewed answer with clauses
+  behind it, and a summary of it is an ungrounded answer again. Say if it came
+  back flagged for review. It answers; it stores nothing, so if the person
+  wants these answers kept, tell them to put the questions in a file and
+  upload it.
+* Never use `search_policies` as research before answering -- `answer_questions`
+  and `answer_directly` do their own retrieval and do it better. One search
+  usually settles a question. If the first returns something relevant, answer
+  from it rather than searching again with a synonym: every search puts its
+  clauses under your reply, and five searches make a wall of them.
+* Never announce a call instead of making it. "Let me run propose_fill so you
+  can review it" ends the turn having done nothing, and the person is left
+  looking at a promise. Call the tool, then say what it reported.
 * If a tool refuses, say what it said. Do not try the same call again.
 
 HOW TO REPLY
@@ -179,9 +299,17 @@ did not call `reword_answers`, you did not reword anything, whatever the
 answers happen to read like. A person acting on a claim that is not true is
 worse off than one told the work is unfinished.
 
-Reply in the language you were addressed in. If somebody writes to you in
-Arabic, answer in Arabic. The questions in a file keep their own language
-whatever you are writing in, and that is handled for you."""
+Write plainly. Short paragraphs, and a list only where there is genuinely a
+list. Bold is for a word that would be missed without it, not for every noun --
+what reaches the screen is the text you wrote, so a reply peppered with
+asterisks reads as a reply peppered with asterisks.
+
+Last, and it outranks everything else about how you write: **reply in the
+language you were addressed in**. A message in Arabic gets an answer in
+Arabic, however much of what you read along the way was in English -- the
+policies are in both, the tool results are in English, and none of that
+changes who is being spoken to. The questions inside a file keep their own
+language whatever you are writing in, and that is handled for you."""
 
 
 def _tools(user: User, state: dict) -> list:
@@ -193,6 +321,11 @@ def _tools(user: User, state: dict) -> list:
 
     def _log(step: str) -> None:
         state["steps"].append(step)
+        # And say it out loud, for whoever is watching the turn happen. The
+        # steps are the record afterwards; this is the only thing a person has
+        # while it runs, and "Working" for ninety seconds is indistinguishable
+        # from a page that has frozen.
+        progress.note(state.get("run_id"), DOING.get(step.split("(", 1)[0], "Working…"))
 
     def _batch_id() -> str:
         return state.get("batch_id") or ""
@@ -251,9 +384,19 @@ def _tools(user: User, state: dict) -> list:
         blank = counts["questions"] - counts["answered"]
         lines = [
             f"{report['source_name']}: {counts['questions']} question(s) in total — "
-            f"{counts['answered']} answered, {blank} still blank, "
+            f"{counts['answered']} answered here, {blank} still blank, "
             f"{counts['needs_review']} flagged for review."
         ]
+        # A file that arrives already filled in is a normal thing to be handed:
+        # last year's submission, or a colleague's half-finished draft. Saying
+        # it has no answers because we did not write them is simply wrong.
+        if counts.get("already_in_file"):
+            lines.append(
+                f"{counts['already_in_file']} question(s) arrived with an answer already "
+                "written in the file, by the team that owns this questionnaire. Those "
+                "are finished work and take precedence over anything drafted here; "
+                "`read_existing` shows what they say. They will not be answered again."
+            )
         parts = [p for p in report["parts"] if p["used"]]
         if parts:
             lines.append("Sheets: " + ", ".join(f"{p['name']} ({p['questions']})" for p in parts))
@@ -310,7 +453,12 @@ def _tools(user: User, state: dict) -> list:
         shown = chosen[: max(1, min(int(limit or 40), 100))]
         lines = [f"{len(chosen)} question(s) matched {scope.describe()}:"]
         for question in shown:
-            mark = "answered" if question.get("answer") else "blank   "
+            if question.get("answer"):
+                mark = "answered"
+            elif question.get("existing"):
+                mark = "in file  "
+            else:
+                mark = "blank    "
             if question.get("skip"):
                 mark = "set aside"
             lines.append(f"  {question['id']}  [{mark}]  {question['text'][:110]}")
@@ -318,31 +466,83 @@ def _tools(user: User, state: dict) -> list:
             lines.append(f"  ... and {len(chosen) - len(shown)} more")
         return "\n".join(lines)
 
+    def read_existing(question_ids: str = "", matching: str = "", limit: int = 20) -> str:
+        """What questions already said when the file arrived. Free and instant.
+
+        A questionnaire is often last year's submission, or the security
+        team's own draft. Those words were written by the people who own the
+        subject and are the authoritative answer to the question; quote them
+        when asked what the file says, and do not replace them.
+
+        Args:
+            question_ids: specific questions, comma separated.
+            matching: one literal phrase, to find them by topic instead.
+            limit: how many to show.
+        """
+        _log(f"read_existing({question_ids!r}, {matching!r})")
+        if not _batch_id():
+            return "No questionnaire is open in this conversation."
+
+        scope = _scope("", matching, False, question_ids)
+        report = tools.inspect(user, _batch_id(), scope)
+        chosen = [
+            question for question in report["questions"]
+            if question["selected"] and question.get("existing")
+        ]
+        if not chosen:
+            return ("None of those arrived with an answer in the file. "
+                    "`list_questions` shows which ones did, marked 'in file'.")
+        lines = []
+        for question in chosen[: max(1, min(int(limit or 20), 50))]:
+            lines.append(f"{question['id']} — {question['text'][:90]}")
+            lines.append(f"    the file says: {question['existing'][:400]}")
+        return "\n".join(lines)
+
     async def answer_questions(
-        part: str = "", matching: str = "", unanswered_only: bool = False, ids: str = ""
+        part: str = "", matching: str = "", unanswered_only: bool = False, ids: str = "",
+        replace_existing: bool = False,
     ) -> str:
         """Answer questions from the organisation's policies. Slow and not free.
+
+        Questions that already have an answer are skipped, not overwritten,
+        unless `replace_existing` is set.
 
         Args:
             part: a sheet name, or the section the questions sit under.
             matching: free text matched against the question and its section.
-            unanswered_only: skip questions that already have an answer.
+            unanswered_only: narrow to questions with no answer yet.
             ids: specific question ids, comma separated.
+            replace_existing: throw away answers that are already there and
+                write new ones. Only when the person asked for those questions
+                to be answered again.
         """
         scope = _scope(part, matching, unanswered_only, ids)
-        _log(f"answer_questions({scope.describe()})")
+        again = ", replacing what is there" if replace_existing else ""
+        _log(f"answer_questions({scope.describe()}{again})")
         if not _batch_id():
             return "No questionnaire is open in this conversation."
         try:
-            outcome = await tools.answer(user, _batch_id(), scope)
+            outcome = await tools.answer(
+                user, _batch_id(), scope, replace_existing=replace_existing,
+                run_id=state.get("run_id") or "",
+            )
         except tools.ToolError as refused:
             return str(refused)
         state["refreshed"] = True
         if outcome.nothing_matched:
             return (f"Nothing matched {scope.describe()}. Call describe_form to see what "
                     "sheets and sections this file actually has.")
-        return (f"Answered {outcome.answered} of {outcome.attempted} ({scope.describe()}). "
-                f"{outcome.failed} failed, {outcome.needs_review} flagged for review.")
+        # Said before the counts, because it is the part that changes what to
+        # report: "answered 0 of 0" reads as a failure and is not one.
+        kept = ""
+        if outcome.protected:
+            kept = (f"{outcome.protected} question(s) in that scope already had an answer "
+                    "and were left exactly as they were. ")
+            if not outcome.attempted:
+                return kept + "Nothing else there was blank, so nothing was answered."
+        return (kept + f"Answered {outcome.answered} of {outcome.attempted} "
+                f"({scope.describe()}). {outcome.failed} failed, "
+                f"{outcome.needs_review} flagged for review.")
 
     async def reword_answers(
         instruction: str, part: str = "", matching: str = "",
@@ -363,7 +563,9 @@ def _tools(user: User, state: dict) -> list:
         if not _batch_id():
             return "No questionnaire is open in this conversation."
         try:
-            outcome = await tools.revise(user, _batch_id(), instruction, scope)
+            outcome = await tools.revise(
+                user, _batch_id(), instruction, scope, run_id=state.get("run_id") or "",
+            )
         except tools.ToolError as refused:
             return str(refused)
         state["refreshed"] = True
@@ -448,17 +650,79 @@ def _tools(user: User, state: dict) -> list:
             found = await tools.search(query)
         except Exception as failed:
             return f"The search failed: {failed}"
-        hits = found.get("results", [])[:5]
+        hits = found.get("results", [])[:SOURCES_SHOWN]
         if not hits:
             return f"Nothing in the indexed policies matched {query!r}."
+
+        # Kept for the interface as well as returned to the model. A claim about
+        # what the policies say is worth exactly as much as the clause behind
+        # it, and a person reading the reply should be able to open that clause
+        # rather than take the sentence on trust -- the same bargain every
+        # answer card makes.
+        state.setdefault("sources", []).extend(hits)
         return "\n\n".join(
             f"[{hit.get('locator') or hit.get('source_name')}] {(hit.get('snippet') or '')[:400]}"
             for hit in hits
         )
 
+    async def answer_directly(questions: str) -> str:
+        """Draft this organisation's answer to a question asked in conversation.
+
+        NOT for "what does our policy say about X", "where is X written down",
+        "which policy covers X" -- those ask to be shown a clause and belong to
+        `search_policies`, which is seconds rather than half a minute. This is
+        for "do we do X", "are we compliant with X", "what would we tell an
+        assessor about X": a questionnaire question that arrived in a sentence
+        instead of a spreadsheet.
+
+        The same pipeline `answer_questions` runs -- retrieval, drafting,
+        review, citations -- over a question somebody typed rather than one
+        read out of a spreadsheet. Slow and not free, the same as answering a
+        questionnaire row. Nothing is stored against a file and nothing can be
+        filled in; the answer is for the person reading the reply.
+
+        Args:
+            questions: the question, or a few, one per line. At most five.
+        """
+        asked = [line.strip() for line in (questions or "").splitlines() if line.strip()]
+        _log(f"answer_directly({len(asked)} question(s))")
+        if not asked:
+            return "Nothing to answer -- pass the question itself."
+        if len(asked) > DIRECT_QUESTIONS:
+            return (f"That is {len(asked)} questions. Answer at most {DIRECT_QUESTIONS} at a "
+                    "time this way; a list this long belongs in a questionnaire file.")
+
+        drafted = await service.answer_questions([
+            Question(
+                id=f"asked-{index + 1}",
+                text=text,
+                language=detect_question_language(text),
+            )
+            for index, text in enumerate(asked)
+        ])
+
+        lines = []
+        for result in drafted:
+            lines.append(result.question.text)
+            if result.error:
+                lines.append(f"    could not be answered: {result.error}")
+                continue
+            # Verbatim, and said so, because this is a drafted answer and not
+            # a note to summarise. The sources go to the interface for the same
+            # reason they do under an answer card: a claim about the policies
+            # is worth what the clause behind it is worth.
+            lines.append(f"    answer, to relay word for word: {result.answer}")
+            if result.needs_review:
+                lines.append(f"    flagged for review: {result.confidence_reason or 'low confidence'}")
+            state.setdefault("sources", []).extend(
+                item.model_dump() for item in result.evidence[:SOURCES_SHOWN]
+            )
+        return "\n".join(lines)
+
     return [
-        open_questionnaire, describe_form, list_questions, answer_questions,
-        reword_answers, write_one_answer, set_aside, propose_fill, search_policies,
+        open_questionnaire, describe_form, list_questions, read_existing,
+        answer_questions, reword_answers, write_one_answer, set_aside,
+        propose_fill, search_policies, answer_directly,
     ]
 
 
@@ -504,6 +768,7 @@ async def say(
     message: str,
     *,
     upload: Path | None = None,
+    run_id: str = "",
 ) -> Turn:
     """One exchange. Runs the tools, saves the conversation, returns what happened.
 
@@ -515,16 +780,31 @@ async def say(
     started = time.monotonic()
     turn = Turn(conversation_id=conversation.id, batch_id=conversation.batch_id)
 
+    # Registered before the first model call, so a page watching this turn has
+    # something to read from the moment it starts asking. `run_id` comes from
+    # the caller rather than being minted here: on a first turn there is no
+    # conversation and no batch to name it after, which is exactly the turn
+    # that takes longest.
+    progress.start(run_id, stage="Thinking…")
+
     state: dict = {
+        "run_id": run_id,
         "batch_id": conversation.batch_id,
         "pending_upload": str(upload) if upload else "",
         "steps": turn.steps,
         "refreshed": False,
         "offer_fill": False,
+        "sources": turn.sources,
     }
+    # What the person actually typed, kept apart from what the model is told.
+    # The note below is plumbing -- it exists so the agent knows a file arrived
+    # -- and it was going into the conversation's title, so the history filled
+    # up with entries reading "Read this file. [A file has been uploaded to
+    # this conversation: HR…".
+    asked = message
     if upload:
         message = (
-            f"{message}\n\n[A file has been uploaded to this conversation: {upload.name}. "
+            f"{message}\n\n{UPLOAD_NOTE} {upload.name}. "
             "Call open_questionnaire to read it.]"
         ).strip()
 
@@ -548,10 +828,10 @@ async def say(
     turn.batch_id = state.get("batch_id", "")
     turn.refreshed = bool(state.get("refreshed"))
 
-    conversation.messages = _keep(final, history, turn.reply)
+    conversation.messages = _remember(_keep(final, history, turn.reply), turn)
     conversation.batch_id = turn.batch_id
     if not conversation.title:
-        conversation.title = conversations.title_from(message)
+        conversation.title = conversations.title_from(asked)
     conversations.save(conversation)
 
     events.record(
@@ -560,7 +840,29 @@ async def say(
         tokens=turn.input_tokens + turn.output_tokens,
     )
     turn.seconds = time.monotonic() - started
+    progress.finish(run_id)
     return turn
+
+
+UI_KEY = "ui"
+"""Where a turn's steps and sources ride on its reply message.
+
+`additional_kwargs` is serialised with the message, so what the interface draws
+under a reply is stored with the reply rather than beside it, and the two
+cannot drift apart.
+"""
+
+
+def _remember(messages: list[BaseMessage], turn: Turn) -> list[BaseMessage]:
+    """Attach what this turn did to the reply it produced."""
+    for message in reversed(messages):
+        if isinstance(message, AIMessage) and not getattr(message, "tool_calls", None):
+            message.additional_kwargs[UI_KEY] = {
+                "steps": list(turn.steps),
+                "sources": list(turn.sources),
+            }
+            break
+    return messages
 
 
 def _keep(final: dict, history: list[BaseMessage], reply: str) -> list[BaseMessage]:

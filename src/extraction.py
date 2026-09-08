@@ -84,6 +84,23 @@ def detect_language(text: str) -> Language:
     return "ar" if letters and arabic / letters > 0.3 else "en"
 
 
+_LATIN_CHARS = re.compile(r"[A-Za-z]")
+
+
+def detect_question_language(text: str) -> Language:
+    """Which language a *single typed question* is in, when nobody said.
+
+    Not `detect_language`, and the difference is the point. That one reads a
+    whole document, where a third of the letters being Arabic means an Arabic
+    document. One question is far too short for a ratio: an English question
+    routinely carries an Arabic gloss -- "Do you enforce MFA (المصادقة متعددة
+    العوامل)?" -- and three glossed words would tip a density test over. So the
+    two scripts are counted against each other, and whichever carries the
+    question carries the answer.
+    """
+    return "ar" if len(_ARABIC_CHARS.findall(text)) > len(_LATIN_CHARS.findall(text)) else "en"
+
+
 def _normalise(text: str) -> str:
     """Collapse whitespace and case for de-duplication comparisons."""
     return re.sub(r"\s+", " ", text).strip().casefold()

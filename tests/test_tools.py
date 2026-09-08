@@ -151,6 +151,117 @@ async def test_answering_only_the_unanswered_leaves_the_rest_alone(batch, user, 
     assert kept["answer"] == "A hand-written answer.", "an upload must not overwrite reviewed work"
 
 
+# --- answers that already exist --------------------------------------------
+#
+# The security team's own words, in the file when it arrived, and a reviewed
+# answer written here. Both used to go quietly: "answer this questionnaire"
+# selected everything, and everything was answered.
+
+
+@pytest.fixture
+def filled(user, tmp_path):
+    """A questionnaire that arrives with two of its four questions answered."""
+    return tools.open_form(user, shapes.already_answered(tmp_path / "last year.xlsx"))
+
+
+@pytest.mark.asyncio
+async def test_a_broad_scope_leaves_the_files_own_answers_alone(filled, user, answers_yes):
+    outcome = await tools.answer(user, filled.id)
+
+    assert outcome.attempted == 2, "it answered the two that were blank"
+    assert outcome.protected == 2, "and reported the two it did not touch"
+    assert [q.text for q in answers_yes["questions"]] == [
+        "Are access rights revoked immediately on termination?",
+        "Do you perform background checks before hiring?",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_naming_a_question_does_not_lift_the_guard(filled, user, answers_yes):
+    """Ids are how a scope is narrowed, not how permission is given. An agent
+    that listed a sheet and passed every id back would otherwise be holding a
+    licence to overwrite it."""
+    already = filled.form.questions[0].id
+    outcome = await tools.answer(user, filled.id, tools.Scope(ids=(already,)))
+
+    assert outcome.attempted == 0 and outcome.protected == 1
+    assert "questions" not in answers_yes
+
+
+@pytest.mark.asyncio
+async def test_a_scope_of_nothing_but_answered_questions_is_not_nothing_matched(
+    filled, user, answers_yes
+):
+    """"Nothing matched" sends the caller off to check the sheet names. The
+    scope matched perfectly well; every question in it was already done."""
+    already = filled.form.questions[0].id
+    outcome = await tools.answer(user, filled.id, tools.Scope(ids=(already,)))
+    assert not outcome.nothing_matched
+
+
+@pytest.mark.asyncio
+async def test_replacing_happens_when_it_is_asked_for(filled, user, answers_yes):
+    already = filled.form.questions[0].id
+    outcome = await tools.answer(
+        user, filled.id, tools.Scope(ids=(already,)), replace_existing=True,
+    )
+
+    assert outcome.attempted == 1
+    view = tools.inspect(user, filled.id)
+    written = next(q for q in view["questions"] if q["id"] == already)
+    assert written["answer"].startswith("Yes, this is documented")
+
+
+@pytest.mark.asyncio
+async def test_an_answer_written_here_is_protected_too(batch, user, answers_yes):
+    """A reviewer's correction is worth at least what the file's own words are."""
+    first = batch.form.questions[0].id
+    tools.set_answer(user, batch.id, first, "A hand-written answer.")
+
+    outcome = await tools.answer(user, batch.id)
+    assert outcome.protected == 1
+
+    view = tools.inspect(user, batch.id)
+    kept = next(q for q in view["questions"] if q["id"] == first)
+    assert kept["answer"] == "A hand-written answer."
+
+
+@pytest.mark.asyncio
+async def test_a_question_left_blank_on_purpose_is_not_answered_again(batch, user, answers_yes):
+    first = batch.form.questions[0].id
+    tools.blank_answer(user, batch.id, first)
+
+    outcome = await tools.answer(user, batch.id)
+    assert outcome.protected == 1
+    assert tools.inspect(user, batch.id)["questions"][0]["blanked"]
+
+
+# --- leaving blank, and taking it back --------------------------------------
+
+
+def test_taking_back_a_blank_leaves_the_question_unanswered(batch, user):
+    """Undo, not reverse. Storing something in its place would be a second
+    decision made on the person's behalf."""
+    first = batch.form.questions[0].id
+    tools.blank_answer(user, batch.id, first)
+    tools.blank_answer(user, batch.id, first, blank=False)
+
+    question = tools.inspect(user, batch.id)["questions"][0]
+    assert not question["blanked"] and not question["answer"]
+    assert first not in batches.answers(batch.id)
+
+
+def test_taking_back_a_blank_leaves_what_the_file_said(filled, user):
+    """The file's own words live in the detected form, not in our answers, so
+    forgetting ours cannot take them with it."""
+    first = filled.form.questions[0].id
+    tools.blank_answer(user, filled.id, first)
+    tools.blank_answer(user, filled.id, first, blank=False)
+
+    question = tools.inspect(user, filled.id)["questions"][0]
+    assert question["existing"].startswith("Yes. The HR process")
+
+
 @pytest.mark.asyncio
 async def test_answering_twice_merges_rather_than_replaces(batch, user, answers_yes):
     ids = [question.id for question in batch.form.questions]
@@ -351,6 +462,43 @@ async def test_filling_twice_reports_replacements(batch, user, answers_yes):
     tools.fill(user, batch.id)
     again = tools.fill(user, batch.id)
     assert again.created == 4 and not again.replaced, "each fill starts from the original"
+
+
+def test_a_fill_that_writes_nothing_says_why(batch, user):
+    """"Wrote 0 value(s) -- every other part of the file is untouched" is true
+    and reads like success, which is the worst way to learn that nothing
+    reached your file."""
+    filled = tools.fill(user, batch.id)
+    assert filled.written == 0
+    assert "Nothing has been answered yet" in filled.because
+
+
+def test_a_file_that_came_answered_needs_nothing_written(filled, user):
+    """Not a failure and not the same message. The answers are in the file
+    already -- that is what "nothing to write" means here, and telling somebody
+    to go and answer something would send them to overwrite the very answers
+    that made the write unnecessary."""
+    report = tools.fill(user, filled.id)
+    assert report.written == 0
+    assert "the 2 answer(s) this questionnaire has came with the file" in report.because
+    # And what to do next, which is the half a bare "nothing to write" leaves out.
+    assert "2 question(s) are still blank" in report.because
+
+
+@pytest.mark.asyncio
+async def test_a_normal_fill_gives_no_reason(batch, user, answers_yes):
+    await tools.answer(user, batch.id)
+    assert tools.fill(user, batch.id).because == "", "a reason is only for a fill that wrote nothing"
+
+
+@pytest.mark.asyncio
+async def test_a_fill_with_every_answer_set_aside_says_so(batch, user, answers_yes):
+    await tools.answer(user, batch.id)
+    tools.set_questions(
+        user, batch.id, [{"id": q.id, "skip": True} for q in batch.form.questions]
+    )
+    report = tools.fill(user, batch.id)
+    assert report.written == 0 and "set aside" in report.because
 
 
 def test_filling_without_the_original_says_so(batch, user):

@@ -67,10 +67,16 @@ class Scope:
     """Free text, matched against the question and its section."""
 
     unanswered_only: bool = False
-    """Skip questions that already have an answer.
+    """Narrow to questions with no answer yet -- "finish the rest", "what is left".
 
-    The default for re-answering a partly finished file: an upload of last
-    year's submission should not silently overwrite reviewed work.
+    A way of *naming* a subset, not a safety belt: `answer` refuses to overwrite
+    an existing answer whether or not this is set. It still earns its place,
+    because "list what is left" and "answer what is left" are things people ask
+    and the count has to come out right.
+
+    "Already answered" means either -- an answer this system wrote, or one the
+    file arrived with. Counting only our own was the whole of that intention
+    missed.
     """
 
     def select(self, form: DetectedForm, answered: dict[str, AnsweredQuestion]) -> list[FormQuestion]:
@@ -85,7 +91,7 @@ class Scope:
                 continue
             if needle and needle not in (question.text + " " + question.section).casefold():
                 continue
-            if self.unanswered_only and _has_answer(answered.get(question.id)):
+            if self.unanswered_only and _settled(answered.get(question.id), question):
                 continue
             if not question.writable:
                 continue
@@ -110,6 +116,29 @@ def _has_answer(answered: AnsweredQuestion | None) -> bool:
     return bool(answered and answered.answer.strip() and not answered.error)
 
 
+BLANKED = "left blank on purpose"
+"""Why an answer is empty, when somebody emptied it deliberately.
+
+Recorded rather than inferred. An empty answer and a question nobody has
+answered yet look identical from the outside, and they are opposite states: one
+is a decision and the other is work outstanding.
+"""
+
+
+def _settled(answered: AnsweredQuestion | None, question: FormQuestion) -> bool:
+    """Whether a question is done with, however it got that way.
+
+    Three ways, and `unanswered_only` has to respect all of them or it offers
+    work that is finished: this system answered it, the file arrived with an
+    answer in it, or somebody decided it should be left blank. The last is the
+    one that catches people out -- an empty answer and an unanswered question
+    look identical, and they are opposite states.
+    """
+    if answered is not None and answered.confidence_reason == BLANKED:
+        return True
+    return _has_answer(answered) or question.is_answered
+
+
 # ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
@@ -126,9 +155,18 @@ class Outcome:
     needs_review: int = 0
     scope: str = ""
 
+    protected: int = 0
+    """Questions the scope selected that already had an answer, and were left alone.
+
+    Not a failure and not "nothing matched": the scope did match them, and the
+    operation deliberately declined to overwrite work that already exists.
+    Counted separately so the caller can say so, because "answered 0" and
+    "answered 0, left 9 alone" mean opposite things to the person reading it.
+    """
+
     @property
     def nothing_matched(self) -> bool:
-        return self.attempted == 0
+        return self.attempted == 0 and not self.protected
 
 
 @dataclass
@@ -144,6 +182,16 @@ class Filled:
     """Targets deliberately left empty, and why. Evidence columns, mostly."""
 
     intact: bool = True
+
+    because: str = ""
+    """Why nothing was written, when nothing was. Empty on a normal fill.
+
+    "Wrote 0 value(s) into the file -- every other part of it is untouched" is
+    a true sentence that reads like success, and a person who has just watched
+    a run finish will read it as one. Zero has causes, and they are different
+    problems: nothing has been answered yet, or everything was answered by the
+    file itself and there is genuinely nothing to add.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +255,10 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             "location": question.location,
             "skip": question.skip,
             "selected": question.id in selected,
+            "existing": question.existing_answer,
+            # Deliberately empty, as opposed to not answered yet. Opposite
+            # states that look identical from the outside.
+            "blanked": bool(result and result.confidence_reason == BLANKED),
             "answer": result.answer if result else "",
             "confidence": result.confidence if result else 0.0,
             "needs_review": result.needs_review if result else False,
@@ -236,6 +288,10 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
         "counts": {
             "questions": len(batch.form.questions),
             "answered": sum(1 for q in batch.form.questions if _has_answer(answered.get(q.id))),
+            # Answers the file arrived with. Uploading last year's completed
+            # submission and being told it has none is a lie the interface used
+            # to tell, because this count only ever looked at what we wrote.
+            "already_in_file": batch.form.answered_count,
             "needs_review": sum(
                 1 for q in batch.form.questions
                 if (answered.get(q.id) and answered[q.id].needs_review)
@@ -266,6 +322,7 @@ async def answer(
     scope: Scope | None = None,
     *,
     run_id: str = "",
+    replace_existing: bool = False,
 ) -> Outcome:
     """Answer a selection of a batch's questions.
 
@@ -276,13 +333,29 @@ async def answer(
     Each question is answered in its own language: the samples mix an Arabic
     question into an English form, and the question's own language is the one
     the assessor asked in.
+
+    An answer that already exists is never overwritten unless the caller says
+    `replace_existing`. This is a guard and not a convenience: an answer in the
+    file was written by the security team who own the subject, and one written
+    here was reviewed by somebody. Either is worth more than a fresh draft, and
+    both used to be lost silently -- a broad scope over last year's submission
+    replaced every reviewed word in it. Naming the questions does not lift the
+    guard; only asking to replace them does.
     """
     batch = _require(user, batch_id)
     scope = scope or Scope()
     existing = batches.answers(batch.id)
     chosen = scope.select(batch.form, existing)
 
-    outcome = Outcome(batch_id=batch.id, attempted=len(chosen), scope=scope.describe())
+    protected = 0
+    if not replace_existing:
+        keeping = [q for q in chosen if not _settled(existing.get(q.id), q)]
+        protected = len(chosen) - len(keeping)
+        chosen = keeping
+
+    outcome = Outcome(
+        batch_id=batch.id, attempted=len(chosen), scope=scope.describe(), protected=protected,
+    )
     if not chosen:
         return outcome
 
@@ -393,6 +466,47 @@ def set_answer(user: User, batch_id: str, question_id: str, text: str) -> None:
     )
 
 
+def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = True) -> None:
+    """Leave a question deliberately blank, keeping it out of the work still to do.
+
+    The cell is still written -- with nothing in it -- because the file may
+    already hold last year's answer, and "leave this blank" has to be able to
+    clear it.
+
+    `blank=False` is the undo, and it undoes rather than reverses: the stored
+    answer is forgotten entirely, so the question goes back to being one nobody
+    has answered. Storing something in its place would only be a different
+    decision made on the person's behalf.
+    """
+    batch = _require(user, batch_id)
+    question = next((q for q in batch.form.questions if q.id == question_id), None)
+    if question is None:
+        raise ToolError(f"No question {question_id!r} in this questionnaire.")
+
+    if not blank:
+        batches.forget_answer(batch.id, question_id)
+        events.record(
+            user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
+            question_id=question_id, blanked=False,
+        )
+        return
+
+    existing = batches.answers(batch.id).get(question_id)
+    answered = existing.model_copy(deep=True) if existing else AnsweredQuestion(
+        question=_as_question(question), answer="", confidence=0.0,
+    )
+    answered.answer = ""
+    answered.needs_review = False
+    answered.error = ""
+    answered.confidence = 1.0
+    answered.confidence_reason = BLANKED
+    batches.save_answers(batch.id, [answered], edited_by=user.email)
+    events.record(
+        user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
+        question_id=question_id, blanked=True,
+    )
+
+
 def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
     """Write the answers into a copy of the original questionnaire.
 
@@ -416,6 +530,15 @@ def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
 
     for question in batch.form.questions:
         result = answered.get(question.id)
+        # A question deliberately left blank is written -- with nothing in it.
+        # The file may already hold last year's answer, and "leave this blank"
+        # has to be able to clear it; skipping the question would leave the old
+        # words in place, which is the opposite of what was asked.
+        if result is not None and result.confidence_reason == BLANKED:
+            for target in question.writable:
+                if target.role is not Role.EVIDENCE:
+                    values[target.id] = ""
+            continue
         if not _has_answer(result):
             continue
         for target in question.writable:
@@ -446,7 +569,35 @@ def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
         skipped=report.skipped,
         blank=blank,
         intact=report.intact,
+        because=_nothing_written(batch, answered) if not report.written else "",
     )
+
+
+def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion]) -> str:
+    """Why a fill wrote nothing. Only asked when it wrote nothing.
+
+    Three states arrive here looking identical and are not: work not started,
+    work already done by the file itself, and every row struck out. The message
+    has to name which, because what the person should do next differs and only
+    one of the three is a problem.
+    """
+    if not any(_has_answer(answered.get(q.id)) for q in batch.form.questions):
+        already = batch.form.answered_count
+        if already:
+            blank = sum(1 for q in batch.form.questions if not _settled(answered.get(q.id), q))
+            return (
+                f"Nothing needed writing: the {already} answer(s) this questionnaire has "
+                "came with the file and are already in it." + (
+                    f" {blank} question(s) are still blank — answer those and fill again."
+                    if blank else " Every question is answered."
+                )
+            )
+        return ("Nothing has been answered yet, so there was nothing to write. "
+                "Answer some questions first.")
+    if all(q.skip for q in batch.form.questions if _has_answer(answered.get(q.id))):
+        return "Every answered question is set aside, so nothing was written for any of them."
+    return ("The answers exist but none of them has a cell to go into -- check the "
+            "answer column for each sheet in the reading report.")
 
 
 def _filled_path(batch: Batch) -> Path:

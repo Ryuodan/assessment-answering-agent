@@ -25,6 +25,13 @@ wrong whichever route was taken:
   reply_in     the language the reply must be written in
   reply_has    alternatives, one of which the reply must contain -- for when
                the answer is a fact rather than a tool call
+  at_most      a ceiling on how often a tool may be called, for the ones where
+               calling it is right and calling it five times is a mess
+
+A failing case prints the tools it called and what it said. Both are evidence
+you cannot get back afterwards: "it did not call X" is not a finding -- what it
+called instead is -- and "replied in ar, got en" does not say whether the
+assistant was wrong or the counting was.
 
 Each case runs against a fixture questionnaire built by the suite, so nothing
 here depends on a customer's file. The answering pipeline is real -- these are
@@ -54,7 +61,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 print = functools.partial(print, flush=True)  # noqa: A001
 
-from src import identity, tools                                   # noqa: E402
+# Half the cases are in Arabic, and a Windows console defaults to a codepage
+# that cannot encode it -- so `--verbose`, the one flag you reach for to find
+# out why an Arabic case failed, died with a UnicodeEncodeError before printing
+# the reply. Replacement rather than strict: a mangled character in a diagnostic
+# line is a nuisance, and a crash in the middle of a suite is an hour.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+from src import batches, conversations, identity, tools           # noqa: E402
 from src.agents import assistant                                  # noqa: E402
 from src.conversations import Conversation                        # noqa: E402
 from tests import forms_fixtures as shapes                        # noqa: E402
@@ -84,8 +99,17 @@ class Case:
     shape: str = "status_and_comment"
     """Which fixture questionnaire to run against."""
 
+    at_most: dict | None = None
+    """A ceiling on how often a tool may be called.
+
+    For the ones where calling it at all is right and calling it five times is
+    a wall of sources under a two-line reply."""
+
     upload_on: int = 0
-    """Which turn carries the file. Every case starts by uploading one."""
+    """Which turn carries the file, or -1 for a case with no file at all.
+
+    A question can be asked straight out -- "do we encrypt backups?" -- and the
+    assistant answers it from the policies without anything being uploaded."""
 
 
 CASES: list[Case] = [
@@ -191,11 +215,118 @@ CASES: list[Case] = [
         answered=1,
     ),
     Case(
+        name="knows-what-the-file-already-said",
+        says=["Read this and tell me how many already have answers."],
+        wants=("open_questionnaire",),
+        forbids=("answer_questions",),
+        reply_has=("2", "two"),
+        answered=0,
+        shape="already_answered",
+    ),
+    Case(
+        name="does-not-overwrite-what-the-file-had",
+        says=[
+            "Read this file.",
+            "Answer the ones that are still blank.",
+        ],
+        wants=("answer_questions",),
+        answered=2,
+        shape="already_answered",
+    ),
+    Case(
+        name="reads-back-what-the-file-said",
+        says=[
+            "Read this file.",
+            "What did we say about the human resources process last time?",
+        ],
+        wants=("read_existing",),
+        forbids=("answer_questions",),
+        answered=0,
+        shape="already_answered",
+    ),
+    Case(
+        # The expensive one. Two of the four arrived answered by the security
+        # team, the instruction is the broadest there is, and the right
+        # behaviour is to answer the other two and leave theirs standing.
+        name="answers-the-blanks-not-the-whole-file",
+        says=[
+            "Read this file.",
+            "Answer this questionnaire.",
+        ],
+        wants=("answer_questions",),
+        answered=2,
+        shape="already_answered",
+    ),
+    Case(
+        # The other half of it: told plainly to redo one, it must actually redo
+        # it rather than reporting the guard back as a refusal.
+        name="redoes-an-answer-when-told-to",
+        says=[
+            "Read this file.",
+            "The answer about the human resources process is out of date. "
+            "Throw it away and write a new one from our policies.",
+        ],
+        wants=("answer_questions",),
+        answered=1,
+        shape="already_answered",
+    ),
+    Case(
+        name="answers-a-question-with-no-file",
+        says=["Do we encrypt customer data at rest? Answer it properly, as if for an assessor."],
+        wants=("answer_directly",),
+        forbids=("open_questionnaire", "answer_questions"),
+        answered=0,
+        upload_on=-1,
+    ),
+    Case(
+        name="arabic-question-with-no-file",
+        says=["هل نقوم بتشفير بيانات العملاء أثناء التخزين؟"],
+        wants=("answer_directly",),
+        answered=0,
+        reply_in="ar",
+        upload_on=-1,
+    ),
+    Case(
+        name="one-search-not-five",
+        says=["What does our policy say about password length?"],
+        wants=("search_policies",),
+        forbids=("answer_questions",),
+        answered=0,
+        at_most={"search_policies": 2},
+    ),
+    Case(
         name="searches-rather-than-inventing",
         says=["What does our own policy say about password length?"],
         wants=("search_policies",),
         forbids=("answer_questions",),
         answered=0,
+    ),
+    # The two cases above and the two below draw the same line from both
+    # sides. Which tool answers a question with no file behind it is decided
+    # by the shape of the question -- and a person who wants the other one
+    # should be able to say so in the words they would naturally use, without
+    # learning a command. These two are that escape hatch, held to by the
+    # suite rather than left to hold by luck.
+    Case(
+        name="show-me-the-clause-overrides-drafting",
+        says=["Do we encrypt customer data at rest? Just show me what the policy "
+              "says — do not write me an answer."],
+        wants=("search_policies",),
+        forbids=("answer_directly", "answer_questions"),
+        answered=0,
+        upload_on=-1,
+    ),
+    Case(
+        name="answer-it-properly-overrides-looking-up",
+        says=["What does our policy say about password length? Answer it properly, "
+              "the way we would put it to an assessor."],
+        wants=("answer_directly",),
+        forbids=("answer_questions",),
+        answered=0,
+        upload_on=-1,
+        # One incidental search is forgivable; falling back into pure lookup
+        # and never drafting is the regression, and `wants` catches that.
+        at_most={"search_policies": 1},
     ),
 ]
 
@@ -226,7 +357,8 @@ async def run_case(case: Case, user) -> Result:
     """One case, start to finish, against the real model."""
     result = Result(case=case.name)
     workspace = Path(tempfile.mkdtemp(prefix="eval_assistant_"))
-    path = getattr(shapes, case.shape)(workspace / "HR Assessment.xlsx")
+    path = (getattr(shapes, case.shape)(workspace / "HR Assessment.xlsx")
+            if case.upload_on >= 0 else None)
 
     conversation: Conversation = assistant.start(user, "")
     for index, says in enumerate(case.says):
@@ -246,6 +378,13 @@ async def run_case(case: Case, user) -> Result:
             f"did not call {forbidden}"
         )
 
+    for name, ceiling in (case.at_most or {}).items():
+        used = sum(1 for step in result.steps if step.split("(", 1)[0] == name)
+        (result.passed if used <= ceiling else result.failed).append(
+            f"called {name} at most {ceiling}x" if used <= ceiling
+            else f"called {name} {used}x, at most {ceiling} wanted"
+        )
+
     if case.answered is not None:
         got = 0
         if conversation.batch_id:
@@ -257,7 +396,10 @@ async def run_case(case: Case, user) -> Result:
         )
 
     if case.reply_has:
-        said = any(wanted in result.reply for wanted in case.reply_has)
+        # Case-insensitively: "Two of the questions already have answers" is the
+        # right answer, and a check that only accepted "two" failed it.
+        spoken = result.reply.casefold()
+        said = any(wanted.casefold() in spoken for wanted in case.reply_has)
         (result.passed if said else result.failed).append(
             "gave the right count" if said
             else "did not say any of " + ", ".join(repr(w) for w in case.reply_has)
@@ -269,7 +411,24 @@ async def run_case(case: Case, user) -> Result:
             f"replied in {case.reply_in}" if spoken == case.reply_in
             else f"replied in {case.reply_in}, got {spoken}"
         )
+
+    # Last, after everything that reads them. A suite that leaves a batch and a
+    # conversation behind per case leaves sixty per run, and they turn up in
+    # the interface: "Or pick up" and the conversation list filled with fixture
+    # questionnaires nobody uploaded, until somebody went and deleted 177 rows
+    # by hand. A test that dirties the thing it is testing is not finished.
+    _forget(conversation)
     return result
+
+
+def _forget(conversation: Conversation) -> None:
+    """Drop what one case created. Best effort -- a failure here is not a result."""
+    try:
+        if conversation.batch_id:
+            batches.delete(conversation.batch_id)
+        conversations.delete(conversation.id)
+    except Exception as failed:  # noqa: BLE001 - tidying must never fail a run
+        print(f"  (could not clean up after {conversation.id}: {failed})")
 
 
 async def main_async(args) -> int:
@@ -296,8 +455,18 @@ async def main_async(args) -> int:
                   f"{result.seconds:6.1f}s  {result.tokens:7d} tok")
             if result.failed:
                 print(f"       missed: {', '.join(result.failed)}")
-            if args.verbose:
+                # Always, not only under --verbose. "It did not call X" is not
+                # a finding on its own -- what it called instead is the finding,
+                # and having to re-run the whole suite with a flag to see it
+                # costs more than the line ever could.
                 print(f"       steps: {' -> '.join(result.steps) or '(none)'}")
+                # The reply too, for the same reason as the steps. A language
+                # check that fails says "replied in ar, got en" and the reply
+                # is the only thing that says whether the assistant was wrong
+                # or the counting was -- and it is gone by the time you think
+                # to re-run with a flag.
+                print(f"       said:  {result.reply[:200]}")
+            elif args.verbose:
                 print(f"       said:  {result.reply[:160]}")
         runs.append(results)
 

@@ -51,6 +51,31 @@ def _upload(client, path, name=None):
         )
 
 
+# --- the two pages ---------------------------------------------------------
+
+
+def test_the_front_door_is_the_conversation(client):
+    """A person meeting this for the first time should meet the thing that
+    needs nothing explained. The workbench is where you go for the controls."""
+    body = client.get("/").text
+    assert 'id="prompt"' in body, "the composer, so this is the conversation"
+    assert '<title>Assessment Answering Agent</title>' in body
+    assert '"/workbench"' in body, "and it has to say how to reach the other one"
+
+
+def test_the_workbench_has_its_own_address(client):
+    body = client.get("/workbench").text
+    assert 'id="questionList"' in body, "the question list, so this is the workbench"
+    assert "<title>Workbench" in body
+
+
+def test_the_old_chat_address_still_arrives(client):
+    """Somebody has this bookmarked. A moved page is a redirect, not a 404."""
+    moved = client.get("/chat", follow_redirects=False)
+    assert moved.status_code == 308 and moved.headers["location"] == "/"
+    assert 'id="prompt"' in client.get("/chat").text
+
+
 # --- opening ---------------------------------------------------------------
 
 
@@ -175,6 +200,61 @@ def test_an_answer_can_be_written_by_hand(client, tmp_path, answers_yes):
     written = next(q for q in body["questions"] if q["id"] == question)
     assert written["answer"] == "We use AES-256 throughout."
     assert written["edited_by"] == identity.LOCAL_EMAIL
+
+
+def test_a_broad_answer_request_does_not_replace_the_files_own_answers(
+    client, tmp_path, answers_yes
+):
+    """The route the workbench calls when somebody presses Answer. Whatever the
+    page sends, the two questions the file arrived answered stay as they are."""
+    opened = _upload(client, shapes.already_answered(tmp_path / "last year.xlsx")).json()
+    outcome = client.post(f"/api/forms/{opened['id']}/answer", json={}).json()
+
+    assert outcome["attempted"] == 2 and outcome["protected"] == 2
+    kept = outcome["batch"]["questions"][0]
+    assert kept["existing"].startswith("Yes. The HR process")
+    assert not kept["answer"]
+
+
+def test_replacing_an_answer_takes_saying_so(client, tmp_path, answers_yes):
+    opened = _upload(client, shapes.already_answered(tmp_path / "last year.xlsx")).json()
+    question = opened["questions"][0]["id"]
+    outcome = client.post(
+        f"/api/forms/{opened['id']}/answer",
+        json={"scope": {"ids": [question]}, "replace_existing": True},
+    ).json()
+
+    assert outcome["attempted"] == 1
+    written = next(q for q in outcome["batch"]["questions"] if q["id"] == question)
+    assert written["answer"].startswith("Yes, an approved policy")
+
+
+def test_an_answer_can_be_left_blank_and_brought_back(client, tmp_path, answers_yes):
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    blanked = client.post(
+        f"/api/forms/{opened['id']}/blank", json={"question_id": question},
+    ).json()
+    assert next(q for q in blanked["questions"] if q["id"] == question)["blanked"]
+
+    # And the cell is written empty, so last year's answer is cleared rather
+    # than left standing.
+    assert client.post(f"/api/forms/{opened['id']}/fill").json()["written"] == 4
+
+    back = client.post(
+        f"/api/forms/{opened['id']}/blank",
+        json={"question_id": question, "blank": False},
+    ).json()
+    restored = next(q for q in back["questions"] if q["id"] == question)
+    assert not restored["blanked"] and not restored["answer"]
+
+
+def test_blanking_a_question_the_file_does_not_have_is_a_400(client, tmp_path):
+    batch_id = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()["id"]
+    response = client.post(f"/api/forms/{batch_id}/blank", json={"question_id": "nope"})
+    assert response.status_code == 400
 
 
 def test_writing_an_unknown_question_is_a_400(client, tmp_path):

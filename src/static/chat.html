@@ -3,201 +3,279 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Assistant — Assessment Answering</title>
+<title>Assessment Answering Agent</title>
 
-<!-- The answer card, shared with the workbench. Same cards, same sources, same
-     reviewer reasoning: two renderings of them would drift within a week. -->
+<!-- The design tokens, the answer card and the chunk renderer, shared with the
+     workbench. A card looks the same in a conversation as it does on the
+     workbench because it is the same card, drawn by the same rules. -->
+<link rel="stylesheet" href="/static/cards.css" />
 <script src="/static/cards.js"></script>
 
 <style>
-  /* Two columns: the conversation on the left, the answers it produced on the
-     right. The answers are the work; the conversation is how you ask for it,
-     and it should not be the thing taking up the screen once there are 183
-     cards to read. */
-  :root {
-    color-scheme: light dark;
-    --bg: #f7f7f8; --panel: #ffffff; --line: #e3e3e6; --ink: #14141a;
-    --muted: #6b6b76; --accent: #3d5afe; --accent-soft: #eef1ff;
-    --warn: #b45309; --warn-soft: #fef3c7; --danger: #b91c1c;
-    --radius: 12px;
-  }
-  :root[data-theme="dark"], :root:not([data-theme="light"]) {
-    @media (prefers-color-scheme: dark) {
-      --bg: #16161a; --panel: #1e1e24; --line: #33333c; --ink: #ececf1;
-      --muted: #9a9aa6; --accent: #8fa2ff; --accent-soft: #23263a;
-      --warn: #fbbf24; --warn-soft: #3a2f14;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #16161a; --panel: #1e1e24; --line: #33333c; --ink: #ececf1;
-    --muted: #9a9aa6; --accent: #8fa2ff; --accent-soft: #23263a;
-    --warn: #fbbf24; --warn-soft: #3a2f14;
-  }
-
+  /* Three columns: history, conversation, answers. The middle one is the only
+     one that is always there -- the other two open and close, because a person
+     reading 183 answer cards wants the width and a person typing does not. */
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-    height: 100vh; display: flex; flex-direction: column;
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
   }
-  button { font: inherit; cursor: pointer; }
+  button, input, textarea, select { font: inherit; }
+  button { cursor: pointer; }
   [hidden] { display: none !important; }
 
-  /* --- header ------------------------------------------------------------ */
-  header {
-    display: flex; align-items: center; gap: 12px;
+  .ghost {
+    background: transparent; color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 6px 11px; font-size: 13px; white-space: nowrap;
+  }
+  .ghost:hover { color: var(--ink); border-color: var(--line-strong); background: var(--surface-sunken); }
+  .ghost.on { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+  .primary {
+    background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent);
+    border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 550;
+  }
+  .primary:disabled { opacity: .55; cursor: not-allowed; }
+  .status { font-size: 13px; color: var(--ink-faint); min-height: 18px; }
+  .status.error { color: var(--err); }
+  .status.ok { color: var(--ok); }
+  .status.busy { color: var(--accent-ink); }
+
+  /* --- top bar ----------------------------------------------------------- */
+  .topbar {
+    display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
     padding: 10px 16px; border-bottom: 1px solid var(--line);
-    background: var(--panel);
+    background: var(--surface); box-shadow: var(--shadow-sm);
   }
-  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
-  header .spacer { flex: 1; }
-  .chip {
-    border: 1px solid var(--line); background: transparent; color: var(--ink);
-    border-radius: 999px; padding: 5px 12px; font-size: 13px;
+  .topbar h1 { font-size: 15px; margin: 0; font-weight: 620; letter-spacing: -.01em; }
+  .topbar .spacer { flex: 1; }
+  .whoami { font-size: 12.5px; color: var(--ink-faint); }
+
+  /* --- the three panes --------------------------------------------------- */
+  main { flex: 1; display: flex; min-height: 0; position: relative; }
+
+  /* Floating rather than in a row of its own: the conversation is the page,
+     and a strip of chrome across the top of it to hold one button would cost
+     more than the button is worth. */
+  .pane-toggle {
+    /* Clear of the conversation's scrollbar rather than flush with the edge:
+       the thread scrolls inside this column, so 16px -- which lines the button
+       up with the address in the bar -- put it under the scrollbar's thumb. */
+    position: absolute; top: 12px; inset-inline-end: 30px; z-index: 6;
+    background: var(--surface); box-shadow: var(--shadow-sm);
   }
-  .chip:hover { border-color: var(--accent); color: var(--accent); }
-  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-  .who { font-size: 13px; color: var(--muted); }
 
-  /* --- layout ------------------------------------------------------------ */
-  main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) 1.25fr; min-height: 0; }
-  main.alone { grid-template-columns: 1fr; }
-  .column { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-  .column + .column { border-left: 1px solid var(--line); }
+  .side {
+    flex: 0 0 250px; background: var(--surface-sunken);
+    border-inline-end: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .side[hidden] { display: none !important; }
+  .side-head {
+    display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint);
+  }
+  .side-head .spacer { flex: 1; }
+  .side-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+  .convo {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    background: transparent; border: 0; border-radius: var(--radius-sm);
+    padding: 8px 10px; text-align: start; color: var(--ink-soft); font-size: 13.5px;
+  }
+  .convo:hover { background: var(--surface); color: var(--ink); }
+  .convo.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
+  .convo .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .convo .forget { opacity: 0; border: 0; background: transparent; color: var(--ink-faint); padding: 0 4px; }
+  .convo:hover .forget { opacity: 1; }
+  .convo .forget:hover { color: var(--err); }
 
-  /* --- conversation ------------------------------------------------------ */
-  #thread { flex: 1; overflow-y: auto; padding: 20px 18px 8px; }
-  .turn { max-width: 680px; margin: 0 auto 18px; }
-  .turn .role { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .middle { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  .answers-pane {
+    flex: 0 0 clamp(400px, 42vw, 620px);
+    border-inline-start: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0; background: var(--surface-sunken);
+  }
+  .answers-pane[hidden] { display: none !important; }
+  .pane-head {
+    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+    padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--surface);
+  }
+  .pane-head h2 {
+    margin: 0; font-size: 13.5px; font-weight: 600; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #answers { flex: 1; overflow-y: auto; padding: 14px; }
+  #answers .summary { margin-bottom: 14px; }
+  .nothing { color: var(--ink-faint); text-align: center; margin-top: 18vh; padding: 0 28px; font-size: 13.5px; }
+
+  /* --- the conversation --------------------------------------------------- */
+  #thread { flex: 1; overflow-y: auto; padding: 22px 20px 6px; }
+  .turn { max-width: 700px; margin: 0 auto 20px; }
+  .turn .role {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-faint); margin-bottom: 5px;
+  }
   .bubble {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 11px 14px; white-space: pre-wrap;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 15px; box-shadow: var(--shadow-sm);
     overflow-wrap: anywhere;
   }
-  .turn.you .bubble { background: var(--accent-soft); border-color: transparent; }
-  .turn.working .bubble { color: var(--muted); font-style: italic; }
-  .turn .did {
-    margin-top: 6px; font-size: 12px; color: var(--muted);
-    display: flex; flex-wrap: wrap; gap: 6px;
+  /* A person's own message is what they typed, newlines and all. A reply is
+     Markdown and comes through as elements. */
+  .turn.you .bubble, .turn.working .bubble { white-space: pre-wrap; }
+  .bubble > :first-child { margin-top: 0; }
+  .bubble > :last-child { margin-bottom: 0; }
+  .bubble p { margin: 0 0 .7em; }
+  .bubble ul, .bubble ol { margin: 0 0 .7em; padding-inline-start: 1.3em; }
+  .bubble li { margin-bottom: .25em; }
+  .bubble code {
+    background: var(--surface-sunken); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0 4px; font-size: .9em;
   }
-  .turn .did span {
-    background: var(--bg); border: 1px solid var(--line);
-    border-radius: 999px; padding: 1px 8px; font-family: ui-monospace, monospace; font-size: 11px;
+  .turn.you .bubble { background: var(--accent-soft); border-color: transparent; box-shadow: none; }
+  .turn.working .bubble { color: var(--ink-faint); display: flex; align-items: center; gap: 9px; }
+  /* Three dots that keep moving. Whatever the label says, this is what tells
+     a person the page has not frozen -- and it is true whether or not the
+     server has managed to say anything yet. */
+  .dots { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+  .dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+    opacity: .3; animation: blink 1.25s ease-in-out infinite;
   }
+  .dots i:nth-child(2) { animation-delay: .18s; }
+  .dots i:nth-child(3) { animation-delay: .36s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: .95; } }
+  @media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .5; } }
+  .working-label { flex: 1; min-width: 0; }
 
-  .empty { max-width: 620px; margin: 8vh auto; text-align: center; color: var(--muted); }
-  .empty h2 { color: var(--ink); font-size: 20px; margin: 0 0 6px; }
-  .starters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+  .did { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .did span {
+    background: var(--surface-sunken); border: 1px solid var(--line);
+    border-radius: var(--radius-pill); padding: 2px 9px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+    color: var(--ink-faint);
+  }
+  /* Sources under a reply use the same bubbles as an answer card, so a claim
+     about the policies can be opened and checked the same way. */
+  .turn .cites { margin-top: 9px; }
+  .sources { margin-top: 9px; }
+  .sources > summary {
+    cursor: pointer; font-size: 12px; color: var(--ink-faint);
+    list-style: none; display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 3px 11px;
+  }
+  .sources > summary::-webkit-details-marker { display: none; }
+  .sources > summary::before { content: "▸"; font-size: 10px; }
+  .sources[open] > summary::before { content: "▾"; }
+  .sources > summary:hover { color: var(--accent-ink); border-color: var(--accent); }
+
+  .progress {
+    display: block; height: 4px; margin-top: 8px; border-radius: 999px;
+    background: var(--line); overflow: hidden;
+  }
+  .progress-fill { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+
+  .empty { max-width: 640px; margin: 9vh auto; text-align: center; }
+  .empty h2 { font-size: 21px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .empty p { color: var(--ink-faint); margin: 0; }
+  .starters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
   .starters button {
-    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
-    border-radius: 999px; padding: 7px 14px; font-size: 13px; text-align: left;
+    background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft);
+    border-radius: var(--radius-pill); padding: 8px 15px; font-size: 13px;
   }
-  .starters button:hover { border-color: var(--accent); }
+  .starters button:hover { border-color: var(--accent); color: var(--accent-ink); }
 
-  /* --- composer ---------------------------------------------------------- */
-  .composer { padding: 10px 18px 16px; }
+  /* --- composer ----------------------------------------------------------- */
+  .composer { flex: 0 0 auto; padding: 8px 20px 16px; }
   .composer-inner {
-    max-width: 680px; margin: 0 auto; background: var(--panel);
-    border: 1px solid var(--line); border-radius: 22px; padding: 8px 8px 8px 14px;
-    display: flex; align-items: flex-end; gap: 8px;
+    max-width: 700px; margin: 0 auto; background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 24px;
+    padding: 7px 8px 7px 6px; display: flex; align-items: flex-end; gap: 6px;
+    box-shadow: var(--shadow-sm);
   }
-  .composer-inner:focus-within { border-color: var(--accent); }
+  .composer-inner:focus-within { border-color: var(--accent); box-shadow: var(--shadow-md); }
   .composer textarea {
-    flex: 1; border: 0; background: transparent; color: inherit; font: inherit;
-    resize: none; max-height: 180px; padding: 6px 0; outline: none;
+    flex: 1; border: 0; background: transparent; color: inherit; resize: none;
+    max-height: 190px; padding: 7px 2px; outline: none; line-height: 1.5;
   }
   .icon {
-    border: 0; background: transparent; color: var(--muted);
-    border-radius: 50%; width: 34px; height: 34px; font-size: 17px; flex: 0 0 auto;
+    border: 0; background: transparent; color: var(--ink-faint);
+    border-radius: 50%; width: 34px; height: 34px; flex: 0 0 auto;
+    display: grid; place-items: center; font-size: 17px;
   }
-  .icon:hover { background: var(--bg); color: var(--ink); }
-  .icon.send { background: var(--accent); color: #fff; }
-  .icon.send:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+  .icon:hover { background: var(--surface-sunken); color: var(--ink); }
+  .icon.send { background: var(--accent); color: var(--on-accent); }
+  .icon.send:disabled { background: var(--line); color: var(--ink-faint); cursor: not-allowed; }
   .attached {
-    max-width: 680px; margin: 0 auto 6px; font-size: 13px; color: var(--muted);
+    max-width: 700px; margin: 0 auto 7px; font-size: 13px; color: var(--ink-faint);
     display: flex; align-items: center; gap: 8px;
   }
-  .attached .name { color: var(--ink); }
-  .hint-line { max-width: 680px; margin: 8px auto 0; font-size: 12px; color: var(--muted); text-align: center; }
+  .attached .name { color: var(--ink); font-weight: 550; }
+  .foot { max-width: 700px; margin: 7px auto 0; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
 
-  /* --- answers ----------------------------------------------------------- */
-  .pane-head {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
-  }
-  .pane-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
-  .pane-head .spacer { flex: 1; }
-  #answers { flex: 1; overflow-y: auto; padding: 14px 16px 40px; }
-  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  .stat {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 7px 12px; display: flex; flex-direction: column;
-  }
-  .stat .value { font-size: 18px; font-weight: 650; }
-  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .stat.warn .value { color: var(--warn); }
-  .nothing { color: var(--muted); text-align: center; margin-top: 20vh; padding: 0 24px; }
-
-  /* --- side panel: the knowledge base ------------------------------------ */
+  /* --- drawer: the knowledge base ---------------------------------------- */
   .scrim {
-    position: fixed; inset: 0; background: rgba(0, 0, 0, .35);
-    opacity: 0; pointer-events: none; transition: opacity .15s;
+    position: fixed; inset: 0; background: rgba(10, 12, 16, .4); z-index: 30;
+    opacity: 0; pointer-events: none; transition: opacity .16s;
   }
   .scrim.open { opacity: 1; pointer-events: auto; }
   .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 92vw);
-    background: var(--panel); border-left: 1px solid var(--line);
-    transform: translateX(100%); transition: transform .18s ease;
-    display: flex; flex-direction: column; z-index: 10;
+    position: fixed; inset-block: 0; inset-inline-end: 0; width: min(480px, 94vw); z-index: 31;
+    background: var(--surface); border-inline-start: 1px solid var(--line);
+    transform: translateX(100%); transition: transform .2s ease;
+    display: flex; flex-direction: column; box-shadow: var(--shadow-lg);
   }
   .drawer.open { transform: none; }
-  .drawer header { border-bottom: 1px solid var(--line); }
   .drawer .body { flex: 1; overflow-y: auto; padding: 16px; }
   .drop {
-    display: block; border: 1.5px dashed var(--line); border-radius: var(--radius);
-    padding: 16px; text-align: center; color: var(--muted); cursor: pointer; margin-bottom: 10px;
+    display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
+    padding: 15px; text-align: center; color: var(--ink-faint); cursor: pointer; margin-bottom: 10px;
+    font-size: 13px;
   }
-  .drop:hover, .drop.over { border-color: var(--accent); color: var(--accent); }
+  .drop:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
   .drop input { display: none; }
+  .drop strong { color: var(--ink); display: block; margin-bottom: 2px; }
   .source {
-    display: flex; align-items: center; gap: 8px; padding: 7px 0;
+    display: flex; align-items: center; gap: 8px; padding: 8px 0;
     border-bottom: 1px solid var(--line); font-size: 13px;
   }
-  .source .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .source .count { color: var(--muted); font-size: 12px; }
-  .quiet {
-    border: 1px solid var(--line); background: transparent; color: var(--muted);
-    border-radius: 8px; padding: 3px 9px; font-size: 12px;
-  }
-  .quiet:hover { color: var(--ink); border-color: var(--accent); }
-  .quiet.danger:hover { color: var(--danger); border-color: var(--danger); }
-  .primary {
-    background: var(--accent); color: #fff; border: 0; border-radius: 9px;
-    padding: 8px 14px; font-weight: 550;
-  }
-  .primary:disabled { opacity: .5; cursor: not-allowed; }
-  .status { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 18px; }
-  .status.error { color: var(--danger); }
-  .status.ok { color: var(--accent); }
+  .source .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source .count { color: var(--ink-faint); font-size: 12px; }
 
-  /* --- sign in ----------------------------------------------------------- */
-  .gate {
-    position: fixed; inset: 0; background: var(--bg); z-index: 50;
-    display: grid; place-items: center; padding: 20px;
+  /* --- the document viewer ------------------------------------------------
+     In the page rather than in a tab. The document is same-origin and already
+     authenticated by the session cookie, so a frame needs no permission from
+     anybody; a popup is at the mercy of the browser and the organisation. */
+  #viewer {
+    width: min(1000px, 94vw); height: min(88vh, 900px); padding: 0;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg);
   }
+  #viewer::backdrop { background: rgba(10, 12, 16, .5); }
+  .viewer-shell { height: 100%; display: flex; flex-direction: column; }
+  #viewerFrame { flex: 1; width: 100%; border: 0; background: var(--surface-sunken); }
+  #viewerDownload { text-decoration: none; }
+
+  /* --- sign in ------------------------------------------------------------ */
+  .gate { position: fixed; inset: 0; background: var(--ground); z-index: 50; display: grid; place-items: center; padding: 20px; }
   .gate[hidden] { display: none !important; }
   .gate form {
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 26px; width: min(380px, 100%); display: flex; flex-direction: column; gap: 10px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; width: min(390px, 100%); display: flex; flex-direction: column; gap: 10px;
+    box-shadow: var(--shadow-md);
   }
-  .gate input {
-    padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px;
-    background: var(--bg); color: inherit; font: inherit;
+  .gate input, .drawer input[type="text"] {
+    padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface-sunken); color: inherit;
   }
 
-  @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; }
-    .column + .column { border-left: 0; border-top: 1px solid var(--line); }
+  @media (max-width: 1100px) { .answers-pane { flex-basis: 46vw; } }
+  @media (max-width: 860px) {
+    .side { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 25; box-shadow: var(--shadow-lg); }
+    .answers-pane { position: fixed; inset: 0; z-index: 24; flex-basis: auto; }
   }
 </style>
 </head>
@@ -205,8 +283,8 @@
 
 <div class="gate" id="gate" hidden>
   <form id="signInForm">
-    <h2 style="margin:0 0 4px">Sign in</h2>
-    <p class="who" style="margin:0 0 6px">Your work address and your team's access code.</p>
+    <h2 style="margin:0 0 2px;font-size:18px">Sign in</h2>
+    <p class="status" style="margin:0 0 6px">Your work address and your team's access code.</p>
     <input id="gateEmail" type="email" placeholder="you@example.com" autocomplete="username" required />
     <input id="gateCode" type="password" placeholder="Access code" autocomplete="current-password" required />
     <button class="primary" type="submit">Sign in</button>
@@ -214,79 +292,107 @@
   </form>
 </div>
 
-<header>
+<div class="topbar">
+  <button class="ghost" id="toggleHistory" title="Earlier conversations">☰</button>
   <h1>Assistant</h1>
-  <button class="chip" id="newChat" title="Start a new conversation">New</button>
-  <select id="history" class="chip" style="max-width:230px" title="Earlier conversations">
-    <option value="">Earlier conversations…</option>
-  </select>
+  <button class="ghost" id="newChat">New conversation</button>
   <span class="spacer"></span>
-  <button class="chip" id="openKb" title="Policies and previous assessments">Knowledge base</button>
-  <a class="chip" href="/" style="text-decoration:none">Workbench →</a>
-  <span class="who" id="who"></span>
-</header>
+  <button class="ghost" id="openKb">Knowledge base</button>
+  <a class="ghost" href="/workbench" style="text-decoration:none">Workbench →</a>
+  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
+  <span class="whoami" id="whoami"></span>
+</div>
 
-<main id="layout" class="alone">
-  <section class="column">
+<main>
+  <!-- Top right, under the address in the bar and against the edge the panel
+       slides in from, so the control and the thing it opens are in the same
+       place. It goes away while the panel is open: the panel has its own ✕,
+       and a button that opens what is already open is a button that does
+       nothing. -->
+  <button class="ghost pane-toggle" id="toggleAnswers" hidden>Answers →</button>
+
+  <aside class="side" id="history">
+    <div class="side-head"><span>Conversations</span></div>
+    <div class="side-list" id="historyList"></div>
+  </aside>
+
+  <section class="middle">
     <div id="thread">
       <div class="empty" id="empty">
         <h2>What would you like done?</h2>
-        <p>Attach a questionnaire and say what to do with it. Answers appear beside this,
-           with the policy clauses they came from.</p>
+        <p>Attach a questionnaire and say what to do with it. The answers appear beside
+           this, with the policy clauses they came from. Or just ask a question —
+           you do not need a file to get an answer out of the policies.</p>
         <div class="starters" id="starters"></div>
       </div>
     </div>
 
     <div class="composer">
       <div class="attached" id="attached" hidden>
-        <span>Attached:</span><span class="name" id="attachedName"></span>
-        <button class="quiet danger" id="detach">remove</button>
+        <span>Attached</span><span class="name" id="attachedName"></span>
+        <button class="ghost" id="detach">remove</button>
       </div>
       <div class="composer-inner">
-        <label class="icon" for="fileInput" title="Attach a questionnaire" style="display:grid;place-items:center">
+        <label class="icon" for="fileInput" title="Attach a questionnaire">
           <input type="file" id="fileInput" accept=".xlsx,.xlsm,.docx" hidden />＋
         </label>
         <textarea id="prompt" rows="1"
-          placeholder="Ask for something — “read this and answer the governance questions, keep them short”"></textarea>
+          placeholder="Ask for something, ex: “read this and answer the governance questions, keep them short”"></textarea>
         <button class="icon send" id="send" disabled title="Send">↑</button>
       </div>
-      <div class="hint-line" id="hintLine">Shift + Enter for a new line.</div>
+      <div class="foot">Shift + Enter for a new line. It cannot write to your file without you pressing the button.</div>
     </div>
   </section>
 
-  <section class="column" id="answerColumn" hidden>
+  <aside class="answers-pane" id="answersPane" hidden>
     <div class="pane-head">
       <h2 id="answerTitle">Answers</h2>
-      <span class="spacer"></span>
-      <button class="quiet" id="fillBtn" hidden>Fill the original file</button>
-      <button class="quiet" id="downloadBtn" hidden>Download</button>
+      <button class="ghost" id="fillBtn" hidden>Fill the file</button>
+      <button class="ghost" id="downloadBtn" hidden>Download</button>
+      <button class="ghost" id="closeAnswers" title="Hide this panel">✕</button>
     </div>
     <div id="answers"></div>
-  </section>
+  </aside>
 </main>
+
+<dialog id="viewer">
+  <div class="viewer-shell">
+    <div class="pane-head">
+      <h2 id="viewerTitle">Document</h2>
+      <a class="ghost" id="viewerDownload" download>Download</a>
+      <button class="ghost" id="viewerClose">✕</button>
+    </div>
+    <!-- No sandbox, the same as the workbench's viewer. `allow-same-origin`
+         alone stops the browser's own PDF viewer from running, and the frame
+         came up blank; the endpoint already serves converted Word previews
+         under `default-src 'none'`, so the protection is on the server where
+         it belongs rather than on an attribute that also breaks PDFs. -->
+    <iframe id="viewerFrame" title="Document preview"></iframe>
+  </div>
+</dialog>
 
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="kb" aria-hidden="true">
-  <header>
-    <h1>Knowledge base</h1>
-    <span class="spacer"></span>
-    <button class="quiet" id="closeKb">close</button>
-  </header>
+  <div class="pane-head">
+    <h2>Knowledge base</h2>
+    <button class="ghost" id="closeKb">✕</button>
+  </div>
   <div class="body">
-    <p class="who">Every answer is written from these and cites them. Managed here rather than
-       through the assistant: this is the corpus, not a task.</p>
+    <p class="status" style="margin-bottom:12px">Every answer is written from these and cites
+       them. Managed here rather than through the assistant: this is the corpus, not a task.</p>
 
-    <label class="drop" data-kind="guidelines">
+    <label class="drop">
       <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
-      <strong>Policies and standards</strong><br />Drop PDF or DOCX here, or click to choose
+      <strong>Policies and standards</strong>Drop PDF or DOCX here, or click to choose
     </label>
-    <label class="drop" data-kind="prior">
+    <label class="drop">
       <input type="file" id="priorInput" multiple accept=".pdf,.docx" />
-      <strong>Previously answered assessments</strong><br />Question and answer pairs, the strongest signal for wording
+      <strong>Previously answered assessments</strong>Question and answer pairs — the strongest signal for wording
     </label>
     <div class="status" id="kbStatus"></div>
 
-    <h3 style="font-size:13px;margin:18px 0 4px">What is indexed</h3>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin:20px 0 4px">
+      What is indexed</h3>
     <div id="sources"></div>
   </div>
 </aside>
@@ -295,11 +401,24 @@
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
+  const THEME_KEY = "assessment-theme";
 
-  /* --- sign in ------------------------------------------------------------
-     The same session cookie the workbench uses, checked the same way. A page
-     that let you type before it knew who you were would collect a message and
-     then throw it away. */
+  /* --- theme, the same two lines the workbench uses ----------------------- */
+  const systemDark = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const theme = () => document.documentElement.getAttribute("data-theme") || (systemDark() ? "dark" : "light");
+  function applyTheme(next) {
+    document.documentElement.setAttribute("data-theme", next);
+    $("themeToggle").textContent = next === "dark" ? "Light mode" : "Dark mode";
+    try { localStorage.setItem(THEME_KEY, next); } catch (error) { /* private mode */ }
+  }
+  (function () {
+    let stored = null;
+    try { stored = localStorage.getItem(THEME_KEY); } catch (error) { /* private mode */ }
+    applyTheme(stored || (systemDark() ? "dark" : "light"));
+  })();
+  $("themeToggle").onclick = () => applyTheme(theme() === "dark" ? "light" : "dark");
+
+  /* --- talking to the server ---------------------------------------------- */
   async function request(url, options) {
     const response = await fetch(url, Object.assign({ credentials: "same-origin" }, options));
     const text = await response.text();
@@ -312,16 +431,11 @@
   }
 
   let me = null;
-
   async function whoAmI() {
-    try {
-      me = await request("/api/auth/session");
-    } catch (error) {
-      me = null;
-    }
+    try { me = await request("/api/auth/session"); } catch (error) { me = null; }
     const needed = me && me.sign_in_required && !me.email;
     $("gate").hidden = !needed;
-    $("who").textContent = me && me.email ? me.email : "";
+    $("whoami").textContent = me && me.email ? me.email : "";
     return !needed;
   }
 
@@ -329,27 +443,23 @@
     event.preventDefault();
     const status = $("gateStatus");
     status.textContent = "Signing in…";
-    status.className = "status";
+    status.className = "status busy";
     try {
       await request("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: $("gateEmail").value, code: $("gateCode").value }),
       });
       status.textContent = "";
-      await whoAmI();
-      await start();
+      if (await whoAmI()) await start();
     } catch (error) {
       status.textContent = error.message;
       status.className = "status error";
     }
   });
 
-  /* --- the conversation --------------------------------------------------- */
-
+  /* --- state --------------------------------------------------------------- */
   let conversationId = "";
   let batchId = "";
-  let answers = null;
   let busy = false;
   let attached = null;
 
@@ -358,6 +468,9 @@
     "Answer everything, keeping each answer to one sentence",
     "Answer only the governance questions",
     "Finish the ones that are still blank",
+    // Nothing attached. Somebody who has only ever seen this used on a file
+    // will not guess that a question can simply be asked.
+    "Do we encrypt customer data at rest?",
     "اقرأ هذا الاستبيان وأجب عن أسئلة الخصوصية",
   ];
 
@@ -373,7 +486,9 @@
     });
   }
 
-  function turnElement(role, text, steps) {
+  /* --- one turn on screen -------------------------------------------------- */
+
+  function turnElement(role, text, data) {
     const turn = document.createElement("div");
     turn.className = "turn " + role;
     const label = document.createElement("div");
@@ -381,14 +496,20 @@
     label.textContent = role === "you" ? "You" : "Assistant";
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    bubble.textContent = text;
+    /* Through the same Markdown renderer an answer goes through. The model
+       writes `**like this**`, and what reached the screen was the asterisks. */
+    if (role === "assistant" && text) {
+      Cards.markdown(text).forEach((node) => bubble.append(node));
+    } else {
+      bubble.textContent = text;
+    }
     if (Cards.isArabic(text)) bubble.dir = "rtl";
     turn.append(label, bubble);
 
-    /* What it did, as the tool calls it actually made. Shown because the reply
-       is a summary and the summary is the thing a person cannot check --
-       "answered the governance ones" means more when the scope it used is
-       visible beside it. */
+    /* What it did, as the tool calls it made. The reply is a summary, and a
+       summary is the part a person cannot check -- "answered the governance
+       ones" means more with the scope it used visible beside it. */
+    const steps = data && data.steps;
     if (steps && steps.length) {
       const did = document.createElement("div");
       did.className = "did";
@@ -399,22 +520,141 @@
       });
       turn.append(did);
     }
+
+    /* Policy clauses it looked up, as the same bubbles an answer card uses.
+       A claim about what the policies say is worth what the clause behind it
+       is worth, and this is how you open it. */
+    const sources = data && data.sources;
+    if (sources && sources.length) turn.append(sourceBubbles(sources));
     return turn;
   }
 
-  function addTurn(role, text, steps) {
+  /* Folded, and de-duplicated across every search in the turn. Asked one
+     question the assistant may search three times with three phrasings, and
+     eighteen bubbles under a two-line reply buries the reply. */
+  function sourceBubbles(sources) {
+    const seen = new Set();
+    const unique = sources.filter((hit) => {
+      const key = (hit.locator || "") + "|" + (hit.source_name || "");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const details = document.createElement("details");
+    details.className = "sources";
+    const summary = document.createElement("summary");
+    summary.textContent = unique.length + " source" + (unique.length === 1 ? "" : "s") +
+      " — click to read the clauses";
+    details.append(summary);
+
+    const wrap = document.createElement("div");
+    wrap.className = "cites";
+    details.append(wrap);
+    unique.forEach((hit) => {
+      const kind = hit.source_type === "prior_answer" ? "prior_answer" : "guideline";
+      const button = document.createElement("button");
+      button.className = "cite " + kind;
+      button.type = "button";
+      button.setAttribute("aria-expanded", "false");
+      button.append(document.createTextNode(hit.locator || hit.source_name || "source"));
+      const caret = document.createElement("span");
+      caret.className = "caret";
+      caret.textContent = "▾";
+      button.append(caret);
+
+      const panel = document.createElement("div");
+      panel.className = "cite-panel";
+      panel.hidden = true;
+      const head = document.createElement("div");
+      head.className = "cite-head";
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = hit.source_name || "";
+      head.append(who, Cards.viewToggle(), Cards.openDocumentButton(hit.source_name, hit.source_type));
+      panel.append(head, Cards.chunk(hit.snippet || ""));
+
+      button.onclick = () => {
+        const open = panel.hidden;
+        panel.hidden = !open;
+        button.setAttribute("aria-expanded", String(open));
+      };
+      wrap.append(button, panel);
+    });
+    return details;
+  }
+
+  function addTurn(role, text, data) {
     $("empty").hidden = true;
-    const turn = turnElement(role, text, steps);
+    const turn = turnElement(role, text, data);
     $("thread").append(turn);
     $("thread").scrollTop = $("thread").scrollHeight;
     return turn;
   }
 
-  function working() {
-    const turn = addTurn("assistant", "Working…");
-    turn.classList.add("working");
-    return turn;
+  /* --- progress -------------------------------------------------------------
+     Answering 183 questions is minutes of work. The pipeline reports how far it
+     has got under the batch's own id, which is the same thing the workbench
+     watches, so a long turn shows a bar rather than a spinner and a guess. */
+  function workingBubble(bubble, label, percent) {
+    const dots = document.createElement("span");
+    dots.className = "dots";
+    dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+
+    const text = document.createElement("span");
+    text.className = "working-label";
+    text.textContent = label;
+    if (typeof percent === "number") {
+      const bar = document.createElement("span");
+      bar.className = "progress";
+      const fill = document.createElement("span");
+      fill.className = "progress-fill";
+      fill.style.width = percent + "%";
+      bar.append(fill);
+      text.append(bar);
+    }
+    bubble.replaceChildren(dots, text);
   }
+
+  function watchProgress(runId, bubble) {
+    let stopped = false;
+    (async function () {
+      // Short first, then settled: the interesting part of a turn is often
+      // over in a few seconds, and a first poll at 1.5s missed all of it.
+      let wait = 400;
+      while (!stopped) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        wait = 1200;
+        if (stopped) return;
+        try {
+          const response = await fetch("/api/assessments/progress/" + runId);
+          if (!response.ok) continue;
+          const state = await response.json();
+          if (stopped) return;
+          workingBubble(bubble, progressText(state), state.total ? state.percent : null);
+        } catch (error) { /* a dropped poll; the next one will do */ }
+      }
+    })();
+    return () => { stopped = true; };
+  }
+
+  /* Two kinds of stage arrive here. The counted ones are the pipeline's own --
+     it has a denominator and says so. Everything else is a sentence the
+     assistant wrote about what it is doing right now, and is shown as it is. */
+  function progressText(state) {
+    if (state.total) {
+      const verb = state.stage === "rewriting" ? "Reworded" : "Answered";
+      return verb + " " + state.completed + " of " + state.total +
+        " — " + state.remaining + " to go";
+    }
+    if (state.stage === "extracting") return "Reading the document…";
+    if (state.stage === "answering") return "Answering…";
+    if (state.stage === "rewriting") return "Rewording…";
+    if (state.stage === "done") return "Finishing up…";
+    return state.stage || "Working…";
+  }
+
+  /* --- sending -------------------------------------------------------------- */
 
   async function send() {
     const field = $("prompt");
@@ -426,7 +666,18 @@
     addTurn("you", message || ("Read " + attached.name));
     field.value = "";
     grow();
-    const placeholder = working();
+
+    const placeholder = addTurn("assistant", "");
+    placeholder.classList.add("working");
+    const bubble = placeholder.querySelector(".bubble");
+    workingBubble(bubble, "Thinking…");
+    /* The turn names itself, and the server reports under that name. It used
+       to be watched under the batch id, which does not exist on the turn that
+       uploads a file -- so the one turn long enough to need a progress bar was
+       the one turn that never had one. */
+    const runId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
+      .replace(/-/g, "").slice(0, 16);
+    const stop = watchProgress(runId, bubble);
 
     try {
       let data;
@@ -435,127 +686,235 @@
         body.append("file", attached);
         body.append("message", message);
         body.append("conversation_id", conversationId);
+        body.append("run_id", runId);
         data = await request("/api/chat/upload", { method: "POST", body });
         detach();
       } else {
         data = await request("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: message, conversation_id: conversationId }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: message, conversation_id: conversationId, run_id: runId,
+          }),
         });
       }
-
+      stop();
       conversationId = data.conversation_id;
       batchId = data.batch_id || batchId;
-      placeholder.replaceWith(turnElement("assistant", data.reply, data.steps));
+      placeholder.replaceWith(turnElement("assistant", data.reply, data));
       $("thread").scrollTop = $("thread").scrollHeight;
       if (data.answers) showAnswers(data.answers);
       loadHistory();
     } catch (error) {
-      placeholder.replaceWith(turnElement("assistant", "That did not work: " + error.message));
+      stop();
+      placeholder.classList.remove("working");
+      placeholder.querySelector(".bubble").textContent = "That did not work: " + error.message;
     } finally {
+      stop();
       busy = false;
       refresh();
       $("prompt").focus();
     }
   }
 
-  /* --- the answers beside it ---------------------------------------------- */
+  /* --- the answers beside it ------------------------------------------------ */
 
   function showAnswers(report) {
-    answers = report;
     const host = $("answers");
     host.replaceChildren();
-    $("answerColumn").hidden = false;
-    $("layout").classList.remove("alone");
+    $("answersPane").hidden = false;
+    answersAvailable = true;
+    refreshAnswersToggle();
     $("answerTitle").textContent = report.source_name || "Answers";
 
     const counts = report.counts || {};
-    const stats = document.createElement("div");
-    stats.className = "stats";
-    stats.append(
+    const summary = document.createElement("div");
+    summary.className = "summary";
+    summary.append(
       Cards.stat(counts.questions || 0, "questions"),
-      Cards.stat(counts.answered || 0, "answered"),
-      Cards.stat(counts.needs_review || 0, "need review", counts.needs_review ? "warn" : ""),
+      Cards.stat(counts.answered || 0, "answered here"),
+      Cards.stat(counts.needs_review || 0, "need review", counts.needs_review ? "review" : ""),
     );
-    host.append(stats);
+    // Only when there are any: a blank questionnaire showing "0 already in the
+    // file" is a number about nothing.
+    if (counts.already_in_file) {
+      summary.append(Cards.stat(counts.already_in_file, "already in the file"));
+    }
+    host.append(summary);
 
     const answered = (report.questions || []).filter((q) => q.answered);
     if (!answered.length) {
       const nothing = document.createElement("div");
       nothing.className = "nothing";
-      nothing.textContent =
-        counts.questions + " question(s) found. Ask the assistant to answer some of them.";
+      nothing.textContent = (counts.questions || 0) +
+        " question(s) found. Ask the assistant to answer some of them.";
       host.append(nothing);
     } else {
       answered.forEach((question, index) => {
+        /* The card is given the answer; "deliberately blank" is a fact about
+           the question, so it has to be carried across or the card cannot tell
+           an emptied answer from one that never arrived. */
+        question.answered.blanked = question.blanked;
         host.append(Cards.render(question.answered, index));
       });
     }
-
     $("fillBtn").hidden = !answered.length;
-    $("downloadBtn").hidden = true;
   }
 
-  /* Filling is a button, never a sentence. The assistant can say what would be
-     written and cannot write it -- see `src/agents/assistant.py`. */
+  /* The button exists when there are answers to look at, and is out of the way
+     while they are on screen. */
+  let answersAvailable = false;
+  function refreshAnswersToggle() {
+    $("toggleAnswers").hidden = !answersAvailable || !$("answersPane").hidden;
+  }
+  function showAnswersPane(show) {
+    $("answersPane").hidden = !show;
+    refreshAnswersToggle();
+  }
+  $("closeAnswers").onclick = () => showAnswersPane(false);
+  $("toggleAnswers").onclick = () => showAnswersPane($("answersPane").hidden);
+
+  /* Filling is a button, never a sentence: the assistant has no tool that can
+     write a file. See src/agents/assistant.py. */
   $("fillBtn").addEventListener("click", async () => {
     const button = $("fillBtn");
     button.disabled = true;
     try {
       const filled = await request("/api/forms/" + batchId + "/fill", { method: "POST" });
-      addTurn("assistant",
-        "Wrote " + filled.written + " value(s) into " + filled.file +
-        (filled.intact ? " — every other part of the file is untouched." : "."));
-      $("downloadBtn").hidden = false;
+      /* Zero is not a quiet success. "Wrote 0 value(s) — every other part of
+         the file is untouched" is true and reads like it worked, which is the
+         worst way for a person who has just watched a run finish to find out
+         that nothing reached their file. */
+      addTurn("assistant", filled.because
+        ? filled.because
+        : "Wrote " + filled.written + " value(s) into " + filled.file +
+          (filled.intact ? " — every other part of the file is untouched." : "."));
+      $("downloadBtn").hidden = !filled.written;
     } catch (error) {
       addTurn("assistant", "The file could not be filled: " + error.message);
     } finally {
       button.disabled = false;
     }
   });
-
-  $("downloadBtn").addEventListener("click", () => {
-    window.location.href = "/api/forms/" + batchId + "/file";
-  });
+  $("downloadBtn").onclick = () => { window.location.href = "/api/forms/" + batchId + "/file"; };
 
   /* The card's page-specific hooks. This page holds a batch rather than a run,
-     so an edit goes back to the server against the question's own id. */
+     so an edit goes back to the server against the question's own id, and a
+     source document opens in its own tab -- there is no viewer dialog here and
+     a button that silently did nothing was worse than a new tab. */
   Cards.answerText = (item) => item.answer || "";
-  Cards.onEdit = async (item, index, text) => {
+  Cards.onOpenDocument = (doc) => showDocument(doc.name);
+
+  /* Two halves, deliberately. `onEdit` fires per keystroke and only updates the
+     copy the card reads back, which is what was frozen: the preview redrew from
+     the payload the server had sent and never from what was being typed.
+     `onEditDone` fires once, when the editor is left, and is the point at which
+     an edit is worth a request. */
+  Cards.onEdit = (item, index, text) => { item.answer = text; };
+  Cards.onEditDone = async (item, index, text) => {
     if (!batchId || !item.question) return;
+    item.answer = text;
     try {
       await request("/api/forms/" + batchId + "/answers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: item.question.id, text: text }),
       });
+      await reloadAnswers();
     } catch (error) {
-      /* Reported when the panel next reloads; an editor that threw on every
-         keystroke would be worse than one that saved late. */
+      addTurn("assistant", "That edit could not be saved: " + error.message);
     }
   };
 
-  /* --- history ------------------------------------------------------------ */
-
-  async function loadHistory() {
+  /* Both directions. Undoing does not write a replacement answer -- it forgets
+     the decision, and the question goes back to being one nobody has answered,
+     which is the only honest thing "no, do not leave it blank" can mean. */
+  Cards.onBlank = async (item, index, blank) => {
+    if (!batchId || !item.question) return;
     try {
-      const data = await request("/api/chat");
-      const select = $("history");
-      select.replaceChildren(new Option("Earlier conversations…", ""));
-      (data.conversations || []).forEach((c) => {
-        const label = c.title + (c.source_name ? " — " + c.source_name : "");
-        select.append(new Option(label, c.id));
+      await request("/api/forms/" + batchId + "/blank", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: item.question.id, blank: blank }),
       });
-      select.value = conversationId;
-    } catch (error) { /* the list is a convenience */ }
+      await reloadAnswers();
+      if (!blank) {
+        addTurn("assistant", "That one is blank again rather than left blank on purpose. " +
+          "Ask me to answer it and I will.");
+      }
+    } catch (error) {
+      addTurn("assistant", "That could not be changed: " + error.message);
+    }
+  };
+
+  async function reloadAnswers() {
+    if (!batchId) return;
+    try { showAnswers(await request("/api/forms/" + batchId)); } catch (error) { /* stale is survivable */ }
   }
 
-  $("history").addEventListener("change", async (event) => {
-    const id = event.target.value;
-    if (!id) return;
-    await open(id);
+  /* --- the document viewer -------------------------------------------------- */
+
+  function documentUrl(name, what) {
+    return "/api/documents/uploaded/uploaded/" + encodeURIComponent(name) + "/" + what;
+  }
+
+  function showDocument(name) {
+    if (!name) return;
+    $("viewerTitle").textContent = name;
+    $("viewerDownload").href = documentUrl(name, "file");
+    $("viewerFrame").src = documentUrl(name, "preview");
+    $("viewer").showModal();
+  }
+
+  function closeDocument() {
+    $("viewer").close();
+    // Released rather than left loaded: a preview is a whole rendered PDF.
+    $("viewerFrame").src = "about:blank";
+  }
+  $("viewerClose").onclick = closeDocument;
+  $("viewer").addEventListener("close", () => { $("viewerFrame").src = "about:blank"; });
+  $("viewer").addEventListener("click", (event) => {
+    if (event.target === $("viewer")) closeDocument();
   });
+
+  /* --- history, as a panel -------------------------------------------------- */
+
+  async function loadHistory() {
+    const host = $("historyList");
+    try {
+      const data = await request("/api/chat");
+      host.replaceChildren();
+      if (!(data.conversations || []).length) {
+        const none = document.createElement("div");
+        none.className = "status";
+        none.style.padding = "4px 10px";
+        none.textContent = "Nothing yet.";
+        host.append(none);
+        return;
+      }
+      data.conversations.forEach((c) => {
+        const row = document.createElement("button");
+        row.className = "convo" + (c.id === conversationId ? " on" : "");
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = c.title || "New conversation";
+        label.title = c.title + (c.source_name ? " — " + c.source_name : "");
+        if (Cards.isArabic(label.textContent)) label.dir = "rtl";
+        const forget = document.createElement("span");
+        forget.className = "forget";
+        forget.textContent = "✕";
+        forget.title = "Forget this conversation";
+        forget.onclick = async (event) => {
+          event.stopPropagation();
+          await request("/api/chat/" + c.id, { method: "DELETE" });
+          if (c.id === conversationId) newConversation();
+          loadHistory();
+        };
+        row.append(label, forget);
+        row.onclick = () => open(c.id);
+        host.append(row);
+      });
+    } catch (error) {
+      host.textContent = error.message;
+    }
+  }
 
   async function open(id) {
     try {
@@ -564,50 +923,60 @@
       batchId = data.batch_id || "";
       $("thread").replaceChildren($("empty"));
       $("empty").hidden = (data.messages || []).length > 0;
-      (data.messages || []).forEach((m) => addTurn(m.role === "you" ? "you" : "assistant", m.text));
+      // With the steps and sources the turn was drawn with the first time: a
+      // reply reopened without its evidence is a claim with nothing behind it.
+      (data.messages || []).forEach((m) => addTurn(m.role === "you" ? "you" : "assistant", m.text, m));
       if (data.answers) showAnswers(data.answers);
       else {
-        $("answerColumn").hidden = true;
-        $("layout").classList.add("alone");
+        $("answersPane").hidden = true;
+        answersAvailable = false;
+        refreshAnswersToggle();
       }
+      loadHistory();
     } catch (error) {
       addTurn("assistant", "That conversation could not be opened: " + error.message);
     }
   }
 
-  $("newChat").addEventListener("click", () => {
+  function newConversation() {
     conversationId = "";
     batchId = "";
-    answers = null;
     $("thread").replaceChildren($("empty"));
     $("empty").hidden = false;
-    $("answerColumn").hidden = true;
-    $("layout").classList.add("alone");
-    $("history").value = "";
+    $("answersPane").hidden = true;
+    answersAvailable = false;
+    refreshAnswersToggle();
+    $("downloadBtn").hidden = true;
     $("prompt").focus();
-  });
+    loadHistory();
+  }
+  $("newChat").onclick = newConversation;
+  $("toggleHistory").onclick = () => {
+    const side = $("history");
+    side.hidden = !side.hidden;
+    $("toggleHistory").classList.toggle("on", !side.hidden);
+  };
 
-  /* --- composer ----------------------------------------------------------- */
+  /* --- composer ------------------------------------------------------------- */
 
   function grow() {
     const field = $("prompt");
     field.style.height = "auto";
-    field.style.height = Math.min(field.scrollHeight, 180) + "px";
+    /* Only when there is something to fit. An empty field still has a
+       placeholder, and a placeholder that wraps makes `scrollHeight` three
+       lines tall -- so the box opened at triple height with nothing in it. */
+    if (field.value) field.style.height = Math.min(field.scrollHeight, 190) + "px";
   }
-
   function refresh() {
-    const has = $("prompt").value.trim() || attached;
-    $("send").disabled = busy || !has;
+    $("send").disabled = busy || !($("prompt").value.trim() || attached);
     $("prompt").disabled = busy;
   }
-
   function detach() {
     attached = null;
     $("fileInput").value = "";
     $("attached").hidden = true;
     refresh();
   }
-
   function attach(file) {
     attached = file;
     $("attachedName").textContent = file.name;
@@ -620,24 +989,20 @@
   $("prompt").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); }
   });
-  $("send").addEventListener("click", send);
+  $("send").onclick = send;
   $("fileInput").addEventListener("change", (event) => {
     if (event.target.files.length) attach(event.target.files[0]);
   });
-  $("detach").addEventListener("click", detach);
+  $("detach").onclick = detach;
 
-  /* Dropping a file anywhere on the conversation attaches it, because that is
-     where a person is looking when they decide to send one. */
   ["dragover", "drop"].forEach((name) => {
     document.addEventListener(name, (event) => {
       event.preventDefault();
-      if (name === "drop" && event.dataTransfer.files.length) {
-        attach(event.dataTransfer.files[0]);
-      }
+      if (name === "drop" && event.dataTransfer.files.length) attach(event.dataTransfer.files[0]);
     });
   });
 
-  /* --- the knowledge base, behind a panel --------------------------------- */
+  /* --- the knowledge base, behind a drawer ---------------------------------- */
 
   function openDrawer(open) {
     $("kb").classList.toggle("open", open);
@@ -645,9 +1010,12 @@
     $("kb").setAttribute("aria-hidden", String(!open));
     if (open) loadSources();
   }
-  $("openKb").addEventListener("click", () => openDrawer(true));
-  $("closeKb").addEventListener("click", () => openDrawer(false));
-  $("scrim").addEventListener("click", () => openDrawer(false));
+  $("openKb").onclick = () => openDrawer(true);
+  $("closeKb").onclick = () => openDrawer(false);
+  $("scrim").onclick = () => openDrawer(false);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") openDrawer(false);
+  });
 
   async function loadSources() {
     const host = $("sources");
@@ -655,9 +1023,11 @@
       const data = await request("/api/knowledge");
       host.replaceChildren();
       if (!data.sources.length) {
+        host.className = "status";
         host.textContent = "Nothing indexed yet.";
         return;
       }
+      host.className = "";
       data.sources.forEach((source) => {
         const row = document.createElement("div");
         row.className = "source";
@@ -668,12 +1038,11 @@
         count.className = "count";
         count.textContent = source.chunks + " chunk(s)";
         const remove = document.createElement("button");
-        remove.className = "quiet danger";
+        remove.className = "ghost";
         remove.textContent = "remove";
         remove.onclick = async () => {
           if (!confirm("Remove " + source.name + " from the knowledge base?")) return;
-          await request("/api/knowledge/sources/" + encodeURIComponent(source.name),
-                        { method: "DELETE" });
+          await request("/api/knowledge/sources/" + encodeURIComponent(source.name), { method: "DELETE" });
           loadSources();
         };
         row.append(name, count, remove);
@@ -691,7 +1060,7 @@
       if (!files.length) return;
       const status = $("kbStatus");
       status.textContent = "Indexing " + files.length + " file(s)…";
-      status.className = "status";
+      status.className = "status busy";
       const body = new FormData();
       files.forEach((file) => body.append("files", file));
       try {
@@ -709,7 +1078,7 @@
     });
   });
 
-  /* --- start -------------------------------------------------------------- */
+  /* --- start ---------------------------------------------------------------- */
 
   async function start() {
     renderStarters();

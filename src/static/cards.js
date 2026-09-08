@@ -12,8 +12,9 @@
      Cards.onDiscard(key)              throw a question away
      Cards.onRetry(keys, button)       answer a failed one again
      Cards.onOpenDocument(descriptor)  open the file a source came from
-     Cards.onEdit(item, index, text)   an answer was edited in place, per keystroke
-     Cards.onEditDone(item, index, text)   ...and the editor was left: worth storing
+     Cards.onEdit(item, index, text)      an answer is being edited, per keystroke
+     Cards.onEditDone(item, index, text)  the editor was left: worth storing
+     Cards.onBlank(item, index, blank)    leave this answer deliberately empty
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
    control simply does nothing rather than throwing.
@@ -25,6 +26,7 @@ const Cards = (window.Cards = {
   onOpenDocument() {},
   onEdit() {},
   onEditDone() {},
+  onBlank() {},
   /* Where the page keeps the answer being edited. The card shows and writes
      through this rather than owning it, because the workbench holds a whole
      run in memory and the chat page holds a batch. */
@@ -324,7 +326,16 @@ const Cards = (window.Cards = {
     const paint = () => {
       const text = Cards.answerText(item, index);
       rendered.innerHTML = "";
-      if (!text.trim()) {
+      if (item.blanked) {
+        /* Deliberately empty is not the same as never answered, and the card
+           has to say which -- one is a decision, the other is work still to
+           do. The cell is still written, with nothing in it, so a stale answer
+           already in the file gets cleared. */
+        const note = document.createElement("p");
+        note.className = "empty";
+        note.textContent = "This answer will be left blank.";
+        rendered.append(note);
+      } else if (!text.trim()) {
         const empty = document.createElement("p");
         empty.className = "empty";
         empty.textContent = "No answer was produced — see the note below.";
@@ -334,6 +345,16 @@ const Cards = (window.Cards = {
       }
       rendered.dir = isArabic(text) ? "rtl" : "ltr";
     };
+    Cards.repaint = paint;
+
+    /* Leaving it blank on purpose. Beside Edit because it is the same kind of
+       decision -- what this question should say -- and because a control that
+       empties an answer belongs next to the answer and nowhere else. */
+    const blank = document.createElement("button");
+    blank.className = "quiet";
+    blank.textContent = item.blanked ? "Write an answer" : "Leave blank";
+    blank.onclick = () => Cards.onBlank(item, index, !item.blanked);
+    field.querySelector(".field-label").append(blank);
 
     let editing = false;
     const setMode = (next) => {
@@ -464,18 +485,29 @@ const Cards = (window.Cards = {
     const band = confidenceBand(item.confidence);
     const confidence = document.createElement("div");
     confidence.className = "confidence " + band.key;
-    const value = document.createElement("div");
-    value.className = "value";
-    value.textContent = percent + "%";
-    const caption = document.createElement("div");
-    caption.className = "caption";
-    caption.textContent = band.word;
-    const meter = document.createElement("div");
-    meter.className = "meter";
-    const fill = document.createElement("span");
-    fill.style.width = percent + "%";
-    meter.append(fill);
-    confidence.append(value, caption, meter);
+    /* Nothing was drafted, so there is nothing to be confident about. The card
+       said "100% — High confidence" over an answer somebody had deliberately
+       emptied, which is a score for a decision rather than for an answer. */
+    if (item.blanked) {
+      confidence.className = "confidence blanked";
+      const caption = document.createElement("div");
+      caption.className = "caption";
+      caption.textContent = "Left blank";
+      confidence.append(caption);
+    } else {
+      const value = document.createElement("div");
+      value.className = "value";
+      value.textContent = percent + "%";
+      const caption = document.createElement("div");
+      caption.className = "caption";
+      caption.textContent = band.word;
+      const meter = document.createElement("div");
+      meter.className = "meter";
+      const fill = document.createElement("span");
+      fill.style.width = percent + "%";
+      meter.append(fill);
+      confidence.append(value, caption, meter);
+    }
 
     // Removing the pair belongs here, beside what it removes. Only offered for
     // answers this session produced, since an imported result has no question
@@ -540,8 +572,10 @@ const Cards = (window.Cards = {
     }
 
     // Plain-English cause of the score itself, computed server-side so the
-    // interface and both exports say exactly the same thing.
-    if (item.confidence_reason) {
+    // interface and both exports say exactly the same thing. Not for a blank:
+    // "left blank on purpose" is where that field keeps the decision, and
+    // reading it back as a reason the confidence is low is nonsense.
+    if (item.confidence_reason && !item.blanked) {
       const field = labelledField("Why the confidence is low", "err");
       const why = document.createElement("div");
       why.className = "reasons why";
@@ -679,6 +713,7 @@ const Cards = (window.Cards = {
     isArabic: isArabic,
     viewToggle: viewToggle,
     openDocumentButton: openDocumentButton,
+    markdown: renderMarkdown,
     view: chunkView,
     setView: setChunkView,
   });

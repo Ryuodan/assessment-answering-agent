@@ -210,7 +210,7 @@ def test_describing_a_form_counts_the_blanks_rather_than_implying_them(kit):
     it."""
     tool, _state = kit
     tool["open_questionnaire"]("")
-    assert "0 answered, 4 still blank" in tool["describe_form"]()
+    assert "0 answered here, 4 still blank" in tool["describe_form"]()
 
 
 def test_every_tool_says_so_when_no_questionnaire_is_open(kit):
@@ -318,6 +318,79 @@ async def test_a_turn_saves_a_conversation_it_can_resume_from(user, tmp_path, sc
 
 
 @pytest.mark.asyncio
+async def test_the_note_about_the_upload_is_not_something_anybody_said(
+    user, tmp_path, scripted, answers_yes
+):
+    """The agent is told a file arrived, in the message it re-reads. That note
+    is plumbing, and it was going into the conversation's name -- so a history
+    read as a list of "[A file has been uploaded to this conversation: HR…"
+    rather than a list of what was asked."""
+    scripted([("open_questionnaire", {"file_name": ""})])
+    conversation = assistant.start(user, "")
+    path = shapes.status_and_comment(tmp_path / "HR.xlsx")
+
+    await assistant.say(user, conversation, "Read this file.", upload=path)
+
+    saved = conversations.load(conversation.id, team_id=user.team_id)
+    assert saved.title == "Read this file."
+    # And it is still in the history, because that is what the agent re-reads.
+    asked = [m for m in saved.messages if isinstance(m, HumanMessage)]
+    assert assistant.UPLOAD_NOTE in str(asked[0].content)
+    assert assistant.spoken(str(asked[0].content)) == "Read this file."
+
+
+@pytest.mark.asyncio
+async def test_a_turn_says_what_it_is_doing_while_it_does_it(user, tmp_path, scripted, answers_yes):
+    """A person watching a turn has the label and nothing else. "Working" for
+    ninety seconds is indistinguishable from a page that has frozen, so every
+    tool announces itself as it starts."""
+    from src import progress
+
+    seen = []
+    real = progress.note
+
+    def watched(run_id, stage):
+        seen.append((run_id, stage))
+        real(run_id, stage)
+
+    scripted([("open_questionnaire", {"file_name": ""}), ("search_policies", {"query": "mfa"})])
+    conversation = assistant.start(user, "")
+    path = shapes.status_and_comment(tmp_path / "HR.xlsx")
+
+    original, progress.note = progress.note, watched
+    try:
+        await assistant.say(user, conversation, "Read this", upload=path, run_id="watched")
+    finally:
+        progress.note = original
+
+    assert [stage for run, stage in seen if run == "watched"] == [
+        "Reading the file…", "Searching the policies…",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_turn_is_watchable_from_the_moment_it_starts(user, scripted):
+    """Registered before the first model call. The turn that uploads a file is
+    the slowest one and has no batch to be named after, which is why the run id
+    comes from the caller."""
+    from src import progress
+
+    scripted([])
+    conversation = assistant.start(user, "")
+    await assistant.say(user, conversation, "hello", run_id="early")
+    assert progress.snapshot("early") is not None
+
+
+@pytest.mark.asyncio
+async def test_a_turn_without_a_run_id_still_works(user, scripted):
+    """Nothing is watching. That is a missing progress bar, never a failure."""
+    scripted([])
+    conversation = assistant.start(user, "")
+    turn = await assistant.say(user, conversation, "hello")
+    assert turn.reply == "Done."
+
+
+@pytest.mark.asyncio
 async def test_a_conversation_is_titled_from_what_was_first_asked(user, tmp_path, scripted):
     scripted([])
     conversation = assistant.start(user, "")
@@ -402,7 +475,7 @@ def test_listing_questions_gives_their_ids_and_state(kit):
 
     assert "4 question(s) matched all questions" in said
     assert "Human Resources!2" in said
-    assert "[blank   ]" in said
+    assert "[blank    ]" in said
 
 
 @pytest.mark.asyncio
@@ -413,7 +486,7 @@ async def test_listing_shows_which_are_already_answered(kit, answers_yes):
 
     said = tool["list_questions"]()
     assert said.count("[answered]") == 1
-    assert said.count("[blank   ]") == 3
+    assert said.count("[blank    ]") == 3
 
 
 def test_a_scope_matching_nothing_explains_that_it_is_not_a_query(kit):
@@ -454,3 +527,295 @@ def test_setting_aside_uses_an_id_that_listing_actually_returns(kit):
     first = listed.splitlines()[1].strip().split("  ")[0]
 
     assert "1 question(s) set aside" in tool["set_aside"](first)
+
+
+# --- a file that arrives already filled in ---------------------------------
+#
+# Last year's submission, or a colleague's draft. Handed one and asked what was
+# in it, the assistant said it had no answers -- the count only ever looked at
+# what this system had written, and the file's own answers live on the targets
+# as the text already in the cell.
+
+
+@pytest.fixture
+def filled(user, tmp_path):
+    path = shapes.already_answered(tmp_path / "Last year.xlsx")
+    state: dict = {"batch_id": "", "pending_upload": str(path), "steps": [], "refreshed": False}
+    tool = {t.__name__: t for t in assistant._tools(user, state)}
+    tool["open_questionnaire"]("")
+    return tool, state
+
+
+def test_answers_the_file_arrived_with_are_counted(filled):
+    tool, _state = filled
+    said = tool["describe_form"]()
+    assert "2 question(s) arrived with an answer already written" in said
+    assert "0 answered here" in said, "they are the file's answers, not ours"
+
+
+def test_a_question_answered_only_by_a_status_still_counts(filled, user, state=None):
+    """"Partially Compliant" with no comment beside it is an answer."""
+    tool, batch_state = filled
+    report = tools.inspect(user, batch_state["batch_id"])
+    assert report["counts"]["already_in_file"] == 2
+    assert report["questions"][1]["existing"] == "Partially Compliant"
+
+
+def test_listing_marks_which_ones_came_with_an_answer(filled):
+    tool, _state = filled
+    said = tool["list_questions"]()
+    assert said.count("[in file  ]") == 2
+    assert said.count("[blank    ]") == 2
+
+
+def test_reading_what_the_file_said_quotes_it(filled):
+    tool, _state = filled
+    said = tool["read_existing"](matching="human resources")
+    assert "the file says: Yes. The HR process is documented" in said
+
+
+def test_reading_a_question_that_arrived_blank_says_so(filled):
+    tool, _state = filled
+    assert "None of those arrived with an answer" in tool["read_existing"](matching="background")
+
+
+@pytest.mark.asyncio
+async def test_finishing_the_rest_skips_what_the_file_already_answered(filled, answers_yes):
+    """The point of counting them: "finish it" should cost two answers, not
+    four, and must not overwrite words somebody already reviewed."""
+    tool, batch_state = filled
+    said = await tool["answer_questions"](unanswered_only=True)
+    assert "Answered 2 of 2" in said
+
+    report = tools.inspect(identity.local_user(), batch_state["batch_id"])
+    assert report["questions"][0]["answer"] == "", "an answer already in the file was overwritten"
+    assert report["questions"][0]["existing"].startswith("Yes. The HR process")
+
+
+@pytest.mark.asyncio
+async def test_answering_the_whole_file_leaves_its_own_answers_alone(filled, answers_yes):
+    """Not a scope the model chose well -- the broadest one there is. The two
+    the file arrived with survive it, and the reply says they were left."""
+    tool, batch_state = filled
+    said = await tool["answer_questions"]()
+
+    assert "2 question(s) in that scope already had an answer" in said
+    assert "Answered 2 of 2" in said
+
+    report = tools.inspect(identity.local_user(), batch_state["batch_id"])
+    assert report["questions"][0]["answer"] == ""
+    assert report["questions"][0]["existing"].startswith("Yes. The HR process")
+
+
+@pytest.mark.asyncio
+async def test_a_scope_of_only_answered_questions_is_not_reported_as_a_dead_end(
+    filled, answers_yes
+):
+    """"Nothing matched, call describe_form" would send it round the houses
+    looking for a sheet name that was never the problem."""
+    tool, batch_state = filled
+    report = tools.inspect(identity.local_user(), batch_state["batch_id"])
+    already = report["questions"][0]["id"]
+
+    said = await tool["answer_questions"](ids=already)
+    assert "already had an answer" in said and "Nothing matched" not in said
+
+
+@pytest.mark.asyncio
+async def test_replacing_an_answer_takes_the_flag(filled, answers_yes):
+    tool, batch_state = filled
+    report = tools.inspect(identity.local_user(), batch_state["batch_id"])
+    already = report["questions"][0]["id"]
+
+    said = await tool["answer_questions"](ids=already, replace_existing=True)
+    assert "Answered 1 of 1" in said
+
+    after = tools.inspect(identity.local_user(), batch_state["batch_id"])
+    assert after["questions"][0]["answer"].startswith("Yes, this is documented")
+
+
+def test_replacing_is_said_out_loud_in_the_steps(filled):
+    """The steps are what the interface shows the person. Overwriting an answer
+    the security team wrote is not something to do without leaving a mark."""
+    import asyncio
+    tool, batch_state = filled
+    report = tools.inspect(identity.local_user(), batch_state["batch_id"])
+    asyncio.run(tool["answer_questions"](ids=report["questions"][0]["id"], replace_existing=True))
+    assert any("replacing what is there" in step for step in batch_state["steps"])
+
+
+# --- answering a question with no file at all -------------------------------
+
+
+@pytest.fixture
+def answers_with_evidence(monkeypatch):
+    """The pipeline, standing in, with a clause behind each answer."""
+    from src.models import Evidence, SourceType
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=question,
+                answer=f"Yes, backups are encrypted. [{question.text[:12]}]",
+                confidence=0.9, needs_review=False,
+                evidence=[Evidence(
+                    source_type=SourceType.GUIDELINE,
+                    source_name="T2 - Information Security Policy.pdf",
+                    snippet="Backups shall be encrypted at rest using AES-256.",
+                    doc_id="T2-ISP", clause="9.4.1",
+                )],
+            )
+            for question in questions
+        ]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+
+
+@pytest.mark.asyncio
+async def test_a_question_can_be_answered_with_no_questionnaire_open(
+    kit, answers_with_evidence
+):
+    """Somebody asks in passing. Making them upload a spreadsheet to find out
+    what the policies commit the organisation to would be absurd."""
+    tool, state = kit
+    said = await tool["answer_directly"]("Do we encrypt our backups?")
+
+    assert "Yes, backups are encrypted" in said
+    assert "relay word for word" in said, "a drafted answer is not a note to summarise"
+    assert not state["batch_id"], "it answered without opening anything"
+
+
+@pytest.mark.asyncio
+async def test_answering_directly_puts_its_clauses_under_the_reply(
+    kit, answers_with_evidence
+):
+    tool, state = kit
+    await tool["answer_directly"]("Do we encrypt our backups?")
+    [source] = state["sources"]
+    assert "T2-ISP" in source["locator"] and "9.4.1" in source["locator"]
+    assert "AES-256" in source["snippet"]
+
+
+@pytest.mark.asyncio
+async def test_answering_directly_takes_a_few_questions_at_once(kit, answers_with_evidence):
+    tool, _state = kit
+    said = await tool["answer_directly"]("Do we encrypt backups?\nDo we log access?")
+    assert said.count("relay word for word") == 2
+
+
+@pytest.mark.asyncio
+async def test_a_list_too_long_to_ask_this_way_is_refused(kit, answers_with_evidence):
+    """This path stores nothing -- no cells, no cards, nothing to come back to.
+    A list that long is a questionnaire and belongs in a file."""
+    tool, _state = kit
+    said = await tool["answer_directly"]("\n".join(f"Question {n}?" for n in range(9)))
+    assert "at most 5" in said
+
+
+@pytest.mark.asyncio
+async def test_answering_directly_leaves_the_open_questionnaire_alone(
+    kit, answers_with_evidence
+):
+    tool, state = kit
+    tool["open_questionnaire"]("")
+    await tool["answer_directly"]("Do we encrypt our backups?")
+
+    report = tools.inspect(identity.local_user(), state["batch_id"])
+    assert report["counts"]["answered"] == 0, "a question asked aloud is not a row in the file"
+
+
+def test_what_a_turn_did_is_stored_with_its_reply(user, scripted, tmp_path):
+    """The steps and the clauses it quoted used to be sent with the reply and
+    then lost: reopening the conversation redrew the words and none of the
+    evidence under them. A claim about what the policies say is worth what the
+    clause behind it is worth, and that has to survive a reload."""
+    scripted([("describe_form", {})])
+    conversation = assistant.start(user, "")
+
+    import asyncio
+    asyncio.run(assistant.say(user, conversation, "What is in the file?"))
+
+    saved = conversations.load(conversation.id, team_id=user.team_id)
+    reply = [m for m in saved.messages
+             if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None)][-1]
+    assert reply.additional_kwargs[assistant.UI_KEY]["steps"] == ["describe_form"]
+
+
+@pytest.mark.asyncio
+async def test_the_transcript_hands_back_what_each_turn_did(user, scripted, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from src.api import app
+
+    scripted([("describe_form", {})])
+    conversation = assistant.start(user, "")
+    await assistant.say(user, conversation, "What is in the file?")
+
+    with TestClient(app) as client:
+        body = client.get(f"/api/chat/{conversation.id}").json()
+
+    assistant_turns = [m for m in body["messages"] if m["role"] == "assistant"]
+    assert assistant_turns and assistant_turns[-1]["steps"] == ["describe_form"]
+    assert "sources" in assistant_turns[-1]
+
+
+# --- leaving an answer blank on purpose ------------------------------------
+#
+# A question can be wrong for this organisation, or answered better by silence.
+# Deleting the answer got you back to "not answered yet", which is the state a
+# person is trying to leave.
+
+
+@pytest.mark.asyncio
+async def test_a_blanked_answer_is_not_the_same_as_an_unanswered_one(kit, answers_yes, user):
+    tool, state = kit
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+    first = tools.inspect(user, state["batch_id"])["questions"][0]["id"]
+
+    tools.blank_answer(user, state["batch_id"], first)
+    question = tools.inspect(user, state["batch_id"])["questions"][0]
+
+    assert question["blanked"] is True
+    assert question["answer"] == ""
+
+
+@pytest.mark.asyncio
+async def test_a_blanked_answer_clears_the_cell_rather_than_skipping_it(kit, answers_yes, user):
+    """The file may already hold last year's answer. Skipping the question
+    would leave those words in place, which is the opposite of what was asked."""
+    from src.forms.xlsx_package import Workbook
+
+    tool, state = kit
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+    first = tools.inspect(user, state["batch_id"])["questions"][0]["id"]
+    tools.blank_answer(user, state["batch_id"], first)
+
+    filled = tools.fill(user, state["batch_id"])
+    with Workbook(filled.path) as workbook:
+        sheet = workbook["Human Resources"]
+        assert sheet.value(2, "D") == "", "the blanked answer left something behind"
+        assert sheet.value(3, "D").startswith("Yes,"), "the others were not written"
+
+
+@pytest.mark.asyncio
+async def test_a_blanked_answer_is_not_counted_as_work_outstanding(kit, answers_yes, user):
+    """It is a decision, so `unanswered_only` must not offer it again."""
+    tool, state = kit
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"](matching="training")
+    first = tools.inspect(user, state["batch_id"])["questions"][0]["id"]
+    tools.blank_answer(user, state["batch_id"], first)
+
+    said = await tool["answer_questions"](unanswered_only=True)
+    assert "Answered 2 of 2" in said, "a question left blank on purpose was answered again"
+
+
+def test_blanking_a_question_that_does_not_exist_is_refused(kit, user):
+    tool, state = kit
+    tool["open_questionnaire"]("")
+    with pytest.raises(tools.ToolError):
+        tools.blank_answer(user, state["batch_id"], "Nowhere!99")
+
+

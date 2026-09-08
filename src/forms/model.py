@@ -130,6 +130,20 @@ class FormQuestion(BaseModel):
         return [target for role, target in self.targets.items() if role in WRITABLE]
 
     @property
+    def existing_answer(self) -> str:
+        """What the file already had in it for this question, if anything.
+
+        The prose first, because that is what a person reads; a status on its
+        own -- "Fully Compliant" with no comment beside it -- is still an
+        answer and is worth reporting as one.
+        """
+        for role in (Role.ANSWER, Role.STATUS):
+            target = self.targets.get(role)
+            if target is not None and not target.is_empty:
+                return target.existing.strip()
+        return ""
+
+    @property
     def is_answered(self) -> bool:
         """Whether an answer is already present.
 

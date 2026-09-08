@@ -3,110 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Assessment Answering Agent</title>
+<title>Workbench — Assessment Answering</title>
+<link rel="stylesheet" href="/static/cards.css" />
 <style>
-  /* ---------------------------------------------------------------------
-     Light first. The palette is a warm near-white ground with one blue
-     accent and three status hues; everything else is a step on a single
-     neutral ramp, so nothing competes with the answer text for attention.
-     Dark mode redefines the same tokens rather than adding new rules.
-     --------------------------------------------------------------------- */
-  :root {
-    --ground: #f4f5f7;
-    --surface: #ffffff;
-    --surface-sunken: #f7f8fa;
-    --surface-raised: #ffffff;
-
-    --ink: #14181f;
-    --ink-soft: #4a5361;
-    --ink-faint: #666e7b;
-
-    --line: #e4e7ec;
-    --line-strong: #d3d8e0;
-
-    --accent: #2c5ce6;
-    --accent-soft: #eaf0ff;
-    --accent-ink: #1c3fa8;
-    --on-accent: #ffffff;
-
-    --ok: #0f7a4d;
-    --ok-soft: #e6f5ed;
-    --warn: #9a6206;
-    --warn-soft: #fdf3e0;
-    --err: #b42318;
-    --err-soft: #fdecea;
-
-    --shadow-sm: 0 1px 2px rgba(20, 24, 31, .06), 0 1px 3px rgba(20, 24, 31, .04);
-    --shadow-md: 0 2px 4px rgba(20, 24, 31, .05), 0 6px 16px rgba(20, 24, 31, .07);
-    --shadow-lg: 0 12px 40px rgba(20, 24, 31, .16);
-
-    --radius: 12px;
-    --radius-sm: 8px;
-    --radius-pill: 999px;
-  }
-
-  :root[data-theme="dark"], :root:not([data-theme="light"]) {
-    color-scheme: light;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --ground: #0f1216;
-      --surface: #171b21;
-      --surface-sunken: #12161b;
-      --surface-raised: #1c2129;
-
-      --ink: #e9edf3;
-      --ink-soft: #a9b3c1;
-      --ink-faint: #909aa8;
-
-      --line: #262c35;
-      --line-strong: #333b46;
-
-      --accent: #6b8dff;
-      --accent-soft: #1a2340;
-      --accent-ink: #a9c0ff;
-      --on-accent: #0b0e13;
-
-      --ok: #4fc98c;
-      --ok-soft: #123024;
-      --warn: #e0aa4a;
-      --warn-soft: #322610;
-      --err: #f4796f;
-      --err-soft: #3a1a17;
-
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
-      --shadow-md: 0 2px 6px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
-      --shadow-lg: 0 16px 48px rgba(0, 0, 0, .6);
-      color-scheme: dark;
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --ground: #0f1216;
-    --surface: #171b21;
-    --surface-sunken: #12161b;
-    --surface-raised: #1c2129;
-    --ink: #e9edf3;
-    --ink-soft: #a9b3c1;
-    --ink-faint: #909aa8;
-    --line: #262c35;
-    --line-strong: #333b46;
-    --accent: #6b8dff;
-    --accent-soft: #1a2340;
-    --accent-ink: #a9c0ff;
-    --on-accent: #0b0e13;
-    --ok: #4fc98c;
-    --ok-soft: #123024;
-    --warn: #e0aa4a;
-    --warn-soft: #322610;
-    --err: #f4796f;
-    --err-soft: #3a1a17;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
-    --shadow-md: 0 2px 6px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
-    --shadow-lg: 0 16px 48px rgba(0, 0, 0, .6);
-    color-scheme: dark;
-  }
+  /* This page's own rules. The design tokens, the answer card and the chunk
+     renderer live in cards.css, shared with the assistant. */
 
   * { box-sizing: border-box; }
 
@@ -301,93 +202,33 @@
   .document-card .row { margin-top: auto; gap: 7px; }
   .document-card button { padding: 6px 11px; font-size: 12.5px; }
 
-  /* --- results ----------------------------------------------------------- */
-
-  .summary { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-  .stat {
-    flex: 1 1 130px; background: var(--surface-sunken);
-    border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px;
-  }
-  .stat .value { display: block; font-size: 23px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
-  .stat .label { font-size: 12px; color: var(--ink-faint); }
-  .stat.review .value { color: var(--warn); }
-
-  .toolbar {
-    display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
-    padding: 12px 14px; background: var(--surface-sunken);
-    border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px;
-  }
-  .toolbar .divider { width: 1px; height: 20px; background: var(--line-strong); }
-  .pdf-options { display: flex; gap: 13px; align-items: center; flex-wrap: wrap; font-size: 12.5px; }
-  .pdf-options .caption {
-    font-size: 10.5px; font-weight: 650; letter-spacing: .06em;
-    text-transform: uppercase; color: var(--ink-faint);
-  }
-  .pdf-options label { color: var(--ink-soft); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
-
-  /* Each question and its answer form one card; the gap and the shadow are
-     what stop a page of them reading as a single wall of text. */
-  .answer {
-    background: var(--surface-raised);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    margin-bottom: 22px;
-    overflow: hidden;
-  }
-  .answer.review { border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); }
-
-  .answer-head {
-    display: flex; gap: 13px; align-items: flex-start;
-    padding: 16px 18px; background: var(--surface-sunken);
-    border-bottom: 1px solid var(--line);
-  }
-  .answer.review .answer-head { background: var(--warn-soft); }
-  .qnum {
-    flex: 0 0 auto; min-width: 27px; height: 27px; padding: 0 7px;
-    border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line-strong);
-    display: grid; place-items: center; font-size: 12.5px; font-weight: 650; color: var(--ink-soft);
-  }
-  .qbody { flex: 1; min-width: 0; }
-  .qtext { font-weight: 640; font-size: 15.5px; line-height: 1.45; letter-spacing: -.005em; }
-  .qmeta {
-    display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
-    margin-top: 6px; font-size: 11.5px; color: var(--ink-faint);
-  }
-
-  /* Confidence is a headline, not a footnote: a labelled meter beside the
-     question, sized so it reads before the answer does. */
-  .confidence { flex: 0 0 auto; width: 116px; text-align: end; }
-  .confidence .value { font-size: 19px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; }
-  .confidence .caption {
-    font-size: 10.5px; font-weight: 650; letter-spacing: .05em;
-    text-transform: uppercase; color: var(--ink-faint);
-  }
-  .meter { height: 5px; border-radius: var(--radius-pill); background: var(--line); margin-top: 6px; overflow: hidden; }
-  .meter span { display: block; height: 100%; border-radius: var(--radius-pill); }
-  .confidence.high .value { color: var(--ok); }
-  .confidence.high .meter span { background: var(--ok); }
-  .confidence.medium .value { color: var(--warn); }
-  .confidence.medium .meter span { background: var(--warn); }
-  .confidence.low .value { color: var(--err); }
-  .confidence.low .meter span { background: var(--err); }
-
-  .answer-body { padding: 16px 18px 18px; }
-
   /* --- the question list -------------------------------------------------
      One row per question, editable in place. Deliberately quieter than an
      answer card: this is a worklist to correct and add to, not a result to
      read, and the two must not compete for the same attention. */
   .qrow {
-    display: flex; align-items: flex-start; gap: 11px;
+    display: flex; align-items: flex-start; gap: 11px; flex-wrap: wrap;
     padding: 10px 12px; border-radius: var(--radius-sm);
     border: 1px solid var(--line); background: var(--surface-sunken);
   }
+  /* Under the question, not squeezed in beside it. A note about where a row
+     came from was a flex item on a row that did not wrap, so it was pressed
+     into whatever column was left over -- fine for "row 4", and a paragraph
+     of last year's answer turned the row into a wall. */
+  .qrow .qmeta { flex: 1 0 100%; margin-inline-start: 33px; }
   .qrow + .qrow { margin-top: 8px; }
   .qrow:focus-within { border-color: var(--accent); }
   .qrow.aside { opacity: .55; }
   .qrow.aside textarea { text-decoration: line-through; }
   .qrow.answered { opacity: .62; }
+  /* What the file already says, quoted under the question it answers. Full
+     opacity inside a dimmed row: the row is dimmed because it is finished, and
+     this line is the reason -- it is the one thing on it worth reading. */
+  .qrow .qmeta.existing {
+    display: block; opacity: 1; color: var(--ink-soft); line-height: 1.5;
+    padding: 6px 10px; font-size: 12px;
+    background: var(--ok-soft); border-radius: var(--radius-sm);
+  }
   .qrow .index {
     flex: 0 0 auto; min-width: 22px; height: 22px; padding: 0 5px;
     border-radius: var(--radius-pill); background: var(--surface);
@@ -426,127 +267,6 @@
   .composer textarea:focus { outline: none; border-color: var(--accent); }
   #composerPending:not(:empty) { margin-bottom: 12px; }
 
-  /* Removing an answer belongs on the answer, not on a list further up. */
-  .answer .qdelete { flex: 0 0 auto; align-self: flex-start; }
-
-  .field { margin-top: 16px; }
-  .field:first-child { margin-top: 0; }
-  .field-label {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
-    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 7px;
-  }
-  .field-label .grow { flex: 1; }
-  .field-label.accent { color: var(--accent); }
-  .field-label.warn { color: var(--warn); }
-  .field-label.err { color: var(--err); }
-
-  .rendered {
-    font-size: 15px; line-height: 1.7; color: var(--ink);
-    background: var(--surface-sunken);
-    border: 1px solid var(--line);
-    border-inline-start: 3px solid var(--accent);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    padding: 14px 16px;
-  }
-  .answer.review .rendered { border-inline-start-color: var(--warn); }
-  .rendered p { margin: 0 0 .65em; }
-  .rendered p:last-child { margin-bottom: 0; }
-  .rendered ul, .rendered ol { margin: .35em 0 .7em; padding-inline-start: 1.35em; }
-  .rendered li { margin: .22em 0; }
-  .rendered li::marker { color: var(--ink-faint); }
-  .rendered h4 { margin: .9em 0 .35em; font-size: 14px; font-weight: 650; }
-  .rendered strong { font-weight: 680; }
-  .rendered .empty { color: var(--ink-faint); font-style: italic; }
-
-  .answer textarea {
-    width: 100%; min-height: 240px; resize: vertical;
-    font: inherit; font-size: 15px; line-height: 1.7; padding: 14px 16px;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    border: 1px solid var(--line); border-inline-start: 3px solid var(--accent);
-    background: var(--surface-sunken); color: var(--ink);
-  }
-
-  /* Reasoning is shown, not hidden behind a disclosure. */
-  .rationale {
-    font-size: 13.5px; line-height: 1.6; color: var(--ink-soft);
-    background: var(--accent-soft); border-inline-start: 3px solid var(--accent);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 11px 14px;
-  }
-  .reasons {
-    font-size: 13px; line-height: 1.55; color: var(--warn);
-    background: var(--warn-soft); border-inline-start: 3px solid var(--warn);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 11px 14px;
-  }
-  /* The cause of a low score, as opposed to a defect found in the answer. */
-  .reasons.why {
-    color: var(--err); background: var(--err-soft); border-inline-start-color: var(--err);
-  }
-
-  /* Citations: soft bubbles that open the chunk they point at. The hue says
-     where the answer came from — a policy the organisation wrote, or a
-     questionnaire it has already answered — because that changes how much
-     weight a reviewer gives it. */
-  .cites { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
-  .cite {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px; line-height: 1.4;
-    border-radius: var(--radius-pill); padding: 5px 12px; cursor: pointer;
-    transition: background .15s, border-color .15s, transform .1s;
-    text-align: start;
-    --cite-hue: var(--accent);
-    --cite-ground: var(--accent-soft);
-    --cite-ink: var(--accent-ink);
-    background: var(--cite-ground); color: var(--cite-ink);
-    border: 1px solid color-mix(in srgb, var(--cite-hue) 24%, transparent);
-  }
-  .cite.prior_answer { --cite-hue: var(--ok); --cite-ground: var(--ok-soft); --cite-ink: var(--ok); }
-  .cite.unknown { --cite-hue: var(--ink-faint); --cite-ground: var(--surface-sunken); --cite-ink: var(--ink-soft); }
-  .cite:hover { background: color-mix(in srgb, var(--cite-hue) 15%, var(--cite-ground)); filter: none; }
-  .cite:active { transform: translateY(1px); }
-  .cite[aria-expanded="true"] {
-    border-color: var(--cite-hue);
-    background: color-mix(in srgb, var(--cite-hue) 20%, var(--cite-ground));
-  }
-  .cite .caret { opacity: .6; margin-inline-start: 6px; font-size: 10px; }
-  .cite-key { display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--ink-faint); }
-  .cite-key span { display: inline-flex; align-items: center; gap: 5px; }
-  .cite-key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-  .cite-key i.guideline { background: var(--accent); }
-  .cite-key i.prior_answer { background: var(--ok); }
-
-  .cite-panel {
-    margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-    background: var(--surface-sunken); overflow: hidden;
-  }
-  .cite-panel .cite-head {
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    padding: 9px 13px; border-bottom: 1px solid var(--line);
-    font-size: 12px; color: var(--ink-faint); background: var(--surface);
-  }
-  .cite-panel .cite-head .who { flex: 1; min-width: 0; color: var(--ink-soft); font-weight: 550; }
-  .cite-panel .snippet {
-    margin: 0; padding: 13px; white-space: pre-wrap; overflow-wrap: anywhere;
-    font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); max-height: 340px; overflow: auto;
-  }
-
-  details.evidence { margin-top: 16px; }
-  details.evidence summary {
-    cursor: pointer; font-size: 12.5px; color: var(--ink-faint); list-style: none;
-    display: inline-flex; align-items: center; gap: 6px;
-  }
-  details.evidence summary::-webkit-details-marker { display: none; }
-  details.evidence summary::before { content: "›"; font-size: 15px; transition: transform .15s; display: inline-block; }
-  details.evidence[open] summary::before { transform: rotate(90deg); }
-  .ev {
-    background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-sm);
-    padding: 11px 13px; margin-top: 9px; white-space: pre-wrap; font-size: 12.5px;
-    line-height: 1.6; color: var(--ink-soft); overflow-wrap: anywhere;
-  }
-  .ev .src { display: block; color: var(--ink-faint); font-size: 11.5px; margin-bottom: 6px; font-weight: 550; }
-
-  [dir="rtl"] { text-align: right; }
-
   /* --- viewer dialog ----------------------------------------------------- */
 
   dialog {
@@ -579,31 +299,6 @@
     border: 1px solid var(--line); border-radius: var(--radius-sm);
     background: var(--surface-sunken); color: var(--ink-soft);
   }
-  /* --- chunk rendering: raw markdown, or laid out ------------------------ */
-  .view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
-  .view-toggle button {
-    background: var(--surface); color: var(--ink-faint); border: 0; padding: 3px 9px;
-    font-size: 11.5px; cursor: pointer; font-weight: 550;
-  }
-  .view-toggle button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
-  .view-toggle button + button { border-left: 1px solid var(--line); }
-
-  .chunk { padding: 13px; font-size: 12.5px; line-height: 1.65; color: var(--ink-soft); max-height: 340px; overflow: auto; }
-  .chunk > * + * { margin-top: 9px; }
-  .chunk h4 { margin: 0; font-size: 12.5px; font-weight: 650; color: var(--ink); }
-  .chunk h4 .clause { color: var(--accent); font-variant-numeric: tabular-nums; }
-  .chunk p { margin: 0; }
-  .chunk ul { margin: 0; padding-inline-start: 20px; }
-  .chunk li { margin: 2px 0; }
-  .chunk .figure { font-size: 11px; color: var(--ink-faint); font-style: italic; }
-  .chunk .tablewrap { overflow-x: auto; }
-  .chunk table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
-  .chunk th, .chunk td {
-    border: 1px solid var(--line); padding: 4px 7px; text-align: start; vertical-align: top;
-  }
-  .chunk thead th { background: var(--surface-sunken); font-weight: 650; color: var(--ink); }
-  .chunk tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-sunken) 45%, transparent); }
-
   /* --- search drawer ----------------------------------------------------- */
   .drawer-scrim {
     position: fixed; inset: 0; background: rgba(0,0,0,.35); opacity: 0; pointer-events: none;
@@ -836,7 +531,7 @@
   <!-- The assistant is a separate page rather than a mode of this one: the two
        are different shapes, and a control that had to know which mode it was in
        would be a control with a bug waiting in it. -->
-  <a class="ghost" href="/chat" title="Ask for this in a conversation instead"
+  <a class="ghost" href="/" title="Ask for this in a conversation instead"
      style="text-decoration:none;display:inline-flex;align-items:center">Assistant →</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
@@ -2190,6 +1885,16 @@
       origin: extra.origin || "",
       skip: Boolean(extra.skip),
       targets: extra.targets || [],
+      /* What the file itself had in this row when it arrived -- last year's
+         submission, or the security team's own draft. It is an answer, it is
+         theirs, and it outranks anything drafted here. Not knowing about it
+         was how this page came to overwrite it. */
+      existing: extra.existing || "",
+      blanked: Boolean(extra.blanked),
+      // Whether *we* have an answer for it, as opposed to the file having one.
+      // The pair is what tells "finished work nobody here has touched" apart
+      // from "answered here, over what the file used to say".
+      ours: Boolean(extra.ours),
     });
   }
 
@@ -2205,10 +1910,16 @@
     row.className = "qrow" + (entry.status === "answered" ? " answered" : "");
     row.dataset.qkey = entry.key;
 
+    // Answered by the file and by nobody here. The row is finished work, and
+    // the only thing offered is a deliberate way to say it is out of date.
+    const fromFile = Boolean(entry.existing) && !entry.ours;
+
     const number = document.createElement("div");
     number.className = "index";
     number.textContent = entry.status === "answered" ? "✓" : String(index + 1);
-    number.title = entry.status === "answered" ? "Answered" : "Not yet answered";
+    number.title = entry.blanked ? "Left blank on purpose"
+      : fromFile ? "Already answered in the file"
+      : entry.status === "answered" ? "Answered" : "Not yet answered";
 
     const text = document.createElement("textarea");
     text.rows = 1;
@@ -2245,6 +1956,22 @@
        and somebody who unticks a row often wants it back once they see the
        sheet filled in. A typed question has no file behind it, so it is simply
        removed. */
+
+    /* An answer that came with the file is finished work, so nothing here
+       offers to redo it by accident -- but somebody who knows it is out of date
+       must be able to say so, and this is the row they are looking at when they
+       decide. It answers this one question and nothing else. */
+    if (fromFile) {
+      const again = document.createElement("button");
+      again.className = "quiet";
+      again.textContent = "Answer it again";
+      again.title = "Replace what the file already says for this question";
+      again.dataset.mutates = "true";
+      again.disabled = answering;
+      again.onclick = () => answerAnyway(entry);
+      actions.append(again);
+    }
+
     if (entry.formId) {
       const aside = document.createElement("button");
       aside.className = "quiet";
@@ -2271,6 +1998,29 @@
     }
 
     row.append(number, text, actions);
+
+    // What the file says, under the question it answers. A count in a summary
+    // line is not something a person can check; the sentence is.
+    if (entry.existing) {
+      const already = document.createElement("div");
+      already.className = "qmeta existing";
+      already.textContent = "Already in the file: " + entry.existing.slice(0, 220) +
+        (entry.existing.length > 220 ? "…" : "");
+      if (Cards.isArabic(entry.existing)) already.dir = "rtl";
+      row.append(already);
+    }
+
+    /* Answerable, but not fillable: there is no cell in the spreadsheet for a
+       question the spreadsheet does not contain. It is answered like any other
+       and leaves through the exports; saying so here is the difference between
+       a feature and a surprise at the end. */
+    if (formBatch && !entry.formId) {
+      const loose = document.createElement("div");
+      loose.className = "qmeta";
+      loose.textContent = "Not a row in " + (formBatch.source_name || "the file") +
+        " — answered, but exported rather than written into it.";
+      row.append(loose);
+    }
 
     // Where it came from, so a reading can be checked against the file itself.
     if (entry.origin) {
@@ -2382,6 +2132,31 @@
       setStatus(status, "Your edit is saved, and is what will be written into the file.", "ok");
     } catch (error) {
       setStatus(status, "That edit could not be saved: " + error.message, "error");
+    }
+  }
+
+  /* Leaving an answer blank on purpose, and taking that back. The button was
+     drawn on every card from the day the card learned to draw it, and did
+     nothing here, because this page never connected the hook.
+
+     Blank is not deletion: the cell is still written, empty, so a stale answer
+     in the file is cleared rather than left standing. Taking it back forgets
+     the decision and the question is simply unanswered again. */
+  async function leaveAnswerBlank(item, index, blank) {
+    const entry = questions.find((q) => q.key === item.__key);
+    if (!formBatch || !entry || !entry.formId) return;
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/blank", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: entry.formId, blank: blank }),
+      });
+      await adoptBatch(updated, { quiet: true });
+      setStatus($("answerStatus"), blank
+        ? "That row will be written empty when you fill the file."
+        : "Back to unanswered. Answer it whenever you like.", "ok");
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
     }
   }
 
@@ -2592,7 +2367,12 @@
     batch.questions.forEach((q) => addQuestion(q.text, {
       section: q.section, language: q.language,
       formId: q.id, origin: q.location, skip: q.skip, targets: q.targets,
-      status: q.answer ? "answered" : "pending",
+      existing: q.existing, blanked: q.blanked, ours: Boolean(q.answer),
+      // Three ways a question is done with, and this used to know only the
+      // first: we answered it, the file arrived with an answer, or somebody
+      // decided it should stay empty. The other two read as "pending", which
+      // is how a run came to replace answers nobody asked it to touch.
+      status: (q.answer || q.existing || q.blanked) ? "answered" : "pending",
     }));
     questions = questions.concat(typed);
 
@@ -2604,7 +2384,9 @@
     const answered = batch.questions.filter((q) => q.answered && !q.skip);
     const cards = answered.map((q) => {
       const entry = questions.find((row) => row.formId === q.id);
-      return Object.assign({}, q.answered, { __key: entry ? entry.key : null });
+      return Object.assign({}, q.answered, {
+        __key: entry ? entry.key : null, blanked: q.blanked,
+      });
     }).concat(typedAnswers);
     result = cards.length ? {
       run_id: batch.id,
@@ -2617,25 +2399,61 @@
     renderFormReport(batch);
     await renderColumns(batch.id);
     renderQuestions();
-    if (result) renderResult(result, { keepQuestions: true });
+    if (result) {
+      renderResult(result, { keepQuestions: true });
+    } else {
+      /* No answers left to show, so nothing should be shown. Rebuilding the
+         batch used to skip this branch entirely, and the last card stayed on
+         the page after the answer behind it was taken back -- a card for
+         something that no longer existed. */
+      $("results").innerHTML = "";
+      $("resultsCard").hidden = true;
+    }
     refreshFormControls();
     listRecentForms();
 
     if (quiet) return;
     const unsure = batch.parts.reduce(
       (total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
+    const already = batch.counts.already_in_file || 0;
     setStatus($("extractStatus"),
       "Found " + batch.counts.questions + " question(s) in " + batch.source_name +
-      (batch.counts.answered ? ", " + batch.counts.answered + " already answered" : "") +
+      (batch.counts.answered ? ", " + batch.counts.answered + " answered here" : "") +
+      // Said plainly, because it changes what the button below is about to do:
+      // those rows are finished and will be left exactly as they are.
+      (already ? ", " + already + " already answered in the file and left alone" : "") +
       (unsure ? " — " + unsure + " reading(s) worth checking below" : "") + ".",
       unsure ? "warn" : "ok");
     $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   async function loadAsText(file) {
+    /* A PDF has no cells, so reading one means giving up the ability to write
+       a file back -- and if a spreadsheet is open, that is *its* ability being
+       given up. It used to happen silently: the questions were appended to the
+       list, the batch was dropped on the floor, and every row from the
+       spreadsheet was left pointing at a questionnaire the page no longer
+       held. The work is not lost, the batch is still on the server, but the
+       person has to know that is where it went. */
+    if (formBatch && !confirm(
+        formBatch.source_name + " is open and can be filled in.\n\n" +
+        "Reading " + file.name + " closes it and starts a new list — the answers " +
+        "already written stay on the server, and you can pick the file up again " +
+        "from “Or pick up” below.\n\nRead " + file.name + " anyway?")) {
+      setStatus($("extractStatus"), "Left " + formBatch.source_name + " open.", "ok");
+      return;
+    }
     const body = new FormData();
     body.append("file", file);
     const data = await request("/api/assessments/extract", { method: "POST", body });
+    if (formBatch) {
+      // A clean list, not the spreadsheet's rows with a PDF's questions after
+      // them: those rows cannot be answered or filled any more.
+      questions = [];
+      result = null;
+      $("results").innerHTML = "";
+      $("resultsCard").hidden = true;
+    }
     formBatch = null;
     $("formReport").hidden = true;
     refreshFormControls();
@@ -2794,6 +2612,18 @@
     await answerPending("answerStatus");
   }
 
+  /* Replacing one answer the file arrived with. Deliberate, one question, and
+     the only thing on this page that passes `replace_existing`. */
+  async function answerAnyway(entry) {
+    if (!formBatch || answering) return;
+    if (!confirm("Replace the answer already in the file for this question?\n\n" +
+                 entry.existing.slice(0, 300))) return;
+    entry.status = "pending";
+    entry.replace = true;
+    renderQuestions();
+    await answerPending("answerStatus", [entry]);
+  }
+
   /* Answer only the rows the person is looking at, by id. The batch holds every
      question in the file; a scope is what says "these ones". */
   async function answerThroughBatch(pending, runId) {
@@ -2812,7 +2642,13 @@
       const outcome = await request("/api/forms/" + formBatch.id + "/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: { ids: own.map((entry) => entry.formId) } }),
+        body: JSON.stringify({
+          scope: { ids: own.map((entry) => entry.formId) },
+          /* The server refuses to overwrite an existing answer unless asked,
+             whatever this page sends -- so asking has to be deliberate, and
+             the only thing that asks is the button on the row itself. */
+          replace_existing: own.some((entry) => entry.replace),
+        }),
       });
       formBatch = outcome.batch;
       const byId = {};
@@ -2895,8 +2731,13 @@
       const refused = Object.keys(filled.skipped || {}).length;
       panel.replaceChildren();
       const line = document.createElement("div");
-      line.textContent = "Wrote " + filled.written + " value(s) into " + filled.file +
-        (filled.intact ? " — every other part of the file is untouched." : ".");
+      /* Zero is not a quiet success. "Wrote 0 value(s) — every other part of
+         the file is untouched" is true and reads like it worked, which is the
+         worst way to find out nothing reached the file. */
+      line.textContent = filled.because
+        ? filled.because
+        : "Wrote " + filled.written + " value(s) into " + filled.file +
+          (filled.intact ? " — every other part of the file is untouched." : ".");
       panel.append(line);
       if (blanks || refused) {
         const note = document.createElement("div");
@@ -2907,14 +2748,27 @@
         ].filter(Boolean).join(", ") + ".";
         panel.append(note);
       }
-      const download = document.createElement("button");
-      download.className = "primary";
-      download.style.marginTop = "10px";
-      download.textContent = "Download the filled file";
-      download.addEventListener("click", () => {
-        window.location.href = "/api/forms/" + formBatch.id + "/file";
-      });
-      panel.append(download);
+      /* The one moment a person finds out their extra questions are not in the
+         file is when they open it and look, so it is said before they do. */
+      const loose = questions.filter((q) => !q.formId && q.status === "answered").length;
+      if (loose) {
+        const note = document.createElement("div");
+        note.className = "blanks";
+        note.textContent = loose + " answered question(s) are not rows in this file, " +
+          "so nothing was written for them — export them instead.";
+        panel.append(note);
+      }
+      // Nothing was written, so there is no filled file to offer.
+      if (filled.written) {
+        const download = document.createElement("button");
+        download.className = "primary";
+        download.style.marginTop = "10px";
+        download.textContent = "Download the filled file";
+        download.addEventListener("click", () => {
+          window.location.href = "/api/forms/" + formBatch.id + "/file";
+        });
+        panel.append(download);
+      }
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     } finally {
@@ -2951,8 +2805,11 @@
     button.textContent = "Try " + failed + " failed question" + (failed === 1 ? "" : "s") + " again";
   }
 
-  async function answerPending(statusId = "answerStatus") {
-    const batch = pendingQuestions();
+  /* `only` answers exactly the entries given, rather than everything waiting:
+     "answer it again" is about one row and must not sweep up the rest of the
+     file with it. */
+  async function answerPending(statusId = "answerStatus", only = null) {
+    const batch = only || pendingQuestions();
     if (!batch.length) return;
     const status = $(statusId);
 
@@ -2989,6 +2846,11 @@
         if (!entry) return;
         answer.__key = entry.key;
         entry.status = "answered";
+        entry.ours = true;
+        entry.blanked = false;
+        // Replacing was for this run only. Left set, a later "answer the rest"
+        // would carry the permission along with it.
+        entry.replace = false;
       });
 
       result = result && result.answers.length
@@ -3282,6 +3144,7 @@
   Cards.onOpenDocument = openDocument;
   Cards.onEdit = (item, index, text) => { result.answers[index].answer = text; };
   Cards.onEditDone = storeEditedAnswer;
+  Cards.onBlank = leaveAnswerBlank;
   Cards.answerText = (item, index) =>
     (result && result.answers[index] ? result.answers[index].answer : item.answer) || "";
 
