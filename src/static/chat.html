@@ -109,6 +109,15 @@
   }
   #answers { flex: 1; overflow-y: auto; padding: 14px; }
   #answers .summary { margin-bottom: 14px; }
+  /* Whose document. Sits under the drop target it applies to, because the
+     panel is a column and a control that far from its subject is a control
+     people answer wrongly. */
+  .whose { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 11px 10px; margin: -4px 0 12px; }
+  .whose legend { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); padding: 0 4px; }
+  .whose label { display: flex; gap: 7px; align-items: flex-start; margin-top: 5px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+  .whose input { margin-top: 3px; flex: 0 0 auto; }
+  .whose strong { color: var(--ink); font-weight: 620; }
+
   .nothing { color: var(--ink-faint); text-align: center; margin-top: 18vh; padding: 0 28px; font-size: 13.5px; }
 
   /* --- the conversation --------------------------------------------------- */
@@ -385,6 +394,18 @@
       <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
       <strong>Policies and standards</strong>Drop PDF or DOCX here, or click to choose
     </label>
+    <!-- Asked rather than inferred, and asked before the file is chosen so the
+         answer is already set when the upload fires. A file name is not
+         evidence: the DataClassificationPolicy.pdf in this corpus is the
+         regulator's and reads exactly like one of ours. -->
+    <fieldset class="whose">
+      <legend>Whose document?</legend>
+      <label><input type="radio" name="kbAuthority" value="ours" checked />
+        <span><strong>Ours</strong> — we wrote it and are bound by it. It says what we do.</span></label>
+      <label><input type="radio" name="kbAuthority" value="external" />
+        <span><strong>A law we follow</strong> — PDPL, NCA ECC, SDAIA. It says what we
+          must do, which is not evidence that we do it.</span></label>
+    </fieldset>
     <label class="drop">
       <input type="file" id="priorInput" multiple accept=".pdf,.docx" />
       <strong>Previously answered assessments</strong>Question and answer pairs — the strongest signal for wording
@@ -558,6 +579,11 @@
       button.type = "button";
       button.setAttribute("aria-expanded", "false");
       button.append(document.createTextNode(hit.locator || hit.source_name || "source"));
+      // Whose document this is. Only the external ones are marked -- our own
+      // policy is the unmarked case, and badging every source would hide the
+      // one that matters.
+      const mark = Cards.authorityBadge(hit.authority);
+      if (mark) button.append(mark);
       const caret = document.createElement("span");
       caret.className = "caret";
       caret.textContent = "▾";
@@ -726,6 +752,19 @@
     refreshAnswersToggle();
     $("answerTitle").textContent = report.source_name || "Answers";
 
+    /* Which length this questionnaire is filled in with. Above the answers
+       rather than beside the fill button, because it changes what every card
+       below is showing, not just what the button will write. */
+    detailLevel = report.detail || "full";
+    const picker = Cards.detailPicker(detailLevel, async (level) => {
+      const updated = await request("/api/forms/" + batchId + "/detail", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ detail: level }),
+      });
+      showAnswers(updated);
+    });
+    host.append(picker);
+
     const counts = report.counts || {};
     const summary = document.createElement("div");
     summary.className = "summary";
@@ -750,11 +789,11 @@
       host.append(nothing);
     } else {
       answered.forEach((question, index) => {
-        /* The card is given the answer; "deliberately blank" is a fact about
-           the question, so it has to be carried across or the card cannot tell
-           an emptied answer from one that never arrived. */
-        question.answered.blanked = question.blanked;
-        host.append(Cards.render(question.answered, index));
+        /* Through the shared mapper: "deliberately blank", "held back by the
+           gate" and the brief form are facts about the question rather than
+           about the answer, and a card that is not given them cannot draw its
+           own state. */
+        host.append(Cards.render(Cards.fromQuestion(question), index));
       });
     }
     $("fillBtn").hidden = !answered.length;
@@ -779,15 +818,24 @@
     const button = $("fillBtn");
     button.disabled = true;
     try {
-      const filled = await request("/api/forms/" + batchId + "/fill", { method: "POST" });
+      const filled = await request("/api/forms/" + batchId + "/fill", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ include_unreviewed: false }),
+      });
       /* Zero is not a quiet success. "Wrote 0 value(s) — every other part of
          the file is untouched" is true and reads like it worked, which is the
          worst way for a person who has just watched a run finish to find out
          that nothing reached their file. */
-      addTurn("assistant", filled.because
+      const held = Object.keys(filled.held_back || {}).length;
+      addTurn("assistant", (filled.because
         ? filled.because
         : "Wrote " + filled.written + " value(s) into " + filled.file +
-          (filled.intact ? " — every other part of the file is untouched." : "."));
+          (filled.intact ? " — every other part of the file is untouched." : "."))
+        + (held
+            ? "\n\n" + held + " answer(s) were held back because nobody has confirmed them. "
+              + "They are marked in the panel beside this — edit one or approve it, and it "
+              + "goes in the next time you fill."
+            : ""));
       $("downloadBtn").hidden = !filled.written;
     } catch (error) {
       addTurn("assistant", "The file could not be filled: " + error.message);
@@ -801,7 +849,16 @@
      so an edit goes back to the server against the question's own id, and a
      source document opens in its own tab -- there is no viewer dialog here and
      a button that silently did nothing was worse than a new tab. */
-  Cards.answerText = (item) => item.answer || "";
+  /* What the card shows and edits: whichever length this questionnaire is set
+     to, falling back to the full answer when the brief one has not been
+     derived yet. */
+  let detailLevel = "full";
+  Cards.answerText = (item) => {
+    // The server resolved this answer's own length; the page does not repeat
+    // the rule that turns a preference plus a default into a choice.
+    const level = item.length || detailLevel;
+    return (level === "brief" && item.brief ? item.brief : item.answer) || "";
+  };
   Cards.onOpenDocument = (doc) => showDocument(doc.name);
 
   /* Two halves, deliberately. `onEdit` fires per keystroke and only updates the
@@ -816,7 +873,12 @@
     try {
       await request("/api/forms/" + batchId + "/answers", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question_id: item.question.id, text: text }),
+        body: JSON.stringify({
+          question_id: item.question.id, text: text,
+          // Editing the full answer discards the brief derived from it, so the
+          // two cannot disagree about what this organisation says.
+          which: (item.length || detailLevel) === "brief" && item.brief ? "brief" : "answer",
+        }),
       });
       await reloadAnswers();
     } catch (error) {
@@ -839,6 +901,35 @@
         addTurn("assistant", "That one is blank again rather than left blank on purpose. " +
           "Ask me to answer it and I will.");
       }
+    } catch (error) {
+      addTurn("assistant", "That could not be changed: " + error.message);
+    }
+  };
+
+  /* Accepting an answer as it stands. Same control, same wording and same
+     result as on the workbench -- it is the same card calling the same hook. */
+  Cards.onApprove = async (item, index, approved) => {
+    if (!batchId || !item.question) return;
+    try {
+      await request("/api/forms/" + batchId + "/approve", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: item.question.id, approved: approved }),
+      });
+      await reloadAnswers();
+    } catch (error) {
+      addTurn("assistant", "That could not be approved: " + error.message);
+    }
+  };
+
+  /* Full or brief for one answer, overriding the questionnaire's default. */
+  Cards.onLength = async (item, index, prefer) => {
+    if (!batchId || !item.question) return;
+    try {
+      await request("/api/forms/" + batchId + "/answers/length", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: item.question.id, prefer: prefer }),
+      });
+      await reloadAnswers();
     } catch (error) {
       addTurn("assistant", "That could not be changed: " + error.message);
     }
@@ -1034,6 +1125,8 @@
         const name = document.createElement("span");
         name.className = "name";
         name.textContent = source.name;
+        const mark = Cards.authorityBadge(source.authority);
+        if (mark) name.append(document.createTextNode(" "), mark);
         const count = document.createElement("span");
         count.className = "count";
         count.textContent = source.chunks + " chunk(s)";
@@ -1063,6 +1156,10 @@
       status.className = "status busy";
       const body = new FormData();
       files.forEach((file) => body.append("files", file));
+      // Only the guidelines upload asks: a previously answered assessment is
+      // ours by definition.
+      const whose = document.querySelector('input[name="kbAuthority"]:checked');
+      if (whose && url.endsWith("/guidelines")) body.append("authority", whose.value);
       try {
         const data = await request(url, { method: "POST", body });
         const added = (data.results || []).filter((r) => !r.error && !r.duplicate_of).length;

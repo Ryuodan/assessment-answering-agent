@@ -59,6 +59,59 @@ def test_a_note_for_a_run_nobody_started_is_harmless():
     progress.note(None, "Thinking…")
 
 
+# --- an answer that arrived in two cells -----------------------------------
+#
+# A questionnaire with a status column and a comment column is answered in the
+# pair, and `existing_answer` used to return whichever of the two it reached
+# first. Measured over seventeen real questionnaires, 208 of 982 answers were
+# losing either their verdict or their explanation that way.
+
+
+def _question(status=None, prose=None):
+    from src.forms.model import FormQuestion, Role, Target
+
+    targets = {}
+    if status is not None:
+        targets[Role.STATUS] = Target(id="s", role=Role.STATUS, existing=status)
+    if prose is not None:
+        targets[Role.ANSWER] = Target(id="a", role=Role.ANSWER, existing=prose)
+    return FormQuestion(id="q", text="Does it?", targets=targets)
+
+
+def test_a_verdict_and_a_comment_are_read_as_one_answer():
+    assert _question("Yes", "we enforce MFA on all privileged accounts").existing_answer == (
+        "Yes, we enforce MFA on all privileged accounts"
+    )
+
+
+def test_a_comment_that_is_its_own_sentence_is_not_comma_spliced():
+    """Lower case continues the verdict; upper case starts a sentence. Nothing
+    is re-cased, because "T2 has documented policies" must not become "t2"."""
+    assert _question("Compliant", "T2 has documented policies.").existing_answer == (
+        "Compliant. T2 has documented policies."
+    )
+
+
+def test_a_comment_that_already_carries_the_verdict_is_the_whole_answer():
+    """Some teams ignore the status column and write everything in the comment.
+    Joining there produces "Fully Compliant, Yes we encrypt", which is nobody's
+    answer."""
+    question = _question("Fully Compliant", "Yes. The HR process was approved in March.")
+    assert question.existing_answer == "Yes. The HR process was approved in March."
+
+
+def test_either_cell_alone_is_still_an_answer():
+    assert _question("Implemented", None).existing_answer == "Implemented"
+    assert _question(None, "We have no DPO.").existing_answer == "We have no DPO."
+    assert _question(None, None).existing_answer == ""
+
+
+def test_a_repeated_verdict_is_not_doubled():
+    assert _question("Yes", "Yes, offsite backups are encrypted").existing_answer == (
+        "Yes, offsite backups are encrypted"
+    )
+
+
 # --- language detection ----------------------------------------------------
 
 
@@ -239,7 +292,10 @@ def test_sources_block_is_numbered_and_labelled():
         ]
     )
     assert "[1] PREVIOUS ANSWER — a.docx" in block
-    assert "[2] GUIDELINE — b.docx" in block
+    assert "[2] OUR POLICY — b.docx" in block, (
+        "a guideline is labelled by whose it is: our policy says what we do, "
+        "and a regulation says what we are required to do"
+    )
     assert "past answer" in block and "policy text" in block
 
 

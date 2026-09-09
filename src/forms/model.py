@@ -21,6 +21,8 @@ Three ideas do most of the work:
 
 from __future__ import annotations
 
+import re
+
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -68,6 +70,18 @@ class Role(str, Enum):
 
 WRITABLE = frozenset({Role.ANSWER, Role.STATUS, Role.EVIDENCE})
 """Roles a value may be written to. THEIRS is excluded on purpose."""
+
+_VERDICT_WORD = re.compile(
+    r"^\s*(yes|no|n/?a|not applicable|compliant|non[- ]compliant|fully compliant|"
+    r"partially compliant|implemented|not implemented|نعم|لا)\b",
+    re.I,
+)
+"""A comment that opens with a verdict of its own.
+
+Some questionnaires have a status column the team ignored, writing the whole
+answer -- verdict and all -- into the comment beside it. Joining the two there
+repeats the verdict, so the comment is taken as the complete answer.
+"""
 
 
 class Finding(BaseModel):
@@ -133,15 +147,38 @@ class FormQuestion(BaseModel):
     def existing_answer(self) -> str:
         """What the file already had in it for this question, if anything.
 
-        The prose first, because that is what a person reads; a status on its
-        own -- "Fully Compliant" with no comment beside it -- is still an
-        answer and is worth reporting as one.
+        Both cells, joined, because both are the answer. A questionnaire that
+        has a status column and a comment column beside it is answered in the
+        pair -- "Yes" in one and "T2 enforces multi-factor authentication" in
+        the other -- and returning whichever came first threw half of it away.
+        Measured over seventeen real questionnaires, 208 of 982 answers were
+        being truncated that way, and which half survived depended on which
+        column the reader happened to label.
+
+        Joined in the order a person says them, which is also the order the
+        security team writes them in: the verdict, then the sentence.
         """
-        for role in (Role.ANSWER, Role.STATUS):
-            target = self.targets.get(role)
-            if target is not None and not target.is_empty:
-                return target.existing.strip()
-        return ""
+        status = self.targets.get(Role.STATUS)
+        prose = self.targets.get(Role.ANSWER)
+        verdict = status.existing.strip() if status is not None and not status.is_empty else ""
+        sentence = prose.existing.strip() if prose is not None and not prose.is_empty else ""
+
+        if not (verdict and sentence):
+            return sentence or verdict
+
+        # The comment already carries a verdict of its own on the files where
+        # the team wrote the whole answer into one cell. Joining there produces
+        # "Fully Compliant, Yes we encrypt", which is nobody's answer.
+        if sentence.casefold().startswith(verdict.casefold()) or _VERDICT_WORD.match(sentence):
+            return sentence
+
+        # Punctuation follows the comment's own capitalisation, and the text is
+        # never altered. A comment beginning lower case continues the verdict --
+        # "Yes" + "we enforce MFA" -- and one beginning upper case is its own
+        # sentence, where a comma would be wrong and lower-casing it would ruin
+        # a name: "T2 has documented policies" must not become "t2".
+        joiner = ", " if sentence[:1].islower() else ". "
+        return f"{verdict}{joiner}{sentence}"
 
     @property
     def is_answered(self) -> bool:

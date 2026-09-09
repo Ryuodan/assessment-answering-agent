@@ -38,6 +38,8 @@ class Batch:
     form: DetectedForm
     created_at: str
     updated_at: str
+    detail: str = "full"
+    """Which length of answer this questionnaire is filled in with."""
 
     @property
     def exists(self) -> bool:
@@ -82,6 +84,7 @@ def _row_to_batch(row) -> Batch:
         form=DetectedForm.model_validate_json(row["detected"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        detail=(row["detail"] if "detail" in row.keys() else "full") or "full",
     )
 
 
@@ -187,6 +190,35 @@ def edited_by(batch_id: str) -> dict[str, str]:
         (batch_id,),
     ).fetchall()
     return {row["question_id"]: row["edited_by"] for row in rows}
+
+
+DETAIL_LEVELS = ("full", "brief")
+"""How long the answers in a questionnaire should be.
+
+Per questionnaire rather than per person, because the reason anybody wants
+short answers is the size of the file in front of them: 183 rows due on
+Thursday is a different job from twenty rows for a bank that will read every
+word, and the same person wants both in different weeks.
+"""
+
+
+def detail_of(batch_id: str) -> str:
+    conn = store.connect()
+    row = conn.execute(
+        "SELECT detail FROM form_batches WHERE batch_id = ?", (batch_id,)
+    ).fetchone()
+    return (row["detail"] if row else "full") or "full"
+
+
+def set_detail(batch_id: str, detail: str) -> None:
+    if detail not in DETAIL_LEVELS:
+        raise ValueError(f"detail must be one of {DETAIL_LEVELS}, not {detail!r}")
+    conn = store.connect()
+    with conn:
+        conn.execute(
+            "UPDATE form_batches SET detail = ?, updated_at = ? WHERE batch_id = ?",
+            (detail, store.utcnow(), batch_id),
+        )
 
 
 def forget_answer(batch_id: str, question_id: str) -> None:

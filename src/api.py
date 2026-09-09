@@ -410,6 +410,8 @@ class ReviseBatchRequest(BaseModel):
 class SetAnswerRequest(BaseModel):
     question_id: str = Field(min_length=1, max_length=400)
     text: str = Field(max_length=20000)
+    which: str = Field(default="answer", pattern="^(answer|brief)$")
+    """Which of the two lengths is being edited. See `tools.set_answer`."""
 
 
 def _tool(action):
@@ -492,7 +494,9 @@ async def revise_questionnaire(
 def write_answer_by_hand(
     batch_id: str, request: SetAnswerRequest, user: User = Depends(current_user)
 ) -> dict:
-    _tool(lambda: tools.set_answer(user, batch_id, request.question_id, request.text))
+    _tool(lambda: tools.set_answer(
+        user, batch_id, request.question_id, request.text, which=request.which,
+    ))
     return tools.inspect(user, batch_id)
 
 
@@ -559,10 +563,92 @@ def correct_questions(
     ))
 
 
+class DetailRequest(BaseModel):
+    """How long the answers in this questionnaire should be."""
+
+    detail: str = Field(pattern="^(full|brief)$")
+
+
+@app.post("/api/forms/{batch_id}/detail")
+async def choose_answer_length(
+    batch_id: str, request: DetailRequest, user: User = Depends(current_user)
+) -> dict:
+    """Switch a questionnaire between full and brief answers.
+
+    Switching to brief derives the short form of every answer that does not
+    have one yet -- one rewrite each, once. Switching back is instant, because
+    the full answer was never replaced: both are stored against the question and
+    the choice only says which one `fill` writes.
+    """
+    _tool(lambda: tools.set_detail(user, batch_id, request.detail))
+    if request.detail == "brief":
+        await _atool(tools.make_brief(user, batch_id))
+    return tools.inspect(user, batch_id)
+
+
+class PreferLengthRequest(BaseModel):
+    """The length for one answer, overriding the questionnaire's default."""
+
+    question_id: str = Field(min_length=1, max_length=400)
+    prefer: str = Field(default="", pattern="^(full|brief|)$")
+
+
+@app.post("/api/forms/{batch_id}/answers/length")
+async def choose_one_answer_length(
+    batch_id: str, request: PreferLengthRequest, user: User = Depends(current_user)
+) -> dict:
+    """Write this one answer full or brief, whatever the rest of the file does."""
+    _tool(lambda: tools.prefer_length(user, batch_id, request.question_id, request.prefer))
+    # Deriving on demand, for the one answer, so choosing "brief" on a file that
+    # is set to full does not silently show the long text instead.
+    if request.prefer == "brief":
+        await _atool(tools.make_brief(
+            user, batch_id, tools.Scope(ids=(request.question_id,)),
+        ))
+    return tools.inspect(user, batch_id)
+
+
+class ApproveRequest(BaseModel):
+    """One answer a person has read and accepted as it stands."""
+
+    question_id: str = Field(min_length=1, max_length=400)
+    approved: bool = True
+
+
+@app.post("/api/forms/{batch_id}/approve")
+def approve_an_answer(
+    batch_id: str, request: ApproveRequest, user: User = Depends(current_user)
+) -> dict:
+    """Release one answer for writing, with the reviewer's name on it."""
+    _tool(lambda: tools.approve_answer(
+        user, batch_id, request.question_id, approved=request.approved,
+    ))
+    return tools.inspect(user, batch_id)
+
+
+class FillRequest(BaseModel):
+    """How much of the questionnaire to write."""
+
+    include_unreviewed: bool = False
+    """Write answers nobody has confirmed as well.
+
+    Off by default, and deliberately awkward to turn on. Measured against the
+    security team's own answers, every answer that contradicted them came back
+    flagged and under 0.50 confidence -- so the default holds back exactly the
+    ones that would embarrass the organisation, and turning it off is a thing
+    somebody should have to mean.
+    """
+
+
 @app.post("/api/forms/{batch_id}/fill")
-def fill_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict:
-    """Write the answers into a copy of the original and report what changed."""
-    filled = _tool(lambda: tools.fill(user, batch_id))
+def fill_questionnaire(
+    batch_id: str,
+    request: FillRequest | None = None,
+    user: User = Depends(current_user),
+) -> dict:
+    """Write the confirmed answers into a copy of the original, and report the rest."""
+    include = bool(request and request.include_unreviewed)
+    filled = _tool(lambda: tools.fill(user, batch_id, include_unreviewed=include))
     return {
         "file": filled.path.name,
         "written": filled.written,
@@ -571,6 +657,7 @@ def fill_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dic
         "intact": filled.intact,
         "skipped": filled.skipped,
         "blank": filled.blank,
+        "held_back": filled.held_back,
         "because": filled.because,
     }
 
@@ -650,7 +737,9 @@ def _check_suffix(filename: str) -> None:
         )
 
 
-async def _ingest_files(files: list[UploadFile], source_type: SourceType) -> list[IngestResult]:
+async def _ingest_files(
+    files: list[UploadFile], source_type: SourceType, authority: str = "ours",
+) -> list[IngestResult]:
     """Save and index a batch of uploads. Shared by both ingestion endpoints."""
     if not files:
         raise HTTPException(status_code=400, detail="No files were uploaded.")
@@ -659,7 +748,7 @@ async def _ingest_files(files: list[UploadFile], source_type: SourceType) -> lis
     for upload in files:
         _check_suffix(upload.filename or "")
         path = service.save_upload(upload.filename or "upload", await upload.read())
-        results.append(await service.ingest(path, source_type))
+        results.append(await service.ingest(path, source_type, authority))
     return results
 
 
@@ -675,9 +764,21 @@ def get_knowledge() -> dict:
 
 
 @app.post("/api/knowledge/guidelines")
-async def upload_guidelines(files: list[UploadFile] = File(...)) -> list[IngestResult]:
-    """Index policy and guideline documents."""
-    return await _ingest_files(files, SourceType.GUIDELINE)
+async def upload_guidelines(
+    files: list[UploadFile] = File(...),
+    authority: str = Form(default="ours"),
+) -> list[IngestResult]:
+    """Index policy and guideline documents.
+
+    `authority` is "ours" for something this organisation wrote and is bound by,
+    "external" for a law, regulation or framework it is subject to. The drafter
+    is told which, because our policy says what we *do* and a regulation says
+    what we are *required* to do -- and answering the second as though it were
+    the first claims a control we may not have.
+    """
+    if authority not in ("ours", "external"):
+        raise HTTPException(status_code=400, detail="authority must be 'ours' or 'external'.")
+    return await _ingest_files(files, SourceType.GUIDELINE, authority)
 
 
 @app.post("/api/knowledge/prior-assessments")

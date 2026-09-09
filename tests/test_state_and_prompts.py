@@ -136,7 +136,7 @@ def test_sources_block_shows_clause_locators():
     )
     assert "std.pdf [MDS-CS-STD-003] \u00a77.2.1" in block
     assert "(7 Monitoring)" in block
-    assert block.startswith("[1] GUIDELINE")
+    assert block.startswith("[1] OUR POLICY")
 
 
 def test_sources_block_numbers_from_one_and_matches_citation_indexes():

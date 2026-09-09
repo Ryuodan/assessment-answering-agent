@@ -188,6 +188,15 @@ MIGRATIONS: list[str] = [
        SET title = RTRIM(SUBSTR(title, 1, INSTR(title, '[A file has been') - 1))
      WHERE INSTR(title, '[A file has been') > 0;
     """,
+    # 6 -- how long the answers in this questionnaire should be.
+    #
+    # Per questionnaire rather than per user or per team, because the reason
+    # anybody wants short answers is the size of the file in front of them: 183
+    # rows due on Thursday is a different job from twenty rows for a bank that
+    # will read every word. The same person wants both, in different weeks.
+    """
+    ALTER TABLE form_batches ADD COLUMN detail TEXT NOT NULL DEFAULT 'full';
+    """,
 ]
 
 _local = threading.local()

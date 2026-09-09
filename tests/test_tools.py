@@ -501,6 +501,241 @@ async def test_a_fill_with_every_answer_set_aside_says_so(batch, user, answers_y
     assert report.written == 0 and "set aside" in report.because
 
 
+# --- two lengths, one answer -------------------------------------------------
+#
+# The team's own answers run to eleven words and their stated preference is for
+# detailed ones. Both are true: eleven words is what you write when a
+# questionnaire has 183 rows and it is due on Thursday. So the choice belongs to
+# whoever is filling the form in, and the two versions have to agree, which is
+# why the brief one is derived from the full one and never drafted beside it.
+
+
+@pytest.fixture
+def shortens(monkeypatch):
+    """Stand in for the rewrite pass that condenses an answer."""
+    seen: list = []
+
+    async def fake(answered):
+        seen.append(answered)
+        return "Yes, briefly."
+
+    monkeypatch.setattr(tools.rewrite, "shorten", fake)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_a_brief_form_is_derived_and_kept(batch, user, answers_yes, shortens):
+    await tools.answer(user, batch.id)
+    outcome = await tools.make_brief(user, batch.id)
+
+    assert outcome.answered == 4
+    stored = batches.answers(batch.id)
+    assert all(a.brief == "Yes, briefly." for a in stored.values())
+    assert all(a.answer.startswith("Yes, this is documented") for a in stored.values()), (
+        "the full answer must survive: switching back has to be lossless"
+    )
+
+
+@pytest.mark.asyncio
+async def test_deriving_twice_costs_nothing_the_second_time(batch, user, answers_yes, shortens):
+    await tools.answer(user, batch.id)
+    await tools.make_brief(user, batch.id)
+    again = await tools.make_brief(user, batch.id)
+    assert again.attempted == 0, "an answer that already has a brief is not rewritten"
+    assert len(shortens) == 4
+
+
+@pytest.mark.asyncio
+async def test_fill_writes_whichever_length_was_chosen(batch, user, answers_yes, shortens):
+    await tools.answer(user, batch.id)
+    await tools.make_brief(user, batch.id)
+
+    tools.set_detail(user, batch.id, "brief")
+    brief = tools.fill(user, batch.id, destination=batch.source_path.with_name("brief.xlsx"))
+    assert brief.written == 4
+
+    tools.set_detail(user, batch.id, "full")
+    full = tools.fill(user, batch.id, destination=batch.source_path.with_name("full.xlsx"))
+    assert full.written == 4
+
+    from src.forms.reading import read
+    short_text = {q.id: q.existing_answer for q in read(brief.path, "rules").form.questions}
+    long_text = {q.id: q.existing_answer for q in read(full.path, "rules").form.questions}
+    assert any("briefly" in v for v in short_text.values())
+    assert not any("briefly" in v for v in long_text.values())
+
+
+@pytest.mark.asyncio
+async def test_brief_falls_back_to_the_full_answer(batch, user, answers_yes):
+    """Switching to brief and filling immediately must write the long answers,
+    not blanks. The interface derives them first; this is what happens when
+    something else does not."""
+    await tools.answer(user, batch.id)
+    tools.set_detail(user, batch.id, "brief")
+    filled = tools.fill(user, batch.id)
+    assert filled.written == 4
+
+
+@pytest.mark.asyncio
+async def test_the_status_column_is_read_off_the_full_answer(
+    dropdown_batch, user, answers_yes, monkeypatch
+):
+    """A condensed answer can lose the sentence the verdict was picked from, and
+    the compliance dropdown must not change because somebody chose shorter
+    prose."""
+    async def drops_the_verdict(answered):
+        return "Encryption is applied."
+
+    monkeypatch.setattr(tools.rewrite, "shorten", drops_the_verdict)
+    await tools.answer(user, dropdown_batch.id)
+    await tools.make_brief(user, dropdown_batch.id)
+    tools.set_detail(user, dropdown_batch.id, "brief")
+
+    filled = tools.fill(user, dropdown_batch.id)
+    assert filled.written, "the status still resolves from the full answer"
+
+
+def test_an_unknown_length_is_refused(batch, user):
+    with pytest.raises(tools.ToolError):
+        tools.set_detail(user, batch.id, "medium")
+
+
+def test_a_questionnaire_starts_full(batch, user):
+    assert tools.inspect(user, batch.id)["detail"] == "full"
+
+
+# --- what reaches the customer's file ---------------------------------------
+#
+# Measured against the security team's own answers on five real questionnaires:
+# of ten answers that contradicted them, ten came back flagged for review with
+# confidence at or below 0.50. Not one wrong answer was confidently wrong. So
+# the flag is worth acting on rather than displaying.
+
+
+@pytest.fixture
+def answers_doubtfully(monkeypatch):
+    """The pipeline, unsure of itself: low confidence and flagged."""
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=question, answer="Probably, though the documentation is thin.",
+                confidence=0.3, needs_review=True,
+                review_reasons=["the sources do not cover this directly"],
+            )
+            for question in questions
+        ]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+
+
+@pytest.mark.asyncio
+async def test_an_unconfirmed_answer_is_not_written(batch, user, answers_doubtfully):
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id)
+
+    assert filled.written == 0
+    assert len(filled.held_back) == 4
+    assert "flagged for review" in next(iter(filled.held_back.values()))
+
+
+@pytest.mark.asyncio
+async def test_a_low_confidence_answer_is_held_back_even_unflagged(batch, user, monkeypatch):
+    """The two signals are separate and either is enough. An answer can score
+    badly without the mechanical checks having anything to say about it."""
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(question=q, answer="Yes.", confidence=0.4, needs_review=False)
+            for q in questions
+        ]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id)
+    assert filled.written == 0
+    assert "confidence 40%" in next(iter(filled.held_back.values()))
+
+
+@pytest.mark.asyncio
+async def test_editing_an_answer_releases_it(batch, user, answers_doubtfully):
+    """A person who rewrote it has confirmed it, and nothing more should be asked."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.set_answer(user, batch.id, first, "Yes, we do this.")
+
+    filled = tools.fill(user, batch.id)
+    assert filled.written >= 1
+    assert first not in filled.held_back
+
+
+@pytest.mark.asyncio
+async def test_approving_an_answer_releases_it_unchanged(batch, user, answers_doubtfully):
+    """An answer that is right as written should not have to be retyped."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    before = batches.answers(batch.id)[first].answer
+
+    tools.approve_answer(user, batch.id, first)
+
+    after = batches.answers(batch.id)[first]
+    assert after.answer == before, "approving must not touch the words"
+    assert after.confidence == pytest.approx(0.3), "nor the score that made it worth reading"
+
+    filled = tools.fill(user, batch.id)
+    assert first not in filled.held_back
+
+
+@pytest.mark.asyncio
+async def test_approving_is_attributed(batch, user, answers_doubtfully):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    assert batches.edited_by(batch.id).get(first) == user.email
+
+
+@pytest.mark.asyncio
+async def test_the_gate_can_be_opened_deliberately(batch, user, answers_doubtfully):
+    """There has to be a way through, or a person with a deadline has no move
+    except to retype four answers they have already read."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, include_unreviewed=True)
+    assert filled.written == 4 and not filled.held_back
+
+
+@pytest.mark.asyncio
+async def test_a_confident_answer_still_goes_straight_in(batch, user, answers_yes):
+    """The gate must not turn every run into a review queue."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id)
+    assert filled.written == 4 and not filled.held_back
+
+
+@pytest.mark.asyncio
+async def test_inspect_says_which_answers_would_be_written(batch, user, answers_doubtfully):
+    """The interface cannot draw the gate without being told about it."""
+    await tools.answer(user, batch.id)
+    view = tools.inspect(user, batch.id)
+    assert view["counts"]["held_back"] == 4
+    question = view["questions"][0]
+    assert question["will_be_written"] is False
+    assert "flagged for review" in question["held_back_because"]
+
+
+def test_approving_a_question_with_no_answer_is_refused(batch, user):
+    with pytest.raises(tools.ToolError):
+        tools.approve_answer(user, batch.id, batch.form.questions[0].id)
+
+
+@pytest.mark.asyncio
+async def test_a_blank_answer_is_not_something_to_approve(batch, user, answers_doubtfully):
+    """Deliberately empty is already a decision; approving it would be a second
+    one wearing the same name."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.blank_answer(user, batch.id, first)
+    with pytest.raises(tools.ToolError):
+        tools.approve_answer(user, batch.id, first)
+
+
 def test_filling_without_the_original_says_so(batch, user):
     batch.source_path.unlink()
     with pytest.raises(tools.ToolError, match="no longer on the server"):

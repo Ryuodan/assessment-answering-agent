@@ -271,8 +271,9 @@ async def test_a_policy_filed_as_previous_answers_is_reported_not_silently_dropp
 async def test_a_questionnaire_filed_as_a_guideline_is_warned_about(monkeypatch, tmp_path):
     indexed = {}
 
-    def fake_add(name, text, content_hash=""):
+    def fake_add(name, text, content_hash="", authority="ours"):
         indexed["name"] = name
+        indexed["authority"] = authority
         return 3
 
     monkeypatch.setattr(service, "extracted_document_text", lambda path: _async(QUESTIONNAIRE))

@@ -39,8 +39,14 @@ _DOCUMENT_LABELS = {"uploaded": "Uploaded document"}
 _ARABIC_TEXT = re.compile(r"[؀-ۿ]")
 
 
-async def ingest(path: str | Path, source_type: SourceType) -> IngestResult:
+async def ingest(
+    path: str | Path, source_type: SourceType, authority: str = "ours",
+) -> IngestResult:
     """Index one uploaded file as either a guideline or a previously answered assessment.
+
+    `authority` distinguishes a document this organisation wrote and is bound by
+    from a law or framework it is subject to. It only means anything for a
+    guideline: a previous answer is ours by definition.
 
     Failures are returned, not raised: a batch upload of ten policies should
     report which one was unreadable and index the other nine.
@@ -63,7 +69,7 @@ async def ingest(path: str | Path, source_type: SourceType) -> IngestResult:
         text = await extracted_document_text(path)
 
         if source_type is SourceType.GUIDELINE:
-            chunks = store.add_guideline(path.name, text, content_hash)
+            chunks = store.add_guideline(path.name, text, content_hash, authority=authority)
             return IngestResult(
                 source_name=path.name,
                 source_type=source_type,

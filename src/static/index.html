@@ -247,6 +247,17 @@
   .qrow .qactions { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
   .qrow .tag { flex: 0 0 auto; }
 
+  /* Whose document. A fieldset rather than a checkbox, because neither
+     answer is the "off" state and getting it wrong is not symmetric. */
+  .whose {
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 9px 12px 11px; margin: 10px 0 12px;
+  }
+  .whose legend { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); padding: 0 4px; }
+  .whose label { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; font-size: 12.5px; color: var(--ink-soft); cursor: pointer; }
+  .whose input { margin-top: 3px; flex: 0 0 auto; }
+  .whose strong { color: var(--ink); font-weight: 620; }
+
   .qlist-empty {
     padding: 22px; text-align: center; color: var(--ink-faint); font-size: 13.5px;
     border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
@@ -549,12 +560,26 @@
     <div class="split">
       <div class="panel">
         <h3>Guidelines</h3>
-        <p class="hint">Policies, standards and reference material stating your organisation's position.</p>
+        <p class="hint">Policies, standards and reference material the answers are drawn from.</p>
         <label class="file" data-drop="guidelines">
           <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
           Drop PDF or DOCX files here, or click to choose
           <span class="chosen" id="guidelinesChosen"></span>
         </label>
+        <!-- Asked rather than guessed. A file name is not evidence: the
+             "DataClassificationPolicy.pdf" in this corpus is the regulator's,
+             not ours, and reads exactly like one of ours. Answering from the
+             second as though it were the first claims a control we may not
+             have. -->
+        <fieldset class="whose">
+          <legend>Whose document is this?</legend>
+          <label><input type="radio" name="guidelineAuthority" value="ours" checked />
+            <span><strong>Ours.</strong> Something we wrote and are bound by — it says what we do.</span></label>
+          <label><input type="radio" name="guidelineAuthority" value="external" />
+            <span><strong>A requirement we are subject to.</strong> A law, regulation or
+              someone else&rsquo;s framework — PDPL, NCA ECC, SDAIA. It says what we must do,
+              which is not evidence that we do it.</span></label>
+        </fieldset>
         <div class="row">
           <button id="guidelinesBtn" disabled>Index guidelines</button>
         </div>
@@ -681,6 +706,10 @@
       at the bottom, past the last answer.</p>
 
     <div class="summary" id="resultsSummary"></div>
+
+    <!-- Above the answers rather than beside the fill button: it changes what
+         every card below is showing, not only what the button will write. -->
+    <div id="detailPick" style="margin-bottom:14px" hidden></div>
 
     <div class="status" style="margin-bottom:18px">Edits you make here are kept, and go into
       the filled file and every download.</div>
@@ -1463,7 +1492,10 @@
       badge.title = item.is_lexical
         ? "Found by keyword search: the score is its rank, not a similarity"
         : "Cosine similarity to your query";
-      head.append(who, badge, Cards.openDocumentButton(item.source_name, item.source_type));
+      const authority = Cards.authorityBadge(item.authority);
+      head.append(who, badge);
+      if (authority) head.append(authority);
+      head.append(Cards.openDocumentButton(item.source_name, item.source_type));
 
       card.append(head, Cards.chunk(item.snippet));
       box.append(card);
@@ -1540,6 +1572,9 @@
 
       const form = new FormData();
       files.forEach((file) => form.append("files", file));
+      // Only the guidelines upload asks: a previous answer is ours by definition.
+      const whose = document.querySelector('input[name="guidelineAuthority"]:checked');
+      if (whose && endpoint.endsWith("/guidelines")) form.append("authority", whose.value);
 
       try {
         const results = await request(endpoint, { method: "POST", body: form });
@@ -1594,6 +1629,11 @@
         const name = document.createElement("span");
         name.className = "name";
         name.textContent = source.name + " (" + source.chunks + ")";
+        // Whether this is ours or a law we follow. The knowledge panel is where
+        // somebody checks that the corpus is labelled correctly, and it was the
+        // one place that could not show them.
+        const whose = Cards.authorityBadge(source.authority);
+        if (whose) name.append(document.createTextNode(" "), whose);
 
         const view = document.createElement("button");
         view.className = "quiet";
@@ -2126,7 +2166,11 @@
       await request("/api/forms/" + formBatch.id + "/answers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question_id: entry.formId, text: text }),
+        body: JSON.stringify({
+          question_id: entry.formId, text: text,
+          // Editing the full answer discards the brief derived from it.
+          which: (entry.length || detailLevel) === "brief" ? "brief" : "answer",
+        }),
       });
       storedEdits[entry.formId] = text;
       setStatus(status, "Your edit is saved, and is what will be written into the file.", "ok");
@@ -2155,6 +2199,46 @@
       setStatus($("answerStatus"), blank
         ? "That row will be written empty when you fill the file."
         : "Back to unanswered. Answer it whenever you like.", "ok");
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    }
+  }
+
+  /* Full or brief, for one answer. The questionnaire's own setting stays the
+     default; this pins one answer against it. */
+  async function chooseAnswerLength(item, index, prefer) {
+    const entry = questions.find((q) => q.key === item.__key);
+    if (!formBatch || !entry || !entry.formId) return;
+    setStatus($("answerStatus"), prefer === "brief"
+      ? "Shortening that answer…" : "Switching that answer back to full…", "busy");
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/answers/length", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: entry.formId, prefer: prefer }),
+      });
+      await adoptBatch(updated, { quiet: true });
+      setStatus($("answerStatus"), "That answer will be written in " + prefer + ".", "ok");
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    }
+  }
+
+  /* Accepting an answer as it stands, so the gate lets it through. The other
+     way through is to edit it, which the card already offers; this is for the
+     answers that are right as written and only need a name against them. */
+  async function approveAnswer(item, index, approved) {
+    const entry = questions.find((q) => q.key === item.__key);
+    if (!formBatch || !entry || !entry.formId) return;
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: entry.formId, approved: approved }),
+      });
+      await adoptBatch(updated, { quiet: true });
+      setStatus($("answerStatus"), approved
+        ? "Approved. That answer will be written into the file."
+        : "Approval withdrawn. It will be held back again.", "ok");
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     }
@@ -2384,9 +2468,7 @@
     const answered = batch.questions.filter((q) => q.answered && !q.skip);
     const cards = answered.map((q) => {
       const entry = questions.find((row) => row.formId === q.id);
-      return Object.assign({}, q.answered, {
-        __key: entry ? entry.key : null, blanked: q.blanked,
-      });
+      return Cards.fromQuestion(q, { __key: entry ? entry.key : null });
     }).concat(typedAnswers);
     result = cards.length ? {
       run_id: batch.id,
@@ -2396,6 +2478,8 @@
       answers: cards,
     } : null;
 
+    detailLevel = batch.detail || "full";
+    renderDetailPicker();
     renderFormReport(batch);
     await renderColumns(batch.id);
     renderQuestions();
@@ -2581,6 +2665,33 @@
     });
   }
 
+  /* Which length this questionnaire is filled in with. Only shown for a real
+     questionnaire: a list of typed questions has no batch to remember it. */
+  let detailLevel = "full";
+
+  function renderDetailPicker() {
+    const host = $("detailPick");
+    host.replaceChildren();
+    if (!formBatch) { host.hidden = true; return; }
+    host.hidden = false;
+    host.append(Cards.detailPicker(detailLevel, async (level) => {
+      setStatus($("answerStatus"), level === "brief"
+        ? "Shortening the answers…" : "Switching back to the full answers…", "busy");
+      try {
+        const updated = await request("/api/forms/" + formBatch.id + "/detail", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ detail: level }),
+        });
+        await adoptBatch(updated, { quiet: true });
+        setStatus($("answerStatus"), level === "brief"
+          ? "Showing the brief answers. The full ones are kept — switch back any time."
+          : "Showing the full answers.", "ok");
+      } catch (error) {
+        setStatus($("answerStatus"), error.message, "error");
+      }
+    }));
+  }
+
   function refreshFormControls() {
     // Filling needs a file to fill. Rewording only needs answers, and works the
     // same on a list of typed questions as it does on a questionnaire.
@@ -2652,8 +2763,13 @@
       });
       formBatch = outcome.batch;
       const byId = {};
+      /* Through the same mapper the rest of the page uses. Taking
+         `question.answered` alone dropped everything the card draws its state
+         from, so an answer held back by the gate looked ordinary until the
+         page was reloaded. */
       outcome.batch.questions.forEach((question) => {
-        if (question.answered) byId[question.id] = question.answered;
+        const item = Cards.fromQuestion(question);
+        if (item) byId[question.id] = item;
       });
       own.forEach((entry) => {
         if (byId[entry.formId]) byKey[entry.key] = byId[entry.formId];
@@ -2719,12 +2835,15 @@
     });
   }
 
-  async function fillTheForm() {
+  async function fillTheForm(includeUnreviewed = false) {
     if (!formBatch) return;
     const button = $("fillFormBtn");
     button.disabled = true;
     try {
-      const filled = await request("/api/forms/" + formBatch.id + "/fill", { method: "POST" });
+      const filled = await request("/api/forms/" + formBatch.id + "/fill", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ include_unreviewed: Boolean(includeUnreviewed) }),
+      });
       const panel = $("formFilled");
       panel.hidden = false;
       const blanks = Object.keys(filled.blank || {}).length;
@@ -2748,6 +2867,27 @@
         ].filter(Boolean).join(", ") + ".";
         panel.append(note);
       }
+      /* Held back, and the way past it. An answer nobody has confirmed is not
+         written, and the person has to be able to see which and decide -- so
+         the count, the reason, and a button that writes them anyway. */
+      const heldCount = Object.keys(filled.held_back || {}).length;
+      if (heldCount) {
+        const note = document.createElement("div");
+        note.className = "blanks held-note";
+        note.textContent = heldCount + " answer(s) were held back because nobody has " +
+          "confirmed them. Open them below to edit or approve, or write them in as they are.";
+        const anyway = document.createElement("button");
+        anyway.className = "quiet";
+        anyway.style.marginInlineStart = "8px";
+        anyway.textContent = "Write them in anyway";
+        anyway.onclick = () => {
+          if (confirm("Write " + heldCount + " unconfirmed answer(s) into the file?\n\n" +
+                      "These are the ones the system is least sure about.")) fillTheForm(true);
+        };
+        note.append(anyway);
+        panel.append(note);
+      }
+
       /* The one moment a person finds out their extra questions are not in the
          file is when they open it and look, so it is said before they do. */
       const loose = questions.filter((q) => !q.formId && q.status === "answered").length;
@@ -3145,8 +3285,18 @@
   Cards.onEdit = (item, index, text) => { result.answers[index].answer = text; };
   Cards.onEditDone = storeEditedAnswer;
   Cards.onBlank = leaveAnswerBlank;
-  Cards.answerText = (item, index) =>
-    (result && result.answers[index] ? result.answers[index].answer : item.answer) || "";
+  Cards.onApprove = approveAnswer;
+  Cards.onLength = chooseAnswerLength;
+  /* Whichever length the questionnaire is set to. The workbench keeps the run
+     in memory, so the brief travels on the same object as the answer. */
+  Cards.answerText = (item, index) => {
+    const held = (result && result.answers[index]) || item;
+    // `length` is what the server resolved for this answer: its own choice if
+    // it made one, otherwise the questionnaire's. The page does not repeat the
+    // fallback rule, so the two cannot disagree about which is showing.
+    const level = held.length || item.length || detailLevel;
+    return (level === "brief" && held.brief ? held.brief : held.answer) || "";
+  };
 
   loadKnowledge();
   loadDocuments();

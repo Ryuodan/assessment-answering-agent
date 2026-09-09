@@ -94,8 +94,18 @@ class KnowledgeStore:
 
     # -- writing ------------------------------------------------------------
 
-    def add_guideline(self, source_name: str, text: str, content_hash: str = "") -> int:
-        """Chunk and index a guideline document. Replaces any earlier upload of the same name."""
+    def add_guideline(
+        self, source_name: str, text: str, content_hash: str = "", authority: str = "ours",
+    ) -> int:
+        """Chunk and index a guideline document. Replaces any earlier upload of the same name.
+
+        `authority` says whether this is something the organisation wrote and is
+        bound by ("ours") or a law, regulation or external framework it is
+        subject to ("external"). The drafter is told, because the two support
+        different claims: our policy says what we do, and a regulation says what
+        we are required to do -- which is not the same answer when we have not
+        done it.
+        """
         chunks = chunk_document(text, source_name=source_name, chunk_size=settings.chunk_size)
         documents = [
             Document(
@@ -104,6 +114,7 @@ class KnowledgeStore:
                     "source_type": SourceType.GUIDELINE.value,
                     "source_name": source_name,
                     "content_hash": content_hash,
+                    "authority": authority if authority in ("ours", "external") else "ours",
                     **chunk.metadata,
                 },
             )
@@ -164,6 +175,33 @@ class KnowledgeStore:
         self._store.add_documents(documents, ids=ids)
         logger.info("Indexed %d chunks for '%s'", len(documents), source_name)
         return len(documents)
+
+    def set_authority(self, source_names: list[str], authority: str) -> int:
+        """Re-mark indexed documents as ours or external. Returns chunks changed.
+
+        Metadata only: the text has not changed, so the vectors have not either,
+        and re-embedding eighty documents to correct a label would cost an hour
+        and several thousand remote calls for nothing.
+        """
+        if authority not in ("ours", "external"):
+            raise ValueError("authority must be 'ours' or 'external'")
+        if not source_names:
+            return 0
+
+        collection = self._store._collection  # noqa: SLF001 - langchain exposes no update
+        changed = 0
+        for name in source_names:
+            found = collection.get(where={"source_name": name}, include=["metadatas"])
+            ids = found.get("ids") or []
+            if not ids:
+                continue
+            collection.update(
+                ids=ids,
+                metadatas=[{**meta, "authority": authority} for meta in found["metadatas"]],
+            )
+            changed += len(ids)
+        self._reset_caches()
+        return changed
 
     def delete_source(self, source_name: str) -> None:
         """Remove every chunk belonging to one uploaded file."""
@@ -226,6 +264,7 @@ class KnowledgeStore:
             score=round(cosine, 4),
             raw_score=round(score, 4),
             query_hits=query_hits,
+            authority=meta.get("authority", "ours"),
             doc_id=meta.get("doc_id", ""),
             clause=meta.get("clause", ""),
             clause_start=meta.get("clause_start", "") or meta.get("clause", ""),
@@ -432,8 +471,13 @@ class KnowledgeStore:
                         key = metadata.get("source_type", "")
                         counts[key] = counts.get(key, 0) + 1
                         name = metadata.get("source_name") or "unknown"
-                        entry = sources.setdefault(
-                            name, {"name": name, "source_type": key, "chunks": 0})
+                        entry = sources.setdefault(name, {
+                            "name": name, "source_type": key, "chunks": 0,
+                            # A document is one or the other; the first chunk
+                            # settles it. Defaults to "ours" for anything
+                            # indexed before the distinction existed.
+                            "authority": metadata.get("authority", "ours"),
+                        })
                         entry["chunks"] += 1
                     self._catalog_cache = (counts, sources)
         return self._catalog_cache

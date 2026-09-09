@@ -1513,6 +1513,71 @@ no cells at all, so it used to drop the batch on the floor and leave every row
 from the spreadsheet pointing at a questionnaire the page no longer held. It
 now asks first, and says where the work went.
 
+## Nothing unconfirmed reaches the customer's file
+
+Measured against the security team's own answers on five real questionnaires:
+of ten answers that *contradicted* them, ten came back flagged for review with
+confidence at or below 0.50. Not one wrong answer was confidently wrong. So the
+confidence score is worth acting on rather than displaying, and `fill` acts on
+it: an answer nobody has confirmed is held back rather than written.
+
+"Confirmed" means a person was involved -- they edited it, or they approved it
+as it stands. Approving exists because the other half of that sentence was a
+trap: an answer that is right as written should not have to be retyped to be
+released, and requiring an edit to release it teaches people to make a
+meaningless one.
+
+The card says which answers are held and why -- "flagged for review: the sources
+do not cover this directly" -- because "held back" on its own is a wall, and the
+whole point of holding an answer is that somebody should look at it. The fill
+report says how many stayed behind and offers to write them anyway, which is a
+button somebody has to mean.
+
+**Silence is not a No.** Five of the eight contradictions that survived the
+identity fix were the same move: the corpus does not say whether we hold ISO
+27001, whether a DPA was signed with this customer, or whether a regulator
+audited us this year -- and the drafter answered "No." None of those are policy
+questions. A policy says what we do; it does not record that an agreement was
+signed or that an audit happened in a period, and those facts sit with the
+security team. So the drafting prompt now separates the absence of *evidence*
+from the absence of the *thing*: where the sources are silent the answer says
+so, scores at or below 0.3, and is held back for a person -- because a wrong No
+understates the organisation to a customer, gets quoted back in the next
+assessment, and is far harder to withdraw than a blank.
+
+The same rule governs the organisation profile. An empty certifications list
+means *unknown*, never *none* -- a distinction learned expensively, since the
+first version read it as "none", instructed the drafter to say so plainly, and
+produced "No. T2 does not hold any information-security certifications" at 0.85
+confidence while the team's own answers in fourteen real questionnaires said ISO
+27001 and SOC 2.
+
+## Our policy, or a law we are subject to
+
+Sixty-four percent of the indexed corpus -- 1,698 chunks of 2,668 -- is Saudi
+national regulation: the PDPL and its implementing regulation, the NCA's ECC
+implementation guide, SDAIA's data and AI material. All of it was being handed
+to the drafter under a heading that said these documents "state what the
+organisation's position is", so it read them as ours and wrote answers like
+"PDP.3.2 requires the Entity to develop and document breach management
+procedures" as though that described what we do -- at 0.90 confidence, destined
+for a customer's file.
+
+Deleting the regulation would fix that and lose more: "are you compliant with
+PDPL?" is a real question and needs the law to answer it. So the distinction is
+recorded instead. Each source arrives labelled `OUR POLICY` or `EXTERNAL
+REQUIREMENT (not our document)`, and the prompt draws the line: our policy says
+what we *do*, a regulation says what we are *required* to do, and only the first
+supports a claim about us. Where the law requires something no policy of ours
+covers, that gap is the honest answer and is exactly what an assessment is for.
+
+Uploads **ask** rather than infer, because a file name is not evidence: the
+`DataClassificationPolicy.pdf` in this corpus is the regulator's, not ours, and
+reads exactly like one of ours. `scripts/classify_corpus.py` backfilled what was
+already indexed -- metadata only, since the text has not changed and so the
+vectors have not either -- with a dry run first, and it names the three scanned
+files it will not guess about rather than quietly deciding.
+
 ## Signing in, and what gets remembered
 
 Signing in takes two things: an address that has been added to the system, and
@@ -1727,9 +1792,114 @@ python -m scripts.selfcheck   # checks the wiring, not just the units
 
 ## Evaluation
 
-`eval/` scores the system against a golden question set — questions paired with
-the core facts a correct answer must state, verified against the source
-documents by a human.
+`eval/` scores the system two ways, against two different standards, and they
+are meant to be read as a pair.
+
+**The facts set** — `eval/golden_set.json` — pairs questions with the core facts
+a correct answer must state, verified against the source documents by a human.
+It measures whether an answer is *right and complete*.
+
+**The house set** — `eval/house_set.json` — holds 122 questions from five real
+questionnaires the security team filled in themselves, paired with **the answer
+they actually wrote**. It measures whether we write what *they* would have
+written. See `eval/house.py`.
+
+The two pull in opposite directions and that is the point. Measuring only fact
+coverage is what produced answers with a median of 152 words against a team
+median of 11: the drafting prompt was told completeness is a correctness
+requirement, because completeness was the only thing being scored. A system
+that does well on the house set and badly on the facts set is terse and wrong,
+which is worse. Neither number means much alone.
+
+### Two lengths, and why neither is the standard
+
+The team's answers run to a median of eleven words against our 152, and the
+obvious conclusion -- that they want short answers -- is wrong. They prefer
+detailed ones; eleven words is what you write when a questionnaire has 183 rows
+and it is due on Thursday. So length is a choice rather than a target, and it is
+made per questionnaire *and* per answer: 183 rows can go brief while the one the
+assessor will actually read stays full.
+
+The brief form is **derived from the full one**, never drafted beside it. It
+goes through `src.rewrite`, which re-retrieves nothing and cannot introduce a
+claim the sources do not carry, and both are stored -- so switching is instant
+in both directions and the two cannot disagree about what this organisation
+says. Editing the full answer discards the brief, because the brief was
+condensed from words that no longer exist.
+
+Two consequences worth knowing. The compliance dropdown is resolved from the
+**full** answer whatever length is being written: a condensed answer can lose
+the sentence the verdict came from, and the rating must not change because
+somebody chose shorter prose. And the evaluation never scores the brief form
+against the team's short answers, however tempting the symmetry -- see
+`eval/house.py`.
+
+### What the team's answers actually look like
+
+Harvested from 17 filled questionnaires: 1,055 question/answer pairs, of which
+832 are usable once the dropdown option lists, unticked checkboxes, owner
+columns and CR numbers are separated out from the answers.
+
+| | the team | this system |
+|---|---|---|
+| median words | 11 | 152 |
+| opens with a verdict | 67% | 5% |
+| names a clause or section | 0.1% | 60% |
+| contains a list | 0.1% | 50% |
+| says the documentation does not cover it | **0 of 1,055** | 19% |
+| question-mirroring | 50% | 13% |
+
+Their answer is one move: restate the question as an assertion and stop. *"Are
+offsite backups containing BAB data encrypted?"* becomes *"Yes, offsite backups
+containing data are encrypted."* Half the content words come from the question.
+
+The last row is the one that matters most. In 1,055 answers the team never once
+wrote that the documentation does not cover something — when they do not know,
+they leave the cell blank or route it to the team that does.
+
+### Splitting the team's answers
+
+122 pairs are held out to grade against; the other 702 are the answer memory.
+The split is **by file**, because a questionnaire asks the same control a dozen
+ways and a graded question whose twin sits in the memory measures retrieval
+rather than drafting. That was not sufficient on its own: customers reuse the
+same template, so eight memory entries duplicated a graded question word for
+word (cosine 1.000) and were removed. After that, 81% of graded questions still
+have a memory neighbour at 0.70 or better — which is the measured basis for
+expecting an answer memory to reach them at all.
+
+```bash
+python -m scripts.run_both_evals --label "what changed" --sample 30
+python -m scripts.run_house_eval --sample 30      # the house set alone
+```
+
+`run_both_evals` runs both suites and reads them as a pair: the house set is the
+number to move, the facts set is a floor that must not fall. A change that
+improves one while dropping the other has traded correctness for brevity, and
+the runner says so rather than leaving it to be discovered later.
+
+### What moved it
+
+| | baseline | + who we are | + ours vs external |
+|---|---|---|---|
+| agreement with the team | 42.1% | **70.7%** | 69.3% |
+| form (verdict first, no hedging) | 41.5% | 86.7% | **87.8%** |
+| facts (the floor) | -- | 76.7% | **79.5%** |
+| says "the documentation does not cover this" | 39.3% | 6.7% | 10.0% |
+| cites an internal clause | 57.1% | 13.3% | 23.3% |
+
+The first column is the system measured against the team's own answers before
+any of this. The jump is almost entirely one sentence: a questionnaire says
+"Does the Third-party..." and means *us*. Without being told, the drafter read
+it as somebody else's supplier, searched our Third-Party Cybersecurity Policy --
+which says what we require *of* vendors -- found nothing about a third party's
+own controls, and answered "the documentation does not state that...". That is
+why the hedging rate collapsed when the organisation profile arrived: most of it
+was never hedging, it was answering the wrong question.
+
+Answers are written to `--out` **before** the judging runs. Answering is the
+minutes and the money; judging is neither, and the first run of this harness
+threw away thirty answers because the judge refused one schema.
 
 `eval/golden_set.json` holds 42 cases across seven categories. The first 28
 cover T2's own policies. The rest were added with the NCA ECC guide and the

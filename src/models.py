@@ -85,6 +85,16 @@ class Evidence(BaseModel):
     of retrieval that has already happened. See `graph.state.order_evidence`.
     """
 
+    authority: str = "ours"
+    """Whether this is our own document or an external requirement.
+
+    "ours" for anything this organisation wrote and is bound by; "external" for
+    law, regulation and other people's frameworks. Defaults to "ours" because
+    that is what the corpus was before the distinction existed, and because the
+    failure it guards against is quoting a regulation as our own control -- a
+    document wrongly marked ours is the state we were already in.
+    """
+
     # Locator, parsed at ingest. Carried so answers can cite a clause.
     doc_id: str = ""
     clause: str = ""
@@ -203,6 +213,29 @@ class AnsweredQuestion(BaseModel):
     needs_review: bool = True
     evidence: list[Evidence] = Field(default_factory=list)
     attempts: int = 1
+    brief: str = Field(
+        default="",
+        description="The same answer, condensed. Empty until somebody asks for it.",
+    )
+
+    prefer: str = Field(
+        default="",
+        description="'full' or 'brief' for this answer alone; '' follows the questionnaire",
+    )
+    """Which length this one answer is written at, overriding the questionnaire.
+
+    Empty means "whatever the file is set to", which is what almost every
+    answer says. The override exists because one question in a file is usually
+    the one the assessor will actually read, and it should be allowed to run
+    long while the other 182 stay short.
+    """
+    """A shorter rendering of `answer`, derived from it and never drafted alone.
+
+    Empty on a fresh answer: it costs a model call and most questionnaires are
+    never filled in briefly. Filled on request, and kept afterwards, so the
+    choice between lengths is instant once it has been made once.
+    """
+
     citations: list[str] = Field(default_factory=list, description="Clause-level locators for the sources actually used")
     review_reasons: list[str] = Field(
         default_factory=list,

@@ -125,6 +125,54 @@ is a decision and the other is work outstanding.
 """
 
 
+APPROVED = "approved by a reviewer"
+"""Recorded in `confidence_reason` when a person accepted an answer as it stands.
+
+Editing an answer already marks it a person's work -- `edited_by` carries their
+name. Approving is the other half of that: the answer is right as written, and
+saying so should not require pretending to change it.
+"""
+
+
+def confirmed_by_a_person(
+    answered: AnsweredQuestion | None, edited_by: str = ""
+) -> bool:
+    """Whether a person has put their name to this answer."""
+    if answered is None:
+        return False
+    return bool(edited_by) or answered.confidence_reason == APPROVED
+
+
+def ready_to_write(
+    answered: AnsweredQuestion | None, edited_by: str = "", *, threshold: float | None = None
+) -> tuple[bool, str]:
+    """Whether an answer may go into the file, and why not when it may not.
+
+    The reason is returned rather than logged because it is what the interface
+    shows the person: "held back" with no cause is a wall, and the whole point
+    of holding an answer back is that somebody should look at it.
+    """
+    if answered is None or not answered.answer.strip():
+        return False, ""
+    if confirmed_by_a_person(answered, edited_by):
+        return True, ""
+
+    floor = settings.review_confidence_threshold if threshold is None else threshold
+    if answered.error:
+        return False, "it could not be answered"
+    if answered.needs_review:
+        reasons = "; ".join(answered.review_reasons) or (
+            answered.confidence_reason or "the reviewer flagged it"
+        )
+        return False, f"flagged for review -- {reasons}"
+    if answered.confidence < floor:
+        return False, (
+            f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed "
+            "to write without a person looking"
+        )
+    return True, ""
+
+
 def _settled(answered: AnsweredQuestion | None, question: FormQuestion) -> bool:
     """Whether a question is done with, however it got that way.
 
@@ -180,6 +228,15 @@ class Filled:
     skipped: dict[str, str] = field(default_factory=dict)
     blank: dict[str, str] = field(default_factory=dict)
     """Targets deliberately left empty, and why. Evidence columns, mostly."""
+
+    held_back: dict[str, str] = field(default_factory=dict)
+    """Questions whose answers nobody has confirmed, and why each was held.
+
+    Keyed by question rather than by target, because this is something a person
+    acts on: they open the answer, read it, and either fix it or approve it.
+    Distinct from `blank`, which is a decision already made, and from
+    `skipped`, which is the file refusing a value.
+    """
 
     intact: bool = True
 
@@ -259,7 +316,15 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             # Deliberately empty, as opposed to not answered yet. Opposite
             # states that look identical from the outside.
             "blanked": bool(result and result.confidence_reason == BLANKED),
+            # Whether `fill` would write this, and why not. The card shows the
+            # reason, because "held back" on its own is a wall.
+            "approved": bool(result and result.confidence_reason == APPROVED),
+            "will_be_written": ready_to_write(result, edits.get(question.id, ""))[0],
+            "held_back_because": ready_to_write(result, edits.get(question.id, ""))[1],
             "answer": result.answer if result else "",
+            "brief": result.brief if result else "",
+            "prefer": result.prefer if result else "",
+            "length": length_of(result, batch.detail) if result else batch.detail,
             "confidence": result.confidence if result else 0.0,
             "needs_review": result.needs_review if result else False,
             "error": result.error if result else "",
@@ -282,6 +347,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
         "id": batch.id,
         "source_name": batch.source_name,
         "format": batch.form.format,
+        "detail": batch.detail,
         "file_present": batch.exists,
         "created_at": batch.created_at,
         "updated_at": batch.updated_at,
@@ -295,6 +361,11 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             "needs_review": sum(
                 1 for q in batch.form.questions
                 if (answered.get(q.id) and answered[q.id].needs_review)
+            ),
+            "held_back": sum(
+                1 for q in batch.form.questions
+                if _has_answer(answered.get(q.id))
+                and not ready_to_write(answered.get(q.id), edits.get(q.id, ""))[0]
             ),
             "failed": sum(
                 1 for q in batch.form.questions
@@ -436,24 +507,38 @@ async def revise(
     return outcome
 
 
-def set_answer(user: User, batch_id: str, question_id: str, text: str) -> None:
+def set_answer(
+    user: User, batch_id: str, question_id: str, text: str, *, which: str = "answer"
+) -> None:
     """Replace one answer with words a person wrote.
 
     Recorded as an edit with their name on it. This is one of only three ways
     answer text is ever written -- the other two are `answer` and `revise` --
     and the agent, when it arrives, will have none of its own.
+
+    `which` says which of the two lengths is being edited. Editing the full
+    answer throws the brief one away rather than keeping it: the brief was
+    condensed from the words that were just replaced, so keeping it would leave
+    the questionnaire holding two answers that no longer say the same thing,
+    and which one went into the file would depend on a toggle.
     """
     batch = _require(user, batch_id)
     question = next((q for q in batch.form.questions if q.id == question_id), None)
     if question is None:
         raise ToolError(f"No question {question_id!r} in this questionnaire.")
+    if which not in ("answer", "brief"):
+        raise ToolError("An answer is either the full one or the brief one.")
 
     existing = batches.answers(batch.id).get(question_id)
-    previous = existing.answer if existing else ""
+    previous = (getattr(existing, which) if existing else "") or ""
     answered = existing.model_copy(deep=True) if existing else AnsweredQuestion(
         question=_as_question(question), answer="", confidence=0.0,
     )
-    answered.answer = text
+    if which == "brief":
+        answered.brief = text
+    else:
+        answered.answer = text
+        answered.brief = ""
     answered.needs_review = False
     answered.error = ""
     answered.confidence = 1.0
@@ -507,7 +592,135 @@ def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = T
     )
 
 
-def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
+def length_of(answered: AnsweredQuestion, detail: str = "full") -> str:
+    """Which length this answer is written at: its own choice, else the file's."""
+    return answered.prefer or detail or "full"
+
+
+def written_text(answered: AnsweredQuestion, detail: str = "full") -> str:
+    """The words that go into the cell, at the length that was chosen for them.
+
+    Falls back to the full answer when a brief one has not been derived yet, so
+    switching a questionnaire to brief and filling it immediately writes the
+    long answers rather than blanks. The interface derives them first; this is
+    what happens when something else does not.
+    """
+    if length_of(answered, detail) == "brief" and answered.brief.strip():
+        return answered.brief.strip()
+    return answered.answer
+
+
+def prefer_length(user: User, batch_id: str, question_id: str, prefer: str) -> None:
+    """Choose the length for one answer, overriding the questionnaire's default.
+
+    `prefer=""` gives the answer back to the default, which is different from
+    pinning it to the value the default happens to have now -- a file switched
+    to brief afterwards should carry this answer with it unless somebody said
+    otherwise about this answer specifically.
+    """
+    batch = _require(user, batch_id)
+    if prefer not in ("", "full", "brief"):
+        raise ToolError("An answer is written full, brief, or however the file is set.")
+    existing = batches.answers(batch.id).get(question_id)
+    if existing is None:
+        raise ToolError(f"No answer for {question_id!r} yet.")
+
+    answered = existing.model_copy(deep=True)
+    answered.prefer = prefer
+    batches.save_answers(batch.id, [answered], edited_by=batches.edited_by(batch.id).get(question_id, ""))
+
+
+async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> Outcome:
+    """Derive the brief form of every answer in scope that does not have one.
+
+    Not a re-answer and not a general rewording: one fixed instruction through
+    the rewrite path, which keeps the facts and the citations because it never
+    re-retrieves. Skips answers that already have a brief, so switching back and
+    forth costs nothing after the first time.
+    """
+    batch = _require(user, batch_id)
+    existing = batches.answers(batch.id)
+    scope = scope or Scope()
+    chosen = [
+        question for question in scope.select(batch.form, existing)
+        if _has_answer(existing.get(question.id)) and not existing[question.id].brief.strip()
+    ]
+
+    outcome = Outcome(batch_id=batch.id, attempted=len(chosen), scope=scope.describe())
+    if not chosen:
+        return outcome
+
+    progress.start(batch.id, stage="shortening")
+    progress.set_total(batch.id, len(chosen))
+    try:
+        async def one(question: FormQuestion) -> AnsweredQuestion:
+            answered = existing[question.id].model_copy(deep=True)
+            try:
+                answered.brief = await rewrite.shorten(answered)
+            except Exception:  # noqa: BLE001 - one failure is one long answer, not a failed run
+                logger.exception("Could not shorten %s", question.id)
+            finally:
+                progress.advance(batch.id)
+            return answered
+
+        results = list(await asyncio.gather(*(one(q) for q in chosen)))
+    finally:
+        progress.finish(batch.id)
+
+    batches.save_answers(batch.id, results)
+    outcome.answered = sum(1 for r in results if r.brief.strip())
+    outcome.failed = outcome.attempted - outcome.answered
+    return outcome
+
+
+def set_detail(user: User, batch_id: str, detail: str) -> None:
+    """Choose whether this questionnaire is filled in full or briefly."""
+    batch = _require(user, batch_id)
+    if detail not in batches.DETAIL_LEVELS:
+        raise ToolError(f"Answer length must be one of {', '.join(batches.DETAIL_LEVELS)}.")
+    batches.set_detail(batch.id, detail)
+    events.record(
+        user, events.BATCH_ANSWERED, subject_type=batches.SUBJECT, subject_id=batch.id,
+        detail=detail,
+    )
+
+
+def approve_answer(user: User, batch_id: str, question_id: str, *, approved: bool = True) -> None:
+    """Accept an answer as it stands, so `fill` will write it.
+
+    The reviewer's name is recorded exactly as an edit records it, because from
+    the file's point of view the two are the same act: a person read this and
+    put their name to it. Approving does not change a word of the answer, and
+    the confidence score is left alone -- overwriting it would destroy the
+    signal that made the answer worth reading in the first place.
+    """
+    batch = _require(user, batch_id)
+    if not any(q.id == question_id for q in batch.form.questions):
+        raise ToolError(f"No question {question_id!r} in this questionnaire.")
+
+    existing = batches.answers(batch.id).get(question_id)
+    if existing is None or not existing.answer.strip():
+        raise ToolError("There is no answer to approve for that question yet.")
+    if existing.confidence_reason == BLANKED:
+        raise ToolError("That answer is deliberately blank. Write one before approving it.")
+
+    answered = existing.model_copy(deep=True)
+    answered.confidence_reason = APPROVED if approved else ""
+    answered.needs_review = False if approved else existing.needs_review
+    batches.save_answers(batch.id, [answered], edited_by=user.email if approved else "")
+    events.record(
+        user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
+        question_id=question_id, approved=approved,
+    )
+
+
+def fill(
+    user: User,
+    batch_id: str,
+    destination: Path | None = None,
+    *,
+    include_unreviewed: bool = False,
+) -> Filled:
     """Write the answers into a copy of the original questionnaire.
 
     Status columns are answered from the file's own dropdown, matched to what
@@ -525,8 +738,10 @@ def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
         )
 
     answered = batches.answers(batch.id)
+    edits = batches.edited_by(batch.id)
     values: dict[str, str] = {}
     blank: dict[str, str] = {}
+    held: dict[str, str] = {}
 
     for question in batch.form.questions:
         result = answered.get(question.id)
@@ -541,25 +756,36 @@ def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
             continue
         if not _has_answer(result):
             continue
+        # Confidence is a gate, not a decoration. Every answer that
+        # contradicted the security team scored at or below 0.50 and was
+        # flagged; none of them should reach a customer unread.
+        allowed, because = ready_to_write(result, edits.get(question.id, ""))
+        if not allowed and not include_unreviewed:
+            held[question.id] = because
+            continue
         for target in question.writable:
             if target.role is Role.EVIDENCE:
                 blank[target.id] = "evidence columns are left blank by default"
                 continue
             if target.role is Role.STATUS:
+                # The verdict is read off the full answer whatever length is
+                # being written: a condensed answer can lose the sentence the
+                # status was picked from, and the dropdown must not change
+                # because somebody chose shorter prose.
                 choice = status_map.choose(result.answer, target.vocabulary)
                 if choice.chosen:
                     values[target.id] = choice.value
                 else:
                     blank[target.id] = choice.because
                 continue
-            values[target.id] = result.answer
+            values[target.id] = written_text(result, batch.detail)
 
     destination = destination or _filled_path(batch)
     report = forms.write(batch.source_path, destination, values)
     events.record(
         user, events.FILE_FILLED, subject_type=batches.SUBJECT, subject_id=batch.id,
         written=report.written, created=len(report.created),
-        replaced=len(report.replaced), left_blank=len(blank),
+        replaced=len(report.replaced), left_blank=len(blank), held_back=len(held),
     )
     return Filled(
         path=destination,
@@ -568,6 +794,7 @@ def fill(user: User, batch_id: str, destination: Path | None = None) -> Filled:
         replaced=len(report.replaced),
         skipped=report.skipped,
         blank=blank,
+        held_back=held,
         intact=report.intact,
         because=_nothing_written(batch, answered) if not report.written else "",
     )

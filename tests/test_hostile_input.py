@@ -88,7 +88,7 @@ def test_a_supported_suffix_is_still_required(client):
 @pytest.mark.parametrize("name", ["../../.env.pdf", "a/b/c.pdf", r"..\..\evil.pdf"])
 def test_an_upload_lands_inside_the_upload_directory(client, isolated, monkeypatch, name):
     """A crafted name must be reduced to a bare filename before it is written."""
-    async def stub(path, source_type):
+    async def stub(path, source_type, authority='ours'):
         from src.models import IngestResult
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0)
 

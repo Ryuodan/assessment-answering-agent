@@ -21,7 +21,7 @@ import logging
 from src.graph.state import order_evidence
 from src.llm import chat_llm
 from src.models import AnsweredQuestion, Language
-from src.prompts import LANGUAGE_NAMES, REWRITE_SYSTEM, REWRITE_USER
+from src.prompts import BRIEF_INSTRUCTION, LANGUAGE_NAMES, REWRITE_SYSTEM, REWRITE_USER
 
 logger = logging.getLogger(__name__)
 
@@ -80,3 +80,18 @@ async def rewrite(
         f"{answered.rationale} Reworded on request: {instruction}".strip()
     )
     return revised
+
+
+async def shorten(answered: AnsweredQuestion) -> str:
+    """The same answer, condensed. Returns the text; stores nothing.
+
+    One fixed instruction rather than free text, because the brief form has to
+    be predictable: "make it shorter" gives a different length every time, and a
+    person switching a 183-row questionnaire to brief is not asking for variety.
+
+    Goes through the rewrite path, so the facts and the citations come through
+    by construction. A brief answer drafted from scratch could say something the
+    full one does not, and then neither is the organisation's position.
+    """
+    rewritten = await rewrite(answered, BRIEF_INSTRUCTION)
+    return rewritten.answer

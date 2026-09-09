@@ -184,6 +184,46 @@
    reader's eye already goes for the state of the answer. */
 .confidence.blanked .caption { color: var(--ink-faint); }
 
+/* Held back from the file. Warning-coloured rather than error-coloured: the
+   answer is not wrong, it is unread, and the difference matters to somebody
+   deciding what to look at first. */
+.held {
+  margin-top: 9px; padding: 8px 11px; border-radius: var(--radius-sm);
+  background: var(--warn-soft); border: 1px solid var(--warn);
+  font-size: 12.5px; line-height: 1.5; color: var(--ink);
+}
+.held strong { font-weight: 640; }
+.held .how { display: block; margin-top: 3px; color: var(--ink-soft); }
+.quiet.approve { color: var(--ok); font-weight: 600; }
+.quiet.approve:hover { background: var(--ok-soft); }
+
+/* A source that is a law rather than one of our documents. Marked rather than
+   coloured like an error: it is a perfectly good source for what we are
+   required to do, and a bad one for what we actually do. */
+.tag.external {
+  background: var(--warn-soft); color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  font-size: 10px; font-weight: 650; letter-spacing: .02em;
+  padding: 1px 7px; border-radius: var(--radius-pill); white-space: nowrap;
+}
+
+/* Full / Brief. A segmented control rather than a checkbox, because neither
+   length is the "off" state -- the team wants both, in different weeks. */
+.detail-pick { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-faint); }
+.detail-pick .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); overflow: hidden; }
+.detail-pick button {
+  border: 0; background: transparent; color: var(--ink-soft);
+  padding: 3px 12px; font-size: 12px; cursor: pointer;
+}
+.detail-pick button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.detail-pick button:disabled { opacity: .6; cursor: progress; }
+
+/* The same choice for one answer, sized down: it lives in a label row beside
+   Edit rather than above a whole panel. */
+.len-pick { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-pill); overflow: hidden; }
+.len-pick button { border: 0; border-radius: 0; padding: 2px 9px; font-size: 11px; }
+.len-pick button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 650; }
+
 .answer-body { padding: 16px 18px 18px; }
 
 /* Removing an answer belongs on the answer, not on a list further up. */

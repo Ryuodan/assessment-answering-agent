@@ -11,6 +11,7 @@ import logging
 import re
 from collections import Counter
 
+from src import organisation
 from src.config import settings
 from src.extraction import extract_questions
 from src.graph.state import AssessmentState, QuestionState, select_evidence
@@ -262,8 +263,16 @@ async def draft(state: QuestionState) -> dict:
     # instruction just as well, comes out shorter, and keeps every citation,
     # where drafting briefly from scratch cited a third fewer and dropped a
     # caveat the sources actually required.
+    # Who we are, read fresh rather than captured at import: the profile is a
+    # file somebody edits, and a correction to it should reach the next answer
+    # rather than the next restart.
+    profile = organisation.load()
     messages = [
-        ("system", ANSWER_SYSTEM.format(language_name=language_name)),
+        ("system", ANSWER_SYSTEM.format(
+            language_name=language_name,
+            organisation=profile.describe(),
+            addressed_as=organisation.ADDRESSED_AS,
+        )),
         (
             "user",
             ANSWER_USER.format(

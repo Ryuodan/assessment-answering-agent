@@ -632,12 +632,30 @@ def _tools(user: User, state: dict) -> list:
         if not counts["answered"]:
             return "Nothing is answered yet, so filling the file would write nothing."
         state["offer_fill"] = True
-        return (
-            f"Ready to fill {report['source_name']}: {counts['answered']} answered question(s) "
-            f"across about {writable} cell(s). Evidence columns are left blank unless asked for, "
-            f"and set-aside questions are not written. I have not written anything -- the "
-            f"'Fill the original file' button beside the answers does that."
+
+        # The gate, said out loud. Reporting the answered count as though all of
+        # it were going in would be a promise the button does not keep: an
+        # answer nobody has confirmed is held back, and the person needs to know
+        # that before they press it rather than after.
+        held = counts.get("held_back", 0)
+        going_in = counts["answered"] - held
+        lines = [
+            f"Ready to fill {report['source_name']}: {going_in} answer(s) would be written "
+            f"across about {writable} cell(s). Evidence columns are left blank unless asked "
+            f"for, and set-aside questions are not written."
+        ]
+        if held:
+            lines.append(
+                f"{held} more are held back because nobody has confirmed them -- each is "
+                "either flagged for review or below the confidence needed to write "
+                "unread. They are marked in the answer panel; editing or approving one "
+                "releases it."
+            )
+        lines.append(
+            "I have not written anything -- the 'Fill the original file' button beside "
+            "the answers does that."
         )
+        return " ".join(lines)
 
     async def search_policies(query: str) -> str:
         """Look something up in the organisation's own policy documents.

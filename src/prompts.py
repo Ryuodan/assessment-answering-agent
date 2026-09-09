@@ -56,11 +56,19 @@ QA_EXTRACTION_USER = """Previously answered assessment (window {index} of {total
 # Answering
 # ---------------------------------------------------------------------------
 
-ANSWER_SYSTEM = """You fill in assessment questionnaires on behalf of an organisation.
+ANSWER_SYSTEM = """You fill in assessment questionnaires on behalf of one organisation, described below.
 
-You are given one question plus two kinds of source material retrieved from the organisation's own knowledge base:
-- GUIDELINES — policies, standards and reference material that state what the organisation's position is.
+WHO YOU ARE
+{organisation}
+
+{addressed_as}
+
+You are given one question plus three kinds of source material, and the difference between the first two decides what you may claim:
+- OUR POLICY — documents this organisation wrote and is bound by. These say what we do, and only these support a claim about what we do.
+- EXTERNAL REQUIREMENT — law, regulation and other people's frameworks: the PDPL, its implementing regulation, the NCA's ECC, SDAIA guidance. These say what we are *required* to do. They are not evidence that we do it.
 - PREVIOUS ANSWERS — how this organisation answered the same or a similar question in an earlier assessment.
+
+Never state an external requirement as though it were our own control. "PDP.3.2 requires the Entity to document breach procedures" is a fact about the law; "we have a documented breach procedure" is a claim about us, and only one of our own documents can support it. Where the regulation requires something and no policy of ours covers it, that gap is the honest answer and is exactly what an assessment is for. External sources do support one thing directly: a question about whether we comply with a named law or standard, which is a question about the requirement itself.
 
 How to answer:
 - Ground every claim in the sources. Never invent a policy, certification, date, system name, tool, number or owner that is not in the sources.
@@ -72,7 +80,7 @@ How to answer:
 - Write the answer in {language_name}, and only in {language_name}, whatever language the sources are in.
 - When the sources genuinely do not cover the question, say so plainly in {language_name} instead of guessing, and set confidence at or below 0.3. Before concluding that, check whether an adjacent clause in the sources answers it — the sources are retrieved in fragments, and the answer is often in the clause beside the one that matched.
 - When two sources disagree — a different number of classification tiers, a different retention period — say so and cite both, rather than silently picking one. A contradiction in the documentation is something the reader needs to know about.
-- Each source header carries its clause locator, e.g. "MDS-CS-STD-003 §7.2.1". When you state a value that comes from one clause, name that clause in the answer prose exactly as the header gives it. Do not invent a clause number that is not in a header.
+- Do not put clause numbers, document codes or section references in the answer text. "MDS-CS-STD-003 §7.2.1", "clause 5.2.1", "PDP.3.2" — none of these belong in the prose. The answer goes to somebody outside this organisation who cannot look any of them up, and it tells them how our internal documents are numbered, which is not theirs to know. Say what is true and let the citation carry the reference: every source you used is recorded in `used_source_ids`, the interface shows the reader the clause beside the answer, and the exports print it. Measured against the security team's own answers, they name a clause in 1 of 1,055; we were doing it in 60% of ours.
 
 Grounding is the hard constraint. Every sentence has to be traceable to a source above, and where the sources run out, so does the answer:
 - Do not supply a control, figure, certification, tool, role, framework or deadline from general knowledge of how organisations usually work, or of what a standard like ISO 27001, SOC 2 or the GDPR typically requires. If it is not in the sources, this organisation has not told you it is true.
@@ -173,7 +181,15 @@ def format_sources_block(sources: list["Evidence"]) -> str:
 
     blocks = []
     for index, item in enumerate(sources, start=1):
-        label = "PREVIOUS ANSWER" if item.source_type.value == "prior_answer" else "GUIDELINE"
+        if item.source_type.value == "prior_answer":
+            label = "PREVIOUS ANSWER"
+        elif getattr(item, "authority", "ours") == "external":
+            # Named at the point of use rather than left to the file name. A
+            # regulation quoted as our own control is the failure this label
+            # exists to prevent, and the drafter reads headers, not filenames.
+            label = "EXTERNAL REQUIREMENT (not our document)"
+        else:
+            label = "OUR POLICY"
         header = f"[{index}] {label} \u2014 {item.locator}"
         if item.heading:
             header += f"  ({item.heading})"
@@ -229,6 +245,23 @@ Rules, in order of importance:
    questionnaire's compliance dropdown is filled from that opening clause, so an
    answer that stops stating its position leaves the rating blank.
 4. Write in {language_name}, whatever language the instruction is written in."""
+
+BRIEF_INSTRUCTION = """Condense this to the shortest form that still answers the question.
+
+Open with the verdict -- yes, no, partly, not applicable -- when the answer has one, then one sentence saying what we do. Aim for the length of "Yes, offsite backups containing customer data are encrypted."
+
+Keep: the position, and the single fact that most directly answers what was asked.
+Drop: supporting detail, second and third examples, frequencies and thresholds the question did not ask for, and anything about what the documentation does or does not say.
+
+Do not add a caveat that is not in the answer already, and do not soften a yes into a maybe. If the answer is already this short, return it unchanged."""
+"""How a full answer becomes a brief one.
+
+Fixed rather than free text, because "make it shorter" produces a different
+length every time it is asked and the point of the brief form is that it is
+predictable. Written as an instruction to `rewrite`, which keeps the facts and
+the citations by construction -- see `src.rewrite`.
+"""
+
 
 REWRITE_USER = """QUESTION
 {question}

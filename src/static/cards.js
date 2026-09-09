@@ -15,6 +15,8 @@
      Cards.onEdit(item, index, text)      an answer is being edited, per keystroke
      Cards.onEditDone(item, index, text)  the editor was left: worth storing
      Cards.onBlank(item, index, blank)    leave this answer deliberately empty
+     Cards.onApprove(item, index, ok)     accept it as it stands, so fill writes it
+     Cards.onLength(item, index, prefer)  write this one answer full or brief
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
    control simply does nothing rather than throwing.
@@ -27,6 +29,8 @@ const Cards = (window.Cards = {
   onEdit() {},
   onEditDone() {},
   onBlank() {},
+  onApprove() {},
+  onLength() {},
   /* Where the page keeps the answer being edited. The card shows and writes
      through this rather than owning it, because the workbench holds a whole
      run in memory and the chat page holds a batch. */
@@ -211,6 +215,68 @@ const Cards = (window.Cards = {
     return node;
   }
 
+  /* Full or Brief, for one questionnaire.
+
+     Switching to Brief condenses every answer that has not been condensed yet,
+     which costs a model call each and is worth saying out loud rather than
+     leaving the button dead for a minute. Switching back is instant: the full
+     answer was never replaced. */
+  /* A batch question, as the card wants it.
+
+     `inspect` returns the answer nested inside the question, with the facts a
+     card needs to draw its state sitting beside it rather than on it. Copying
+     those across by hand is what three call sites each did differently. */
+  function fromQuestion(question, extra) {
+    if (!question || !question.answered) return null;
+    return Object.assign({}, question.answered, {
+      blanked: question.blanked,
+      brief: question.brief,
+      approved: question.approved,
+      will_be_written: question.will_be_written,
+      held_back_because: question.held_back_because,
+      prefer: question.prefer,
+      // What the server resolved this answer's length to: its own preference if
+      // it has one, otherwise the questionnaire's. Left off, the pages fell
+      // back to the file's default and the per-answer choice did nothing.
+      length: question.length,
+    }, extra || {});
+  }
+
+  function detailPicker(current, onPick) {
+    const wrap = document.createElement("div");
+    wrap.className = "detail-pick";
+    const label = document.createElement("span");
+    label.textContent = "Answers:";
+    const seg = document.createElement("div");
+    seg.className = "seg";
+
+    const buttons = [["full", "Full"], ["brief", "Brief"]].map(([value, text]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.setAttribute("aria-pressed", String((current || "full") === value));
+      button.title = value === "brief"
+        ? "One sentence each, condensed from the full answer"
+        : "The full answer, with its supporting detail";
+      button.onclick = async () => {
+        if (button.getAttribute("aria-pressed") === "true") return;
+        buttons.forEach((b) => { b.disabled = true; });
+        if (value === "brief") button.textContent = "Shortening…";
+        try {
+          await onPick(value);
+        } finally {
+          button.textContent = text;
+          buttons.forEach((b) => { b.disabled = false; });
+        }
+      };
+      seg.append(button);
+      return button;
+    });
+
+    wrap.append(label, seg);
+    return wrap;
+  }
+
   function viewToggle() {
     const box = document.createElement("div");
     box.className = "view-toggle";
@@ -347,6 +413,67 @@ const Cards = (window.Cards = {
     };
     Cards.repaint = paint;
 
+    /* Held back, and why. `will_be_written` is absent on an answer that never
+       came through `inspect` -- a loose question answered in the workbench, an
+       imported run -- and absent must not read as "held", or every card on
+       those pages would grow a warning about a file it will never be written
+       into. */
+    const gated = item.will_be_written === false && !item.blanked && item.answer;
+    if (gated) {
+      const held = document.createElement("div");
+      held.className = "held";
+      const what = document.createElement("strong");
+      what.textContent = "Not going into the file yet.";
+      const why = document.createElement("span");
+      why.textContent = item.held_back_because
+        ? " " + item.held_back_because[0].toUpperCase() + item.held_back_because.slice(1) + "."
+        : " Nobody has confirmed this answer.";
+      const how = document.createElement("span");
+      how.className = "how";
+      how.textContent = "Edit it, or approve it as it stands.";
+      held.append(what, why, how);
+      field.append(held);
+    }
+
+    /* Full or brief, for this one answer. The questionnaire-level control is
+       the bulk action -- 183 rows, make them short -- and it is the wrong unit
+       for the answer somebody actually cares about, which is usually the one
+       the assessor will read closely. Shown only where there is a choice to
+       make: an answer with no brief form yet has one length. */
+    if (item.length && (item.brief || item.length === "brief")) {
+      const lengths = document.createElement("span");
+      lengths.className = "len-pick";
+      [["full", "Full"], ["brief", "Brief"]].forEach(([value, text]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "quiet";
+        button.textContent = text;
+        button.setAttribute("aria-pressed", String(item.length === value));
+        button.title = value === "brief"
+          ? "Write this one briefly, whatever the rest of the file does"
+          : "Write this one in full, whatever the rest of the file does";
+        button.onclick = () => Cards.onLength(item, index, value);
+        lengths.append(button);
+      });
+      field.querySelector(".field-label").append(lengths);
+    }
+
+    /* Approving is the other half of editing: an answer that is right as
+       written should not have to be retyped to be released. Only offered where
+       it would change something -- an answer already going into the file has
+       nothing to approve. */
+    if (gated || item.approved) {
+      const approve = document.createElement("button");
+      approve.className = item.approved ? "quiet" : "quiet approve";
+      approve.textContent = item.approved ? "Approved ✓" : "Approve";
+      approve.title = item.approved
+        ? "You approved this answer. Click to withdraw that."
+        : "Accept this answer as it stands, so it goes into the file";
+      approve.dataset.mutates = "true";
+      approve.onclick = () => Cards.onApprove(item, index, !item.approved);
+      field.querySelector(".field-label").append(approve);
+    }
+
     /* Leaving it blank on purpose. Beside Edit because it is the same kind of
        decision -- what this question should say -- and because a control that
        empties an answer belongs next to the answer and nowhere else. */
@@ -382,6 +509,19 @@ const Cards = (window.Cards = {
     return field;
   }
 
+  /* Whose document a source is. Only drawn for external ones: "our policy" is
+     the unmarked case and badging all four sources under every answer would
+     make the exception invisible again. */
+  function authorityBadge(authority) {
+    if (authority !== "external") return null;
+    const tag = document.createElement("span");
+    tag.className = "tag external";
+    tag.textContent = "law / external";
+    tag.title = "A regulation or framework we are subject to, not a document we wrote. "
+      + "It says what we are required to do, which is not evidence that we do it.";
+    return tag;
+  }
+
   function citationsField(item) {
     const field = labelledField("Sources cited — click to read the clause", "accent");
     const cites = document.createElement("div");
@@ -395,6 +535,7 @@ const Cards = (window.Cards = {
 
     item.citations.forEach((citation) => {
       const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
+      const mark = authorityBadge(source && source.authority);
       const kind = source ? source.source_type : "unknown";
       if (source) sourceTypes.add(kind);
 
@@ -408,6 +549,9 @@ const Cards = (window.Cards = {
       chip.type = "button";
       chip.setAttribute("aria-expanded", "false");
       chip.append(document.createTextNode(citation));
+      // Before the caret, so it reads as part of the source's name rather than
+      // as another control.
+      if (mark) chip.append(mark);
       const caret = document.createElement("span");
       caret.className = "caret";
       caret.textContent = "▾";
@@ -617,6 +761,8 @@ const Cards = (window.Cards = {
         label.textContent =
           (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
           " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
+        const evidenceMark = authorityBadge(evidence.authority);
+        if (evidenceMark) head.append(evidenceMark);
         const open = openDocumentButton(evidence.source_name, evidence.source_type);
         const labelRow = document.createElement("div");
         labelRow.className = "ev-head";
@@ -712,6 +858,9 @@ const Cards = (window.Cards = {
     chunk: renderChunk,
     isArabic: isArabic,
     viewToggle: viewToggle,
+    fromQuestion: fromQuestion,
+    detailPicker: detailPicker,
+    authorityBadge: authorityBadge,
     openDocumentButton: openDocumentButton,
     markdown: renderMarkdown,
     view: chunkView,
