@@ -15,7 +15,7 @@
      Cards.onEdit(item, index, text)      an answer is being edited, per keystroke
      Cards.onEditDone(item, index, text)  the editor was left: worth storing
      Cards.onBlank(item, index, blank)    leave this answer deliberately empty
-     Cards.onApprove(item, index, ok)     accept it as it stands, so fill writes it
+     Cards.onApprove(item, index, ok)     accept it as it stands: fill writes it, memory keeps it
      Cards.onLength(item, index, prefer)  write this one answer full or brief
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
@@ -232,6 +232,8 @@ const Cards = (window.Cards = {
       blanked: question.blanked,
       brief: question.brief,
       approved: question.approved,
+      remembered: question.remembered,
+      by_hand: question.by_hand,
       will_be_written: question.will_be_written,
       held_back_because: question.held_back_because,
       prefer: question.prefer,
@@ -294,8 +296,20 @@ const Cards = (window.Cards = {
     return box;
   }
 
-  /* A chunk is only checkable if you can open the file it came from. */
+  /* A chunk is only checkable if you can open the file it came from — and some
+     of them have no file. The document viewer serves PDFs and Word documents
+     out of the upload directory, which is what a policy is; a remembered answer
+     is a row in the answer memory, and a questionnaire it was extracted from is
+     a spreadsheet the viewer does not serve. Both used to get a button that
+     opened an error. */
+  const OPENABLE = /\.(pdf|docx)$/i;
+
+  function canOpenDocument(sourceName) {
+    return OPENABLE.test(sourceName || "");
+  }
+
   function openDocumentButton(sourceName, sourceType) {
+    if (!canOpenDocument(sourceName)) return null;
     const button = document.createElement("button");
     button.className = "quiet";
     button.textContent = "open document";
@@ -459,19 +473,44 @@ const Cards = (window.Cards = {
     }
 
     /* Approving is the other half of editing: an answer that is right as
-       written should not have to be retyped to be released. Only offered where
-       it would change something -- an answer already going into the file has
-       nothing to approve. */
-    if (gated || item.approved) {
+       written should not have to be retyped to be released.
+
+       It has a second effect on an answer somebody wrote: that one joins the
+       answer memory, and is what the next questionnaire asking this question is
+       answered from. A draft nobody touched does not, however sure the reviewer
+       is -- remembering the model's own output would feed it back as a
+       "previous answer" at a confidence the loop manufactured rather than
+       earned. The title says which of the two effects apply here, because the
+       difference is invisible otherwise. */
+    {
+      const byHand = item.by_hand || item.confidence_reason === "written by hand";
       const approve = document.createElement("button");
       approve.className = item.approved ? "quiet" : "quiet approve";
       approve.textContent = item.approved ? "Approved ✓" : "Approve";
       approve.title = item.approved
-        ? "You approved this answer. Click to withdraw that."
-        : "Accept this answer as it stands, so it goes into the file";
+        ? byHand
+          ? "You approved this answer, and it is in the answer memory. Click to withdraw both."
+          : "You approved this answer. It is not in the answer memory — the memory only keeps answers a person wrote."
+        : byHand
+          ? "Confirm this answer, and remember your wording for next time"
+          : gated
+            ? "Accept this answer as it stands, so it goes into the file. It is not added to the answer memory: nobody has changed a word of it."
+            : "Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.";
       approve.dataset.mutates = "true";
       approve.onclick = () => Cards.onApprove(item, index, !item.approved);
       field.querySelector(".field-label").append(approve);
+
+      /* The second effect, on the card rather than in a message that scrolls
+         away: this wording is what the next questionnaire asking this question
+         gets answered from, and there was nothing anywhere that said so once
+         the click was over. */
+      if (item.remembered) {
+        const kept = document.createElement("span");
+        kept.className = "tag memory";
+        kept.textContent = "in the answer memory";
+        kept.title = "Your wording is saved. The next questionnaire asking this is answered from it.";
+        field.querySelector(".field-label").append(kept);
+      }
     }
 
     /* Leaving it blank on purpose. Beside Edit because it is the same kind of
@@ -602,10 +641,33 @@ const Cards = (window.Cards = {
     const body = document.createElement("div");
     body.className = "qbody";
 
+    /* A questionnaire item can be a paragraph: the brand-protection question in
+       this corpus runs to six lines of bold text, which pushes the answer --
+       the thing the card is about -- below the fold, and strands the confidence
+       meter at the top of an empty column. So a long question is clamped to
+       three lines with a control to see the rest.
+
+       Whether it needs clamping is measured after layout rather than guessed
+       from a character count: the same two hundred characters are two lines on
+       a wide screen and five on a phone. It starts clamped so a long one never
+       flashes open, and un-clamps itself when there was nothing to hide. */
     const question = document.createElement("div");
-    question.className = "qtext";
+    question.className = "qtext clamped";
     question.textContent = item.question.text;
     if (isArabic(item.question.text)) question.dir = "rtl";
+
+    const more = document.createElement("button");
+    more.className = "quiet qmore";
+    more.hidden = true;
+    more.textContent = "show the whole question";
+    more.onclick = () => {
+      const clamped = question.classList.toggle("clamped");
+      more.textContent = clamped ? "show the whole question" : "show less";
+    };
+    requestAnimationFrame(() => {
+      if (question.scrollHeight > question.clientHeight + 1) more.hidden = false;
+      else question.classList.remove("clamped");
+    });
 
     const meta = document.createElement("div");
     meta.className = "qmeta";
@@ -621,7 +683,7 @@ const Cards = (window.Cards = {
     if (item.attempts > 1) bits.push(item.attempts + " retrieval rounds");
     const detail = document.createElement("span");
     detail.textContent = bits.join(" · ");
-    meta.append(detail);
+    meta.append(detail, more);
 
     body.append(question, meta);
 
@@ -719,7 +781,14 @@ const Cards = (window.Cards = {
     // interface and both exports say exactly the same thing. Not for a blank:
     // "left blank on purpose" is where that field keeps the decision, and
     // reading it back as a reason the confidence is low is nonsense.
-    if (item.confidence_reason && !item.blanked) {
+    //
+    // The same field also carries what a *person* did — approved it, wrote it —
+    // and those are not explanations of a score either. A hand-written answer
+    // scores 100% and was arriving under a red "why the confidence is low:
+    // approved by a reviewer". The button and the tag beside it already say
+    // that, and say it in the right place.
+    const decision = ["approved by a reviewer", "written by hand"].includes(item.confidence_reason);
+    if (item.confidence_reason && !item.blanked && !decision) {
       const field = labelledField("Why the confidence is low", "err");
       const why = document.createElement("div");
       why.className = "reasons why";
@@ -761,12 +830,20 @@ const Cards = (window.Cards = {
         label.textContent =
           (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
           " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
-        const evidenceMark = authorityBadge(evidence.authority);
-        if (evidenceMark) head.append(evidenceMark);
         const open = openDocumentButton(evidence.source_name, evidence.source_type);
         const labelRow = document.createElement("div");
         labelRow.className = "ev-head";
-        labelRow.append(label, open);
+        labelRow.append(label);
+        // Whose document this is, beside the document. `head` -- the card's own
+        // question header -- was in scope, and this line appended to it: an
+        // answer citing five external sources put five "external" badges next
+        // to the question number, whose combined nowrap width became the
+        // header's minimum. That crushed the question text to nothing and, in
+        // the chat, forced the answers panel to 917px against a 620px cap,
+        // leaving the conversation beside it 113px wide.
+        const evidenceMark = authorityBadge(evidence.authority);
+        if (evidenceMark) labelRow.append(evidenceMark);
+        if (open) labelRow.append(open);
         block.append(labelRow, renderChunk(evidence.snippet));
         details.append(block);
       });
@@ -829,19 +906,8 @@ const Cards = (window.Cards = {
         head.append(score);
       }
 
-      const open = document.createElement("button");
-      open.className = "quiet";
-      open.textContent = "open document";
-      open.onclick = () => Cards.onOpenDocument({
-        name: source.source_name,
-        title: source.source_name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
-        origin: "uploaded",
-        category: "uploaded",
-        label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
-        extension: source.source_name.split(".").pop().toLowerCase(),
-        size_bytes: 0,
-      });
-      head.append(open);
+      const open = openDocumentButton(source.source_name, source.source_type);
+      if (open) head.append(open);
     }
 
     const body = renderChunk(source
@@ -862,6 +928,7 @@ const Cards = (window.Cards = {
     detailPicker: detailPicker,
     authorityBadge: authorityBadge,
     openDocumentButton: openDocumentButton,
+    canOpenDocument: canOpenDocument,
     markdown: renderMarkdown,
     view: chunkView,
     setView: setChunkView,

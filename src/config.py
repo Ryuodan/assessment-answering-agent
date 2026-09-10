@@ -138,6 +138,14 @@ class Settings(BaseSettings):
     upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
     extracted_text_dir: Path = PROJECT_ROOT / "data" / "extracted"
 
+    filled_dir: Path = PROJECT_ROOT / "data" / "filled"
+    """Where a filled copy of a questionnaire is written, one directory per batch.
+
+    Separate from the uploads, which are the originals a person compares
+    against, and separate per batch, because two people can open the same
+    questionnaire and each has their own answers to write into it.
+    """
+
     # --- Retrieval + answering --------------------------------------------
     top_k_guidelines: int = 8
     top_k_prior_answers: int = 5
@@ -317,7 +325,7 @@ class Settings(BaseSettings):
             part.strip().casefold() for part in self.allowed_emails.split(",") if part.strip()
         )
 
-    @field_validator("chroma_dir", "upload_dir", "extracted_text_dir", "db_path")
+    @field_validator("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path")
     @classmethod
     def _anchor_to_project(cls, value: Path) -> Path:
         """Resolve a relative path against the project, not the process's cwd.
@@ -336,6 +344,7 @@ class Settings(BaseSettings):
         """Create the directories the app writes to. Safe to call repeatedly."""
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.filled_dir.mkdir(parents=True, exist_ok=True)
         self.extracted_text_dir.mkdir(parents=True, exist_ok=True)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 

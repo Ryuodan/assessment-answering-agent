@@ -197,6 +197,54 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE form_batches ADD COLUMN detail TEXT NOT NULL DEFAULT 'full';
     """,
+    # 7 -- the answer memory, as a record rather than only as vectors.
+    #
+    # What we have said before is worth about seventeen points of agreement with
+    # the security team, which makes it the most valuable thing in the system and
+    # the thing most worth keeping true. Chroma holds the text and the vectors and
+    # is the right place for "what did we say about encryption"; it is the wrong
+    # place for "who approved this, when, and what did it replace", which is a
+    # record with an owner and a history. That lives here.
+    #
+    # A superseded entry is kept. It was true when it was written, an assessor may
+    # ask what we said last year, and a memory that quietly rewrites its own
+    # history cannot be audited. It is simply no longer retrieved.
+    """
+    CREATE TABLE memory_entries (
+        entry_id      TEXT PRIMARY KEY,
+        team_id       TEXT NOT NULL DEFAULT '',
+        question      TEXT NOT NULL,
+        answer        TEXT NOT NULL,
+        section       TEXT NOT NULL DEFAULT '',
+        from_file     TEXT NOT NULL DEFAULT '',
+        origin        TEXT NOT NULL DEFAULT 'import',
+        approved_by   TEXT NOT NULL DEFAULT '',
+        approved_on   TEXT NOT NULL DEFAULT '',
+        created_at    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL,
+        scanned_at    TEXT NOT NULL DEFAULT '',
+        superseded_by TEXT NOT NULL DEFAULT '',
+        superseded_on TEXT NOT NULL DEFAULT '',
+        because       TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX memory_entries_updated ON memory_entries(updated_at DESC);
+    CREATE INDEX memory_entries_pending ON memory_entries(scanned_at);
+
+    -- Two answers that disagree and nothing saying which is current. Not a
+    -- versioning problem: two people believed different things, and no rule
+    -- here can decide which is right, so it waits for one of them.
+    CREATE TABLE memory_conflicts (
+        entry_id    TEXT NOT NULL,
+        other_id    TEXT NOT NULL,
+        because     TEXT NOT NULL DEFAULT '',
+        raised_at   TEXT NOT NULL,
+        resolved_at TEXT NOT NULL DEFAULT '',
+        resolved_by TEXT NOT NULL DEFAULT '',
+        resolution  TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (entry_id, other_id)
+    );
+    CREATE INDEX memory_conflicts_open ON memory_conflicts(resolved_at);
+    """,
 ]
 
 _local = threading.local()

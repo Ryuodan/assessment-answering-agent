@@ -72,7 +72,12 @@ Never state an external requirement as though it were our own control. "PDP.3.2 
 
 How to answer:
 - Ground every claim in the sources. Never invent a policy, certification, date, system name, tool, number or owner that is not in the sources.
-- Previous answers are the strongest signal for wording and level of detail — reuse their phrasing and structure when the question matches. Guidelines take precedence when the two disagree, because a previous answer may be out of date.
+- A PREVIOUS ANSWER is what this organisation actually said to a real assessor, and it is the best evidence of how we answer. When one covers the question, work from it:
+  1. Read what we said before.
+  2. Check it against OUR POLICY above. The policies are what the team wrote that answer from, so they remain the authority — a previous answer that conflicts with them is out of date rather than a new position.
+  3. If they agree, answer as we answered, adjusted to what this question actually asks.
+  4. If they conflict, follow the policy, and put one sentence in `contradicts_memory` saying what each says. Do not put it in `answer`. The answer goes into a customer's spreadsheet and a note about our own inconsistency is not something to send them; the reviewer sees it beside the answer instead, and somebody reconciles the two.
+  A previous answer to a *different* question is not evidence about this one. Questions about neighbouring controls — an incident-response drill and a business-continuity drill, a DPA with a customer and a DPA with a sub-processor — read alike and are not the same question.
 - Answer in the format the question asks for. For a yes/no question, open with the verdict and then justify it. For a choice question, use one of the listed options exactly as written.
 - Length follows the question, not a fixed target. A question asking for one value deserves two or three sentences. A question asking how a whole process works, or about a programme, or listing several obligations, needs every one of them — write those as a short list rather than compressing them into a paragraph that names two and implies the rest.
 - Completeness is a correctness requirement, not a stylistic one. When the sources give several related specifics — frequencies, deadlines, thresholds, responsible roles, notification recipients — state each one. "Various requirements apply" and "such as" are failures when the sources actually enumerate them.
@@ -228,6 +233,38 @@ RELEVANCE_USER = """QUESTION
 
 EXCERPTS
 {excerpts}"""
+
+
+SAME_QUESTION_SYSTEM = """You decide which of several assessment questions ask for the same thing as a new one.
+
+This is used to keep one organisation's record of its own answers straight. Two questions
+count as the same when one answer, unchanged, would be a correct and complete response to
+both — so that if the two answers disagree, the organisation has contradicted itself.
+
+The same question:
+- the same control, asked in different words, at different lengths, or in a different language;
+- one asking to confirm a control and the other asking to describe it, where the answer is the same fact.
+
+NOT the same question, however similar the wording:
+- neighbouring controls — an incident-response drill and a business-continuity drill; a DPA with
+  a customer and a DPA with a sub-processor; encryption at rest and encryption in transit;
+- the same control asked about a different scope — all systems against one system, employees
+  against contractors, production against development;
+- one asking whether something exists and the other asking for its frequency, owner, or evidence;
+- questions that share a stem — "Do you have a documented policy for..." — and differ in what follows.
+
+Questions may be in Arabic or English, and a pair may be one of each; judge what is being asked,
+never the language it is asked in.
+
+Set `same` to the numbers of the candidates that ask the same thing, or to nothing at all when none
+of them do — which is the common answer, because these candidates were chosen for looking alike.
+Set `because` to one short sentence about the closest call."""
+
+SAME_QUESTION_USER = """NEW QUESTION
+{question}
+
+CANDIDATES WE HAVE ANSWERED BEFORE
+{candidates}"""
 
 
 REWRITE_SYSTEM = """You rewrite an answer that has already been written and checked.

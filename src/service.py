@@ -15,7 +15,7 @@ import re
 import uuid
 from pathlib import Path
 
-from src import progress
+from src import answer_memory, progress
 from src.config import settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs, extract_questions
@@ -96,6 +96,11 @@ async def ingest(
             )
 
         chunks = store.add_prior_answers(path.name, pairs, content_hash)
+        # Every pair is now an answer-memory entry with a row of its own, and
+        # arrives unscanned: what it supersedes and what it contradicts is
+        # settled by the sweep the caller runs next, not here, because that
+        # sweep is model calls and an upload should not wait for them.
+        answer_memory.adopt_file(path.name, pairs)
         return IngestResult(
             source_name=path.name,
             source_type=source_type,
@@ -361,9 +366,24 @@ def save_upload(filename: str, content: bytes) -> Path:
 
     Only the basename is used, so a crafted filename such as `../../.env` cannot
     escape the upload directory.
+
+    A name already taken by *different* content gets a numbered sibling rather
+    than overwriting it. Two people on one team send each other questionnaires
+    called `Vendor Security Questionnaire.xlsx`, and the second upload used to
+    replace the first on disk -- silently repointing a batch that had already
+    been read, column by column, at somebody else's spreadsheet. Identical
+    content keeps the one name: re-uploading the same file is how a person
+    reopens their own work, and a folder of `(2)`, `(3)`, `(4)` copies of one
+    document helps nobody.
     """
     settings.ensure_directories()
-    destination = settings.upload_dir / Path(filename).name
+    name = Path(filename).name
+    destination = settings.upload_dir / name
+    stem, suffix = destination.stem, destination.suffix
+    attempt = 1
+    while destination.exists() and destination.read_bytes() != content:
+        attempt += 1
+        destination = settings.upload_dir / f"{stem} ({attempt}){suffix}"
     destination.write_bytes(content)
     return destination
 

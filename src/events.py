@@ -46,6 +46,12 @@ BATCH_REVISED = "batch_revised"
 ROLES_CORRECTED = "roles_corrected"
 QUESTIONS_CORRECTED = "questions_corrected"
 
+# The answer memory: what we have said before, and who decided it still holds.
+MEMORY_ADDED = "memory_added"
+MEMORY_EDITED = "memory_edited"
+MEMORY_REMOVED = "memory_removed"
+MEMORY_RESOLVED = "memory_conflict_resolved"
+
 ASSISTANT_STARTED = "assistant_started"
 ASSISTANT_TURN = "assistant_turn"
 

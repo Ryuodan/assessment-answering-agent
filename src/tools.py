@@ -30,7 +30,7 @@ from pathlib import Path
 import asyncio
 
 from src.config import settings
-from src import batches, events, progress, rewrite, service
+from src import answer_memory, batches, events, progress, rewrite, service
 from src.batches import Batch
 from src.forms import status as status_map
 from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role, Target
@@ -125,6 +125,15 @@ is a decision and the other is work outstanding.
 """
 
 
+HAND = "written by hand"
+"""What `confidence_reason` says when a person typed the answer themselves.
+
+The durable mark is `AnsweredQuestion.by_hand`; this is the sentence shown
+beside the score, and the reading of it that answers written before that field
+existed still rely on.
+"""
+
+
 APPROVED = "approved by a reviewer"
 """Recorded in `confidence_reason` when a person accepted an answer as it stands.
 
@@ -140,7 +149,27 @@ def confirmed_by_a_person(
     """Whether a person has put their name to this answer."""
     if answered is None:
         return False
-    return bool(edited_by) or answered.confidence_reason == APPROVED
+    return (
+        bool(edited_by)
+        or answered.by_hand
+        or answered.confidence_reason in (APPROVED, HAND)
+    )
+
+
+def written_by_a_person(answered: AnsweredQuestion | None) -> bool:
+    """Whether the words are somebody's own, rather than the model's.
+
+    A narrower question than `confirmed_by_a_person`, and the two are often
+    confused: reading an answer and agreeing with it is not the same act as
+    writing it, and only one of them tells us anything the system did not
+    already believe.
+
+    The `confidence_reason` reading is for answers stored before `by_hand`
+    existed, which are still sitting in open batches.
+    """
+    if answered is None:
+        return False
+    return answered.by_hand or answered.confidence_reason == HAND
 
 
 def ready_to_write(
@@ -299,6 +328,9 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
     answered = batches.answers(batch.id)
     edits = batches.edited_by(batch.id)
     selected = {q.id for q in (scope or Scope()).select(batch.form, answered)}
+    # One query for the whole questionnaire: approving has a second effect, and
+    # a card that cannot say whether it happened is a button working in silence.
+    remembered = answer_memory.ids_from_batch(batch.id)
 
     questions = []
     for question in batch.form.questions:
@@ -319,6 +351,10 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             # Whether `fill` would write this, and why not. The card shows the
             # reason, because "held back" on its own is a wall.
             "approved": bool(result and result.confidence_reason == APPROVED),
+            # Whether this answer's wording is in the answer memory, which is
+            # true only of answers somebody wrote and then approved.
+            "remembered": _memory_id(batch.id, question.id) in remembered,
+            "by_hand": bool(result and written_by_a_person(result)),
             "will_be_written": ready_to_write(result, edits.get(question.id, ""))[0],
             "held_back_because": ready_to_write(result, edits.get(question.id, ""))[1],
             "answer": result.answer if result else "",
@@ -542,7 +578,8 @@ def set_answer(
     answered.needs_review = False
     answered.error = ""
     answered.confidence = 1.0
-    answered.confidence_reason = "written by hand"
+    answered.by_hand = True
+    answered.confidence_reason = HAND
 
     batches.save_answers(batch.id, [answered], edited_by=user.email)
     events.record(
@@ -685,7 +722,9 @@ def set_detail(user: User, batch_id: str, detail: str) -> None:
     )
 
 
-def approve_answer(user: User, batch_id: str, question_id: str, *, approved: bool = True) -> None:
+def approve_answer(
+    user: User, batch_id: str, question_id: str, *, approved: bool = True
+) -> str:
     """Accept an answer as it stands, so `fill` will write it.
 
     The reviewer's name is recorded exactly as an edit records it, because from
@@ -693,6 +732,28 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
     put their name to it. Approving does not change a word of the answer, and
     the confidence score is left alone -- overwriting it would destroy the
     signal that made the answer worth reading in the first place.
+
+    It teaches the answer memory only when the words are a person's own, and
+    returns the entry id it wrote -- "" when it wrote nothing. An answer the
+    model drafted and a reviewer waved through carries no information this
+    system did not already have: remembering it feeds the drafter its own
+    output, and the next questionnaire is then answered from a prior answer
+    that was itself a draft, at a confidence the loop manufactured rather than
+    earned. What a person *wrote* is the opposite -- it is the one thing in the
+    exchange that came from outside the model -- and that is what the memory is
+    for.
+
+    So approving does two things and they are separate: the answer goes into
+    the file either way, and it goes into the memory when somebody wrote it.
+    Taking an approval back removes what it taught, because an answer somebody
+    withdrew should not be quoted back at them next month.
+
+    There is no way to approve one *without* teaching it when it was written by
+    hand, deliberately. An answer that is right for this customer and not a
+    general position does happen, and the place to deal with it is the memory
+    page, where the entry can be read, corrected or forgotten -- rather than a
+    second switch beside every approve button, which is a decision asked of
+    everybody to serve the rare case.
     """
     batch = _require(user, batch_id)
     if not any(q.id == question_id for q in batch.form.questions):
@@ -704,14 +765,60 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
     if existing.confidence_reason == BLANKED:
         raise ToolError("That answer is deliberately blank. Write one before approving it.")
 
+    by_hand = written_by_a_person(existing)
+
     answered = existing.model_copy(deep=True)
-    answered.confidence_reason = APPROVED if approved else ""
+    answered.confidence_reason = APPROVED if approved else (HAND if by_hand else "")
     answered.needs_review = False if approved else existing.needs_review
     batches.save_answers(batch.id, [answered], edited_by=user.email if approved else "")
     events.record(
         user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
         question_id=question_id, approved=approved,
     )
+
+    entry_id = _memory_id(batch.id, question_id)
+    if not approved:
+        answer_memory.remove(entry_id)
+        return ""
+    if not by_hand:
+        return ""
+
+    question = next(q for q in batch.form.questions if q.id == question_id)
+    answer_memory.record(
+        question.text,
+        # What went into the cell, not the longest thing on the record. A
+        # questionnaire filled in briefly is answered with the brief text, and
+        # somebody who shortens one by hand has written *that* -- remembering
+        # the untouched full draft instead put the model's own words in the
+        # memory under a person's name, which is the whole thing this gate
+        # exists to prevent.
+        written_text(answered, batch.detail),
+        entry_id=entry_id,
+        section=question.section,
+        from_file=batch.source_name,
+        origin="approved",
+        approved_by=user.email,
+        team_id=user.team_id,
+    )
+    events.record(
+        user, events.MEMORY_ADDED, subject_type=SUBJECT_MEMORY, subject_id=entry_id,
+        question=question.text[:200], batch_id=batch.id,
+    )
+    return entry_id
+
+
+SUBJECT_MEMORY = "memory_entry"
+
+
+def _memory_id(batch_id: str, question_id: str) -> str:
+    """One entry per approved question, so approving twice does not remember twice.
+
+    Derived from the questionnaire and the question rather than random, because
+    the same answer gets approved, corrected and approved again — and three
+    near-identical entries in the memory is three chances to retrieve the one
+    that was wrong.
+    """
+    return f"approved::{batch_id}::{question_id}"
 
 
 def fill(
@@ -781,6 +888,7 @@ def fill(
             values[target.id] = written_text(result, batch.detail)
 
     destination = destination or _filled_path(batch)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     report = forms.write(batch.source_path, destination, values)
     events.record(
         user, events.FILE_FILLED, subject_type=batches.SUBJECT, subject_id=batch.id,
@@ -828,13 +936,21 @@ def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion]) -> str
 
 
 def _filled_path(batch: Batch) -> Path:
-    """Where a filled copy goes. Beside the upload, never over it.
+    """Where a filled copy goes: under this batch, never over the original.
 
     The original is what a person compares against and what a re-run starts
     from, so answering never consumes it.
+
+    A directory per batch rather than a sibling file, because a batch is what
+    the answers belong to and two of them can share one source: a teammate who
+    opens the same questionnaire gets their own batch, and both filling into
+    `<name> - answered.xlsx` beside the upload meant the second one to press the
+    button silently replaced the first one's file, which is then what both of
+    them download. The name inside the directory stays the plain one, so the
+    download is still `<name> - answered.xlsx`.
     """
     source = batch.source_path
-    return source.with_name(f"{source.stem} - answered{source.suffix}")
+    return settings.filled_dir / batch.id / f"{source.stem} - answered{source.suffix}"
 
 
 async def search(query: str, mode: str = "hybrid", limit: int = 8) -> dict:

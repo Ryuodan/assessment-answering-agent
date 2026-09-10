@@ -11,6 +11,7 @@ from src.verification import (
     explain_confidence,
     incomplete_units,
     mentioned_clauses,
+    rests_on_memory_alone,
     unsupported_clauses,
 )
 
@@ -415,3 +416,45 @@ def test_assess_passes_the_limit_through():
         review_threshold=0.6, incomplete_cap=0.5, completable_parts=6,
     )
     assert reasons == [] and review is False and confidence == 0.9
+
+
+# --- an answer with nothing of ours behind it -------------------------------
+#
+# A previous answer is the best evidence of *how we answer* and no evidence at
+# all of what is true. An answer built only from one looks exactly like an
+# answer built from a policy, and the reported case -- "in which jurisdiction
+# will you store the Personal Data" -- scored 0.90 and was on its way into a
+# customer's file citing two remembered answers and no document.
+
+
+def prior(**overrides):
+    return ev(source_type=SourceType.PRIOR_ANSWER, source_name="Answer memory", **overrides)
+
+
+def test_an_answer_citing_only_previous_answers_is_flagged():
+    cited = [prior(), prior(snippet="another")]
+    confidence, review, reasons = assess(
+        "All personal data is stored within the Kingdom.", cited, 0.9,
+        retrieved=cited, grounded=True, review_threshold=0.6, incomplete_cap=0.5,
+    )
+
+    assert review is True
+    assert any("rests only on what we told somebody before" in reason for reason in reasons)
+    assert confidence == 0.9, "provenance is not a scoring problem"
+
+
+def test_one_policy_among_them_is_enough():
+    """The common case, and it must not be flagged: measured over nineteen real
+    questions, eighteen cited at least one policy."""
+    cited = [prior(), ev()]
+    _, review, reasons = assess(
+        "text", cited, 0.9, retrieved=cited, grounded=True,
+        review_threshold=0.6, incomplete_cap=0.5,
+    )
+    assert reasons == [] and review is False
+
+
+def test_an_answer_with_no_sources_at_all_is_not_this_flag():
+    """It is already flagged, and for a different reason: there was nothing to
+    answer from, rather than the wrong kind of something."""
+    assert rests_on_memory_alone([]) is False

@@ -12,6 +12,7 @@ from src.config import settings
 from src.graph import nodes
 from src.graph.workflow import _answer_question, _fan_out
 from src.models import AnsweredQuestion, AnswerReview, DraftedAnswer, Evidence, Question, SourceType
+from src.tools import ready_to_write
 
 
 def _state(**overrides):
@@ -145,6 +146,34 @@ async def test_finalize_takes_the_lower_of_the_two_confidences():
     assert answered.confidence == pytest.approx(0.4)
     # Grounded but low confidence still goes to a human.
     assert answered.needs_review is True
+
+
+async def test_a_memory_conflict_is_flagged_and_never_written_into_the_answer():
+    """The drafter reports a policy/memory disagreement in a field of its own.
+
+    It reaches the reviewer through `review_reasons` -- which also stops
+    `ready_to_write` -- and reaches `answer`, the string that goes into the
+    customer's spreadsheet, through nothing at all.
+    """
+    state = _state(draft=DraftedAnswer(
+        answer="Yes. Access is reviewed quarterly.",
+        confidence=0.95,
+        used_source_ids=[],
+        contradicts_memory="A 2023 answer said reviews are annual; the policy says quarterly.",
+    ))
+
+    answered = (await nodes.finalize(state))["answered"]
+
+    assert answered.needs_review is True
+    assert any("we are not consistent about this" in r for r in answered.review_reasons)
+    assert "annual" not in answered.answer
+    assert answered.answer == "Yes. Access is reviewed quarterly."
+    assert ready_to_write(answered)[0] is False
+
+
+async def test_an_answer_with_no_conflict_gains_no_reason():
+    answered = (await nodes.finalize(_state()))["answered"]
+    assert not any("not consistent" in r for r in answered.review_reasons)
 
 
 async def test_ungrounded_answer_is_flagged_even_when_confident():

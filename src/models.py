@@ -120,6 +120,14 @@ class Evidence(BaseModel):
     questionnaire: str = ""
     answered_date: str = ""
 
+    entry_id: str = ""
+    """Which answer-memory entry this is, for a prior answer. "" for a policy.
+
+    The same string names the row in `memory_entries` and the document in the
+    index, so a retrieved answer can be traced to who approved it and what it
+    replaced — and so a superseded one can be recognised and dropped.
+    """
+
     clause_start: str = ""
     clause_end: str = ""
     section_clause: str = ""
@@ -236,6 +244,19 @@ class AnsweredQuestion(BaseModel):
     choice between lengths is instant once it has been made once.
     """
 
+    by_hand: bool = Field(
+        default=False,
+        description="Whether a person typed these words, rather than agreeing with them",
+    )
+    """The one fact about an answer the model cannot supply.
+
+    Kept as a field of its own rather than read off `confidence_reason`, which
+    already carries a different question -- why the score is what it is -- and
+    which approving overwrites. The answer memory turns on this and nothing
+    else: agreeing with a draft teaches it nothing, and writing one teaches it
+    what we actually say.
+    """
+
     citations: list[str] = Field(default_factory=list, description="Clause-level locators for the sources actually used")
     review_reasons: list[str] = Field(
         default_factory=list,
@@ -339,6 +360,13 @@ class DraftedAnswer(BaseModel):
 
     answer: str = Field(description="The answer to write into the assessment, in the required language")
     rationale: str = Field(default="", description="Short note on which sources were used and why")
+    contradicts_memory: str = Field(
+        default="",
+        description=(
+            "Set only when a PREVIOUS ANSWER disagrees with OUR POLICY on this question: "
+            "one sentence saying what each says. Empty otherwise. Never put this in `answer`."
+        ),
+    )
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     used_source_ids: list[int] = Field(
         default_factory=list,
@@ -356,6 +384,23 @@ class AnswerReview(BaseModel):
         default="",
         description="A better search query to retry with when the answer is not grounded; '' to accept as is",
     )
+
+
+class SameQuestions(BaseModel):
+    """Which of several remembered questions ask the same thing as a new one.
+
+    A list of numbers rather than a verdict per pair: the candidates are a
+    handful of near neighbours from one search, and asking about them together
+    costs one call instead of five and lets the model see them side by side,
+    which is how the difference between "the same question reworded" and "the
+    next control along" actually shows up.
+    """
+
+    same: list[int] = Field(
+        default_factory=list,
+        description="Numbers of the candidates that ask for the same thing; empty when none do",
+    )
+    because: str = Field(default="", description="One short sentence on the closest call")
 
 
 class RelevanceVerdict(BaseModel):

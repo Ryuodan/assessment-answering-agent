@@ -155,6 +155,8 @@
     display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
     font-size: 13.5px; color: var(--ink-soft); margin-bottom: 12px;
   }
+  .kb-summary a { color: var(--accent-ink); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+  .kb-summary a:hover { border-bottom-color: var(--accent); }
   ul.sources { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 300px; overflow: auto; }
   ul.sources li {
     display: flex; align-items: center; gap: 9px;
@@ -544,6 +546,8 @@
        would be a control with a bug waiting in it. -->
   <a class="ghost" href="/" title="Ask for this in a conversation instead"
      style="text-decoration:none;display:inline-flex;align-items:center">Assistant →</a>
+  <a class="ghost" href="/memory" title="What we have said before, and which of it still stands"
+     style="text-decoration:none;display:inline-flex;align-items:center">Answer memory</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
@@ -1495,7 +1499,8 @@
       const authority = Cards.authorityBadge(item.authority);
       head.append(who, badge);
       if (authority) head.append(authority);
-      head.append(Cards.openDocumentButton(item.source_name, item.source_type));
+      const openIt = Cards.openDocumentButton(item.source_name, item.source_type);
+      if (openIt) head.append(openIt);
 
       card.append(head, Cards.chunk(item.snippet));
       box.append(card);
@@ -1615,7 +1620,11 @@
       $("kbSummary").innerHTML = stats.total_chunks
         ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
           "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
-          "<span>" + stats.prior_answer_chunks.toLocaleString() + " previous answers</span>"
+          // The previous answers are the one part of the corpus with a page of
+          // its own: they are managed one answer at a time rather than one file
+          // at a time, which is why the count links there.
+          '<span><a href="/memory" title="Manage the answer memory">' +
+            stats.prior_answer_chunks.toLocaleString() + " previous answers</a></span>"
         : "Nothing indexed yet. Upload guidelines or previous assessments above.";
 
       $("kbSources").innerHTML = "";
@@ -2236,9 +2245,14 @@
         body: JSON.stringify({ question_id: entry.formId, approved: approved }),
       });
       await adoptBatch(updated, { quiet: true });
+      // Both halves of what the click did, and the second half only when it
+      // actually happened: the memory takes an answer somebody wrote, not one
+      // the model wrote and a reviewer agreed with.
       setStatus($("answerStatus"), approved
-        ? "Approved. That answer will be written into the file."
-        : "Approval withdrawn. It will be held back again.", "ok");
+        ? (updated.remembered
+            ? "Approved. It will be written into the file, and your wording is now in the answer memory."
+            : "Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
+        : "Approval withdrawn. It will be held back again, and is out of the answer memory.", "ok");
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     }

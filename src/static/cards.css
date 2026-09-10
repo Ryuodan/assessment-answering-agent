@@ -150,6 +150,9 @@
   display: flex; gap: 13px; align-items: flex-start;
   padding: 16px 18px; background: var(--surface-sunken);
   border-bottom: 1px solid var(--line);
+  /* Anything unexpected in here wraps onto its own line rather than widening
+     the card and everything the card sits in. */
+  flex-wrap: wrap;
 }
 .answer.review .answer-head { background: var(--warn-soft); }
 .qnum {
@@ -158,7 +161,17 @@
   display: grid; place-items: center; font-size: 12.5px; font-weight: 650; color: var(--ink-soft);
 }
 .qbody { flex: 1; min-width: 0; }
-.qtext { font-weight: 640; font-size: 15.5px; line-height: 1.45; letter-spacing: -.005em; }
+.qtext {
+  font-weight: 640; font-size: 15.5px; line-height: 1.45; letter-spacing: -.005em;
+  overflow-wrap: anywhere;
+}
+/* Three lines of the question, and the answer above the fold. `.qmore` un-hides
+   itself only when there is something behind the clamp. */
+.qtext.clamped {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.qmore { margin-inline-start: auto; white-space: nowrap; }
 .qmeta {
   display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
   margin-top: 6px; font-size: 11.5px; color: var(--ink-faint);
@@ -205,6 +218,12 @@
   border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
   font-size: 10px; font-weight: 650; letter-spacing: .02em;
   padding: 1px 7px; border-radius: var(--radius-pill); white-space: nowrap;
+}
+/* Not a state of the answer but a fact about the memory: quieter than the
+   review and blank tags, which are things somebody has to act on. */
+.tag.memory {
+  background: var(--accent-soft); color: var(--accent-ink);
+  border: 1px solid transparent; font-weight: 600;
 }
 
 /* Full / Brief. A segmented control rather than a checkbox, because neither

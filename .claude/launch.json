@@ -4,8 +4,25 @@
     {
       "name": "assessment-answer",
       "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "src.api:app", "--port", "8123"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "src.api:app",
+        "--port",
+        "8123"
+      ],
       "port": 8123
+    },
+    {
+      "name": "open-mode",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "scripts.dev_server",
+        "--port",
+        "8124"
+      ],
+      "port": 8124
     }
   ]
 }

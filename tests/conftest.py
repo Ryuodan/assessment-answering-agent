@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src import credentials, store
+from src import answer_memory, credentials, store
 from src.chunking import chunk_document
 from src.config import settings
 from src.knowledge import KnowledgeStore
@@ -46,14 +46,23 @@ def isolated_storage(tmp_path, monkeypatch):
     """
     monkeypatch.setattr(settings, "db_path", tmp_path / "app.db")
     monkeypatch.setattr(settings, "upload_dir", tmp_path / "uploads")
+    monkeypatch.setattr(settings, "filled_dir", tmp_path / "filled")
+    # The vector store came last and matters most: the answer memory writes to
+    # the index when a reviewer approves an answer, so a test that approves one
+    # would otherwise add it to the deployment's real corpus -- and embed it
+    # against the real embedding host to do so. Pointed at the throwaway
+    # directory, the worst case is an empty collection nobody reads.
+    monkeypatch.setattr(settings, "chroma_dir", tmp_path / "chroma")
     monkeypatch.setattr(settings, "extracted_text_dir", tmp_path / "extracted")
     monkeypatch.setattr(settings, "allowed_emails", "")
     monkeypatch.setattr(settings, "admin_email", "")
     monkeypatch.setattr(settings, "admin_password", "")
     monkeypatch.setattr(settings, "detection_strategy", "rules")
     store.reset_connection()
+    answer_memory.forget_sync()
     yield
     store.reset_connection()
+    answer_memory.forget_sync()
 
 
 @pytest.fixture(autouse=True)
@@ -184,10 +193,11 @@ class FakeVectorStore:
 
     def add_documents(self, documents, ids=None):
         """Chroma's write path, so the ingestion routes can be exercised."""
-        for document in documents:
+        for index, document in enumerate(documents):
             self.records.append({
                 "text": document.page_content,
                 "metadata": dict(document.metadata),
+                "id": (ids or [])[index] if ids and index < len(ids) else "",
             })
         return ids or []
 
@@ -195,6 +205,14 @@ class FakeVectorStore:
         self.records = []
 
     def delete(self, where=None, ids=None):
+        """By id or by metadata filter — Chroma accepts either, and both are used.
+
+        The answer memory deletes one entry by its id; everything else deletes a
+        whole source by name.
+        """
+        if ids is not None:
+            self.records = [r for r in self.records if r.get("id") not in set(ids)]
+            return
         clauses = where.get("$and", [where]) if where else []
         self.records = [
             record
@@ -220,6 +238,7 @@ class FakeVectorStore:
             )
         ]
         return {
+            "ids": [record.get("id", "") for record in matched],
             "documents": [record["text"] for record in matched],
             "metadatas": [record["metadata"] for record in matched],
         }
@@ -313,3 +332,17 @@ def expansion_uncapped(monkeypatch):
     """
     from src.config import settings
     monkeypatch.setattr(settings, "max_expanded_parts", 99)
+
+
+@pytest.fixture
+def memory_index(monkeypatch):
+    """An answer memory whose index is a fake, for the tests that write to it.
+
+    Approving an answer indexes it, and indexing means embedding: without this
+    the write is silently swallowed by `index_entry` and the test proves the
+    row was written and nothing about the vector beside it.
+    """
+    fake = FakeVectorStore([])
+    index = bare_store(fake)
+    monkeypatch.setattr("src.knowledge.get_store", lambda: index)
+    return fake

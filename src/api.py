@@ -14,15 +14,15 @@ from urllib.parse import quote
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from src import (
-    batches, conversations, events, forms, identity, progress, rewrite, runs, service,
-    store, tools,
+    answer_memory, batches, conversations, events, forms, identity, progress, rewrite,
+    runs, service, store, tools,
 )
 from src.agents import assistant
 from src.identity import User
@@ -617,13 +617,24 @@ class ApproveRequest(BaseModel):
 
 @app.post("/api/forms/{batch_id}/approve")
 def approve_an_answer(
-    batch_id: str, request: ApproveRequest, user: User = Depends(current_user)
+    batch_id: str, request: ApproveRequest, tasks: BackgroundTasks,
+    user: User = Depends(current_user),
 ) -> dict:
-    """Release one answer for writing, with the reviewer's name on it."""
-    _tool(lambda: tools.approve_answer(
+    """Release one answer for writing, with the reviewer's name on it.
+
+    Approving an answer somebody *wrote* also teaches the answer memory, which
+    is where the team's own answers come from once the imported questionnaires
+    run out; approving a draft nobody changed teaches it nothing, and
+    `remembered` comes back empty. The sweep for what a new entry supersedes or
+    contradicts runs after the response: it is model calls, and a reviewer
+    clicking through twenty answers should not wait for any of them.
+    """
+    entry_id = _tool(lambda: tools.approve_answer(
         user, batch_id, request.question_id, approved=request.approved,
     ))
-    return tools.inspect(user, batch_id)
+    if entry_id:
+        tasks.add_task(_scan_memory)
+    return {**tools.inspect(user, batch_id), "remembered": entry_id}
 
 
 class FillRequest(BaseModel):
@@ -757,8 +768,15 @@ async def _ingest_files(
 # ---------------------------------------------------------------------------
 
 
+# Every route here takes a session. The corpus has no owner -- it is what the
+# organisation is bound by, and everyone on the team works from the same one --
+# but "shared" is not "public": these read the policies out, index documents
+# into them, and one of them empties the lot. Who did each of those is recorded,
+# so a shared corpus is still an attributable one.
+
+
 @app.get("/api/knowledge")
-def get_knowledge() -> dict:
+def get_knowledge(user: User = Depends(current_user)) -> dict:
     """What is currently indexed."""
     return service.knowledge_stats()
 
@@ -767,6 +785,7 @@ def get_knowledge() -> dict:
 async def upload_guidelines(
     files: list[UploadFile] = File(...),
     authority: str = Form(default="ours"),
+    user: User = Depends(current_user),
 ) -> list[IngestResult]:
     """Index policy and guideline documents.
 
@@ -778,27 +797,274 @@ async def upload_guidelines(
     """
     if authority not in ("ours", "external"):
         raise HTTPException(status_code=400, detail="authority must be 'ours' or 'external'.")
-    return await _ingest_files(files, SourceType.GUIDELINE, authority)
+    results = await _ingest_files(files, SourceType.GUIDELINE, authority)
+    _record_indexing(user, results, authority=authority)
+    return results
 
 
 @app.post("/api/knowledge/prior-assessments")
-async def upload_prior_assessments(files: list[UploadFile] = File(...)) -> list[IngestResult]:
-    """Index previously answered assessments as question/answer pairs."""
-    return await _ingest_files(files, SourceType.PRIOR_ANSWER)
+async def upload_prior_assessments(
+    tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    user: User = Depends(current_user),
+) -> list[IngestResult]:
+    """Index previously answered assessments as question/answer pairs.
+
+    Every pair becomes an answer-memory entry, and the sweep that works out what
+    each one supersedes or contradicts runs after the response rather than
+    inside it -- a file of sixty answers is sixty comparisons, and an upload
+    that takes four minutes reads as an upload that has hung.
+    """
+    results = await _ingest_files(files, SourceType.PRIOR_ANSWER)
+    _record_indexing(user, results)
+    tasks.add_task(_scan_memory)
+    return results
+
+
+def _record_indexing(user: User, results: list[IngestResult], **payload) -> None:
+    """One event per file that actually went in."""
+    for result in results:
+        if result.error or not result.chunks_indexed:
+            continue
+        events.record(
+            user, events.DOCUMENT_INDEXED, subject_type="document",
+            subject_id=result.source_name, chunks=result.chunks_indexed,
+            source_type=result.source_type.value, **payload,
+        )
 
 
 @app.delete("/api/knowledge/sources/{source_name}")
-def remove_source(source_name: str) -> dict:
+def remove_source(source_name: str, user: User = Depends(current_user)) -> dict:
     """Remove one indexed file."""
     service.delete_source(source_name)
+    events.record(
+        user, events.SOURCE_REMOVED, subject_type="document", subject_id=source_name,
+    )
     return {"deleted": source_name}
 
 
 @app.delete("/api/knowledge")
-def clear_knowledge() -> dict:
+def clear_knowledge(user: User = Depends(current_user)) -> dict:
     """Empty the knowledge base."""
     service.clear_knowledge()
+    events.record(user, events.SOURCE_REMOVED, subject_type="document", subject_id="*", all=True)
     return {"cleared": True}
+
+
+# ---------------------------------------------------------------------------
+# The answer memory
+#
+# Shared by the whole team, like the knowledge base and for the same reason:
+# what this organisation has said before is one fact about the organisation, not
+# a private note. Who added or approved each entry is recorded on it, so a
+# shared record is still an attributable one.
+# ---------------------------------------------------------------------------
+
+
+def _memory_payload(entry) -> dict:
+    return {
+        "entry_id": entry.entry_id,
+        "question": entry.question,
+        "answer": entry.answer,
+        "section": entry.section,
+        "from_file": entry.from_file,
+        "origin": entry.origin,
+        "approved_by": entry.approved_by,
+        "approved_on": entry.approved_on,
+        "superseded_by": entry.superseded_by,
+        "stands": entry.stands,
+    }
+
+
+@app.get("/api/memory")
+def list_memory(
+    query: str = "",
+    standing: str = "",
+    origin: str = "",
+    limit: int = 100,
+    offset: int = 0,
+    user: User = Depends(current_user),
+) -> dict:
+    """What we have said before, newest first."""
+    keep = {"yes": True, "no": False}.get(standing.lower())
+    found = answer_memory.entries(
+        query=query, standing=keep, origin=origin,
+        limit=max(1, min(limit, 500)), offset=max(0, offset),
+    )
+    return {
+        "entries": [_memory_payload(entry) for entry in found],
+        "total": answer_memory.count(query=query, standing=keep, origin=origin),
+        "stats": answer_memory.stats(),
+    }
+
+
+@app.get("/api/memory/conflicts")
+def list_memory_conflicts(user: User = Depends(current_user)) -> dict:
+    """Pairs that disagree, with both answers, for somebody to decide between."""
+    pairs = []
+    for conflict in answer_memory.conflicts():
+        first, second = answer_memory.get(conflict.entry_id), answer_memory.get(conflict.other_id)
+        if first is None or second is None:
+            continue
+        pairs.append({
+            "because": conflict.because,
+            "raised_at": conflict.raised_at,
+            "entry": _memory_payload(first),
+            "other": _memory_payload(second),
+        })
+    return {"conflicts": pairs}
+
+
+class MemoryEntryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+    answer: str = Field(min_length=1, max_length=20000)
+    section: str = Field(default="", max_length=400)
+
+
+@app.post("/api/memory")
+def add_memory_entry(
+    body: MemoryEntryRequest, tasks: BackgroundTasks, user: User = Depends(current_user)
+) -> dict:
+    """Teach the memory an answer by hand."""
+    entry = answer_memory.record(
+        body.question, body.answer, section=body.section, origin="manual",
+        approved_by=user.email, team_id=user.team_id,
+    )
+    events.record(
+        user, events.MEMORY_ADDED, subject_type=tools.SUBJECT_MEMORY,
+        subject_id=entry.entry_id, question=entry.question[:200],
+    )
+    tasks.add_task(_scan_memory)
+    return _memory_payload(entry)
+
+
+class MemoryEditRequest(BaseModel):
+    question: str | None = Field(default=None, max_length=4000)
+    answer: str | None = Field(default=None, max_length=20000)
+
+
+# `:path` on every one of these, and it is not cosmetic. An approved answer's id
+# is `approved::<batch>::<question id>`, and a question id carries the shape of
+# the questionnaire it came from -- `Cybersecurity Governance/Q1` in the Word
+# forms. `encodeURIComponent` sends that slash as `%2F`, the server decodes it
+# before routing, and a plain `{entry_id}` never matches a value with a slash in
+# it: every attempt to correct or forget those entries returned 404, and the
+# page left the card on screen because nothing had happened to it.
+@app.patch("/api/memory/{entry_id:path}")
+def edit_memory_entry(
+    entry_id: str, body: MemoryEditRequest, tasks: BackgroundTasks,
+    user: User = Depends(current_user),
+) -> dict:
+    """Correct an entry. Not a supersession: nothing changed its mind.
+
+    A corrected answer is compared again, because correcting one is one of the
+    ways it comes to contradict another.
+    """
+    entry = answer_memory.update(entry_id, question=body.question, answer=body.answer)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+    events.record(
+        user, events.MEMORY_EDITED, subject_type=tools.SUBJECT_MEMORY, subject_id=entry_id,
+    )
+    tasks.add_task(_scan_memory)
+    return _memory_payload(entry)
+
+
+@app.delete("/api/memory/{entry_id:path}")
+def remove_memory_entry(entry_id: str, user: User = Depends(current_user)) -> dict:
+    """Forget an entry: the row, its vector, and the conflicts it raised."""
+    if not answer_memory.remove(entry_id):
+        raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+    events.record(
+        user, events.MEMORY_REMOVED, subject_type=tools.SUBJECT_MEMORY, subject_id=entry_id,
+    )
+    return {"deleted": entry_id}
+
+
+@app.post("/api/memory/{entry_id:path}/restore")
+def restore_memory_entry(entry_id: str, user: User = Depends(current_user)) -> dict:
+    """Put a superseded entry back into use, when the later answer was wrong."""
+    if answer_memory.get(entry_id) is None:
+        raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+    answer_memory.restore(entry_id)
+    events.record(
+        user, events.MEMORY_EDITED, subject_type=tools.SUBJECT_MEMORY,
+        subject_id=entry_id, restored=True,
+    )
+    return _memory_payload(answer_memory.get(entry_id))
+
+
+class ResolveConflictRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=400)
+    other_id: str = Field(min_length=1, max_length=400)
+    resolution: str = Field(pattern="^(keep_this|keep_other|keep_both)$")
+
+
+@app.post("/api/memory/conflicts/resolve")
+def resolve_memory_conflict(
+    body: ResolveConflictRequest, user: User = Depends(current_user)
+) -> dict:
+    """Say which of two disagreeing answers is our position, or that neither loses."""
+    for entry_id in (body.entry_id, body.other_id):
+        if answer_memory.get(entry_id) is None:
+            raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+    answer_memory.apply_resolution(
+        body.entry_id, body.other_id, resolution=body.resolution, by=user.email,
+    )
+    events.record(
+        user, events.MEMORY_RESOLVED, subject_type=tools.SUBJECT_MEMORY,
+        subject_id=body.entry_id, other_id=body.other_id, resolution=body.resolution,
+    )
+    return {"resolved": True}
+
+
+@app.post("/api/memory/scan")
+async def scan_memory_now(limit: int = 50, user: User = Depends(current_user)) -> dict:
+    """Compare everything that has arrived since the last sweep, and report it.
+
+    The same sweep that runs by itself after an upload or an approval, exposed
+    so a person can ask for it — after importing eleven questionnaires at once,
+    "has anything I just added contradicted us" is a question with an answer,
+    and waiting for a background task to have got round to it is not one.
+
+    Bounded, and it says how much is left. A sweep is one model call per entry
+    and a backlog can be hundreds: a button that returns in twenty seconds
+    saying what it found and what remains is a button somebody will press again,
+    and one that hangs for four minutes is one they will reload the page on.
+    """
+    findings = await answer_memory.scan_pending(limit=max(1, min(limit, 500)))
+    return {
+        "scanned": True,
+        "found": [
+            {"kind": f.kind, "other_id": f.other_id, "because": f.because,
+             "other_question": f.other_question}
+            for f in findings
+        ],
+        "stats": answer_memory.stats(),
+    }
+
+
+async def _scan_memory() -> None:
+    """The sweep as a background task: never raises, never blocks a response."""
+    try:
+        found = await answer_memory.scan_pending(limit=200)
+    except Exception:  # noqa: BLE001 - a background sweep must not take the app down
+        logger.exception("The answer-memory sweep failed")
+        return
+    if found:
+        logger.info("Answer memory: %d finding(s) from the sweep", len(found))
+
+
+@app.get("/memory", include_in_schema=False)
+def memory_page() -> FileResponse:
+    """The answer memory, managed on a page of its own.
+
+    Not a panel in the workbench: the workbench is organised around one
+    questionnaire in front of you, and this is about everything the organisation
+    has ever said, which is a different job done at a different time — usually
+    after somebody notices an answer they disagree with.
+    """
+    return FileResponse(STATIC_DIR / "memory.html")
 
 
 @app.get("/api/search")
@@ -807,6 +1073,7 @@ async def search_knowledge(
     mode: str = "hybrid",
     limit: int = 20,
     source: str = "",
+    user: User = Depends(current_user),
 ) -> dict:
     """Search the indexed corpus directly.
 
@@ -825,7 +1092,7 @@ async def search_knowledge(
 
 
 @app.get("/api/documents")
-def get_documents() -> dict:
+def get_documents(user: User = Depends(current_user)) -> dict:
     """The documents somebody has uploaded, for the interface to open."""
     documents = service.list_documents()
     return {"documents": documents, "uploaded_count": len(documents)}
@@ -841,14 +1108,18 @@ def _resolve_document(origin: str, category: str, name: str) -> Path:
 
 
 @app.get("/api/documents/{origin}/{category}/{name}/file")
-def view_document(origin: str, category: str, name: str) -> FileResponse:
+def view_document(
+    origin: str, category: str, name: str, user: User = Depends(current_user)
+) -> FileResponse:
     """Open or download the original PDF/DOCX document."""
     path = _resolve_document(origin, category, name)
     return FileResponse(path, filename=path.name, content_disposition_type="inline")
 
 
 @app.get("/api/documents/{origin}/{category}/{name}/preview")
-def preview_document(origin: str, category: str, name: str) -> Response:
+def preview_document(
+    origin: str, category: str, name: str, user: User = Depends(current_user)
+) -> Response:
     """Return a browser preview: the original PDF or safe HTML converted from DOCX."""
     path = _resolve_document(origin, category, name)
     if path.suffix.lower() == ".pdf":
@@ -870,7 +1141,9 @@ def preview_document(origin: str, category: str, name: str) -> Response:
 
 
 @app.get("/api/documents/{origin}/{category}/{name}/text")
-async def view_extracted_text(origin: str, category: str, name: str) -> dict:
+async def view_extracted_text(
+    origin: str, category: str, name: str, user: User = Depends(current_user)
+) -> dict:
     """Extract and return the document text, using the persistent extraction cache."""
     path = _resolve_document(origin, category, name)
     try:
@@ -963,7 +1236,9 @@ class AnswerQuestionsRequest(BaseModel):
 
 
 @app.post("/api/assessments/extract")
-async def extract_assessment(file: UploadFile = File(...)) -> dict:
+async def extract_assessment(
+    file: UploadFile = File(...), user: User = Depends(current_user),
+) -> dict:
     """Pull the questions out of an assessment without answering them.
 
     The first half of `/answer`, separated so the questions can be reviewed and
@@ -1064,7 +1339,7 @@ async def revise_answer_list(
 
 
 @app.get("/api/assessments/progress/{run_id}")
-def assessment_progress(run_id: str) -> dict:
+def assessment_progress(run_id: str, user: User = Depends(current_user)) -> dict:
     """How far a run has got: questions found, answered, and left to answer."""
     state = service.run_progress(run_id)
     if state is None:
@@ -1097,6 +1372,7 @@ def export_pdf(
     include_flagged: bool = False,
     include_citations: bool = True,
     include_reasoning: bool = False,
+    user: User = Depends(current_user),
 ) -> Response:
     """Render an answered assessment as a PDF.
 
@@ -1137,6 +1413,7 @@ def export_docx(
     include_flagged: bool = False,
     include_citations: bool = True,
     include_reasoning: bool = False,
+    user: User = Depends(current_user),
 ) -> Response:
     """Render an answered assessment as a Word document.
 

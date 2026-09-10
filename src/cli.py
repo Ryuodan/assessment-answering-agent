@@ -13,7 +13,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from src import service
+from src import answer_memory, service
 from src.config import configure_logging
 from src.models import SourceType
 
@@ -30,6 +30,19 @@ async def _ingest(paths: list[str], source_type: SourceType) -> int:
         else:
             detail = f"{result.qa_pairs_found} Q/A pairs" if result.qa_pairs_found else f"{result.chunks_indexed} chunks"
             print(f"✓ {result.source_name}: {detail}")
+
+    # Every imported pair is now an answer-memory entry, and what each one
+    # supersedes or contradicts is a sweep of model calls. It runs here rather
+    # than being left for whoever next opens the memory page, because importing
+    # from the command line is exactly when nobody is looking at that page.
+    if source_type is SourceType.PRIOR_ANSWER:
+        found = await answer_memory.scan_pending(limit=500)
+        conflicts = [f for f in found if f.needs_a_person]
+        if found:
+            print()
+            print(f"Answer memory: {len(found) - len(conflicts)} answer(s) superseded, "
+                  f"{len(conflicts)} disagreement(s) raised for a person.")
+
     return 1 if failed else 0
 
 

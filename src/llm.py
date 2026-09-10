@@ -118,6 +118,21 @@ def _recover_from_tool_use_failed(error: BaseException, schema: type[SchemaT]) -
         return None
 
 
+def tool_use_failed(error: BaseException) -> bool:
+    """Whether this is Groq refusing a turn because the model wrote prose, not a call.
+
+    Public because one caller wants to know rather than to recover: the
+    answer-memory sweep asks a yes/no question whose empty answer is the common
+    one, and a model that replies with a bare `[]` instead of calling the tool
+    has said "none of them" in the one way the API will not accept.
+    """
+    if GroqBadRequestError is None or not isinstance(error, GroqBadRequestError):
+        return False
+    body = getattr(error, "body", None)
+    err = body.get("error") if isinstance(body, dict) else None
+    return isinstance(err, dict) and err.get("code") == "tool_use_failed"
+
+
 def _with_tool_use_recovery(inner: Runnable, schema: type[SchemaT]) -> Runnable[Any, SchemaT]:
     """Wrap `inner` so a recoverable Groq tool-naming failure yields a result."""
 

@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Answer memory — Assessment Answering</title>
+<link rel="stylesheet" href="/static/cards.css" />
+<style>
+  /* The third page. The workbench is one questionnaire in front of you and the
+     assistant is a conversation about one; this is everything the organisation
+     has ever said, which is looked at on a different day, usually because
+     somebody disagreed with an answer. Tokens and the sign-in gate are shared;
+     the rest is this page's own. */
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 26px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #9b6bff));
+    display: grid; place-items: center; color: var(--on-accent); font-weight: 700; font-size: 14px;
+  }
+  .brand-text h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .brand-text p { margin: 0; font-size: 12.5px; color: var(--ink-faint); }
+  .topbar .spacer { flex: 1; }
+  .topbar a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 26px 24px 90px; }
+
+  button {
+    font: inherit; font-weight: 550;
+    background: var(--accent); color: var(--on-accent);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: 9px 15px; cursor: pointer;
+    transition: filter .15s, background .15s, border-color .15s, color .15s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  button.ghost { background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong); }
+  button.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); filter: none; }
+  button.quiet {
+    background: none; border: none; color: var(--ink-faint);
+    padding: 3px 8px; font-size: 12.5px; border-radius: 6px;
+  }
+  button.quiet:hover { color: var(--accent); background: var(--accent-soft); filter: none; }
+  button.quiet.danger:hover { color: var(--err); background: var(--err-soft); }
+
+  input[type="search"], input[type="text"], textarea, select {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+    padding: 9px 12px; width: 100%;
+  }
+  textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 18px;
+  }
+  .panel + .panel { margin-top: 14px; }
+  .panel h2 { margin: 0 0 3px; font-size: 15px; font-weight: 640; }
+  .panel .hint { margin: 0 0 14px; color: var(--ink-faint); font-size: 12.5px; }
+
+  .lede { margin: 0 0 20px; color: var(--ink-soft); font-size: 13.5px; max-width: 74ch; }
+
+  /* --- the count strip --------------------------------------------------- */
+
+  .counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .count {
+    flex: 1 1 130px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px;
+  }
+  .count b { display: block; font-size: 21px; font-weight: 660; letter-spacing: -.02em; }
+  .count span { font-size: 12px; color: var(--ink-faint); }
+  .count.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  .count.warn b { color: var(--warn); }
+
+  /* --- controls ---------------------------------------------------------- */
+
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .controls input[type="search"] { flex: 1 1 260px; width: auto; }
+  .controls select { width: auto; }
+
+  /* --- one remembered answer --------------------------------------------- */
+
+  .entry {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 15px 17px; margin-bottom: 11px;
+  }
+  .entry.replaced { background: var(--surface-sunken); border-style: dashed; }
+  .entry .q { font-weight: 600; font-size: 14px; margin: 0 0 7px; }
+  .entry .a { margin: 0; color: var(--ink-soft); font-size: 13.5px; white-space: pre-wrap; }
+  .entry .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin-top: 11px; font-size: 12px; color: var(--ink-faint);
+  }
+  .entry .meta .spacer { flex: 1; }
+  .tag {
+    display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill);
+    font-size: 11.5px; font-weight: 600;
+    background: var(--surface-sunken); color: var(--ink-faint); border: 1px solid var(--line);
+  }
+  .tag.approved { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .tag.manual { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+  .tag.replaced { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+  .editing { display: grid; gap: 9px; margin-top: 10px; }
+
+  /* --- disagreements ------------------------------------------------------ */
+
+  .conflict {
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+    border-radius: var(--radius); padding: 15px 17px; margin-bottom: 11px;
+    background: var(--surface);
+  }
+  .conflict > p.why { margin: 0 0 12px; font-size: 13px; color: var(--warn); }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+  @media (max-width: 760px) { .sides { grid-template-columns: 1fr; } }
+  .side {
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 12px 13px; background: var(--surface-sunken);
+  }
+  .side .q { font-size: 12.5px; color: var(--ink-faint); margin: 0 0 6px; }
+  .side .a { font-size: 13.5px; margin: 0 0 10px; white-space: pre-wrap; }
+  .side .from { font-size: 11.5px; color: var(--ink-faint); margin: 0 0 10px; }
+
+  .status { font-size: 12.5px; color: var(--ink-faint); min-height: 1.4em; }
+  .status.err { color: var(--err); }
+  .status.ok { color: var(--ok); }
+
+  .empty {
+    text-align: center; padding: 34px 20px; color: var(--ink-faint); font-size: 13.5px;
+    border: 1px dashed var(--line-strong); border-radius: var(--radius);
+  }
+
+  /* --- sign-in gate (shared shape with the other two pages) --------------- */
+
+  .auth-gate {
+    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+    padding: 24px; background: var(--ground);
+  }
+  .auth-card {
+    width: min(420px, 100%); background: var(--surface-raised);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); padding: 28px;
+  }
+  /* A class selector outranks the browser's own `[hidden] { display: none }`,
+     so a gate styled `display: grid` stays on screen when the script hides it —
+     which in open mode means a sign-in card nobody can dismiss over a page that
+     had loaded perfectly well behind it. */
+  .auth-gate[hidden], .whoami[hidden] { display: none; }
+  .auth-card h2 { margin: 0 0 6px; font-size: 19px; }
+  .auth-card p { margin: 0 0 18px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+  .auth-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .auth-card input { margin-bottom: 12px; }
+  .auth-card button { margin-top: 6px; width: 100%; }
+  .auth-error {
+    margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--err-soft); color: var(--err); font-size: 13.5px;
+  }
+  .whoami { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-faint); }
+  .whoami b { color: var(--ink-soft); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="auth-gate" id="authGate" hidden>
+  <form class="auth-card" id="authForm">
+    <h2>Sign in</h2>
+    <p>Enter your address and your team&rsquo;s access code. Ask an administrator if
+       you do not have one.</p>
+    <label for="authEmail">Email address</label>
+    <input id="authEmail" type="email" autocomplete="email" required
+           placeholder="you@t2.sa" spellcheck="false">
+    <label for="authCode">Access code</label>
+    <input id="authCode" type="password" autocomplete="current-password" required
+           placeholder="Your team's code" spellcheck="false">
+    <button type="submit" id="authSubmit">Continue</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </form>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-text">
+      <h1>Answer memory</h1>
+      <p>What this organisation has said before, and which of it still stands</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="whoami" id="whoami" hidden>
+    <b id="whoamiEmail"></b>
+    <button class="ghost" id="signOut" title="End this session">Sign out</button>
+  </div>
+  <a class="ghost" href="/">Assistant</a>
+  <a class="ghost" href="/workbench">Workbench</a>
+  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
+</div>
+
+<main>
+  <p class="lede">
+    Every answer here is one a person wrote &mdash; imported from a questionnaire
+    the team filled in, written here by hand, or edited and approved on an answer
+    card. A draft nobody changed never reaches this page, however confident it
+    was: what the model produced is not evidence about us. These are the
+    strongest thing the system has to work from, so they are worth keeping true:
+    correct one that has aged, retire one that was replaced, and settle the pairs
+    that disagree.
+  </p>
+
+  <div class="counts" id="counts"></div>
+
+  <!-- Disagreements first. This is the only part of the page that is somebody's
+       decision rather than a list to browse, and it is why most people open it. -->
+  <div class="panel" id="conflictsPanel" hidden>
+    <h2>Two answers that disagree</h2>
+    <p class="hint">
+      Both were given to a real assessor and nothing says which is current. Choose
+      the one that is our position &mdash; the other is kept as history and stops
+      being used &mdash; or say they are not the same question after all.
+    </p>
+    <div id="conflicts"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Everything we have said</h2>
+    <p class="hint">Newest first. Search matches the question and the answer.</p>
+
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search remembered answers…" spellcheck="false">
+      <select id="standing">
+        <option value="">Everything</option>
+        <option value="yes">In use</option>
+        <option value="no">Replaced</option>
+      </select>
+      <select id="origin">
+        <option value="">Any source</option>
+        <option value="import">From a questionnaire</option>
+        <option value="approved">Approved here</option>
+        <option value="manual">Added by hand</option>
+      </select>
+      <button class="ghost" id="scan" title="Compare anything new against what we already remember">Check for conflicts</button>
+    </div>
+
+    <div class="status" id="listStatus"></div>
+    <div id="entries"></div>
+    <div style="margin-top:12px"><button class="ghost" id="more" hidden>Show more</button></div>
+  </div>
+
+  <div class="panel">
+    <h2>Add an answer</h2>
+    <p class="hint">
+      For something we say that no questionnaire in the corpus happens to ask.
+      It is retrieved exactly like the rest.
+    </p>
+    <div class="editing">
+      <input type="text" id="newQuestion" placeholder="The question, as an assessor would ask it">
+      <textarea id="newAnswer" placeholder="What we say"></textarea>
+      <div><button id="add">Remember this</button></div>
+      <div class="status" id="addStatus"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// --- sign-in -----------------------------------------------------------------
+// Its own block, ahead of everything else and identical in shape to the other
+// two pages: whether anyone may use this page is settled before the rest runs.
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const gate = $("authGate"), form = $("authForm"), error = $("authError");
+
+  function apply(session) {
+    const signedIn = Boolean(session.email);
+    gate.hidden = signedIn || !session.sign_in_required;
+    $("whoami").hidden = !(signedIn && session.sign_in_required);
+    if (!$("whoami").hidden) $("whoamiEmail").textContent = session.email;
+    if (!gate.hidden) $("authEmail").focus();
+  }
+
+  fetch("/api/auth/session")
+    .then((r) => r.json())
+    .then(apply)
+    .catch((e) => console.error("Could not check the session", e));
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    $("authSubmit").disabled = true;
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: $("authEmail").value.trim(), code: $("authCode").value }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.hidden = false;
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      error.textContent = "Could not reach the server.";
+      error.hidden = false;
+    } finally {
+      $("authSubmit").disabled = false;
+    }
+  });
+
+  $("signOut").addEventListener("click", async () => {
+    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+    window.location.reload();
+  });
+})();
+
+// --- the page ----------------------------------------------------------------
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const PAGE = 50;
+  let offset = 0;
+  let total = 0;
+
+  // --- theme (same key as the other pages, so the choice follows you) -------
+
+  const THEME_KEY = "assessment-theme";
+  function systemPrefersDark() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    $("themeToggle").textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
+  }
+  (function initTheme() {
+    let stored = null;
+    try { stored = localStorage.getItem(THEME_KEY); } catch (e) { /* private mode */ }
+    applyTheme(stored || (systemPrefersDark() ? "dark" : "light"));
+  })();
+  $("themeToggle").addEventListener("click", () => {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  // --- talking to the server ----------------------------------------------
+
+  async function api(path, options) {
+    const response = await fetch(path, Object.assign({
+      headers: { "Content-Type": "application/json" },
+    }, options || {}));
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error((body && body.detail) || ("Request failed (" + response.status + ")"));
+    }
+    return body;
+  }
+
+  function say(node, message, kind) {
+    node.className = "status" + (kind ? " " + kind : "");
+    node.textContent = message;
+  }
+
+  function when(value) {
+    if (!value) return "";
+    return String(value).slice(0, 10);
+  }
+
+  // Half this corpus is Arabic. Left-to-right is not a neutral default for it:
+  // an Arabic answer laid out LTR puts its punctuation at the wrong end and
+  // reads as broken to the person who wrote it.
+  const ARABIC = /[؀-ۿ]/;
+  function withDirection(node, text) {
+    if (ARABIC.test(text || "")) node.dir = "rtl";
+    return node;
+  }
+
+  // --- the counts ----------------------------------------------------------
+
+  function drawCounts(stats) {
+    const cells = [
+      { n: stats.standing, label: "in use" },
+      { n: stats.superseded, label: "replaced" },
+      { n: (stats.by_origin || {}).approved || 0, label: "approved here" },
+      { n: stats.open_conflicts, label: "disagreements", warn: stats.open_conflicts > 0 },
+    ];
+    // Shown only when there is a backlog, and it is what makes the "Check for
+    // conflicts" button mean something: without it the button is an offer to do
+    // nothing in particular.
+    if (stats.unscanned) cells.push({ n: stats.unscanned, label: "still to compare" });
+    $("counts").replaceChildren(...cells.map((cell) => {
+      const box = document.createElement("div");
+      box.className = "count" + (cell.warn ? " warn" : "");
+      const number = document.createElement("b");
+      number.textContent = cell.n;
+      const label = document.createElement("span");
+      label.textContent = cell.label;
+      box.append(number, label);
+      return box;
+    }));
+  }
+
+  // --- one entry -----------------------------------------------------------
+
+  function tag(text, kind) {
+    const span = document.createElement("span");
+    span.className = "tag" + (kind ? " " + kind : "");
+    span.textContent = text;
+    return span;
+  }
+
+  function entryCard(entry) {
+    const card = document.createElement("div");
+    card.className = "entry" + (entry.stands ? "" : " replaced");
+
+    const question = withDirection(document.createElement("p"), entry.question);
+    question.className = "q";
+    question.textContent = entry.question;
+
+    const answer = withDirection(document.createElement("p"), entry.answer);
+    answer.className = "a";
+    answer.textContent = entry.answer;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    if (entry.origin === "approved") meta.append(tag("approved", "approved"));
+    else if (entry.origin === "manual") meta.append(tag("added by hand", "manual"));
+    else meta.append(tag("from a questionnaire"));
+    if (!entry.stands) meta.append(tag("replaced", "replaced"));
+
+    // "Approved by" is only true of an approval. The same field carries who
+    // typed an entry in by hand, and calling that an approval would claim a
+    // review that never happened.
+    const who = entry.origin === "approved" ? "approved by " : "added by ";
+    const where = document.createElement("span");
+    where.textContent = [
+      entry.from_file,
+      entry.approved_by ? who + entry.approved_by : "",
+      when(entry.approved_on),
+    ].filter(Boolean).join(" · ");
+    meta.append(where);
+
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+    meta.append(spacer);
+
+    if (!entry.stands) {
+      const restore = document.createElement("button");
+      restore.className = "quiet";
+      restore.textContent = "Put back in use";
+      restore.onclick = () => act(restore, () => api("/api/memory/" + encodeURIComponent(entry.entry_id) + "/restore", { method: "POST" }));
+      meta.append(restore);
+    }
+
+    const edit = document.createElement("button");
+    edit.className = "quiet";
+    edit.textContent = "Edit";
+    edit.onclick = () => openEditor(card, entry);
+    meta.append(edit);
+
+    const remove = document.createElement("button");
+    remove.className = "quiet danger";
+    remove.textContent = "Forget";
+    remove.title = "Remove this answer from the memory entirely";
+    remove.onclick = () => {
+      if (!confirm("Forget this answer?\n\nIt stops being retrieved and cannot be recovered from here.")) return;
+      act(remove, () => api("/api/memory/" + encodeURIComponent(entry.entry_id), { method: "DELETE" }));
+    };
+    meta.append(remove);
+
+    card.append(question, answer, meta);
+    return card;
+  }
+
+  function openEditor(card, entry) {
+    if (card.querySelector(".editing")) return;
+    const box = document.createElement("div");
+    box.className = "editing";
+
+    const question = withDirection(document.createElement("input"), entry.question);
+    question.type = "text";
+    question.value = entry.question;
+
+    const answer = withDirection(document.createElement("textarea"), entry.answer);
+    answer.value = entry.answer;
+
+    const row = document.createElement("div");
+    const save = document.createElement("button");
+    save.textContent = "Save";
+    const cancel = document.createElement("button");
+    cancel.className = "ghost";
+    cancel.textContent = "Cancel";
+    cancel.style.marginLeft = "8px";
+    cancel.onclick = () => box.remove();
+    row.append(save, cancel);
+
+    const status = document.createElement("div");
+    status.className = "status";
+
+    save.onclick = async () => {
+      save.disabled = true;
+      try {
+        await api("/api/memory/" + encodeURIComponent(entry.entry_id), {
+          method: "PATCH",
+          body: JSON.stringify({ question: question.value, answer: answer.value }),
+        });
+        await reload();
+      } catch (error) {
+        say(status, error.message, "err");
+        save.disabled = false;
+      }
+    };
+
+    box.append(question, answer, row, status);
+    card.append(box);
+    question.focus();
+  }
+
+  async function act(button, work) {
+    button.disabled = true;
+    const card = button.closest(".entry, .conflict");
+    const existing = card && card.querySelector(":scope > .status.err");
+    if (existing) existing.remove();
+    try {
+      await work();
+      await reload();
+    } catch (error) {
+      // Beside the thing that failed. The status line at the top of the list is
+      // where a message about the list belongs, and a reader who clicked
+      // "Forget" on the fortieth card never sees it: the card stays, nothing
+      // says why, and the two together read as a button that does nothing.
+      const where = card || $("entries");
+      const note = document.createElement("div");
+      note.className = "status err";
+      note.style.marginTop = "9px";
+      note.textContent = error.message;
+      where.append(note);
+      say($("listStatus"), error.message, "err");
+      button.disabled = false;
+    }
+  }
+
+  // --- disagreements -------------------------------------------------------
+
+  function side(entry, other, label, resolution) {
+    const box = document.createElement("div");
+    box.className = "side";
+
+    const question = withDirection(document.createElement("p"), entry.question);
+    question.className = "q";
+    question.textContent = entry.question;
+
+    const answer = withDirection(document.createElement("p"), entry.answer);
+    answer.className = "a";
+    answer.textContent = entry.answer;
+
+    const from = document.createElement("p");
+    from.className = "from";
+    from.textContent = [entry.from_file, entry.approved_by, when(entry.approved_on)]
+      .filter(Boolean).join(" · ") || "no date recorded";
+
+    const keep = document.createElement("button");
+    keep.className = "ghost";
+    keep.textContent = label;
+    keep.onclick = () => act(keep, () => api("/api/memory/conflicts/resolve", {
+      method: "POST",
+      body: JSON.stringify({ entry_id: entry.entry_id, other_id: other.entry_id, resolution }),
+    }));
+
+    box.append(question, answer, from, keep);
+    return box;
+  }
+
+  function conflictCard(pair) {
+    const card = document.createElement("div");
+    card.className = "conflict";
+
+    const why = document.createElement("p");
+    why.className = "why";
+    why.textContent = pair.because || "These two answers disagree.";
+
+    const sides = document.createElement("div");
+    sides.className = "sides";
+    sides.append(
+      side(pair.entry, pair.other, "This one is our position", "keep_this"),
+      side(pair.other, pair.entry, "This one is our position", "keep_this"),
+    );
+
+    const neither = document.createElement("button");
+    neither.className = "quiet";
+    neither.style.marginTop = "10px";
+    neither.textContent = "They are not the same question";
+    neither.onclick = () => act(neither, () => api("/api/memory/conflicts/resolve", {
+      method: "POST",
+      body: JSON.stringify({
+        entry_id: pair.entry.entry_id, other_id: pair.other.entry_id, resolution: "keep_both",
+      }),
+    }));
+
+    card.append(why, sides, neither);
+    return card;
+  }
+
+  // --- loading -------------------------------------------------------------
+
+  function filters() {
+    const params = new URLSearchParams();
+    if ($("search").value.trim()) params.set("query", $("search").value.trim());
+    if ($("standing").value) params.set("standing", $("standing").value);
+    if ($("origin").value) params.set("origin", $("origin").value);
+    params.set("limit", String(PAGE));
+    params.set("offset", String(offset));
+    return params;
+  }
+
+  async function loadEntries(append) {
+    say($("listStatus"), "Loading…");
+    try {
+      const body = await api("/api/memory?" + filters().toString());
+      total = body.total;
+      drawCounts(body.stats);
+      const cards = body.entries.map(entryCard);
+      if (append) $("entries").append(...cards);
+      else $("entries").replaceChildren(...cards);
+
+      if (!$("entries").children.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = total === 0 && !$("search").value.trim()
+          ? "Nothing remembered yet. Import a questionnaire you have already filled in, or approve an answer on a card."
+          : "Nothing matches that.";
+        $("entries").replaceChildren(empty);
+      }
+
+      const shown = $("entries").querySelectorAll(".entry").length;
+      $("more").hidden = shown >= total;
+      say($("listStatus"), total ? "Showing " + shown + " of " + total : "");
+    } catch (error) {
+      say($("listStatus"), error.message, "err");
+    }
+  }
+
+  async function loadConflicts() {
+    try {
+      const body = await api("/api/memory/conflicts");
+      const pairs = body.conflicts || [];
+      $("conflictsPanel").hidden = pairs.length === 0;
+      $("conflicts").replaceChildren(...pairs.map(conflictCard));
+    } catch (error) {
+      $("conflictsPanel").hidden = true;
+    }
+  }
+
+  async function reload() {
+    offset = 0;
+    await Promise.all([loadEntries(false), loadConflicts()]);
+  }
+
+  // --- events --------------------------------------------------------------
+
+  let typing = null;
+  $("search").addEventListener("input", () => {
+    clearTimeout(typing);
+    typing = setTimeout(reload, 200);
+  });
+  $("standing").addEventListener("change", reload);
+  $("origin").addEventListener("change", reload);
+
+  $("more").addEventListener("click", () => {
+    offset += PAGE;
+    loadEntries(true);
+  });
+
+  $("scan").addEventListener("click", async () => {
+    const button = $("scan");
+    button.disabled = true;
+    say($("listStatus"), "Comparing what is new against what we already remember…");
+    try {
+      const body = await api("/api/memory/scan", { method: "POST" });
+      const found = body.found || [];
+      const left = (body.stats && body.stats.unscanned) || 0;
+      await reload();
+      const said = found.length
+        ? found.filter((f) => f.kind === "conflict").length + " disagreement(s) and " +
+          found.filter((f) => f.kind !== "conflict").length + " replaced answer(s) found."
+        : "Nothing new found.";
+      say($("listStatus"), left ? said + " " + left + " still to compare — press again." : said, "ok");
+    } catch (error) {
+      say($("listStatus"), error.message, "err");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $("add").addEventListener("click", async () => {
+    const question = $("newQuestion").value.trim();
+    const answer = $("newAnswer").value.trim();
+    if (!question || !answer) {
+      say($("addStatus"), "An entry needs both the question and the answer.", "err");
+      return;
+    }
+    $("add").disabled = true;
+    try {
+      await api("/api/memory", {
+        method: "POST",
+        body: JSON.stringify({ question, answer }),
+      });
+      $("newQuestion").value = "";
+      $("newAnswer").value = "";
+      say($("addStatus"), "Remembered.", "ok");
+      await reload();
+    } catch (error) {
+      say($("addStatus"), error.message, "err");
+    } finally {
+      $("add").disabled = false;
+    }
+  });
+
+  reload();
+})();
+</script>
+</body>
+</html>

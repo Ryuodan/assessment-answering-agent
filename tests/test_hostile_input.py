@@ -172,10 +172,19 @@ def test_a_broken_dependency_returns_a_clean_500(target, url):
 
 def test_search_still_answers_when_the_embedding_host_is_down():
     """Meaning-based search needs a remote host; literal search does not. Losing
-    one must not take the other with it."""
+    one must not take the other with it.
+
+    The corpus is stubbed as non-empty. Search skips a type it knows has nothing
+    in it, so against the suite's throwaway collection this would report a
+    healthy search that never happened -- which is what it did while the tests
+    still read the developer's own Chroma directory.
+    """
     from unittest.mock import patch
 
-    with patch("src.knowledge.KnowledgeStore.search", side_effect=TimeoutError("no answer")):
+    with (
+        patch("src.knowledge.KnowledgeStore.search", side_effect=TimeoutError("no answer")),
+        patch("src.knowledge.KnowledgeStore.counts_by_type", return_value={"guideline": 3}),
+    ):
         with TestClient(app) as client:
             response = client.get("/api/search", params={"q": "policy", "mode": "hybrid"})
 

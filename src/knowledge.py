@@ -21,6 +21,7 @@ from functools import lru_cache
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
+from src import answer_memory
 from src.config import settings
 from src.embeddings import get_embeddings
 from src.lexical import LexicalIndex, parse_search_query, reciprocal_rank_fusion
@@ -123,7 +124,13 @@ class KnowledgeStore:
         return self._replace_source(source_name, documents)
 
     def add_prior_answers(self, source_name: str, pairs: list[ExtractedQAPair], content_hash: str = "") -> int:
-        """Index question/answer pairs from a completed assessment."""
+        """Index question/answer pairs from a completed assessment.
+
+        Each pair carries the id it is known by in the answer memory, which is
+        built from the file name and the pair's position — the same string the
+        Chroma document gets — so that a retrieved answer can be traced back to
+        the row recording who approved it and what it replaced.
+        """
         documents = [
             Document(
                 page_content=f"Q: {pair.question}\nA: {pair.answer}",
@@ -132,6 +139,7 @@ class KnowledgeStore:
                     "source_name": source_name,
                     "content_hash": content_hash,
                     "chunk": index,
+                    "entry_id": f"{source_name}::{index}",
                     "question": pair.question,
                     "answer": pair.answer,
                     "section": pair.section,
@@ -140,6 +148,42 @@ class KnowledgeStore:
             for index, pair in enumerate(pairs)
         ]
         return self._replace_source(source_name, documents)
+
+    def add_entry(self, entry_id: str, document: Document) -> None:
+        """Index one answer-memory entry under its own id.
+
+        Separate from `add_prior_answers` because that one replaces a whole
+        file: an approved answer arrives alone and must not clear the source it
+        joins.
+        """
+        self._reset_caches()
+        self._store.add_documents([document], ids=[entry_id])
+
+    def remove_entry(self, entry_id: str) -> None:
+        """Take one entry back out of the index.
+
+        By id *and* by metadata, because for most of the corpus those are not
+        the same string. An entry this module indexed is stored under its own
+        id; the six hundred and ninety-eight adopted from the bulk import are
+        stored under `<source>::<chunk>` and carry the entry id in their
+        metadata. Deleting only by id left those retrievable after somebody had
+        forgotten them -- and re-adopted, row and all, the next time the process
+        started and read the index.
+        """
+        self._reset_caches()
+        self._store.delete(ids=[entry_id])
+        self._store.delete(where={"entry_id": entry_id})
+
+    def prior_answer_metadata(self) -> list[dict]:
+        """The metadata of every indexed prior answer.
+
+        For adopting answers indexed before the memory kept rows of its own;
+        everything those rows need is already here.
+        """
+        found = self._store.get(
+            where={"source_type": SourceType.PRIOR_ANSWER.value}, include=["metadatas"]
+        )
+        return list(found.get("metadatas") or [])
 
     def source_with_hash(self, content_hash: str, *, excluding: str = "") -> str | None:
         """Name of an already-indexed file with identical content, if any.
@@ -283,7 +327,34 @@ class KnowledgeStore:
             parts=int(meta.get("parts", 1)),
             questionnaire=meta.get("questionnaire", ""),
             answered_date=meta.get("answered_date", ""),
+            entry_id=(
+                answer_memory.entry_id_of(meta)
+                if source_type is SourceType.PRIOR_ANSWER
+                else ""
+            ),
         )
+
+    def _still_standing(self, evidence: list[Evidence]) -> list[Evidence]:
+        """Drop prior answers a later one has replaced.
+
+        Only on the answering path. A person searching the corpus should still
+        find a superseded answer -- "what did we tell them in 2023" is a real
+        question, and the memory page is built to show exactly that -- but no
+        answer being written today should be built on a position we have since
+        changed.
+
+        The vector stays in the index rather than being deleted, so this filter
+        is the whole mechanism: cheap, reversible, and undone by restoring the
+        entry rather than by re-embedding it.
+        """
+        try:
+            replaced = answer_memory.superseded_ids()
+        except Exception:  # noqa: BLE001 - retrieval must not fail on bookkeeping
+            logger.exception("Could not read which memory entries were superseded")
+            return evidence
+        if not replaced:
+            return evidence
+        return [item for item in evidence if item.entry_id not in replaced]
 
     async def search(
         self, query: str, source_type: SourceType, k: int, *, expand: bool = True
@@ -356,6 +427,8 @@ class KnowledgeStore:
                 self._evidence(document, to_relevance(distance), source_type)
                 for document, distance in hits
             ]
+            if source_type is SourceType.PRIOR_ANSWER:
+                evidence = self._still_standing(evidence)
             if settings.hybrid_search:
                 evidence = self._fuse_with_lexical(query, evidence, source_type, k)
             evidence = evidence[:k]

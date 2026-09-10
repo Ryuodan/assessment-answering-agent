@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 
-from src.models import Evidence
+from src.models import Evidence, SourceType
 
 # "§7.2.1", "§ 7.2", and the same with an en-dash range: "§5.1–5.6".
 _CLAUSE_MENTION = re.compile(r"\u00a7\s*(\d+(?:\.\d+){0,7})(?:\s*[\u2013\u2014-]\s*(\d+(?:\.\d+){0,7}))?")
@@ -196,11 +196,39 @@ def assess(
         reasons.append("holds only part of a split source; the set may be incomplete")
         confidence = min(confidence, incomplete_cap)
 
+    if rests_on_memory_alone(cited):
+        reasons.append(
+            "nothing in our documents backs this — it rests only on what we told "
+            "somebody before"
+        )
+
     if not grounded:
         reasons.append("the reviewer did not find the answer grounded")
 
     needs_review = bool(reasons) or confidence <= review_threshold
     return confidence, needs_review, reasons
+
+
+def rests_on_memory_alone(cited: list[Evidence]) -> bool:
+    """Whether every source behind this answer is a previous answer of ours.
+
+    A previous answer is the best evidence of *how we answer* and no evidence at
+    all of what is true: it is our own earlier claim, and an answer built only
+    from it says "we said this before" while looking exactly like an answer
+    built from a policy. Measured over nineteen real questions it happens to one
+    of them -- rare enough that flagging it costs a reviewer almost nothing, and
+    the one it caught was "in which jurisdiction will you store the Personal
+    Data", answered at 0.90 confidence and on its way into a customer's file
+    with no document of ours behind it.
+
+    Deliberately not a confidence penalty. The score measures how well the
+    answer is supported by what it was given, and it was well supported -- by
+    the wrong kind of source. That is a fact about provenance, and provenance is
+    what a reviewer is for.
+    """
+    return bool(cited) and all(
+        item.source_type is SourceType.PRIOR_ANSWER for item in cited
+    )
 
 
 # ---------------------------------------------------------------------------

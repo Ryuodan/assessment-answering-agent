@@ -1545,12 +1545,161 @@ so, scores at or below 0.3, and is held back for a person -- because a wrong No
 understates the organisation to a customer, gets quoted back in the next
 assessment, and is far harder to withdraw than a blank.
 
+**An answer with nothing of ours behind it is held too.** A previous answer is
+the best evidence of *how we answer* and no evidence at all of what is true --
+it is our own earlier claim -- so an answer whose every source is a remembered
+one is flagged: "nothing in our documents backs this". Measured over nineteen
+real questions it catches one, and the one it caught was *"In which
+jurisdiction(s) will you store the Personal Data?"*, answered at 0.90 confidence
+from two remembered answers and no document, on its way into a customer's file.
+The score is left alone -- the answer is well supported by what it was given,
+and which *kind* of source that was is a question about provenance rather than
+about the writing.
+
+Retrieval is not what causes this, and a floor on policy chunks would not fix
+it: that question reached the drafter with thirty-four policy chunks in the
+prompt. It cited none of them, because none of them say where we store data.
+
 The same rule governs the organisation profile. An empty certifications list
 means *unknown*, never *none* -- a distinction learned expensively, since the
 first version read it as "none", instructed the drafter to say so plainly, and
 produced "No. T2 does not hold any information-security certifications" at 0.85
 confidence while the team's own answers in fourteen real questionnaires said ISO
 27001 and SOC 2.
+
+## The answer memory
+
+What this organisation has already told an assessor is the single most valuable
+thing in the system. Measured on the held-out half of the team's own
+questionnaires, having it at all is worth about **seventeen points of agreement**
+with the security team — more than any prompt, any retrieval setting and any
+model choice in this repository. It earns that by being what the team really
+wrote, so everything here exists to keep it true.
+
+**A previous answer is worked from, not copied, and the policies still decide.**
+The team wrote those answers *from* these policies in the first place, so the
+two agreeing is the ordinary case and the policies remain the authority when
+they do not. The drafter is told to read what we said before, check it against
+our policy, answer as we answered where they agree — and where they conflict, to
+follow the policy and report the disagreement.
+
+That report is a **flag, never prose**. `DraftedAnswer.contradicts_memory` is a
+field of its own, and `finalize` turns it into a review reason, which holds the
+answer back and shows it on the card beside the answer. It cannot reach the
+spreadsheet, because the only string this system writes into a cell is `answer`
+— and a note about our own inconsistency is not something to send a customer.
+
+### Only what a person wrote goes in
+
+Approving an answer does two things, and they are separate: it releases the
+answer into the file, and — **only if somebody wrote it** — it teaches the
+memory. A draft the model produced and a reviewer waved through carries no
+information the system did not already have. Remembering it feeds the drafter
+its own output: the next questionnaire is answered from a "previous answer" that
+was itself a draft, cited as the organisation's own words, at a confidence the
+loop manufactured rather than earned. Do that a few times and the memory stops
+being a record of what the team says and becomes a record of what the model
+said, which is the one thing retrieval cannot correct for.
+
+So the mark that matters is `AnsweredQuestion.by_hand`, set when a person types
+an answer and untouched by approval. `remembered` comes back empty when nothing
+was learned; the approve button says which of the two effects apply before it is
+pressed, and the card carries an **in the answer memory** tag afterwards, which
+survives a reload because the batch reports it. Editing one word is enough — the
+point is that a person put their own words there, not how many.
+
+**What is remembered is what went into the cell** — `written_text`, not `answer`.
+A questionnaire set to brief is filled in with the brief text, and somebody who
+shortens an answer by hand has written *that*: storing `answer` regardless put
+the untouched full draft into the memory under a reviewer's name, which is the
+model's own words laundered through an approval and exactly what this gate
+exists to prevent.
+
+### Supersession and contradiction are different things
+
+A later answer that says something different, or something more — an audit that
+has since happened, a certificate since issued — **supersedes** the earlier one.
+That is not a decision anybody needs to be asked about, so it is applied: the
+earlier entry stops being retrieved and is kept, marked, and still visible. It
+was true when it was written, an assessor may well ask what we said last year,
+and a memory that quietly rewrites its own history cannot be audited.
+
+Two answers that disagree with **nothing to say which is current** are a
+different matter. That is not a versioning problem; it is two people believing
+different things, and no rule here can pick a winner. It is raised for a person
+on the memory page, with both answers side by side and the questionnaire each
+was given in.
+
+The ordering key is *approval* time, not upload time: an answer becomes ours
+when somebody accepts it, not when a file lands on a disk. The imported
+questionnaires record no date at all, so they carry none — they sort equal, and
+the first properly dated answer supersedes any of them it matches. That is the
+right outcome and worth saying out loud.
+
+### Similarity proposes, a model confirms
+
+Nothing is marked on a distance. Two questions about annual drills embed at
+0.793 and are different controls; two about sub-processor DPAs embed at 0.808
+and are one question, and no threshold separates those. So the sweep filters
+three times, cheapest first: the index proposes the neighbourhood, the questions
+alone are re-embedded and compared at `PROPOSE = 0.80`, and a model is asked
+which of the survivors actually ask the same thing.
+
+The re-scoring matters more than it sounds. The index embeds `Q: … A: …` as one
+document, so a hit's score is a question-*and-answer* similarity: two identical
+questions with different answers come back at 0.76. The threshold was calibrated
+question against question — 91% of pairs above 0.90 were reusable, 54% between
+0.80 and 0.85, 21% below 0.75 — and that is the comparison the sweep makes.
+About 3% of the corpus has a cross-questionnaire neighbour that close, so the
+model is asked about roughly one entry in thirty rather than all of them.
+
+### When it runs, and where the entries come from
+
+At ingest, never at answer time. By the time a questionnaire is being answered
+it is too late to be useful — whichever entry retrieval ranked first has already
+gone into a customer's file — and the person filling in the form is not the
+person who can say which of two answers is the organisation's position. The
+sweep runs as a background task after an upload, an approval or a correction,
+inline at the end of a `cli answers` import, and on demand from the page — where
+a press compares fifty and says how many are left, because a button that returns
+in twenty seconds gets pressed again and one that hangs for four minutes gets
+reloaded.
+
+Three things feed it:
+
+* **Import.** A previously answered questionnaire, extracted as question/answer
+  pairs. Undated and unattributed, because the files record neither.
+* **Approval.** A reviewer read an answer this system drafted, put their name to
+  it, and it went into a customer's file. Approving therefore *teaches*: it is
+  where the memory grows once the imported questionnaires run out, and
+  withdrawing an approval takes the entry back out, because an answer somebody
+  withdrew should not be quoted back at them next month.
+* **By hand,** on the memory page, for something we say that no questionnaire in
+  the corpus happens to ask.
+
+### The page
+
+`/memory` is the third page, beside the assistant and the workbench, because it
+is a different job done on a different day — usually the day somebody disagrees
+with an answer. It lists everything the organisation has said, newest first,
+searchable and filterable by whether an entry is still in use and where it came
+from; each entry can be corrected, retired, restored or forgotten, and the
+disagreements sit at the top where they are the only thing on the page that is
+somebody's decision rather than a list to read.
+
+It is the team's, not one person's — like the knowledge base, and for the same
+reason: what we have said before is a fact about the organisation, not a private
+note. Who imported, approved or corrected each entry is recorded on it, so a
+shared record is still an attributable one.
+
+```bash
+python -m scripts.build_answer_memory --sync-only   # what is there
+python -m scripts.build_answer_memory --rescan      # compare all of it again
+```
+
+The historical import is adopted already-compared. Seven hundred model calls is
+not something a page should start because somebody opened it; running that sweep
+is a decision, and the script is how it is taken.
 
 ## Our policy, or a law we are subject to
 
@@ -2311,6 +2460,9 @@ src/
   chunking.py     structure-aware chunking with clause ranges
   extraction.py   text -> questions, text -> Q/A pairs
   knowledge.py    Chroma store for guidelines and prior answers
+  memory.py       what two remembered answers mean to each other
+  answer_memory.py  the record of those answers: rows, vectors, the sweep
+  organisation.py who this is answering on behalf of
   verification.py mechanical checks, and why a score came out low
   formatting.py   the slice of Markdown the drafter actually writes
   export_pdf.py   PDF export, incl. Arabic shaping and line breaking
@@ -2343,6 +2495,7 @@ src/
   static/
     index.html    the workbench
     chat.html     the assistant
+    memory.html   the answer memory, and the disagreements in it
     cards.js      the answer card, shared by both
     cards.css     the design tokens and the card's styles, likewise
 eval/             golden-set runner, LLM judge and scoring report
@@ -2381,3 +2534,12 @@ eval/             golden-set runner, LLM judge and scoring report
   skipped, but two policies that disagree — a four-tier classification scheme in
   one and a five-tier scheme in another — are both retrieved and both cited. The
   agent reports what it found; reconciling the corpus is a human job.
+- **The answer memory is de-conflicted, and only that far.** Two remembered
+  answers that open with opposite verdicts are found and raised for a person;
+  two that differ in a number, a period or a scope are not. The sweep compares
+  verdicts, because widening it to "these two say different things" would put
+  every ordinary rewording in front of a reviewer.
+- **One process owns the Chroma directory.** The local client is not built to
+  share a persist directory: a second process reading while the first writes
+  fails with `Error finding id`. Run one uvicorn worker, and do not run the
+  ingest scripts against a directory a live server is writing to.

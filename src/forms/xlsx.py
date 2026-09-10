@@ -129,6 +129,38 @@ def _owner(heading: str) -> str | None:
     return match.group(1).strip(" .:()") if match else None
 
 
+_IMPERATIVE = re.compile(
+    r"^\s*(list|provide|attach|specify|describe|state|upload|share|include|submit|"
+    r"enter|indicate|confirm the|please\b|if\s+(yes|no|applicable)\b|see\s+attach|"
+    r"refer\s+to\b|n/?a\s+if|mandatory\b)",
+    re.I,
+)
+
+
+def _instructional(sheet: Sheet, column: str, rows: list[int]) -> float:
+    """How much of a column tells somebody what to supply rather than answering.
+
+    The author of a questionnaire fills this column in before sending it, so it
+    is complete on every row while the real answer column is empty -- and any
+    rule that prefers the fuller column prefers the wrong one.
+    """
+    values = [
+        text.strip() for row in rows
+        if (text := sheet.value(row, column).strip())
+    ]
+    if len(values) < 3:
+        return 0.0
+    return sum(1 for value in values if _IMPERATIVE.match(value)) / len(values)
+
+
+def _prose_share(sheet: Sheet, column: str, rows: list[int]) -> float:
+    """How much of a column reads like a written answer rather than a token."""
+    values = [text for row in rows if (text := sheet.value(row, column).strip())]
+    if not values:
+        return 0.0
+    return sum(1 for value in values if len(value.split()) >= 4) / len(values)
+
+
 def _role_for(heading: str, *, has_dropdown: bool) -> tuple[Role, str]:
     """A column's role, and the evidence for it.
 
@@ -546,16 +578,43 @@ def _resolve_roles(
     # usually one whose answer column was worded as a request for evidence.
     # Promote it, and say that the promotion happened.
     if not any(role is Role.ANSWER for role, _ in resolved.values()):
-        evidence = [c for c, (role, _) in resolved.items() if role is Role.EVIDENCE]
-        if evidence:
-            column = evidence[0]
-            resolved[column] = (Role.ANSWER, "the only free-text column, so read as the answer")
+        body = [r for r in sheet.rows if r > header_row]
+        # Anything that could hold prose, not only the evidence columns: the
+        # answer is sometimes under a heading like "Document Reference", which
+        # every heading rule reads as context.
+        candidates = [
+            column for column, (role, _) in resolved.items()
+            if role in (Role.EVIDENCE, Role.CONTEXT, Role.IGNORE)
+            and column != question_column
+            and _prose_share(sheet, column, body) > 0.2
+        ] or [c for c, (role, _) in resolved.items() if role is Role.EVIDENCE]
+
+        if candidates:
+            # Least instructional first, then most prose, then leftmost. A
+            # column of "Provide screenshot or policy doc" is the author
+            # talking, and promoting it makes every row read as answered.
+            column = min(
+                candidates,
+                key=lambda c: (
+                    round(_instructional(sheet, c, body), 2),
+                    -round(_prose_share(sheet, c, body), 2),
+                    column_number(c),
+                ),
+            )
+            instructive = _instructional(sheet, column, body)
+            resolved[column] = (Role.ANSWER, "the free-text column that holds answers")
+            because = (
+                f"{headings.get(column, '')!r} is not headed as an answer, but it is the "
+                "column here that holds written answers"
+            )
+            if instructive > 0.3:
+                because += (
+                    f" -- though {instructive:.0%} of it reads as instructions to the "
+                    "person filling the form, so this is worth checking"
+                )
             findings.append(Finding(
-                subject=f"column {column}",
-                verdict="answer",
-                because=f"{headings.get(column, '')!r} asks for evidence, but it is the only free-text "
-                        "column here, and in the completed examples it holds the answer",
-                confident=False,
+                subject=f"column {column}", verdict="answer",
+                because=because, confident=False,
             ))
 
     for column, (role, why) in sorted(resolved.items(), key=lambda item: column_number(item[0])):

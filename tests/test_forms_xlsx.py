@@ -498,3 +498,74 @@ def test_a_sentence_in_the_first_row_is_data_and_not_a_label(tmp_path):
         layout = _find_headless_layout(workbook["S"])
     assert layout is not None and layout.question_column == "A", \
         "a question beginning with a recognised word is still a question"
+
+
+# --- the instruction column -------------------------------------------------
+#
+# A questionnaire's author fills one column in before sending it: "List accounts
+# if applicable", "Provide screenshot or policy doc". It is the only column
+# guaranteed to be complete on every row, which is exactly what made it look
+# like the answer column to a rule that counted cells -- and promoting it made
+# every question read as already answered, so the overwrite guard then protected
+# the author's instructions from being replaced by our answer.
+
+
+def test_the_instruction_column_is_not_promoted_to_the_answer(tmp_path):
+    """The shape of `Vendors annual Review 1.xlsx`: a verdict dropdown, a column
+    of instructions, and the real prose one column further right under a heading
+    that reads as context."""
+    path = shapes.build(tmp_path / "instructions.xlsx", [shapes.SheetSpec("Review", {
+        "A1": "#", "B1": "Question", "C1": "Response", "D1": "Details / Evidence",
+        "E1": "Document Reference",
+        "A2": "1", "B2": "Are user accounts reviewed periodically?",
+        "C2": "Yes", "D2": "List accounts if applicable",
+        "E2": "T2 reviews user accounts quarterly and records the outcome.",
+        "A3": "2", "B3": "Is MFA enforced?",
+        "C3": "Yes", "D3": "Provide screenshot or policy doc",
+        "E3": "T2 enforces multi-factor authentication on all remote access.",
+        "A4": "3", "B4": "Are privileged accounts separated?",
+        "C4": "Yes", "D4": "Provide offboarding evidence",
+        "E4": "Administrative accounts are separate from day-to-day accounts.",
+    }, validations=(("C2:C4", '"Yes,No,N/A"'),))])
+
+    form = forms.detect(path)
+    answers = [q.existing_answer for q in form.questions]
+    assert all("T2" in a or "Administrative" in a for a in answers), answers
+    assert not any("Provide screenshot" in a or "List accounts" in a for a in answers), (
+        "the author's instructions were read as our answers"
+    )
+
+
+def test_an_evidence_column_is_still_promoted_when_it_holds_the_answers(tmp_path):
+    """The promotion exists for a reason and must survive: plenty of forms word
+    their only free-text column as a request for evidence and then answer in
+    it."""
+    path = shapes.build(tmp_path / "evidence.xlsx", [shapes.SheetSpec("Q", {
+        "A1": "#", "B1": "Question", "C1": "Compliance", "D1": "Evidence",
+        "A2": "1", "B2": "Do you encrypt backups?",
+        "C2": "Yes", "D2": "Backups are encrypted with AES-256 at rest and in transit.",
+        "A3": "2", "B3": "Are logs retained?",
+        "C3": "Yes", "D3": "Security event logs are retained for twelve months.",
+        "A4": "3", "B4": "Is access reviewed?",
+        "C4": "Yes", "D4": "Access rights are reviewed every quarter by the owner.",
+    }, validations=(("C2:C4", '"Yes,No"'),))])
+
+    form = forms.detect(path)
+    assert all("encrypt" in q.existing_answer or "retained" in q.existing_answer
+               or "reviewed" in q.existing_answer for q in form.questions)
+
+
+def test_the_promotion_says_when_the_column_it_chose_looks_instructional(tmp_path):
+    """Where there is no better candidate the column is still used -- an answer
+    the person can correct beats no answer -- but the finding says why it is
+    worth a look."""
+    path = shapes.build(tmp_path / "only.xlsx", [shapes.SheetSpec("Q", {
+        "A1": "#", "B1": "Question", "C1": "Compliance", "D1": "Evidence",
+        "A2": "1", "B2": "Do you encrypt backups?", "C2": "Yes", "D2": "Provide the policy",
+        "A3": "2", "B3": "Are logs retained?", "C3": "Yes", "D3": "Provide the retention schedule",
+        "A4": "3", "B4": "Is access reviewed?", "C4": "Yes", "D4": "Provide the review record",
+    }, validations=(("C2:C4", '"Yes,No"'),))])
+
+    form = forms.detect(path)
+    said = " ".join(f.because for part in form.parts for f in part.findings)
+    assert "instructions" in said, said[:300]
