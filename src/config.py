@@ -54,6 +54,19 @@ class Settings(BaseSettings):
     langsmith_api_key: str = ""
     langsmith_project: str = "Cyber-Assessment-Answering-Agent"
 
+    # --- Tracing (Phoenix, on this machine) --------------------------------
+    # The same traces, kept locally. Phoenix is an OpenTelemetry collector with
+    # a UI that understands LLM spans, and it runs wherever this does, so the
+    # data-residency objection to LangSmith does not apply: nothing crosses a
+    # border, or leaves the host at all.
+    #
+    # Still off by default, because a trace is a copy of the policy text and
+    # the customer's questionnaire in a second store with no access control in
+    # front of it. Local is not the same as harmless -- see the README.
+    phoenix_tracing: bool = False
+    phoenix_endpoint: str = "http://localhost:6006/v1/traces"
+    phoenix_project: str = "assessment-answer"
+
     # --- Embeddings (BGE-M3 behind an OpenAI-compatible endpoint) ----------
     embedding_base_url: str = "https://ds.t2.sa/text_embed/v1"
     embedding_model: str = "bge-m3"
@@ -385,7 +398,58 @@ def configure_tracing() -> bool:
     return True
 
 
+def start_phoenix_tracing() -> bool:
+    """Send OpenTelemetry spans to a Phoenix collector on this machine.
+
+    A different mechanism from `configure_tracing`, not a second destination
+    for the same one. LangSmith is read out of the environment by LangChain
+    itself, so switching it on is a matter of publishing variables; Phoenix is
+    OpenTelemetry, and something in this process has to build a tracer provider
+    and patch LangChain to emit spans into it. That is what this does, and it
+    runs at import for the same reason the other one does -- the API, the CLI,
+    the eval harness and the scripts all get it without each remembering to ask.
+
+    The imports are inside the function and the failure is a warning rather
+    than a crash: the packages are an optional extra, and an application that
+    refuses to start because its *observability* is missing has the priority
+    backwards. `pip install -e ".[phoenix]"` installs them.
+
+    Nothing is started here. Phoenix itself -- the collector and its UI -- is a
+    separate process that the operator runs; if it is not listening, the
+    exporter drops spans in a background thread and says so, and answering
+    carries on.
+    """
+    if not settings.phoenix_tracing:
+        return False
+
+    logger = logging.getLogger(__name__)
+    try:
+        from openinference.instrumentation.langchain import LangChainInstrumentor
+        from phoenix.otel import register
+    except ImportError as error:
+        logger.warning(
+            "PHOENIX_TRACING is on but the tracing packages are not installed "
+            "(%s). Install them with: pip install -e \".[phoenix]\"", error,
+        )
+        return False
+
+    provider = register(
+        endpoint=settings.phoenix_endpoint,
+        project_name=settings.phoenix_project,
+        # One span at a time blocks the caller on every LLM call; a batch
+        # processor hands them to a background thread, which is what a server
+        # answering somebody else's questionnaire needs.
+        batch=True,
+        # `register` prints its configuration to stdout. This process logs.
+        verbose=False,
+        set_global_tracer_provider=True,
+    )
+    LangChainInstrumentor().instrument(tracer_provider=provider)
+    return True
+
+
 _TRACING_ON = configure_tracing()
+_PHOENIX_ON = start_phoenix_tracing()
 
 
 def configure_logging() -> None:
@@ -404,4 +468,11 @@ def configure_logging() -> None:
             "policy text retrieved to answer each question, are sent there. "
             "LangSmith has no Saudi region, so this leaves the country.",
             settings.langsmith_project, settings.langsmith_endpoint,
+        )
+    if _PHOENIX_ON:
+        logging.getLogger(__name__).info(
+            "Phoenix tracing is ON — project %r to %s. Traces stay on this "
+            "machine, and they carry the policy text and the questionnaire, so "
+            "Phoenix's own store is as sensitive as the corpus.",
+            settings.phoenix_project, settings.phoenix_endpoint,
         )

@@ -9,13 +9,23 @@ contract broke, not that a mock drifted from reality.
 
 from __future__ import annotations
 
-import pytest
+import os
 
-from src import answer_memory, credentials, store
-from src.chunking import chunk_document
-from src.config import settings
-from src.knowledge import KnowledgeStore
-from src.models import SourceType
+# Before `src.config` is imported, which is where tracing is switched on and,
+# for Phoenix, where LangChain is patched to emit spans. The fixture below can
+# unset LangSmith's variables after the fact because LangChain reads them per
+# call; instrumentation happens once, at import, and a developer with
+# `PHOENIX_TRACING=true` in their `.env` would otherwise have the whole suite
+# exporting fixtures to their collector.
+os.environ["PHOENIX_TRACING"] = "false"
+
+import pytest  # noqa: E402
+
+from src import answer_memory, credentials, store  # noqa: E402
+from src.chunking import chunk_document  # noqa: E402
+from src.config import settings  # noqa: E402
+from src.knowledge import KnowledgeStore  # noqa: E402
+from src.models import SourceType  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -92,10 +102,11 @@ def _no_tracing_in_tests():
     are the ones that would actually send, and they are exactly the ones whose
     traces would be least useful.
     """
-    import os
-
     saved = {name: os.environ.pop(name, None)
              for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2")}
+    # Phoenix is handled at the top of this file, before `src.config` is
+    # imported: by the time a fixture runs, its instrumentation would already
+    # have been installed.
     os.environ["LANGSMITH_TRACING"] = "false"
     os.environ["LANGCHAIN_TRACING_V2"] = "false"
     yield

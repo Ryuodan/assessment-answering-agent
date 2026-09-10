@@ -543,10 +543,15 @@ versa, because BGE-M3 embeds both into one space.
 
 ## Tracing
 
-Every LLM call, retrieval and graph step can be recorded to LangSmith. It is
-**off by default and should stay off until the data question is settled**,
-because switching it on is a decision about data residency rather than about
-observability.
+Every LLM call, retrieval and graph step can be recorded as a trace, to either
+of two places: **Phoenix on this machine**, or **LangSmith in the cloud**. Both
+are off by default. If you are here to watch the thing work, skip to
+[Phoenix](#the-same-traces-without-the-border-crossing-phoenix) — it is local,
+and the section below is the reason that matters.
+
+LangSmith is **off by default and should stay off until the data question is
+settled**, because switching it on is a decision about data residency rather
+than about observability.
 
 > **Tracing sends your policy text outside Saudi Arabia.**
 > A trace carries the prompt, and the prompt carries the policy chunks
@@ -607,6 +612,82 @@ Inside a run you get the graph as it executed — `plan → retrieve → rerank 
 draft → review → finalize`, the retry edge when the reviewer sends one back,
 and every `ChatGroq` call with its token counts, which is also how the token
 cost of a configuration change can be read off rather than estimated.
+
+### The same traces without the border crossing: Phoenix
+
+[Arize Phoenix](https://docs.arize.com/phoenix) is an OpenTelemetry collector
+with a UI that understands LLM spans, and it runs wherever you run it. That
+single fact answers the objection above: the traces never leave the machine, so
+there is no region to choose and no transfer to justify. It is the sensible
+default for developing against this corpus, and LangSmith is the one to think
+twice about.
+
+Two installs, deliberately separate — the collector is a server with its own
+database and does not belong in the dependency set of the application it
+watches:
+
+```bash
+pip install -e ".[phoenix]"    # this app: the exporter and the instrumentation
+pip install arize-phoenix      # the collector and its UI, ideally in its own venv
+phoenix serve                  # http://localhost:6006
+```
+
+`docker run -p 6006:6006 arizephoenix/phoenix:latest` does the same without the
+second environment. **The Phoenix server needs Python 3.12 or newer** — this
+application runs on 3.11, and the current release of the server fails at import
+there — so give it its own interpreter or use the image. The `[phoenix]` extra
+that goes into *this* venv is fine on 3.11.
+
+Then:
+
+```bash
+PHOENIX_TRACING=true
+PHOENIX_ENDPOINT=http://localhost:6006/v1/traces
+PHOENIX_PROJECT=assessment-answer
+```
+
+`config.start_phoenix_tracing()` is the bridge, and it is a different mechanism
+from the LangSmith one rather than a second destination for it. LangSmith is
+read out of the environment by LangChain itself, so switching it on is a matter
+of publishing variables; Phoenix is OpenTelemetry, and something in the process
+has to build a tracer provider and patch LangChain to emit spans into it. Like
+the other bridge it runs at import of `src.config`, so the API, the CLI, the
+eval harness and the scripts are all covered without each remembering to ask.
+
+The imports live inside the function and a missing package is a warning, not a
+crash: `PHOENIX_TRACING=true` without the extra installed is a plausible
+mistake, and an application that refuses to start because its *observability* is
+missing has the priority backwards. Same for the collector being down — the
+exporter drops the spans in a background thread and answering carries on.
+
+**What you get.** Everything the LangSmith naming above buys, because it is the
+same metadata: a two-question run produced 38 spans, root spans named
+`answer[1]` and `answer[2]`, the graph steps as their own spans (`plan`,
+`retrieve`, `rerank`, `draft`, `review`, `finalize`, `route_after_review`), six
+`ChatGroq` LLM spans carrying 35,221 tokens between them. The chat agent traces
+too, with its tool calls as `tool` spans — `answer_directly`, `open_questionnaire`
+and the rest.
+
+One addition earns its keep here. `trace_config` also puts the batch id in
+`metadata["session_id"]`, which is the name the OpenInference convention
+reserves for it, so Phoenix groups the hundred and eighty-three questions of one
+questionnaire into **one session** instead of a hundred and eighty-three
+unrelated traces. LangSmith reads `run_id` and ignores the other; Phoenix reads
+`session_id` and ignores the other; both are cheap.
+
+Retrieval shows up as the `retrieve` step with its evidence in the span, not as
+OpenInference `retriever` spans with one document each — the store is called
+directly rather than through a LangChain `Retriever`, so there is nothing for
+the instrumentation to hook. Phoenix's document-level relevance evals want the
+latter; if that becomes worth having, the place to emit them is
+`KnowledgeStore.search`.
+
+> **Local is not the same as harmless.** A trace holds the prompt, and the
+> prompt holds the policy text and the customer's questionnaire. Phoenix keeps
+> them in its own store — `PHOENIX_WORKING_DIR`, a SQLite file by default — with
+> no sign-in in front of it and none of this application's team scoping. Treat
+> that directory as another copy of the corpus: keep it off shared machines,
+> and delete it when you are done debugging.
 
 ## One embedding per query
 

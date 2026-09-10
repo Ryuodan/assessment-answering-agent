@@ -780,6 +780,31 @@ def _reply_from(state: dict) -> str:
     return ""
 
 
+def _trace_config(conversation: Conversation, recursion_limit: int) -> dict:
+    """Name and group one turn, for whoever is reading the traces.
+
+    The same argument as `graph.workflow.trace_config`, which this deliberately
+    mirrors: every turn of every conversation arrives called "LangGraph", and a
+    project of a few hundred of those cannot be navigated at all. Here the unit
+    is the conversation rather than the batch -- `session_id` is the id Phoenix
+    groups by, so a conversation reads as one thread of turns instead of five
+    unrelated traces.
+
+    No message text: the prompts already carry it, and a trace does not need
+    the customer's questionnaire twice.
+    """
+    return {
+        "recursion_limit": recursion_limit,
+        "run_name": f"assistant[{conversation.id}]",
+        "tags": ["assistant"],
+        "metadata": {
+            "conversation_id": conversation.id,
+            "session_id": conversation.id,
+            "batch_id": conversation.batch_id or "",
+        },
+    }
+
+
 async def say(
     user: User,
     conversation: Conversation,
@@ -830,7 +855,8 @@ async def say(
     final: dict = {}
     try:
         async for chunk in _agent(_tools(user, state)).astream(
-            {"messages": history}, {"recursion_limit": MAX_STEPS}, stream_mode="values",
+            {"messages": history}, _trace_config(conversation, MAX_STEPS),
+            stream_mode="values",
         ):
             final = chunk
     except Exception as failed:

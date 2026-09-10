@@ -61,21 +61,31 @@ def trace_config(question: Question, language: Language, run_id: str = "") -> di
 
     Only metadata: no answer text or document content is added here beyond what
     the prompts already carry.
+
+    `session_id` is the same value as `run_id` under the name the OpenInference
+    convention reserves for it, so a Phoenix collector groups the hundred and
+    eighty-three questions of one questionnaire into one session rather than a
+    hundred and eighty-three unrelated traces. LangSmith reads `run_id` and
+    ignores the other; Phoenix reads `session_id` and ignores the other; both
+    are cheap, and neither is a place to be clever.
     """
     tags = [f"lang:{language}", f"type:{question.question_type.value}"]
     if run_id:
         tags.append(f"run:{run_id}")
+    metadata = {
+        "question_id": question.id,
+        "question": question.text[:300],
+        "language": language,
+        "question_type": question.question_type.value,
+        "run_id": run_id or "",
+        "section": question.section or "",
+    }
+    if run_id:
+        metadata["session_id"] = run_id
     return {
         "run_name": f"answer[{question.id}]",
         "tags": tags,
-        "metadata": {
-            "question_id": question.id,
-            "question": question.text[:300],
-            "language": language,
-            "question_type": question.question_type.value,
-            "run_id": run_id or "",
-            "section": question.section or "",
-        },
+        "metadata": metadata,
     }
 
 
