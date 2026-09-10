@@ -27,7 +27,12 @@ _BOLD = re.compile(r"(?<!\w)(\*\*|__)(?=\S)(.+?)(?<=\S)\1(?!\w)", re.DOTALL)
 # — referring to the [n] numbering of the prompt's sources block. That numbering
 # is internal: the reader never sees the block, so the marker points at nothing.
 # The clause citation beside it is the real reference and survives.
-_SOURCE_MARKER = re.compile(r"[【〔]\s*\d{1,2}\s*[】〕]")
+#
+# The optional `†source` tail is the shape this model reaches for unprompted:
+# 【1†source】【2†source】, four of them in a row, went into an answer measured on
+# the held-out set. Without it the brackets were stripped and the word "source"
+# was left standing in the sentence.
+_SOURCE_MARKER = re.compile(r"[【〔]\s*\d{1,2}\s*(?:†[^】〕]*)?[】〕]")
 _BULLET = re.compile(r"^\s*[-*•]\s+(?P<text>.+)$")
 _NUMBERED = re.compile(r"^\s*(?P<marker>\d{1,3})[.)]\s+(?P<text>.+)$")
 _HEADING = re.compile(r"^\s*#{1,6}\s+(?P<text>.+?)\s*#*$")

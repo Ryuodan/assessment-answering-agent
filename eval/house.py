@@ -49,6 +49,7 @@ a brief answer for resembling the reference.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -94,6 +95,22 @@ class HouseCase:
 
 
 def load_house_set(path: Path | str = HOUSE_SET) -> list[HouseCase]:
+    """The held-out questionnaires: five customers the answer memory has never seen."""
+    return _load(path)
+
+
+def load_memory_set(path: Path | str = ANSWER_MEMORY) -> list[HouseCase]:
+    """The questions the answer memory holds, as cases to answer again.
+
+    Answering these with the memory on measures reproduction rather than
+    generalisation: the exact pair is in the corpus, so a high score says the
+    pipeline finds and reuses what the team wrote, and a low one says it cannot
+    even do that. Read it as a ceiling, never as a real-world estimate.
+    """
+    return _load(path)
+
+
+def _load(path: Path | str) -> list[HouseCase]:
     rows = json.loads(Path(path).read_text(encoding="utf-8"))
     return [
         HouseCase(
@@ -104,6 +121,51 @@ def load_house_set(path: Path | str = HOUSE_SET) -> list[HouseCase]:
         )
         for row in rows
     ]
+
+
+NEAR_TWIN = 0.88
+"""Above this, a held-out question is one the memory has already been asked.
+
+Same threshold as `src.memory.SAME_QUESTION`, and used here for a different
+purpose: not to decide anything, but to split the held-out score into the two
+situations it averages over. A new customer asking a question we have answered
+before is the ordinary case and reusing the answer is the point; a question
+nothing in the memory resembles is the harder one, and a single average hides
+which of the two a number came from.
+"""
+
+
+async def nearest_in_memory(cases: list[HouseCase], memory: list[HouseCase]) -> list[float]:
+    """For each case, how close the memory's closest *question* is.
+
+    Questions only. Comparing question-plus-answer is what the index does, and
+    it drags two unrelated questions together whenever both answers open "Yes,
+    T2 maintains a documented policy".
+    """
+    from src.embeddings import get_embeddings
+
+    if not cases or not memory:
+        return [0.0] * len(cases)
+
+    embed = get_embeddings()
+    ours = await asyncio.to_thread(embed.embed_documents, [c.question for c in cases])
+    theirs = await asyncio.to_thread(embed.embed_documents, [c.question for c in memory])
+
+    # Normalised once, so the comparison is a dot product rather than a cosine.
+    # It is 698 x 698 of them for the memory set, and recomputing both norms
+    # inside the loop spent minutes of CPU before the first question was even
+    # answered.
+    def unit(vector: list[float]) -> list[float]:
+        length = sum(x * x for x in vector) ** 0.5
+        return [x / length for x in vector] if length else vector
+
+    ours = [unit(v) for v in ours]
+    theirs = [unit(v) for v in theirs]
+
+    def nearest(one: list[float]) -> float:
+        return max(sum(x * y for x, y in zip(one, other)) for other in theirs)
+
+    return [round(await asyncio.to_thread(nearest, one), 4) for one in ours]
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +462,17 @@ class HouseResult:
     confidence: float = 0.0
     needs_review: bool = False
 
+    twin: float = 0.0
+    """How close the nearest question in the answer memory is. See `NEAR_TWIN`."""
+
+    found_own_answer: bool = False
+    """Whether the answer cited the memory entry for this very question.
+
+    Only meaningful for the memory set, where such an entry exists. It
+    separates the two ways a reproduction run can go wrong: retrieval never
+    surfaced the pair, or it did and the drafter wrote something else.
+    """
+
 
 def summarise(results: list[HouseResult]) -> dict:
     graded = [r for r in results if not (r.agreement and r.agreement.verdict == "unanswerable")]
@@ -428,9 +501,40 @@ def summarise(results: list[HouseResult]) -> dict:
             100 * sum(1 for r in graded if r.shape.cites_a_clause) / len(graded), 1
         ) if graded else 0.0,
         "hedges": round(100 * sum(1 for r in graded if r.shape.hedges) / len(graded), 1) if graded else 0.0,
-        "would_be_filled_unreviewed": sum(
+        # Held back, not written: `ready_to_write` refuses an answer nobody has
+        # confirmed when it is flagged or below the floor, so this is the count
+        # a reviewer has to read before the file can be filled. It was reported
+        # under the opposite name -- "would be written into the file
+        # unreviewed" -- which inverts the one number in here that says how
+        # much human work a run leaves behind.
+        "held_back": sum(
             1 for r in graded if r.answer.strip() and (r.needs_review or r.confidence < 0.6)
         ),
+        "found_own_answer": round(
+            100 * sum(1 for r in graded if r.found_own_answer) / len(graded), 1
+        ) if graded else 0.0,
+        "with_a_twin": _split(graded, lambda r: r.twin >= NEAR_TWIN),
+        "without_a_twin": _split(graded, lambda r: r.twin < NEAR_TWIN),
+    }
+
+
+def _split(results: list[HouseResult], keep) -> dict:
+    """Agreement and form over one half of a set, with its size.
+
+    A single average over the held-out set mixes two different questions --
+    "can it reuse an answer we have given before" and "can it answer something
+    new from the policies" -- and the mix is a property of whichever customer
+    sent the questionnaire rather than of the system.
+    """
+    part = [r for r in results if keep(r)]
+    if not part:
+        return {"cases": 0, "agreement": 0.0, "form": 0.0}
+    return {
+        "cases": len(part),
+        "agreement": round(
+            100 * statistics.mean([r.agreement.score for r in part if r.agreement]) / 5, 1
+        ) if any(r.agreement for r in part) else 0.0,
+        "form": round(100 * statistics.mean([r.register for r in part]), 1),
     }
 
 
@@ -454,7 +558,15 @@ def format_summary(label: str, summary: dict) -> str:
         # not a number to converge on.
         f"  cites a clause        {summary['cites_a_clause']:5.1f}%",
         "",
-        f"  would be written into the file unreviewed: {summary['would_be_filled_unreviewed']}",
+        f"  held back for a person to read: {summary['held_back']} of {summary['graded']}"
+        f"   ({summary['graded'] - summary['held_back']} would be written as they stand)",
+        "",
+        f"  where the memory had already been asked something similar "
+        f"({summary['with_a_twin']['cases']} cases): "
+        f"agreement {summary['with_a_twin']['agreement']:.1f}%",
+        f"  where it had not "
+        f"({summary['without_a_twin']['cases']} cases): "
+        f"agreement {summary['without_a_twin']['agreement']:.1f}%",
         "",
         "  verdicts: " + ", ".join(f"{k} {v}" for k, v in sorted(summary["verdicts"].items())),
     ]

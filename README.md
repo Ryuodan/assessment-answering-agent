@@ -2008,14 +2008,21 @@ they leave the cell blank or route it to the team that does.
 
 ### Splitting the team's answers
 
-122 pairs are held out to grade against; the other 702 are the answer memory.
+135 pairs are held out to grade against; the other 698 are the answer memory.
 The split is **by file**, because a questionnaire asks the same control a dozen
 ways and a graded question whose twin sits in the memory measures retrieval
-rather than drafting. That was not sufficient on its own: customers reuse the
-same template, so eight memory entries duplicated a graded question word for
-word (cosine 1.000) and were removed. After that, 81% of graded questions still
-have a memory neighbour at 0.70 or better — which is the measured basis for
-expecting an answer memory to reach them at all.
+rather than drafting. Every one of the five held-out questionnaires is a
+customer whose form the memory has never seen, and no held-out question appears
+in it: measured across all 135, the closest remembered *question* sits at a
+median cosine of 0.76 and a maximum of 0.93, with none above 0.95 and none
+identical. Sixteen of the 135 are close enough (≥ 0.88) that the memory has
+effectively been asked before, and the summary reports those separately from
+the other 119 — a single average over the two would hide which of them a number
+came from.
+
+That is also the measured basis for expecting an answer memory to help at all:
+most held-out questions have a neighbour in the 0.7–0.9 band, which is close
+enough to inform an answer and not close enough to copy one.
 
 ```bash
 python -m scripts.run_both_evals --label "what changed" --sample 30
@@ -2026,6 +2033,60 @@ python -m scripts.run_house_eval --sample 30      # the house set alone
 number to move, the facts set is a floor that must not fall. A change that
 improves one while dropping the other has traded correctness for brevity, and
 the runner says so rather than leaving it to be discovered later.
+
+### The two measurements that matter
+
+```bash
+python -m scripts.run_house_eval --set held-out  --all    # what happens on the next questionnaire
+python -m scripts.run_house_eval --set in-memory --all    # how faithfully it reuses what it holds
+python -m scripts.eval_to_xlsx eval/results/heldout_full.json    # one row per question, for a person
+```
+
+**Held out — 135 questions, five questionnaires the memory has never seen.**
+This is the estimate of real-world performance: agreement with the team's own
+answer **86.7%**, form 90.4%, 12 contradictions.
+
+The number that decides whether it can be trusted is not that one. It is what
+happens either side of the confidence gate:
+
+| | cases | agreement | contradicts the team |
+|---|---|---|---|
+| would be written as it stands | 72 | **95.8%** | **1** |
+| held back for a person to read | 63 | 76.2% | 11 |
+
+Eleven of the twelve disagreements are in the half the system refuses to write.
+The one that gets through is a question about security guards where the team
+wrote "Yes" for offices and data centres together and ours said guards at the
+data centres and controlled access at the offices — a disagreement by being
+more specific, which is the mildest kind available.
+
+Two things this run found, both since fixed: eleven answers in 135 referred to
+our own records in the prose ("as confirmed in our prior answer"), which is
+internal bookkeeping in a customer's file; and one reported a disagreement
+between two remembered answers *to the assessor* rather than through
+`contradicts_memory`. The prompt now bans both, and `strip_source_markers`
+learned the `【1†source】` shape this model reaches for.
+
+**In memory — all 698 questions the memory holds, answered again.** Not
+generalisation: the pair is in the corpus, so this is the ceiling. Agreement
+**95.9%** (691 graded; 7 references are not answers and are excluded), form
+98.0%, 24 contradictions. Either side of the gate: 409 would be written at
+99.5% agreement with one contradiction; 289 are held back at 90.0% with the
+other 23.
+
+The diagnostic that makes the pair readable is whether retrieval found the
+entry for the question being asked:
+
+| | cases | agreement |
+|---|---|---|
+| cited its own memory entry | 613 | **98.7%** |
+| did not | 85 | 72.7% |
+
+So the pipeline reuses what it holds almost perfectly *when it finds it*, and
+misses its own answer 11% of the time — which is where the remaining work is,
+and it is in retrieval rather than in drafting. Read against the held-out
+86.7%, generalising to a customer the memory has never seen costs about nine
+points.
 
 ### What moved it
 

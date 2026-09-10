@@ -23,6 +23,15 @@ def test_the_other_bracket_style_is_removed_too():
     assert strip_source_markers(f"Retention is 12 months{MARKER_ALT}.") == "Retention is 12 months."
 
 
+def test_the_labelled_marker_this_model_writes_is_removed():
+    """Four of these in a row reached an answer measured on the held-out
+    questionnaires. Stripping only the brackets left the word "source"
+    standing in the middle of the sentence."""
+    text = "Cryptographic controls apply【1†source】【2†source】 at rest."
+
+    assert strip_source_markers(text) == "Cryptographic controls apply at rest."
+
+
 def test_stripping_does_not_leave_a_gap_before_punctuation():
     assert strip_source_markers(f"Retention is 12 months {MARKER} .") == "Retention is 12 months."
 
