@@ -18,7 +18,6 @@ opposite things and nothing says which is current.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import sys
 import time
 from pathlib import Path
@@ -28,6 +27,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src import answer_memory  # noqa: E402
 from src.config import configure_logging  # noqa: E402
+from src import llm  # noqa: E402
 
 
 async def main_async(args) -> int:
@@ -94,7 +94,7 @@ def main() -> int:
     parser.add_argument("--origin", default="", help="with --rescan: only this origin")
     args = parser.parse_args()
     configure_logging()
-    return asyncio.run(main_async(args))
+    return llm.run(main_async(args))
 
 
 if __name__ == "__main__":

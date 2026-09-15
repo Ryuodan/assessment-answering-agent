@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
+from src import llm  # noqa: E402
 from eval.house import (  # noqa: E402
     HouseResult, format_summary, judge_agreement, load_house_set,
     load_memory_set, nearest_in_memory, register_score, summarise,
@@ -223,7 +224,7 @@ def main() -> int:
           f"running {len(chosen)}. Answer memory holds {len(memory_cases)}.")
     if args.which == "in-memory":
         print("  Reproduction, not generalisation: every answer is already in the corpus.")
-    asyncio.run(answer_and_score(chosen, args.label, args.out, memory_cases))
+    llm.run(answer_and_score(chosen, args.label, args.out, memory_cases))
     return 0
 
 

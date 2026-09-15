@@ -124,6 +124,12 @@
 
   .editing { display: grid; gap: 9px; margin-top: 10px; }
 
+  /* The answer just added, where it lands: the top of the list. */
+  .entry.just-added {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
   /* --- disagreements ------------------------------------------------------ */
 
   .conflict {
@@ -213,18 +219,19 @@
   </div>
   <a class="ghost" href="/">Assistant</a>
   <a class="ghost" href="/workbench">Workbench</a>
+  <a class="ghost" href="/preferences">Preferences</a>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
 <main>
   <p class="lede">
-    Every answer here is one a person wrote &mdash; imported from a questionnaire
-    the team filled in, written here by hand, or edited and approved on an answer
-    card. A draft nobody changed never reaches this page, however confident it
-    was: what the model produced is not evidence about us. These are the
-    strongest thing the system has to work from, so they are worth keeping true:
-    correct one that has aged, retire one that was replaced, and settle the pairs
-    that disagree.
+    Every answer here is one a person wrote &mdash; from questionnaires the team
+    filled in, written here by hand, or edited and approved on an answer card. New
+    answers only arrive deliberately, one at a time. A draft nobody changed never
+    reaches this page, however confident it was: what the model produced is not
+    evidence about us. These are the strongest thing the system has to work from,
+    so they are worth keeping true: correct one that has aged, retire one that was
+    replaced, and settle the pairs that disagree.
   </p>
 
   <div class="counts" id="counts"></div>
@@ -239,6 +246,24 @@
       being used &mdash; or say they are not the same question after all.
     </p>
     <div id="conflicts"></div>
+  </div>
+
+  <!-- Above the list, so what was just added is checked where it lands: the
+       list is newest first. There is no bulk import. A questionnaire read into
+       the memory wholesale is hundreds of answers nobody looked at one by one,
+       and each is retrieved afterwards as something we said. -->
+  <div class="panel">
+    <h2>Add an answer</h2>
+    <p class="hint">
+      For something we say that no questionnaire in the corpus happens to ask.
+      It is retrieved exactly like the rest.
+    </p>
+    <div class="editing">
+      <input type="text" id="newQuestion" placeholder="The question, as an assessor would ask it">
+      <textarea id="newAnswer" placeholder="What we say"></textarea>
+      <div><button id="add">Remember this</button></div>
+      <div class="status" id="addStatus"></div>
+    </div>
   </div>
 
   <div class="panel">
@@ -264,20 +289,6 @@
     <div class="status" id="listStatus"></div>
     <div id="entries"></div>
     <div style="margin-top:12px"><button class="ghost" id="more" hidden>Show more</button></div>
-  </div>
-
-  <div class="panel">
-    <h2>Add an answer</h2>
-    <p class="hint">
-      For something we say that no questionnaire in the corpus happens to ask.
-      It is retrieved exactly like the rest.
-    </p>
-    <div class="editing">
-      <input type="text" id="newQuestion" placeholder="The question, as an assessor would ask it">
-      <textarea id="newAnswer" placeholder="What we say"></textarea>
-      <div><button id="add">Remember this</button></div>
-      <div class="status" id="addStatus"></div>
-    </div>
   </div>
 </main>
 
@@ -433,6 +444,7 @@
   function entryCard(entry) {
     const card = document.createElement("div");
     card.className = "entry" + (entry.stands ? "" : " replaced");
+    card.dataset.entryId = entry.entry_id;
 
     const question = withDirection(document.createElement("p"), entry.question);
     question.className = "q";
@@ -648,7 +660,7 @@
         const empty = document.createElement("div");
         empty.className = "empty";
         empty.textContent = total === 0 && !$("search").value.trim()
-          ? "Nothing remembered yet. Import a questionnaire you have already filled in, or approve an answer on a card."
+          ? "Nothing remembered yet. Add an answer above, or edit and approve an answer on a card."
           : "Nothing matches that.";
         $("entries").replaceChildren(empty);
       }
@@ -722,14 +734,27 @@
     }
     $("add").disabled = true;
     try {
-      await api("/api/memory", {
+      const added = await api("/api/memory", {
         method: "POST",
         body: JSON.stringify({ question, answer }),
       });
       $("newQuestion").value = "";
       $("newAnswer").value = "";
-      say($("addStatus"), "Remembered.", "ok");
+      // Filters cleared, so the new answer is the first card rather than one a
+      // search typed earlier happens to hide.
+      $("search").value = "";
+      $("standing").value = "";
+      $("origin").value = "";
       await reload();
+      const card = [...$("entries").querySelectorAll(".entry")]
+        .find((one) => one.dataset.entryId === added.entry_id);
+      if (card) {
+        card.classList.add("just-added");
+        card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+      say($("addStatus"), card
+        ? "Remembered. It is the first answer in the list below."
+        : "Remembered.", "ok");
     } catch (error) {
       say($("addStatus"), error.message, "err");
     } finally {

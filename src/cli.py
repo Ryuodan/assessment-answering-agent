@@ -9,11 +9,10 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import sys
 from pathlib import Path
 
-from src import answer_memory, service
+from src import answer_memory, llm, service
 from src.config import configure_logging
 from src.models import SourceType
 
@@ -119,11 +118,11 @@ def main() -> int:
     args = build_parser().parse_args()
 
     if args.command == "guidelines":
-        return asyncio.run(_ingest(args.paths, SourceType.GUIDELINE))
+        return llm.run(_ingest(args.paths, SourceType.GUIDELINE))
     if args.command == "answers":
-        return asyncio.run(_ingest(args.paths, SourceType.PRIOR_ANSWER))
+        return llm.run(_ingest(args.paths, SourceType.PRIOR_ANSWER))
     if args.command == "answer":
-        return asyncio.run(_answer(args.path, args.language, args.out))
+        return llm.run(_answer(args.path, args.language, args.out))
     if args.command == "stats":
         return _stats()
 

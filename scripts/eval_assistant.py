@@ -48,7 +48,6 @@ worth knowing before a person hits it.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import functools
 import json
 import re
@@ -69,7 +68,7 @@ print = functools.partial(print, flush=True)  # noqa: A001
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src import batches, conversations, identity, tools           # noqa: E402
+from src import batches, conversations, identity, llm, tools      # noqa: E402
 from src.agents import assistant                                  # noqa: E402
 from src.conversations import Conversation                        # noqa: E402
 from tests import forms_fixtures as shapes                        # noqa: E402
@@ -104,6 +103,30 @@ class Case:
 
     For the ones where calling it at all is right and calling it five times is
     a wall of sources under a two-line reply."""
+
+    last_wants: tuple[str, ...] = ()
+    """Tools the *last* turn must call.
+
+    For follow-ups. A case whose first turn answers cannot forbid answering,
+    and "what is the answer to question 2" is exactly the follow-up where
+    answering again -- or reporting how to fill the file -- is the mistake."""
+
+    last_forbids: tuple[str, ...] = ()
+    """Tools the last turn must not call."""
+
+    last_calls_nothing: bool = False
+    """The last turn is conversation, not work: "thanks", "what can you do"."""
+
+    quotes_answer: int = 0
+    """The reply must contain the answer stored for the question at this place
+    in the file, counting from 1. Read back from the batch after the case, so
+    the check holds whatever the pipeline happened to write."""
+
+    answers_in: str = ""
+    """Every stored answer must be written in this language, "ar" or "en"."""
+
+    answer_contains: dict | None = None
+    """{place: text} -- the stored answer at that place must contain the text."""
 
     upload_on: int = 0
     """Which turn carries the file, or -1 for a case with no file at all.
@@ -328,6 +351,141 @@ CASES: list[Case] = [
         # and never drafting is the regression, and `wants` catches that.
         at_most={"search_policies": 1},
     ),
+    # --- asked about the answers, rather than asked to change them -----------
+    #
+    # The failure these were written for: asked "what is the second question
+    # answer?", the assistant replied that the answer "has been drafted and is
+    # ready to be written to the file" and pointed at the fill button. It had
+    # no way to read an answer back, so it described the one thing it could
+    # see. Every case here is a question about the answers; none is a request
+    # to change one.
+    Case(
+        name="reads-back-an-answer-by-position",
+        says=["Read this and answer all of it.", "what is the second question answer?"],
+        answered=4,
+        last_wants=("read_answers",),
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "answer_directly"),
+        quotes_answer=2,
+    ),
+    Case(
+        name="reads-back-the-last-answer",
+        says=["Read this and answer all of it.", "Read me the last answer."],
+        answered=4,
+        last_wants=("read_answers",),
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "answer_directly"),
+        quotes_answer=4,
+    ),
+    Case(
+        name="reads-back-an-answer-by-topic",
+        says=["Read this and answer all of it.", "What did you write for the training question?"],
+        answered=4,
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "answer_directly"),
+        quotes_answer=2,
+    ),
+    Case(
+        name="reads-back-an-answer-asked-in-arabic",
+        says=["Read this and answer all of it.", "ما هي إجابة السؤال الثالث؟"],
+        answered=4,
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "answer_directly"),
+        quotes_answer=3,
+    ),
+    Case(
+        name="says-which-are-flagged-and-why",
+        says=["Read this and answer all of it.", "Are any of the answers flagged? Why?"],
+        answered=4,
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "answer_directly"),
+    ),
+    Case(
+        name="answer-before-it-exists-is-not-invented",
+        says=["Read this file.", "What is the answer to question 2?"],
+        answered=0,
+        last_forbids=("reword_answers", "propose_fill", "answer_directly"),
+        reply_has=("not", "no answer", "hasn't", "has not", "yet"),
+    ),
+    Case(
+        name="no-file-open-says-so",
+        says=["What is the answer to question 2?"],
+        forbids=("answer_questions", "reword_answers", "propose_fill"),
+        answered=0,
+        upload_on=-1,
+    ),
+    # --- changing, undoing, and what it cannot do ---------------------------------
+    Case(
+        name="undoes-a-rewording",
+        says=[
+            "Read this and answer all of it.",
+            "Make every answer a single short sentence.",
+            "Undo that, the original answers were better.",
+        ],
+        answered=4,
+        last_wants=("put_back_drafts",),
+        last_forbids=("answer_questions", "reword_answers"),
+    ),
+    Case(
+        # Question 3's id is `Human Resources!4` in this fixture: the row. Asked
+        # for question 3, the assistant reworded the training question instead,
+        # whose id ends in 3 -- the question counted, taken for the row.
+        name="counts-questions-not-rows",
+        says=["Read this and answer all of it.", "Change the answer to question 3 to: Yes, on the same day."],
+        answered=4,
+        last_wants=("write_one_answer",),
+        last_forbids=("answer_questions",),
+        answer_contains={3: "on the same day"},
+    ),
+    Case(
+        name="translates-when-asked",
+        says=["Read this and answer all of it.", "Translate all the answers to Arabic."],
+        answered=4,
+        last_wants=("reword_answers",),
+        last_forbids=("answer_questions",),
+        answers_in="ar",
+    ),
+    Case(
+        name="replaces-one-answer-as-dictated",
+        says=[
+            "Read this and answer all of it.",
+            "Change the answer to question 4 to: Yes, background checks are completed for every new hire.",
+        ],
+        answered=4,
+        last_wants=("write_one_answer",),
+        last_forbids=("answer_questions", "reword_answers"),
+        answer_contains={4: "background checks are completed for every new hire"},
+    ),
+    Case(
+        name="cannot-approve-and-says-where",
+        says=["Read this and answer all of it.", "Approve all of them."],
+        answered=4,
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "write_one_answer"),
+        reply_has=("card",),
+    ),
+    Case(
+        name="asks-rather-than-guesses-a-vague-request",
+        says=["Read this and answer all of it.", "fix it"],
+        answered=4,
+        last_forbids=("answer_questions", "reword_answers", "propose_fill", "write_one_answer",
+                      "set_aside", "put_back_drafts"),
+    ),
+    # --- conversation that is not work -------------------------------------------------
+    Case(
+        name="thanks-is-not-an-instruction",
+        says=["Read this and answer all of it.", "Thanks, that is all for now."],
+        answered=4,
+        last_calls_nothing=True,
+    ),
+    Case(
+        name="says-what-it-can-do",
+        says=["What can you do?"],
+        answered=0,
+        upload_on=-1,
+        last_calls_nothing=True,
+    ),
+    Case(
+        name="declines-something-off-topic",
+        says=["Write me a short poem about cats."],
+        forbids=("answer_directly", "answer_questions", "search_policies"),
+        answered=0,
+        upload_on=-1,
+    ),
 ]
 
 
@@ -361,10 +519,12 @@ async def run_case(case: Case, user) -> Result:
             if case.upload_on >= 0 else None)
 
     conversation: Conversation = assistant.start(user, "")
+    last_steps: list[str] = []
     for index, says in enumerate(case.says):
         turn = await assistant.say(
             user, conversation, says, upload=path if index == case.upload_on else None
         )
+        last_steps = list(turn.steps)
         result.steps.extend(turn.steps)
         result.reply = turn.reply
         result.seconds += turn.seconds
@@ -376,6 +536,53 @@ async def run_case(case: Case, user) -> Result:
     for forbidden in case.forbids:
         (result.failed if forbidden in called else result.passed).append(
             f"did not call {forbidden}"
+        )
+
+    last_called = {step.split("(", 1)[0] for step in last_steps}
+    for wanted in case.last_wants:
+        (result.passed if wanted in last_called else result.failed).append(f"last turn called {wanted}")
+    for forbidden in case.last_forbids:
+        (result.failed if forbidden in last_called else result.passed).append(
+            f"last turn did not call {forbidden}"
+        )
+    if case.last_calls_nothing:
+        (result.passed if not last_steps else result.failed).append(
+            "last turn called nothing" if not last_steps
+            else f"last turn called {', '.join(last_steps)}"
+        )
+
+    stored = []
+    if conversation.batch_id and (case.quotes_answer or case.answers_in or case.answer_contains):
+        stored = tools.inspect(user, conversation.batch_id)["questions"]
+
+    def at_place(place: int) -> str:
+        return (stored[place - 1].get("answer") or "") if 0 < place <= len(stored) else ""
+
+    if case.quotes_answer:
+        answer = " ".join(at_place(case.quotes_answer).split())
+        spoken = " ".join(result.reply.split())
+        # The opening of the stored answer, allowing for Markdown the reply may
+        # have wrapped around it: a relay that changes the words is a summary.
+        probe = re.sub(r"[*_`]", "", answer)[:60].casefold()
+        quoted = bool(probe) and probe in re.sub(r"[*_`]", "", spoken).casefold()
+        (result.passed if quoted else result.failed).append(
+            f"quoted answer #{case.quotes_answer}" if quoted
+            else f"did not quote answer #{case.quotes_answer} ({answer[:60]!r})"
+        )
+
+    if case.answers_in:
+        written = [q.get("answer") or "" for q in stored if q.get("answer")]
+        right = bool(written) and all(_language(text) == case.answers_in for text in written)
+        (result.passed if right else result.failed).append(
+            f"answers written in {case.answers_in}" if right
+            else f"answers not all in {case.answers_in}"
+        )
+
+    for place, text in (case.answer_contains or {}).items():
+        found = text.casefold() in at_place(place).casefold()
+        (result.passed if found else result.failed).append(
+            f"answer #{place} says what was dictated" if found
+            else f"answer #{place} is {at_place(place)[:60]!r}"
         )
 
     for name, ceiling in (case.at_most or {}).items():
@@ -509,7 +716,7 @@ def main() -> int:
     parser.add_argument("-v", "--verbose", action="store_true", help="Show steps and replies")
     parser.add_argument("--floor", type=float, default=0.9,
                         help="Exit non-zero below this overall score (default 0.9)")
-    return asyncio.run(main_async(parser.parse_args()))
+    return llm.run(main_async(parser.parse_args()))
 
 
 if __name__ == "__main__":

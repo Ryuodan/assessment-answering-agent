@@ -479,6 +479,11 @@
      over the page for a signed-in user. Restate it for the elements that set a
      display of their own. */
   .auth-gate[hidden], .whoami[hidden] { display: none; }
+  /* How every card below reads: its length, and a skill to reword them with. */
+  .pick-row { display: flex; align-items: center; gap: 12px 22px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pick-row[hidden] { display: none; }
+  a.ghost-link { color: var(--accent-ink); font-weight: 550; font-size: 14px; text-decoration: none; }
+  a.ghost-link:hover { text-decoration: underline; }
   .auth-card {
     width: min(420px, 100%);
     background: var(--surface-raised); border: 1px solid var(--line);
@@ -548,6 +553,8 @@
      style="text-decoration:none;display:inline-flex;align-items:center">Assistant →</a>
   <a class="ghost" href="/memory" title="What we have said before, and which of it still stands"
      style="text-decoration:none;display:inline-flex;align-items:center">Answer memory</a>
+  <a class="ghost" href="/preferences" title="How you want answers to read, and your skills"
+     style="text-decoration:none;display:inline-flex;align-items:center">Preferences</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
@@ -559,7 +566,7 @@
       <span class="step-number">1</span>
       <h2>Build the knowledge base</h2>
     </div>
-    <p class="step-hint">Everything the agent answers from. Upload your policies, and any questionnaires you have already filled in.</p>
+    <p class="step-hint">Everything the agent answers from: your policies here, and the answers the team has already given in the answer memory.</p>
 
     <div class="split">
       <div class="panel">
@@ -591,17 +598,12 @@
       </div>
 
       <div class="panel">
-        <h3>Previously answered assessments</h3>
-        <p class="hint">Completed questionnaires. Question and answer pairs are reused as the strongest signal for wording.</p>
-        <label class="file" data-drop="prior">
-          <input type="file" id="priorInput" multiple accept=".pdf,.docx" />
-          Drop PDF or DOCX files here, or click to choose
-          <span class="chosen" id="priorChosen"></span>
-        </label>
+        <h3>The team&rsquo;s own answers</h3>
+        <p class="hint">Kept in the answer memory, not here, and added one at a time: written
+          on that page, or edited and approved on an answer card.</p>
         <div class="row">
-          <button id="priorBtn" disabled>Index previous answers</button>
+          <a class="ghost-link" href="/memory">Open the answer memory →</a>
         </div>
-        <div class="status" id="priorStatus"></div>
       </div>
     </div>
 
@@ -611,7 +613,7 @@
       <ul class="sources" id="kbSources"></ul>
       <div class="row">
         <button class="ghost" id="kbRefresh">Refresh</button>
-        <button class="ghost" id="kbClear">Clear everything</button>
+        <button class="ghost" id="kbClear" title="The answer memory is not affected">Remove every policy document</button>
       </div>
     </div>
 
@@ -713,7 +715,7 @@
 
     <!-- Above the answers rather than beside the fill button: it changes what
          every card below is showing, not only what the button will write. -->
-    <div id="detailPick" style="margin-bottom:14px" hidden></div>
+    <div id="detailPick" class="pick-row" hidden></div>
 
     <div class="status" style="margin-bottom:18px">Edits you make here are kept, and go into
       the filled file and every download.</div>
@@ -1625,7 +1627,7 @@
           // at a time, which is why the count links there.
           '<span><a href="/memory" title="Manage the answer memory">' +
             stats.prior_answer_chunks.toLocaleString() + " previous answers</a></span>"
-        : "Nothing indexed yet. Upload guidelines or previous assessments above.";
+        : "Nothing indexed yet. Upload your policies above.";
 
       $("kbSources").innerHTML = "";
       stats.sources.forEach((source) => {
@@ -1892,8 +1894,13 @@
     if (state.stage === "extracting") return "Reading the document and extracting questions…";
     // Rewording runs through the same counter, and "Answered 4 of 12" during a
     // rewrite describes work nobody asked for.
-    const done = state.stage === "rewriting" ? "Reworded" : "Answered";
-    if (!state.total) return done === "Reworded" ? "Rewording…" : "Answering…";
+    const done = state.stage === "rewriting" ? "Reworded"
+      : state.stage === "styling" ? "Applied your preferences to"
+      : state.stage === "shortening" ? "Shortened" : "Answered";
+    if (!state.total) {
+      return state.stage === "styling" ? "Applying your preferences…"
+        : done === "Reworded" ? "Rewording…" : "Answering…";
+    }
     const bar =
       '<span class="progress"><span class="progress-fill" style="width:' + state.percent + '%"></span></span>';
     return done + " <strong>" + state.completed + "</strong> of <strong>" + state.total +
@@ -2140,7 +2147,7 @@
     // logic wanted it off.
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
      "composerAdd", "composerInput", "extractBtn", "assessmentInput",
-     "guidelinesBtn", "priorBtn", "kbClear", "retryFailed",
+     "guidelinesBtn", "kbClear", "retryFailed",
      "fillFormBtn", "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
@@ -2683,6 +2690,65 @@
      questionnaire: a list of typed questions has no batch to remember it. */
   let detailLevel = "full";
 
+  /* This person's saved skills. Re-read when the page comes back into view,
+     because the place they are made is another page, usually another tab. */
+  let mySkills = [];
+  async function loadSkills() {
+    try {
+      mySkills = (await request("/api/preferences")).skills || [];
+    } catch (error) {
+      mySkills = [];
+    }
+    if (formBatch) renderDetailPicker();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") loadSkills();
+  });
+
+  async function applySkill(skillId, name) {
+    if (!formBatch) return;
+    const status = $("answerStatus");
+    setStatus(status, "Rewording with \u201c" + name + "\u201d…", "busy");
+    const stop = watchProgress(formBatch.id, (state) => {
+      status.innerHTML = progressMessage(state);
+      status.className = "status busy";
+    });
+    try {
+      const outcome = await request(
+        "/api/forms/" + formBatch.id + "/skills/" + encodeURIComponent(skillId), {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: {} }),
+        });
+      stop();
+      await adoptBatch(outcome.batch, { quiet: true });
+      const kept = outcome.protected
+        ? " " + outcome.protected + " written by a person were left exactly as they are." : "";
+      const failed = outcome.failed
+        ? " " + outcome.failed + " could not be reworded and were left as they were." : "";
+      setStatus(status, outcome.attempted
+        ? "Reworded " + outcome.answered + " answer(s) with \u201c" + name + "\u201d." + failed + kept
+        : "Nothing to reword with \u201c" + name + "\u201d." + kept, "ok");
+    } catch (error) {
+      stop();
+      setStatus(status, error.message, "error");
+    }
+  }
+
+  async function restoreDraft(item) {
+    const entry = questions.find((q) => q.key === item.__key);
+    if (!formBatch || !entry || !entry.formId) return;
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/answers/draft", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: entry.formId }),
+      });
+      await adoptBatch(updated, { quiet: true });
+      setStatus($("answerStatus"), "The original draft is back, as it was before it was reworded.", "ok");
+    } catch (error) {
+      setStatus($("answerStatus"), error.message, "error");
+    }
+  }
+
   function renderDetailPicker() {
     const host = $("detailPick");
     host.replaceChildren();
@@ -2704,6 +2770,7 @@
         setStatus($("answerStatus"), error.message, "error");
       }
     }));
+    host.append(Cards.skillPicker(mySkills, applySkill));
   }
 
   function refreshFormControls() {
@@ -3212,13 +3279,10 @@
 
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
-  const priorInput = fileField("priorInput", "priorChosen", "priorBtn");
   fileField("assessmentInput", "assessmentChosen", "extractBtn");
 
   $("guidelinesBtn").onclick = ingestHandler(
     guidelinesInput, "/api/knowledge/guidelines", $("guidelinesBtn"), $("guidelinesStatus"), "guideline(s)");
-  $("priorBtn").onclick = ingestHandler(
-    priorInput, "/api/knowledge/prior-assessments", $("priorBtn"), $("priorStatus"), "assessment(s)");
 
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
@@ -3269,7 +3333,7 @@
   };
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
-    if (!confirm("Delete every indexed guideline and previous answer?")) return;
+    if (!confirm("Remove every policy document from the knowledge base?\n\nThe answer memory is not affected.")) return;
     await request("/api/knowledge", { method: "DELETE" });
     loadKnowledge();
   };
@@ -3301,6 +3365,7 @@
   Cards.onBlank = leaveAnswerBlank;
   Cards.onApprove = approveAnswer;
   Cards.onLength = chooseAnswerLength;
+  Cards.onRestoreDraft = restoreDraft;
   /* Whichever length the questionnaire is set to. The workbench keeps the run
      in memory, so the brief travels on the same object as the answer. */
   Cards.answerText = (item, index) => {
@@ -3312,6 +3377,7 @@
     return (level === "brief" && held.brief ? held.brief : held.answer) || "";
   };
 
+  loadSkills();
   loadKnowledge();
   loadDocuments();
   listRecentForms();

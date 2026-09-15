@@ -245,6 +245,50 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX memory_conflicts_open ON memory_conflicts(resolved_at);
     """,
+    # 8 -- preferences and skills: how one person wants answers worded.
+    #
+    # Personal, both of them. The answer memory and the knowledge base are the
+    # team's, because they are facts about the organisation; how a particular
+    # reviewer likes an answer phrased is a fact about that reviewer. Keyed by
+    # address rather than by a users row, so the open, unsigned-in deployment --
+    # which has no users table rows at all -- keeps its preferences too.
+    #
+    # Neither is ever read by the drafter. A style is applied by rewording an
+    # answer that has already been grounded and reviewed, which is the only
+    # place a free-text instruction cannot argue with the evidence.
+    """
+    CREATE TABLE user_preferences (
+        email          TEXT PRIMARY KEY,
+        style          TEXT NOT NULL DEFAULT '',
+        default_length TEXT NOT NULL DEFAULT 'full',
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE TABLE skills (
+        skill_id     TEXT PRIMARY KEY,
+        owner_email  TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        description  TEXT NOT NULL DEFAULT '',
+        instruction  TEXT NOT NULL,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX skills_owner_name ON skills(owner_email, name COLLATE NOCASE);
+    """,
+    # 9 -- preferences as choices rather than a paragraph.
+    #
+    # Migration 8 kept a preference as one free-text instruction, which made it
+    # the same kind of thing as a skill -- and nobody could tell the two apart.
+    # A preference is now a handful of fixed choices applied to every answer;
+    # `style` stays, as the optional "also, always" line beneath them, so any
+    # instruction already saved keeps applying. Every default is "as drafted":
+    # nobody's answers change until they choose something.
+    """
+    ALTER TABLE user_preferences ADD COLUMN verdict_first INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE user_preferences ADD COLUMN refer_to TEXT NOT NULL DEFAULT '';
+    ALTER TABLE user_preferences ADD COLUMN policy_references TEXT NOT NULL DEFAULT 'keep';
+    ALTER TABLE user_preferences ADD COLUMN tone TEXT NOT NULL DEFAULT 'as_drafted';
+    """,
 ]
 
 _local = threading.local()

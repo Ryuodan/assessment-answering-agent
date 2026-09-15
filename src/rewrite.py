@@ -40,13 +40,25 @@ def _sources_block(answered: AnsweredQuestion) -> str:
 
 
 async def rewrite(
-    answered: AnsweredQuestion, instruction: str, language: Language | None = None
+    answered: AnsweredQuestion,
+    instruction: str,
+    language: Language | None = None,
+    *,
+    note: str = "",
 ) -> AnsweredQuestion:
     """Reword one answer under an instruction, keeping its evidence.
 
     Returns a copy. On failure the original comes back unchanged rather than
     half-rewritten: a revision that fails should cost the wording, not the
-    answer.
+    answer -- and callers can tell the two apart by identity.
+
+    `note` is what the reasoning records about the rewording. It defaults to
+    the instruction itself, which is right for "make it shorter" and wrong for a
+    two-paragraph house style that would otherwise be pasted under every answer.
+
+    The copy is the model's words, whatever the original was. An answer a person
+    wrote and then had reworded is no longer theirs, and must not reach the
+    answer memory as though it were.
     """
     if not answered.answer.strip():
         return answered
@@ -74,10 +86,11 @@ async def rewrite(
 
     revised = answered.model_copy(deep=True)
     revised.answer = text
+    revised.by_hand = False
     # Evidence and citations are carried over deliberately: the sources did not
     # change, so the clause a reader would go and check has not moved either.
     revised.rationale = (
-        f"{answered.rationale} Reworded on request: {instruction}".strip()
+        f"{answered.rationale} {note or 'Reworded on request: ' + instruction}".strip()
     )
     return revised
 

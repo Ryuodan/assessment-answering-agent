@@ -262,6 +262,46 @@ def test_setting_aside_nothing_asks_which(kit):
     assert "Name the questions" in tool["set_aside"]("  ")
 
 
+@pytest.mark.asyncio
+async def test_a_set_aside_answer_is_not_said_to_be_going_into_the_file(kit, answers_yes):
+    """The answers panel draws what `inspect` says. It said "will be written" of
+    an answer set aside, so the card beside the assistant never changed."""
+    tool, state = kit
+    user = identity.local_user()
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+    before = tools.inspect(user, state["batch_id"])
+    first = before["questions"][0]
+    going_in = sum(1 for q in before["questions"] if q["will_be_written"])
+    assert first["will_be_written"], "the premise: it was going in"
+
+    tool["set_aside"](position="1")
+    after = tools.inspect(user, state["batch_id"])
+
+    assert after["questions"][0]["will_be_written"] is False
+    assert after["questions"][0]["held_back_because"] == "", "set aside is not held back"
+    assert after["counts"]["set_aside"] == 1
+    assert after["counts"]["held_back"] == before["counts"]["held_back"]
+    assert sum(1 for q in after["questions"] if q["will_be_written"]) == going_in - 1
+
+
+@pytest.mark.asyncio
+async def test_a_set_aside_answer_is_not_flagged_and_the_fill_report_counts_it_out(kit, answers_yes):
+    tool, state = kit
+    user = identity.local_user()
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+    going_in = sum(1 for q in tools.inspect(user, state["batch_id"])["questions"] if q["will_be_written"])
+
+    tool["set_aside"](position="1")
+
+    assert "set aside" in tool["read_answers"](position="1")
+    assert "#1 " not in tool["read_answers"](only="flagged")
+    said = tool["propose_fill"]()
+    assert f"{going_in - 1} answer(s) would be written" in said
+    assert "the 1 set-aside question(s) are not written" in said
+
+
 # --- what a turn leaves behind ---------------------------------------------
 
 

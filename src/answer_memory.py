@@ -182,6 +182,14 @@ def count(*, query: str = "", standing: bool | None = None, origin: str = "") ->
     ).fetchone()[0]
 
 
+def count_from_file(source_name: str) -> int:
+    """How many entries importing this questionnaire contributed last time."""
+    return store.connect().execute(
+        "SELECT COUNT(*) FROM memory_entries WHERE from_file = ? AND origin = 'import'",
+        (source_name,),
+    ).fetchone()[0]
+
+
 def ids_from_batch(batch_id: str) -> set[str]:
     """Which of a questionnaire's answers are in the memory, in one query.
 

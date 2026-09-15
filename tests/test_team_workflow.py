@@ -67,7 +67,12 @@ def answers_yes(monkeypatch):
 def _open(client, tmp_path, name="vendor.xlsx"):
     path = tmp_path / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(shapes.simple(path), "rb") as handle:
+    # Built once per name. A workbook records when it was made, to the second,
+    # so building it again for a second upload is a different file whenever the
+    # clock ticks over in between -- and the upload is right to keep both.
+    if not path.exists():
+        shapes.simple(path)
+    with open(path, "rb") as handle:
         return client.post("/api/forms", files={"file": (
             name, handle.read(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

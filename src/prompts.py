@@ -283,7 +283,10 @@ Rules, in order of importance:
    question does not apply, the rewrite opens by saying the same thing. A
    questionnaire's compliance dropdown is filled from that opening clause, so an
    answer that stops stating its position leaves the rating blank.
-4. Write in {language_name}, whatever language the instruction is written in."""
+4. Write in {language_name}, whatever language the instruction is written in.
+5. Write plain text, because it goes into a spreadsheet cell: no bold, italics or
+   headings, whatever the instruction says. Where a list is wanted, put one item
+   on each line starting with a hyphen."""
 
 BRIEF_INSTRUCTION = """Condense this to the shortest form that still answers the question.
 

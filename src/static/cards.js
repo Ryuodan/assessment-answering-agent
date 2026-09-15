@@ -17,6 +17,9 @@
      Cards.onBlank(item, index, blank)    leave this answer deliberately empty
      Cards.onApprove(item, index, ok)     accept it as it stands: fill writes it, memory keeps it
      Cards.onLength(item, index, prefer)  write this one answer full or brief
+     Cards.onRestoreDraft(item, index)    put back the answer as it was drafted
+     Cards.onSetAside(item, index, skip)  leave the question out of the file, or bring it back
+     Cards.canSetAside                    whether the page offers that on the card
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
    control simply does nothing rather than throwing.
@@ -31,6 +34,9 @@ const Cards = (window.Cards = {
   onBlank() {},
   onApprove() {},
   onLength() {},
+  onRestoreDraft() {},
+  onSetAside() {},
+  canSetAside: false,
   /* Where the page keeps the answer being edited. The card shows and writes
      through this rather than owning it, because the workbench holds a whole
      run in memory and the chat page holds a batch. */
@@ -236,6 +242,7 @@ const Cards = (window.Cards = {
       by_hand: question.by_hand,
       will_be_written: question.will_be_written,
       held_back_because: question.held_back_because,
+      set_aside: question.skip,
       prefer: question.prefer,
       // What the server resolved this answer's length to: its own preference if
       // it has one, otherwise the questionnaire's. Left off, the pages fell
@@ -276,6 +283,60 @@ const Cards = (window.Cards = {
     });
 
     wrap.append(label, seg);
+    return wrap;
+  }
+
+  /* One of the person's saved skills, over the answers on screen. Nothing at
+     all for someone who has saved none: an empty menu is a control that offers
+     to do nothing, and the link to create one lives on the preferences page. */
+  function skillPicker(skills, onApply) {
+    const wrap = document.createElement("div");
+    wrap.className = "skill-pick";
+    if (!skills || !skills.length) {
+      wrap.hidden = true;
+      return wrap;
+    }
+    const label = document.createElement("span");
+    label.textContent = "Skills:";
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "Choose one of your skills");
+    select.append(new Option("Choose a skill…", ""));
+    // Two groups, because they are two different promises: the built-in ones
+    // are the same for everybody, and "Yours" are nobody else's.
+    [["Built in", skills.filter((s) => s.builtin)], ["Yours", skills.filter((s) => !s.builtin)]]
+      .forEach(([label, group]) => {
+        if (!group.length) return;
+        const holder = document.createElement("optgroup");
+        holder.label = label;
+        group.forEach((skill) => {
+          const option = new Option(skill.name, skill.skill_id);
+          if (skill.description) option.title = skill.description;
+          holder.append(option);
+        });
+        select.append(holder);
+      });
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "ghost";
+    apply.dataset.mutates = "true";
+    apply.textContent = "Reword with it";
+    apply.title = "Rewords the answers shown here. Answers somebody wrote by hand are left as they are.";
+    apply.onclick = async () => {
+      if (!select.value) { select.focus(); return; }
+      const name = select.options[select.selectedIndex].text;
+      apply.disabled = true;
+      select.disabled = true;
+      try {
+        await onApply(select.value, name);
+      } finally {
+        apply.disabled = false;
+        select.disabled = false;
+      }
+    };
+    const manage = document.createElement("a");
+    manage.href = "/preferences";
+    manage.textContent = "Manage";
+    wrap.append(label, select, apply, manage);
     return wrap;
   }
 
@@ -432,8 +493,28 @@ const Cards = (window.Cards = {
        imported run -- and absent must not read as "held", or every card on
        those pages would grow a warning about a file it will never be written
        into. */
-    const gated = item.will_be_written === false && !item.blanked && item.answer;
-    if (gated) {
+    const gated = !item.set_aside && item.will_be_written === false && !item.blanked && item.answer;
+    if (item.set_aside) {
+      /* Said on the card, with the way back beside it. Setting a question aside
+         used to change nothing anyone could see beside the assistant: the card
+         stayed exactly as it was, so "leave that one out" looked ignored. */
+      const aside = document.createElement("div");
+      aside.className = "held aside";
+      const what = document.createElement("strong");
+      what.textContent = "Set aside.";
+      const why = document.createElement("span");
+      why.textContent = " Nothing is written to the file for this question, whatever its answer says.";
+      aside.append(what, why);
+      if (Cards.canSetAside) {
+        const back = document.createElement("button");
+        back.className = "quiet";
+        back.dataset.mutates = "true";
+        back.textContent = "Include it again";
+        back.onclick = () => Cards.onSetAside(item, index, false);
+        aside.append(back);
+      }
+      field.append(aside);
+    } else if (gated) {
       const held = document.createElement("div");
       held.className = "held";
       const what = document.createElement("strong");
@@ -628,7 +709,7 @@ const Cards = (window.Cards = {
 
   function renderAnswer(item, index) {
     const card = document.createElement("div");
-    card.className = "answer" + (item.needs_review ? " review" : "");
+    card.className = "answer" + (item.needs_review ? " review" : "") + (item.set_aside ? " set-aside" : "");
 
     // --- head: number, question, confidence
     const head = document.createElement("div");
@@ -684,6 +765,17 @@ const Cards = (window.Cards = {
     const detail = document.createElement("span");
     detail.textContent = bits.join(" · ");
     meta.append(detail, more);
+    /* Beside the question, because it is a decision about the question: leave
+       it out of the file, whatever the answer says. */
+    if (Cards.canSetAside && !item.set_aside) {
+      const aside = document.createElement("button");
+      aside.className = "quiet";
+      aside.dataset.mutates = "true";
+      aside.textContent = "Set aside";
+      aside.title = "Leave this question out of the file. Its answer is kept, and it can be brought back.";
+      aside.onclick = () => Cards.onSetAside(item, index, true);
+      meta.append(aside);
+    }
 
     body.append(question, meta);
 
@@ -734,6 +826,33 @@ const Cards = (window.Cards = {
     const content = document.createElement("div");
     content.className = "answer-body";
     content.append(answerField(item, index));
+
+    /* Something reworded this answer after it was drafted -- preferences, a
+       skill, a "make them shorter". Said on the card and undoable from it: each
+       of those runs over many answers at once, so the one place an odd result
+       gets noticed has to be the place it can be put right. Which one it was is
+       in the reasoning below. */
+    if (item.drafted && !item.blanked) {
+      const field = labelledField("Reworded after drafting", "accent");
+      const box = document.createElement("details");
+      box.className = "drafted";
+      const summary = document.createElement("summary");
+      summary.textContent = "See the answer as it was drafted";
+      const original = document.createElement("div");
+      original.className = "rationale";
+      original.textContent = item.drafted;
+      if (isArabic(item.drafted)) original.dir = "rtl";
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "ghost";
+      back.dataset.mutates = "true";
+      back.textContent = "Put the draft back";
+      back.title = "Replace the reworded answer with the original draft, for this question only";
+      back.onclick = () => Cards.onRestoreDraft(item, index);
+      box.append(summary, original, back);
+      field.append(box);
+      content.append(field);
+    }
 
     if (item.citations && item.citations.length) {
       content.append(citationsField(item));
@@ -926,6 +1045,7 @@ const Cards = (window.Cards = {
     viewToggle: viewToggle,
     fromQuestion: fromQuestion,
     detailPicker: detailPicker,
+    skillPicker: skillPicker,
     authorityBadge: authorityBadge,
     openDocumentButton: openDocumentButton,
     canOpenDocument: canOpenDocument,

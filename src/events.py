@@ -52,6 +52,13 @@ MEMORY_EDITED = "memory_edited"
 MEMORY_REMOVED = "memory_removed"
 MEMORY_RESOLVED = "memory_conflict_resolved"
 
+# How one person wants answers worded: their house style, and their skills.
+PREFERENCES_CHANGED = "preferences_changed"
+SKILL_ADDED = "skill_added"
+SKILL_EDITED = "skill_edited"
+SKILL_REMOVED = "skill_removed"
+SKILL_APPLIED = "skill_applied"
+
 ASSISTANT_STARTED = "assistant_started"
 ASSISTANT_TURN = "assistant_turn"
 

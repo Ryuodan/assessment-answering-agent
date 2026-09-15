@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Preferences — Assessment Answering</title>
+<link rel="stylesheet" href="/static/cards.css" />
+<style>
+  /* The fourth page, and the only personal one. Everything else in this system
+     is the team's -- the questionnaires, the memory, the policies. This is how
+     one reviewer likes their answers worded, and nobody else sees it. Tokens and
+     the sign-in gate are shared with the other pages; the rest is its own. */
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 26px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #9b6bff));
+    display: grid; place-items: center; color: var(--on-accent); font-weight: 700; font-size: 14px;
+  }
+  .brand-text h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .brand-text p { margin: 0; font-size: 12.5px; color: var(--ink-faint); }
+  .topbar .spacer { flex: 1; }
+  .topbar a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 26px 24px 90px; }
+
+  button, a.ghost {
+    font: inherit; font-weight: 550; font-size: 14px;
+    background: var(--accent); color: var(--on-accent);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: 9px 15px; cursor: pointer;
+    transition: filter .15s, background .15s, border-color .15s, color .15s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  button.ghost, a.ghost { background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong); }
+  button.ghost:hover:not(:disabled), a.ghost:hover { color: var(--ink); border-color: var(--ink-faint); filter: none; }
+  button.quiet {
+    background: none; border: none; color: var(--ink-faint);
+    padding: 3px 8px; font-size: 12.5px; border-radius: 6px;
+  }
+  button.quiet:hover { color: var(--accent); background: var(--accent-soft); filter: none; }
+  button.quiet.danger:hover { color: var(--err); background: var(--err-soft); }
+  button.small { padding: 5px 11px; font-size: 12.5px; }
+
+  input[type="text"], textarea, select {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+    padding: 9px 12px; width: 100%;
+  }
+  textarea { resize: vertical; min-height: 70px; line-height: 1.55; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 20px 22px;
+  }
+  .panel + .panel { margin-top: 16px; }
+  .panel h2 { margin: 0 0 3px; font-size: 17px; font-weight: 650; }
+  .panel .hint { margin: 0 0 16px; color: var(--ink-faint); font-size: 13px; max-width: 74ch; }
+  .panel h3 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); font-weight: 650; }
+
+  .status { font-size: 13px; color: var(--ink-faint); min-height: 1.4em; }
+  .status.err { color: var(--err); }
+  .status.ok { color: var(--ok); }
+  .status.busy { color: var(--accent-ink); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+
+  /* --- the two, side by side ------------------------------------------------ */
+
+  .glance { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 18px; }
+  @media (max-width: 720px) { .glance { grid-template-columns: 1fr; } }
+  .glance .kind {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px;
+    background: var(--surface);
+  }
+  .glance .kind h2 { margin: 0 0 2px; font-size: 15px; }
+  .glance .kind .when { font-size: 13px; font-weight: 600; color: var(--accent-ink); margin-bottom: 6px; }
+  .glance .kind ul { margin: 0; padding-inline-start: 18px; font-size: 13px; color: var(--ink-soft); }
+  .glance .kind li { margin: 2px 0; }
+
+  /* --- preferences ----------------------------------------------------------- */
+
+  .choice {
+    display: grid; grid-template-columns: 230px 1fr; gap: 6px 18px; align-items: start;
+    padding: 12px 0; border-top: 1px solid var(--line);
+  }
+  .choice:first-of-type { border-top: 0; }
+  @media (max-width: 720px) { .choice { grid-template-columns: 1fr; } }
+  .choice .label { font-size: 14px; font-weight: 600; padding-top: 4px; }
+  .choice .label small { display: block; font-weight: 400; color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+  .options { display: flex; flex-wrap: wrap; gap: 8px; }
+  .options label {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    border: 1px solid var(--line-strong); border-radius: var(--radius-pill);
+    padding: 5px 13px; font-size: 13.5px; color: var(--ink-soft); background: var(--surface);
+  }
+  .options label:has(input:checked) {
+    border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600;
+  }
+  .options input { accent-color: var(--accent); margin: 0; }
+  .refer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .refer input { max-width: 260px; }
+
+  .recommend {
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 10px; background: var(--accent-soft);
+  }
+  .recommend p { margin: 0; font-size: 13px; color: var(--ink-soft); flex: 1 1 320px; }
+  .recommend strong { color: var(--ink); }
+
+  .asks {
+    margin-top: 14px; border-radius: var(--radius-sm); background: var(--surface-sunken);
+    border: 1px solid var(--line); padding: 10px 13px;
+  }
+  .asks h4 { margin: 0 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); }
+  .asks p { margin: 0; font-size: 13px; color: var(--ink-soft); white-space: pre-wrap; }
+  .asks p.none { color: var(--ink-faint); font-style: italic; }
+
+  /* --- trying an instruction on a sample ------------------------------------ */
+
+  .try { margin-top: 16px; border-top: 1px dashed var(--line-strong); padding-top: 14px; }
+  .try[hidden] { display: none; }
+  .try h4 { margin: 0 0 8px; font-size: 13.5px; font-weight: 620; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  @media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+  .compare[hidden] { display: none; }
+  .compare .side {
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 11px 13px; background: var(--surface-sunken);
+  }
+  .compare .side h5 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); }
+  .compare .side p { margin: 0; font-size: 13.5px; white-space: pre-wrap; }
+  .compare .side.after { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+  /* --- skills --------------------------------------------------------------- */
+
+  .skill {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 13px 16px; margin-bottom: 10px;
+    background: var(--surface);
+  }
+  .skill .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .skill .name { font-weight: 650; font-size: 14.5px; }
+  .skill .desc { color: var(--ink-soft); font-size: 13px; margin: 2px 0 6px; }
+  .skill details summary { cursor: pointer; font-size: 12.5px; color: var(--ink-faint); }
+  .skill .instr {
+    font-size: 13px; color: var(--ink-soft); white-space: pre-wrap; margin: 6px 0 0;
+    background: var(--surface-sunken); border-radius: var(--radius-sm); padding: 8px 11px;
+  }
+  .skill .actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .tag {
+    display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill);
+    font-size: 11px; font-weight: 600; background: var(--surface-sunken); color: var(--ink-faint);
+    border: 1px solid var(--line);
+  }
+  .empty {
+    text-align: center; padding: 16px; color: var(--ink-faint); font-size: 13.5px;
+    border: 1px dashed var(--line-strong); border-radius: var(--radius); margin-bottom: 12px;
+  }
+  label.field-name { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin: 12px 0 5px; }
+  .count-note { font-size: 11.5px; color: var(--ink-faint); text-align: end; margin-top: 3px; }
+  .count-note.over { color: var(--err); }
+  details.new-skill { margin-top: 6px; }
+  details.new-skill > summary {
+    list-style: none; cursor: pointer; display: inline-flex; align-items: center;
+    font-weight: 550; font-size: 14px; color: var(--accent-ink);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 8px 14px;
+  }
+  details.new-skill > summary::-webkit-details-marker { display: none; }
+  details.new-skill[hidden] { display: none; }
+
+  /* --- sign-in gate (shared shape with the other pages) --------------------- */
+
+  .auth-gate {
+    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+    padding: 24px; background: var(--ground);
+  }
+  .auth-card {
+    width: min(420px, 100%); background: var(--surface-raised);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); padding: 28px;
+  }
+  .auth-gate[hidden], .whoami[hidden] { display: none; }
+  .auth-card h2 { margin: 0 0 6px; font-size: 19px; }
+  .auth-card p { margin: 0 0 18px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+  .auth-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .auth-card input { margin-bottom: 12px; }
+  .auth-card button { margin-top: 6px; width: 100%; }
+  .auth-card input[type="email"], .auth-card input[type="password"] {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 9px 12px; width: 100%;
+  }
+  .auth-error {
+    margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--err-soft); color: var(--err); font-size: 13.5px;
+  }
+  .whoami { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-faint); }
+  .whoami b { color: var(--ink-soft); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="auth-gate" id="authGate" hidden>
+  <form class="auth-card" id="authForm">
+    <h2>Sign in</h2>
+    <p>Enter your address and your team&rsquo;s access code. Ask an administrator if
+       you do not have one.</p>
+    <label for="authEmail">Email address</label>
+    <input id="authEmail" type="email" autocomplete="email" required
+           placeholder="you@t2.sa" spellcheck="false">
+    <label for="authCode">Access code</label>
+    <input id="authCode" type="password" autocomplete="current-password" required
+           placeholder="Your team's code" spellcheck="false">
+    <button type="submit" id="authSubmit">Continue</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </form>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-text">
+      <h1>Your preferences</h1>
+      <p>How you want your answers to read &mdash; nobody else sees these</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="whoami" id="whoami" hidden>
+    <b id="whoamiEmail"></b>
+    <button class="ghost" id="signOut" title="End this session">Sign out</button>
+  </div>
+  <a class="ghost" href="/">Assistant</a>
+  <a class="ghost" href="/workbench">Workbench</a>
+  <a class="ghost" href="/memory">Answer memory</a>
+  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
+</div>
+
+<main>
+  <!-- The two, side by side, because the first version of this page had them
+       one above the other as two text boxes and nobody could tell them apart. -->
+  <div class="glance">
+    <div class="kind">
+      <h2>Preferences</h2>
+      <div class="when">Every answer you draft</div>
+      <ul>
+        <li>Set once, applied as each answer is drafted</li>
+        <li>A few fixed choices: verdict first, what to call us, clause numbers, tone</li>
+        <li>Everything starts &ldquo;as drafted&rdquo;</li>
+      </ul>
+    </div>
+    <div class="kind">
+      <h2>Skills</h2>
+      <div class="when">Only the answers you pick</div>
+      <ul>
+        <li>For a particular job: an auditor, a customer, a senior reader</li>
+        <li>Picked from the Skills menu above the answers, or asked for in the assistant</li>
+        <li>Built in, or your own</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Preferences ------------------------------------------------------------ -->
+  <section class="panel" id="preferencesPanel">
+    <h2>Preferences</h2>
+    <p class="hint">
+      Applied to every answer you draft, in the assistant and in the workbench, after it has been
+      drafted from the policies and checked. They change how an answer reads &mdash; never what it
+      says: the Yes or No stays, the citations stay, and nothing the sources do not support is added.
+      Each reworded answer keeps its original draft, which you can put back from the answer card.
+    </p>
+
+    <div class="recommend">
+      <p><strong>Recommended setup:</strong> how your team&rsquo;s own answers read &mdash; the verdict
+        first, the company by name, and policy references left to the citations.</p>
+      <button type="button" class="ghost small" id="useRecommended">Use it</button>
+    </div>
+
+    <div class="choice">
+      <div class="label">Start with the verdict<small>Yes, No, Partially or Not applicable</small></div>
+      <div class="options" data-field="verdict_first">
+        <label><input type="radio" name="verdict_first" value="false"> As drafted</label>
+        <label><input type="radio" name="verdict_first" value="true"> Always, when the question asks for one</label>
+      </div>
+    </div>
+
+    <div class="choice">
+      <div class="label">Call the organisation<small>Leave empty to keep the draft&rsquo;s wording</small></div>
+      <div class="refer">
+        <input type="text" id="referTo" placeholder="As drafted" spellcheck="false">
+        <button type="button" class="quiet" id="referShort" hidden></button>
+        <button type="button" class="quiet" id="referWe">&ldquo;we&rdquo;</button>
+      </div>
+    </div>
+
+    <div class="choice">
+      <div class="label">Policy names and clause numbers<small>In the answer text itself</small></div>
+      <div class="options" data-field="policy_references">
+        <label><input type="radio" name="policy_references" value="keep"> Keep them</label>
+        <label><input type="radio" name="policy_references" value="citations_only"> Leave them to the citations</label>
+      </div>
+    </div>
+
+    <div class="choice">
+      <div class="label">Tone</div>
+      <div class="options" data-field="tone">
+        <label><input type="radio" name="tone" value="as_drafted"> As drafted</label>
+        <label><input type="radio" name="tone" value="formal"> Formal</label>
+        <label><input type="radio" name="tone" value="plain"> Plain and direct</label>
+      </div>
+    </div>
+
+    <div class="choice">
+      <div class="label">Questionnaires you open start with</div>
+      <div class="options" data-field="default_length">
+        <label><input type="radio" name="default_length" value="full"> Full answers</label>
+        <label><input type="radio" name="default_length" value="brief"> Brief answers</label>
+      </div>
+    </div>
+
+    <div class="choice">
+      <div class="label">Also, always<small>Optional &mdash; anything the choices above do not cover</small></div>
+      <div>
+        <textarea id="also" rows="2" placeholder="e.g. Write &ldquo;Not applicable&rdquo;, never &ldquo;N/A&rdquo;."></textarea>
+        <div class="count-note" id="alsoCount"></div>
+      </div>
+    </div>
+
+    <div class="asks">
+      <h4>What your answers get reworded with</h4>
+      <p id="asks" class="none">Nothing &mdash; your answers stay exactly as drafted.</p>
+    </div>
+
+    <div class="row">
+      <button id="savePreferences">Save</button>
+      <button class="ghost" id="tryPreferences">Try it on a sample</button>
+      <span class="status" id="preferencesStatus"></span>
+    </div>
+    <div class="try" id="preferencesTry" hidden></div>
+  </section>
+
+  <!-- Skills ------------------------------------------------------------------ -->
+  <section class="panel" id="skillsPanel">
+    <h2>Skills</h2>
+    <p class="hint">
+      A named rewording for a particular job, applied only to the answers you pick: choose one from
+      the Skills menu above the answers on either page, or ask the assistant &mdash; &ldquo;give me the
+      executive summary of the privacy answers&rdquo;. Answers somebody wrote by hand are left as they are.
+    </p>
+
+    <h3>Built in</h3>
+    <div id="builtinSkills"></div>
+
+    <h3>Yours</h3>
+    <div id="ownSkills"></div>
+
+    <details class="new-skill" id="newSkill">
+      <summary>+ Write a new skill</summary>
+      <div id="newSkillForm"></div>
+    </details>
+  </section>
+</main>
+
+<script>
+// --- sign-in -----------------------------------------------------------------
+// Its own block, ahead of everything else and identical in shape to the other
+// pages: whether anyone may use this page is settled before the rest runs.
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const gate = $("authGate"), form = $("authForm"), error = $("authError");
+
+  function apply(session) {
+    const signedIn = Boolean(session.email);
+    gate.hidden = signedIn || !session.sign_in_required;
+    $("whoami").hidden = !(signedIn && session.sign_in_required);
+    if (!$("whoami").hidden) $("whoamiEmail").textContent = session.email;
+    if (!gate.hidden) $("authEmail").focus();
+  }
+
+  fetch("/api/auth/session")
+    .then((r) => r.json())
+    .then(apply)
+    .catch((e) => console.error("Could not check the session", e));
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    $("authSubmit").disabled = true;
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: $("authEmail").value.trim(), code: $("authCode").value }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.hidden = false;
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      error.textContent = "Could not reach the server.";
+      error.hidden = false;
+    } finally {
+      $("authSubmit").disabled = false;
+    }
+  });
+
+  $("signOut").addEventListener("click", async () => {
+    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+    window.location.reload();
+  });
+})();
+
+// --- the page ----------------------------------------------------------------
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  let limits = { also: 1000, refer_to: 60, name: 60, description: 300, instruction: 2000, skills: 40 };
+  let saved = null;
+  let recommended = null;
+  let composed = "";
+
+  // --- theme (same key as the other pages, so the choice follows you) -------
+
+  const THEME_KEY = "assessment-theme";
+  function systemPrefersDark() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    $("themeToggle").textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
+  }
+  (function initTheme() {
+    let stored = null;
+    try { stored = localStorage.getItem(THEME_KEY); } catch (e) { /* private mode */ }
+    applyTheme(stored || (systemPrefersDark() ? "dark" : "light"));
+  })();
+  $("themeToggle").addEventListener("click", () => {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  // --- talking to the server ----------------------------------------------
+
+  async function api(path, options) {
+    const response = await fetch(path, Object.assign({
+      headers: { "Content-Type": "application/json" },
+    }, options || {}));
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = body && body.detail;
+      // Validation failures arrive as a list; a person needs the sentence.
+      const message = Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail;
+      throw new Error(message || ("Request failed (" + response.status + ")"));
+    }
+    return body;
+  }
+
+  function say(node, message, kind) {
+    node.className = "status" + (kind ? " " + kind : "");
+    node.textContent = message;
+  }
+
+  const ARABIC = /[؀-ۿ]/;
+  function withDirection(node, text) {
+    node.dir = ARABIC.test(text || "") ? "rtl" : "auto";
+    return node;
+  }
+
+  function counter(input, note, max) {
+    const update = () => {
+      const used = input.value.length;
+      note.textContent = used ? used + " / " + max : "";
+      note.className = "count-note" + (used > max ? " over" : "");
+    };
+    input.addEventListener("input", update);
+    update();
+    return update;
+  }
+
+  // --- samples to try an instruction on ------------------------------------
+  //
+  // Illustrative, and labelled so: they show what an instruction does to a
+  // typical draft -- a verdict, a few specifics, a policy reference -- and are
+  // not statements about this organisation. Pasting a real one is the better
+  // test.
+
+  const SAMPLES = [
+    {
+      label: "Illustrative — a yes/no question (English)",
+      question: "Is personal data encrypted at rest?",
+      answer: "Yes. The organisation encrypts personal data at rest in accordance with the Data Cybersecurity and Privacy Policy, section 3.2.4. Databases and file stores that hold personal data use AES-256 encryption, encryption keys are kept in a managed key store with access limited to authorised administrators, and backups are encrypted to the same standard.",
+    },
+    {
+      label: "Illustrative — a process question (English)",
+      question: "Describe how security incidents are reported and handled.",
+      answer: "The organisation follows the Cybersecurity Incident and Threat Management Policy, sections 3.4–3.4.7. Incidents are reported to the Security Operations team through the service desk, logged and classified by severity within four hours. High-severity incidents are escalated to the CISO within one hour, affected clients are notified within 72 hours where their data is involved, and a post-incident review is completed within ten working days.",
+    },
+    {
+      label: "مثال توضيحي — سؤال بنعم أو لا (عربي)",
+      question: "هل يتم تشفير البيانات الشخصية أثناء التخزين؟",
+      answer: "نعم. تقوم المنظمة بتشفير البيانات الشخصية أثناء التخزين وفقاً لسياسة الأمن السيبراني وحماية البيانات، البند 3.2.4، باستخدام معيار AES-256، وتُدار مفاتيح التشفير في مخزن مفاتيح يقتصر الوصول إليه على المسؤولين المصرح لهم.",
+    },
+    { label: "Paste one of your own…", question: "", answer: "" },
+  ];
+
+  /* A try-it box: pick a sample, reword it with the instruction as it stands
+     right now, and show the two side by side. Nothing is saved. */
+  function tryBox(host, instructionOf, what) {
+    host.replaceChildren();
+    host.hidden = false;
+
+    const title = document.createElement("h4");
+    title.textContent = "Trying " + what + " on a sample. Nothing is saved.";
+
+    const picker = document.createElement("select");
+    picker.setAttribute("aria-label", "Sample answer");
+    SAMPLES.forEach((sample, index) => picker.append(new Option(sample.label, String(index))));
+
+    const own = document.createElement("div");
+    own.hidden = true;
+    const ownQuestion = document.createElement("input");
+    ownQuestion.type = "text";
+    ownQuestion.placeholder = "The question";
+    ownQuestion.style.marginTop = "8px";
+    const ownAnswer = document.createElement("textarea");
+    ownAnswer.placeholder = "An answer as the system drafted it";
+    ownAnswer.style.marginTop = "8px";
+    own.append(ownQuestion, ownAnswer);
+    picker.onchange = () => { own.hidden = !!SAMPLES[Number(picker.value)].answer; };
+
+    const run = document.createElement("button");
+    run.type = "button";
+    run.textContent = "Reword it";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "ghost";
+    close.textContent = "Close";
+    close.onclick = () => { host.hidden = true; };
+    const status = document.createElement("span");
+    status.className = "status";
+
+    const compare = document.createElement("div");
+    compare.className = "compare";
+    compare.hidden = true;
+    const sides = ["As drafted", "Reworded"].map((label, index) => {
+      const side = document.createElement("div");
+      side.className = "side" + (index ? " after" : "");
+      const heading = document.createElement("h5");
+      heading.textContent = label;
+      const text = document.createElement("p");
+      side.append(heading, text);
+      compare.append(side);
+      return text;
+    });
+
+    run.onclick = async () => {
+      const instruction = (instructionOf() || "").trim();
+      const sample = SAMPLES[Number(picker.value)];
+      const question = (sample.answer ? sample.question : ownQuestion.value).trim();
+      const answer = (sample.answer ? sample.answer : ownAnswer.value).trim();
+      if (!instruction) { say(status, "Nothing to try: every choice is still as drafted.", "err"); return; }
+      if (!question || !answer) { say(status, "Paste a question and an answer to try it on.", "err"); return; }
+      run.disabled = true;
+      say(status, "Rewording…", "busy");
+      try {
+        const body = await api("/api/preferences/try", {
+          method: "POST",
+          body: JSON.stringify({ instruction: instruction, question: question, answer: answer }),
+        });
+        withDirection(sides[0], body.before).textContent = body.before;
+        withDirection(sides[1], body.after).textContent = body.after;
+        compare.hidden = false;
+        say(status, body.failed
+          ? "The rewording did not come back, so the answer would have been left as drafted. Try again."
+          : body.changed ? "" : "It came back unchanged: there was nothing to change in this one.",
+          body.failed ? "err" : "");
+      } catch (error) {
+        say(status, error.message, "err");
+      } finally {
+        run.disabled = false;
+      }
+    };
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.marginTop = "10px";
+    row.append(run, close, status);
+    host.append(title, picker, own, row, compare);
+    host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // --- preferences ----------------------------------------------------------
+
+  const alsoCount = counter($("also"), $("alsoCount"), limits.also);
+
+  function chosen() {
+    const pick = (name) => {
+      const input = document.querySelector('input[name="' + name + '"]:checked');
+      return input ? input.value : null;
+    };
+    return {
+      verdict_first: pick("verdict_first") === "true",
+      refer_to: $("referTo").value.trim(),
+      policy_references: pick("policy_references") || "keep",
+      tone: pick("tone") || "as_drafted",
+      default_length: pick("default_length") || "full",
+      also: $("also").value,
+    };
+  }
+
+  function show(values) {
+    const tick = (name, value) => {
+      document.querySelectorAll('input[name="' + name + '"]').forEach((input) => {
+        input.checked = input.value === String(value);
+      });
+    };
+    tick("verdict_first", Boolean(values.verdict_first));
+    tick("policy_references", values.policy_references);
+    tick("tone", values.tone);
+    tick("default_length", values.default_length);
+    $("referTo").value = values.refer_to || "";
+    $("also").value = values.also || "";
+    withDirection($("also"), values.also);
+    alsoCount();
+  }
+
+  function unsaved() {
+    if (!saved) return false;
+    const now = chosen();
+    return Object.keys(now).some((key) => String(now[key]).trim() !== String(saved[key]).trim());
+  }
+
+  let composing = null;
+  function recompose() {
+    say($("preferencesStatus"), unsaved() ? "Not saved yet." : "");
+    clearTimeout(composing);
+    composing = setTimeout(async () => {
+      try {
+        const body = await api("/api/preferences/compose", { method: "POST", body: JSON.stringify(chosen()) });
+        composed = body.instruction || "";
+        const asks = $("asks");
+        asks.className = composed ? "" : "none";
+        asks.textContent = composed || "Nothing — your answers stay exactly as drafted.";
+      } catch (error) {
+        /* The preview is a courtesy; saving still validates. */
+      }
+    }, 150);
+  }
+
+  document.querySelectorAll("#preferencesPanel input, #preferencesPanel textarea").forEach((input) => {
+    input.addEventListener(input.type === "radio" ? "change" : "input", recompose);
+  });
+  $("also").addEventListener("input", () => withDirection($("also"), $("also").value));
+  $("referWe").onclick = () => { $("referTo").value = "we"; recompose(); };
+  $("referShort").onclick = () => { $("referTo").value = $("referShort").dataset.name; recompose(); };
+
+  $("useRecommended").onclick = () => {
+    if (!recommended) return;
+    // The recommendation covers the wording, not the length or the extra line:
+    // those were chosen by the person and are left as they are.
+    const now = chosen();
+    show(Object.assign({}, now, {
+      verdict_first: recommended.verdict_first,
+      refer_to: recommended.refer_to,
+      policy_references: recommended.policy_references,
+      tone: recommended.tone,
+    }));
+    recompose();
+    say($("preferencesStatus"), "Filled in. Save to use it, or try it on a sample first.");
+  };
+
+  $("savePreferences").addEventListener("click", async () => {
+    const button = $("savePreferences");
+    button.disabled = true;
+    say($("preferencesStatus"), "Saving…", "busy");
+    try {
+      const body = await api("/api/preferences", { method: "PUT", body: JSON.stringify(chosen()) });
+      adopt(body);
+      say($("preferencesStatus"), body.instruction
+        ? "Saved. Answers you draft from now on are reworded with these."
+        : "Saved. Answers you draft stay exactly as drafted.", "ok");
+    } catch (error) {
+      say($("preferencesStatus"), error.message, "err");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $("tryPreferences").addEventListener("click", () => {
+    tryBox($("preferencesTry"), () => composed, "your preferences");
+  });
+
+  // --- skills ---------------------------------------------------------------
+
+  function skillForm(skill, onDone) {
+    const box = document.createElement("div");
+
+    const field = (label, element) => {
+      const name = document.createElement("label");
+      name.className = "field-name";
+      name.textContent = label;
+      box.append(name, element);
+    };
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = limits.name;
+    name.placeholder = "e.g. Zain format";
+    name.value = skill ? skill.name : "";
+    field("Name", name);
+
+    const desc = document.createElement("input");
+    desc.type = "text";
+    desc.maxLength = limits.description;
+    desc.placeholder = "e.g. Zain's supplier questionnaires: short, verdict first";
+    desc.value = skill ? skill.description : "";
+    field("When to use it (optional)", desc);
+
+    const instr = document.createElement("textarea");
+    instr.rows = 4;
+    instr.placeholder = "e.g. Open with Yes, No or Partially. Then at most one short sentence. No policy names or clause numbers.";
+    instr.value = skill ? skill.instruction : "";
+    withDirection(instr, instr.value);
+    instr.addEventListener("input", () => withDirection(instr, instr.value));
+    field("How the answers should read", instr);
+    const note = document.createElement("div");
+    note.className = "count-note";
+    box.append(note);
+    counter(instr, note, limits.instruction);
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = skill ? "Save changes" : "Save skill";
+    const tryIt = document.createElement("button");
+    tryIt.type = "button";
+    tryIt.className = "ghost";
+    tryIt.textContent = "Try it on a sample";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "ghost";
+    cancel.textContent = "Cancel";
+    const status = document.createElement("span");
+    status.className = "status";
+    const trying = document.createElement("div");
+    trying.className = "try";
+    trying.hidden = true;
+
+    tryIt.onclick = () => tryBox(trying, () => instr.value, "this skill");
+    cancel.onclick = () => onDone(false);
+    save.onclick = async () => {
+      save.disabled = true;
+      say(status, "Saving…", "busy");
+      try {
+        const payload = JSON.stringify({ name: name.value, description: desc.value, instruction: instr.value });
+        if (skill) {
+          await api("/api/skills/" + encodeURIComponent(skill.skill_id), { method: "PATCH", body: payload });
+        } else {
+          await api("/api/skills", { method: "POST", body: payload });
+        }
+        onDone(true);
+      } catch (error) {
+        say(status, error.message, "err");
+        save.disabled = false;
+      }
+    };
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.append(save, tryIt, cancel, status);
+    box.append(row, trying);
+    return box;
+  }
+
+  function skillCard(skill) {
+    const card = document.createElement("div");
+    card.className = "skill";
+    card.id = "skill-" + skill.skill_id;
+
+    const top = document.createElement("div");
+    top.className = "top";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = skill.name;
+    top.append(name);
+    if (skill.builtin) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = "built in";
+      top.append(tag);
+    }
+
+    const desc = document.createElement("div");
+    desc.className = "desc";
+    desc.textContent = skill.description || "";
+    desc.hidden = !skill.description;
+
+    const more = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "What it tells the rewording";
+    const instr = withDirection(document.createElement("p"), skill.instruction);
+    instr.className = "instr";
+    instr.textContent = skill.instruction;
+    more.append(summary, instr);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const trying = document.createElement("div");
+    trying.className = "try";
+    trying.hidden = true;
+
+    const tryIt = document.createElement("button");
+    tryIt.className = "quiet";
+    tryIt.textContent = "Try it";
+    tryIt.onclick = () => tryBox(trying, () => skill.instruction, "“" + skill.name + "”");
+    actions.append(tryIt);
+
+    const copy = document.createElement("button");
+    copy.className = "quiet";
+    copy.textContent = skill.builtin ? "Make a copy to change" : "Duplicate";
+    copy.onclick = async () => {
+      copy.disabled = true;
+      try {
+        const made = await api("/api/skills/" + encodeURIComponent(skill.skill_id) + "/copy", { method: "POST" });
+        await load();
+        const card = document.getElementById("skill-" + made.skill_id);
+        if (card) {
+          card.scrollIntoView({ behavior: "smooth", block: "center" });
+          card.querySelector("button.edit").click();
+        }
+      } catch (error) {
+        copy.disabled = false;
+        say(statusOf(card), error.message, "err");
+      }
+    };
+    actions.append(copy);
+
+    if (!skill.builtin) {
+      const edit = document.createElement("button");
+      edit.className = "quiet edit";
+      edit.textContent = "Edit";
+      edit.onclick = () => {
+        card.replaceChildren(skillForm(skill, async (changed) => {
+          if (changed) await load();
+          else drawSkills(lastSkills);
+        }));
+      };
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "Delete";
+      remove.onclick = async () => {
+        if (!confirm("Delete the skill “" + skill.name + "”?\n\nAnswers already reworded with it keep their wording.")) return;
+        remove.disabled = true;
+        try {
+          await api("/api/skills/" + encodeURIComponent(skill.skill_id), { method: "DELETE" });
+          await load();
+        } catch (error) {
+          remove.disabled = false;
+          say(statusOf(card), error.message, "err");
+        }
+      };
+      actions.append(edit, remove);
+    }
+
+    card.append(top, desc, more, actions, trying);
+    return card;
+  }
+
+  function statusOf(card) {
+    let status = card.querySelector(":scope > .status");
+    if (!status) {
+      status = document.createElement("div");
+      status.className = "status";
+      card.append(status);
+    }
+    return status;
+  }
+
+  let lastSkills = [];
+  function drawSkills(skills) {
+    lastSkills = skills;
+    const builtin = skills.filter((s) => s.builtin);
+    const own = skills.filter((s) => !s.builtin);
+    $("builtinSkills").replaceChildren(...builtin.map(skillCard));
+    if (own.length) {
+      $("ownSkills").replaceChildren(...own.map(skillCard));
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "None yet. Make a copy of a built-in one to change it, or write your own below.";
+      $("ownSkills").replaceChildren(empty);
+    }
+    $("newSkill").hidden = own.length >= limits.skills;
+  }
+
+  function resetNewSkill() {
+    $("newSkillForm").replaceChildren(skillForm(null, async (changed) => {
+      $("newSkill").open = false;
+      resetNewSkill();
+      if (changed) await load();
+    }));
+  }
+
+  // --- loading --------------------------------------------------------------
+
+  function adopt(body) {
+    limits = body.limits || limits;
+    saved = body.preferences;
+    recommended = body.recommended;
+    show(saved);
+    composed = body.instruction || "";
+    $("asks").className = composed ? "" : "none";
+    $("asks").textContent = composed || "Nothing — your answers stay exactly as drafted.";
+    if (recommended && recommended.refer_to) {
+      $("referShort").hidden = false;
+      $("referShort").dataset.name = recommended.refer_to;
+      $("referShort").textContent = "“" + recommended.refer_to + "”";
+    }
+  }
+
+  async function load() {
+    try {
+      const body = await api("/api/preferences");
+      adopt(body);
+      drawSkills(body.skills || []);
+    } catch (error) {
+      say($("preferencesStatus"), error.message, "err");
+    }
+  }
+
+  resetNewSkill();
+  load();
+})();
+</script>
+</body>
+</html>

@@ -102,6 +102,30 @@ async def test_the_rationale_records_that_it_was_reworded(model):
 
 
 @pytest.mark.asyncio
+async def test_a_note_replaces_the_instruction_in_the_rationale(model):
+    """A two-paragraph house style pasted under every answer is noise; the
+    note says what happened in a sentence."""
+    revised = await rewrite.rewrite(
+        _answered(), "Open with Yes or No.\nNo clause numbers.", note="Reworded to your house style.",
+    )
+    assert revised.rationale.endswith("Reworded to your house style.")
+    assert "No clause numbers" not in revised.rationale
+
+
+@pytest.mark.asyncio
+async def test_a_reworded_answer_is_the_models_words_whoever_wrote_the_original(model):
+    """What keeps model text out of the answer memory. A person's answer run
+    through a rewording is no longer theirs, whichever caller asked for it."""
+    original = _answered()
+    original.by_hand = True
+
+    revised = await rewrite.rewrite(original, "More formal.")
+
+    assert revised.by_hand is False
+    assert original.by_hand is True, "and the one passed in is left alone"
+
+
+@pytest.mark.asyncio
 async def test_the_instruction_must_keep_the_answers_position():
     """A questionnaire's compliance dropdown is filled by reading the opening
     clause of the answer -- see `forms.status`. Rewording once turned "Yes. We

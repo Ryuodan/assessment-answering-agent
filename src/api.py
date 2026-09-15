@@ -6,9 +6,11 @@ Run with:  uvicorn src.api:app --reload
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import unicodedata
 import uuid
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 
@@ -21,8 +23,8 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from src import (
-    answer_memory, batches, conversations, events, forms, identity, progress, rewrite,
-    runs, service, store, tools,
+    answer_memory, batches, conversations, events, forms, identity, llm, preferences, progress,
+    rewrite, runs, service, store, tools,
 )
 from src.agents import assistant
 from src.identity import User
@@ -40,6 +42,51 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+SHARED_ASSETS = ("cards.js", "cards.css")
+"""The scripts and styles every page loads, and the reason pages are not plain files.
+
+A page and the shared script it calls are two downloads, and a browser caches
+them separately. Served with no caching instructions, a browser that had
+yesterday's `cards.js` kept it -- for hours, on its own heuristic -- while
+fetching today's page, and the page called a function the old script did not
+have: the assistant's answer panel opened and stayed empty. So each page names
+its shared assets by a fingerprint of their content. A changed script is a new
+URL, which no cache can hold an older copy of.
+"""
+
+NO_CACHE = {"Cache-Control": "no-cache"}
+"""Revalidate every time. Not "do not store": an unchanged file still comes back
+as a 304 against its ETag, so this costs a request and not a download."""
+
+
+def _fingerprint(name: str) -> str:
+    path = STATIC_DIR / name
+    stat = path.stat()
+    return _fingerprint_of(name, stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=32)
+def _fingerprint_of(name: str, mtime_ns: int, size: int) -> str:
+    """Keyed on the file's timestamp and size, so an edit is a fresh hash."""
+    return hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
+
+
+def _page(name: str) -> HTMLResponse:
+    """One of the pages, pointing at the exact version of the shared assets on disk."""
+    html = (STATIC_DIR / name).read_text(encoding="utf-8")
+    for asset in SHARED_ASSETS:
+        html = html.replace(f'"/static/{asset}"', f'"/static/{asset}?v={_fingerprint(asset)}"')
+    return HTMLResponse(html, headers=NO_CACHE)
+
+
+class _RevalidatedStatic(StaticFiles):
+    """Static files a browser checks before reusing, for the same reason as `_page`."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
 
 # Whichever script carries more of a typed question carries the answer. The
 # rule moved to `src.extraction` when the assistant needed it too; the name is
@@ -75,6 +122,7 @@ async def lifespan(_: FastAPI):
             identity.LOCAL_EMAIL,
         )
     yield
+    await llm.close_clients()
 
 
 app = FastAPI(
@@ -352,7 +400,7 @@ def admin_rotate_code(team_id: str, admin: User = Depends(current_admin)) -> dic
 
 
 @app.get("/admin", response_class=HTMLResponse)
-def admin_page() -> FileResponse:
+def admin_page() -> HTMLResponse:
     """A deep link to the access panel, which lives inside the app itself.
 
     The same document as `/`, because a deployment may only expose the
@@ -362,7 +410,7 @@ def admin_page() -> FileResponse:
     page the request came from. This route exists only so the link still works
     where that path *is* reachable.
     """
-    return FileResponse(STATIC_DIR / "index.html")
+    return _page("index.html")
 
 
 # ---------------------------------------------------------------------------
@@ -802,23 +850,10 @@ async def upload_guidelines(
     return results
 
 
-@app.post("/api/knowledge/prior-assessments")
-async def upload_prior_assessments(
-    tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...),
-    user: User = Depends(current_user),
-) -> list[IngestResult]:
-    """Index previously answered assessments as question/answer pairs.
-
-    Every pair becomes an answer-memory entry, and the sweep that works out what
-    each one supersedes or contradicts runs after the response rather than
-    inside it -- a file of sixty answers is sixty comparisons, and an upload
-    that takes four minutes reads as an upload that has hung.
-    """
-    results = await _ingest_files(files, SourceType.PRIOR_ANSWER)
-    _record_indexing(user, results)
-    tasks.add_task(_scan_memory)
-    return results
+# No route takes a filled questionnaire into the answer memory. Answers arrive
+# one at a time -- `POST /api/memory`, or an edited answer approved on its card --
+# so every one of them was read by the person who put it there. The command line
+# (`python -m src.cli answers`) remains for whoever sets up a corpus.
 
 
 def _record_indexing(user: User, results: list[IngestResult], **payload) -> None:
@@ -835,8 +870,11 @@ def _record_indexing(user: User, results: list[IngestResult], **payload) -> None
 
 @app.delete("/api/knowledge/sources/{source_name}")
 def remove_source(source_name: str, user: User = Depends(current_user)) -> dict:
-    """Remove one indexed file."""
-    service.delete_source(source_name)
+    """Remove one indexed policy document."""
+    try:
+        service.delete_source(source_name)
+    except service.NotADocument as refused:
+        raise HTTPException(status_code=400, detail=str(refused)) from refused
     events.record(
         user, events.SOURCE_REMOVED, subject_type="document", subject_id=source_name,
     )
@@ -845,7 +883,7 @@ def remove_source(source_name: str, user: User = Depends(current_user)) -> dict:
 
 @app.delete("/api/knowledge")
 def clear_knowledge(user: User = Depends(current_user)) -> dict:
-    """Empty the knowledge base."""
+    """Remove every policy document. The answer memory is left as it is."""
     service.clear_knowledge()
     events.record(user, events.SOURCE_REMOVED, subject_type="document", subject_id="*", all=True)
     return {"cleared": True}
@@ -1055,8 +1093,228 @@ async def _scan_memory() -> None:
         logger.info("Answer memory: %d finding(s) from the sweep", len(found))
 
 
+# ---------------------------------------------------------------------------
+# Preferences and skills
+#
+# Personal, unlike everything above: how one reviewer likes an answer worded is
+# a fact about that reviewer, not about the organisation. So every route here
+# acts on the signed-in person's own record and nobody else's, and a skill id
+# that belongs to a colleague answers exactly as one that does not exist.
+#
+# Nothing here reaches the drafter. See `src.preferences`.
+# ---------------------------------------------------------------------------
+
+
+def _preference(action):
+    """`_tool`, for the preference store's own refusals."""
+    try:
+        return action()
+    except preferences.PreferenceError as refused:
+        raise HTTPException(status_code=400, detail=str(refused)) from refused
+
+
+def _skill_payload(skill: preferences.Skill) -> dict:
+    return {
+        "skill_id": skill.skill_id,
+        "name": skill.name,
+        "description": skill.description,
+        "instruction": skill.instruction,
+        "builtin": skill.builtin,
+        "updated_at": skill.updated_at,
+    }
+
+
+@app.get("/preferences", include_in_schema=False)
+def preferences_page() -> HTMLResponse:
+    return _page("preferences.html")
+
+
+@app.get("/api/preferences")
+def get_preferences(user: User = Depends(current_user)) -> dict:
+    """Preferences, what they add up to, and every skill this person can use."""
+    from src import organisation
+
+    mine = preferences.load(user.email)
+    return {
+        "preferences": mine.as_dict(),
+        "instruction": mine.instruction(),
+        "recommended": preferences.recommended(organisation.load().short_name).as_dict(),
+        "skills": [_skill_payload(skill) for skill in preferences.skills(user.email)],
+        "limits": {
+            "also": preferences.MAX_ALSO,
+            "refer_to": preferences.MAX_REFER_TO,
+            "name": preferences.MAX_NAME,
+            "description": preferences.MAX_DESCRIPTION,
+            "instruction": preferences.MAX_INSTRUCTION,
+            "skills": preferences.MAX_SKILLS,
+        },
+    }
+
+
+class PreferencesRequest(BaseModel):
+    default_length: str | None = Field(default=None, pattern="^(full|brief)$")
+    verdict_first: bool | None = None
+    refer_to: str | None = Field(default=None, max_length=preferences.MAX_REFER_TO)
+    policy_references: str | None = Field(default=None, pattern="^(keep|citations_only)$")
+    tone: str | None = Field(default=None, pattern="^(as_drafted|formal|plain)$")
+    also: str | None = Field(default=None, max_length=preferences.MAX_ALSO)
+
+
+@app.put("/api/preferences")
+def save_preferences(body: PreferencesRequest, user: User = Depends(current_user)) -> dict:
+    saved = _preference(lambda: preferences.save(user.email, **body.model_dump()))
+    events.record(
+        user, events.PREFERENCES_CHANGED, subject_type="preferences", subject_id=user.email,
+        rewords=saved.rewords, **{k: v for k, v in saved.as_dict().items() if k != "also"},
+    )
+    return get_preferences(user)
+
+
+@app.post("/api/preferences/compose")
+def compose_preferences(body: PreferencesRequest, user: User = Depends(current_user)) -> dict:
+    """What a set of choices would tell the rewrite, without saving them.
+
+    So the page can show the instruction as the choices change, and try it on a
+    sample, from the one place that assembles it -- a copy of that logic in the
+    browser would drift from the one that actually runs.
+    """
+    try:
+        candidate = preferences.Preferences(**{
+            **preferences.load(user.email).as_dict(),
+            **{k: v for k, v in body.model_dump().items() if v is not None},
+        })
+    except TypeError as bad:
+        raise HTTPException(status_code=400, detail=str(bad)) from bad
+    return {"instruction": candidate.instruction()}
+
+
+class TryStyleRequest(BaseModel):
+    instruction: str = Field(min_length=1, max_length=preferences.MAX_INSTRUCTION)
+    question: str = Field(min_length=1, max_length=4000)
+    answer: str = Field(min_length=1, max_length=20000)
+
+
+@app.post("/api/preferences/try")
+async def try_a_style(body: TryStyleRequest, user: User = Depends(current_user)) -> dict:
+    """What an instruction does to one answer, before it is let loose on all of them.
+
+    Preferences are applied to every answer somebody drafts and a skill to a
+    whole selection, so a badly worded one reaches a questionnaire at once.
+    This is the same rewrite over one sample, stored nowhere, so the person sees
+    the effect first.
+    """
+    sample = AnsweredQuestion(
+        question=Question(
+            id="sample", text=body.question,
+            language=detect_question_language(body.question),
+        ),
+        answer=body.answer,
+        confidence=1.0,
+    )
+    reworded = await rewrite.rewrite(sample, body.instruction, note="Tried out.")
+    return {
+        "before": body.answer,
+        "after": reworded.answer,
+        "changed": reworded is not sample and reworded.answer.strip() != body.answer.strip(),
+        "failed": reworded is sample,
+    }
+
+
+class SkillRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=preferences.MAX_NAME)
+    description: str = Field(default="", max_length=preferences.MAX_DESCRIPTION)
+    instruction: str = Field(min_length=1, max_length=preferences.MAX_INSTRUCTION)
+
+
+class SkillEditRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=preferences.MAX_NAME)
+    description: str | None = Field(default=None, max_length=preferences.MAX_DESCRIPTION)
+    instruction: str | None = Field(default=None, max_length=preferences.MAX_INSTRUCTION)
+
+
+@app.post("/api/skills")
+def add_skill(body: SkillRequest, user: User = Depends(current_user)) -> dict:
+    skill = _preference(lambda: preferences.add_skill(
+        user.email, body.name, body.instruction, body.description,
+    ))
+    events.record(
+        user, events.SKILL_ADDED, subject_type="skill", subject_id=skill.skill_id,
+        name=skill.name,
+    )
+    return _skill_payload(skill)
+
+
+@app.patch("/api/skills/{skill_id}")
+def edit_skill(skill_id: str, body: SkillEditRequest, user: User = Depends(current_user)) -> dict:
+    skill = _preference(lambda: preferences.update_skill(
+        user.email, skill_id,
+        name=body.name, description=body.description, instruction=body.instruction,
+    ))
+    if skill is None:
+        raise HTTPException(status_code=404, detail="You have no skill like that.")
+    events.record(
+        user, events.SKILL_EDITED, subject_type="skill", subject_id=skill_id, name=skill.name,
+    )
+    return _skill_payload(skill)
+
+
+@app.delete("/api/skills/{skill_id}")
+def remove_skill(skill_id: str, user: User = Depends(current_user)) -> dict:
+    if not _preference(lambda: preferences.remove_skill(user.email, skill_id)):
+        raise HTTPException(status_code=404, detail="You have no skill like that.")
+    events.record(user, events.SKILL_REMOVED, subject_type="skill", subject_id=skill_id)
+    return {"deleted": skill_id}
+
+
+@app.post("/api/skills/{skill_id}/copy")
+def copy_skill(skill_id: str, user: User = Depends(current_user)) -> dict:
+    """A skill of your own, starting from a built-in one or another of yours."""
+    skill = _preference(lambda: preferences.copy_skill(user.email, skill_id))
+    if skill is None:
+        raise HTTPException(status_code=404, detail="You have no skill like that.")
+    events.record(
+        user, events.SKILL_ADDED, subject_type="skill", subject_id=skill.skill_id,
+        name=skill.name, copied_from=skill_id,
+    )
+    return _skill_payload(skill)
+
+
+class ApplySkillRequest(BaseModel):
+    scope: ScopeRequest = Field(default_factory=ScopeRequest)
+    include_written: bool = False
+
+
+@app.post("/api/forms/{batch_id}/skills/{skill_id}")
+async def apply_a_skill(
+    batch_id: str, skill_id: str, body: ApplySkillRequest, user: User = Depends(current_user)
+) -> dict:
+    """Reword a selection of a questionnaire's answers with one of your skills."""
+    skill, outcome = await _atool(tools.apply_skill(
+        user, batch_id, skill_id, body.scope.to_scope(),
+        include_written=body.include_written,
+    ))
+    return {
+        "skill": _skill_payload(skill),
+        **vars(outcome),
+        "batch": tools.inspect(user, batch_id),
+    }
+
+
+class RestoreDraftRequest(BaseModel):
+    question_id: str = Field(min_length=1, max_length=400)
+
+
+@app.post("/api/forms/{batch_id}/answers/draft")
+def put_back_the_draft(
+    batch_id: str, body: RestoreDraftRequest, user: User = Depends(current_user)
+) -> dict:
+    """Undo a house style on one answer: the draft goes back as it was written."""
+    _tool(lambda: tools.restore_draft(user, batch_id, body.question_id))
+    return tools.inspect(user, batch_id)
+
+
 @app.get("/memory", include_in_schema=False)
-def memory_page() -> FileResponse:
+def memory_page() -> HTMLResponse:
     """The answer memory, managed on a page of its own.
 
     Not a panel in the workbench: the workbench is organised around one
@@ -1064,7 +1322,7 @@ def memory_page() -> FileResponse:
     has ever said, which is a different job done at a different time — usually
     after somebody notices an answer they disagree with.
     """
-    return FileResponse(STATIC_DIR / "memory.html")
+    return _page("memory.html")
 
 
 @app.get("/api/search")
@@ -1208,6 +1466,9 @@ async def answer_assessment(
             status_code=422,
             detail=f"No questions could be extracted from '{result.source_name}'.",
         )
+    result.answers = await tools.in_house_style(
+        user, result.answers, run_id=run_id or "", language=language,
+    )
     _persist_run(user, result)
     return result
 
@@ -1287,6 +1548,11 @@ async def answer_question_list(
 
     answers = await service.answer_questions(
         questions, language=request.language, run_id=request.run_id
+    )
+    # Every answer somebody drafts gets their house style, however it was asked
+    # for -- a typed question in the workbench as much as a spreadsheet row.
+    answers = await tools.in_house_style(
+        user, answers, run_id=request.run_id or "", language=request.language,
     )
     result = AssessmentResult(
         run_id=request.run_id or uuid.uuid4().hex[:12],
@@ -1479,6 +1745,8 @@ def _turn_response(turn, conversation, user: User) -> dict:
         "stopped_early": turn.stopped_early,
         "seconds": round(turn.seconds, 1),
         "tokens": turn.input_tokens + turn.output_tokens,
+        "at": store.utcnow(),
+        "changed": turn.refreshed,
         "answers": assistant.answers_for(user, conversation) if turn.refreshed else None,
     }
 
@@ -1558,8 +1826,15 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
         kind = getattr(message, "type", "")
         if kind == "human":
             # Their own words, without the note that told the agent a file had
-            # arrived -- that is not something anybody said.
-            transcript.append({"role": "you", "text": assistant.spoken(str(message.content))})
+            # arrived -- that is not something anybody said. The file itself is
+            # shown, beside the words, because it is what they were about.
+            kept = message.additional_kwargs or {}
+            transcript.append({
+                "role": "you",
+                "text": assistant.spoken(str(message.content)),
+                "file": assistant.uploaded_name(message),
+                "at": kept.get("at", ""),
+            })
         elif kind == "ai" and not getattr(message, "tool_calls", None):
             text = message.content
             if isinstance(text, list):
@@ -1567,11 +1842,18 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
             if str(text).strip():
                 # What the turn did, stored on the reply itself when it was made.
                 drawn = (message.additional_kwargs or {}).get(assistant.UI_KEY) or {}
+                steps = drawn.get("steps", [])
                 transcript.append({
                     "role": "assistant",
                     "text": str(text).strip(),
-                    "steps": drawn.get("steps", []),
+                    "steps": steps,
                     "sources": drawn.get("sources", []),
+                    "at": drawn.get("at", ""),
+                    # Recorded since replies learned to offer the answers; read
+                    # off the steps for the ones stored before that.
+                    "changed": drawn.get("changed", any(
+                        step.split("(", 1)[0] in assistant.CHANGES_ANSWERS for step in steps
+                    )),
                 })
     return {
         "id": conversation.id,
@@ -1602,11 +1884,11 @@ def health() -> dict:
 # The pages were single files with everything inline until the answer card had
 # to be shared between two of them. `/static` serves that one script and
 # whatever else the pages come to share; the directory holds nothing else.
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", _RevalidatedStatic(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
+def index() -> HTMLResponse:
     """The assistant, and the front door.
 
     A separate document from the workbench rather than a mode inside it. The
@@ -1619,12 +1901,12 @@ def index() -> FileResponse:
     explained, and everything the workbench does can be asked for in a
     sentence. The workbench is where you go when you want the controls.
     """
-    return FileResponse(STATIC_DIR / "chat.html")
+    return _page("chat.html")
 
 
 @app.get("/workbench", include_in_schema=False)
-def workbench_page() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+def workbench_page() -> HTMLResponse:
+    return _page("index.html")
 
 
 @app.get("/chat", include_in_schema=False)

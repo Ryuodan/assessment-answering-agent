@@ -244,6 +244,20 @@ class AnsweredQuestion(BaseModel):
     choice between lengths is instant once it has been made once.
     """
 
+    drafted: str = Field(
+        default="",
+        description="The answer as the pipeline drafted it, before anything reworded it; '' when nothing has",
+    )
+    """What the pipeline wrote, kept once something rewords it.
+
+    A house style is somebody's own instruction applied to every answer they
+    draft, and a skill or a "make them shorter" runs over a whole selection, so
+    a poorly worded one reaches a questionnaire at once. Keeping the draft means
+    the reviewer can see what changed and put it back, rather than having to
+    answer the question again to find out. Set by the first rewording and kept
+    through later ones, so "put it back" always means the grounded draft.
+    """
+
     by_hand: bool = Field(
         default=False,
         description="Whether a person typed these words, rather than agreeing with them",

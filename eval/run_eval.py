@@ -17,11 +17,11 @@ produced it; `history` prints them. See eval/history.py.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import uuid
 from pathlib import Path
 
+from src import llm
 from src.config import PROJECT_ROOT, configure_logging
 from src.models import AssessmentResult
 
@@ -174,15 +174,15 @@ def main() -> int:
     args = build_parser().parse_args()
 
     if args.command == "answer":
-        asyncio.run(answer_golden_set(args.golden, args.out))
+        llm.run(answer_golden_set(args.golden, args.out))
     elif args.command == "history":
         print(format_history(load_history()))
     elif args.command == "retrieval":
-        asyncio.run(score_retrieval(args.targets, args.golden, args.label, args.out,
+        llm.run(score_retrieval(args.targets, args.golden, args.label, args.out,
                                     args.baseline, args.plans))
     else:
         label = args.label or args.answers.stem
-        asyncio.run(score(args.answers, args.golden, label, args.baseline, args.notes))
+        llm.run(score(args.answers, args.golden, label, args.baseline, args.notes))
     return 0
 
 

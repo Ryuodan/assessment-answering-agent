@@ -30,12 +30,12 @@ from pathlib import Path
 import asyncio
 
 from src.config import settings
-from src import answer_memory, batches, events, progress, rewrite, service
+from src import answer_memory, batches, events, preferences, progress, rewrite, service
 from src.batches import Batch
 from src.forms import status as status_map
 from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role, Target
 from src.identity import User
-from src.models import AnsweredQuestion, Question
+from src.models import AnsweredQuestion, Language, Question
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +241,13 @@ class Outcome:
     "answered 0, left 9 alone" mean opposite things to the person reading it.
     """
 
+    styled: int = 0
+    """Answers reworded to the person's preferences after they were drafted.
+
+    Reported so whoever relays the outcome can say so: an answer that reads
+    unlike the last run's for a reason nobody mentioned looks like a fault.
+    """
+
     @property
     def nothing_matched(self) -> bool:
         return self.attempted == 0 and not self.protected
@@ -303,11 +310,19 @@ def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
     result = reading.read(path, chosen)
     form = result.form
     batch = batches.create(user, path, form)
+    # Whoever opens it decides how long its answers start out. Only the opening
+    # default: a teammate who picks the file up later sees the length it already
+    # has, because changing it under somebody else's work is not a preference.
+    wanted = preferences.load(user.email).default_length
+    if wanted != batch.detail:
+        batches.set_detail(batch.id, wanted)
+        batch = batches.load(batch.id, team_id=user.team_id) or batch
     events.record(
         user, events.FORM_OPENED, subject_type=batches.SUBJECT, subject_id=batch.id,
         source_name=form.source_name, questions=len(form.questions),
         already_answered=form.answered_count,
         strategy=chosen, seconds=round(result.seconds, 2), tokens=result.tokens,
+        detail=batch.detail,
     )
     return batch
 
@@ -335,6 +350,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
     questions = []
     for question in batch.form.questions:
         result = answered.get(question.id)
+        ready, held_because = ready_to_write(result, edits.get(question.id, ""))
         questions.append({
             "id": question.id,
             "number": question.number,
@@ -355,8 +371,12 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             # true only of answers somebody wrote and then approved.
             "remembered": _memory_id(batch.id, question.id) in remembered,
             "by_hand": bool(result and written_by_a_person(result)),
-            "will_be_written": ready_to_write(result, edits.get(question.id, ""))[0],
-            "held_back_because": ready_to_write(result, edits.get(question.id, ""))[1],
+            # Set aside is decided about the question rather than the answer:
+            # whatever state the answer is in, nothing is written for it. This
+            # said "will be written" of a set-aside answer, and the cards beside
+            # the assistant drew it exactly like the others.
+            "will_be_written": ready and not question.skip,
+            "held_back_because": "" if question.skip else held_because,
             "answer": result.answer if result else "",
             "brief": result.brief if result else "",
             "prefer": result.prefer if result else "",
@@ -400,9 +420,10 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             ),
             "held_back": sum(
                 1 for q in batch.form.questions
-                if _has_answer(answered.get(q.id))
+                if _has_answer(answered.get(q.id)) and not q.skip
                 and not ready_to_write(answered.get(q.id), edits.get(q.id, ""))[0]
             ),
+            "set_aside": sum(1 for q in batch.form.questions if q.skip),
             "failed": sum(
                 1 for q in batch.form.questions
                 if (answered.get(q.id) and answered[q.id].error)
@@ -470,7 +491,21 @@ async def answer(
         [_as_question(question) for question in chosen],
         run_id=run_id or batch.id,
     )
+    # Preferences are applied here, after drafting and review, and never
+    # handed to `service`: see `src.preferences` for why the drafter must not
+    # see them. Here rather than in each interface so the workbench and the
+    # assistant cannot disagree about whether it happened.
+    results = await in_house_style(user, results, run_id=run_id or batch.id)
+    outcome.styled = sum(1 for result in results if result.drafted)
     batches.save_answers(batch.id, results)
+    # A questionnaire being filled in briefly needs the brief form of what was
+    # just answered. It used to get it only at the moment somebody switched the
+    # file to brief, so anything answered afterwards showed -- and was written
+    # -- at full length under a "Brief" label.
+    if batch.detail == "brief":
+        fresh = tuple(result.question.id for result in results if _has_answer(result))
+        if fresh:
+            await make_brief(user, batch.id, Scope(ids=fresh))
 
     outcome.answered = sum(1 for r in results if not r.error)
     outcome.failed = sum(1 for r in results if r.error)
@@ -483,8 +518,86 @@ async def answer(
     return outcome
 
 
+async def in_house_style(
+    user: User,
+    results: list[AnsweredQuestion],
+    *,
+    run_id: str = "",
+    language: Language | None = None,
+) -> list[AnsweredQuestion]:
+    """Reword freshly drafted answers to this person's preferences, if they chose any.
+
+    Every answer keeps its draft in `drafted`, so what the rewording changed can
+    be seen and undone. An answer the rewrite could not reword comes back
+    exactly as drafted: preferences that fail cost the wording, never the answer.
+
+    Public because several paths draft: questionnaire rows here, questions
+    typed into the workbench, and a question asked in the assistant's
+    conversation, which is answered with no file.
+
+    `language` is the one the answers were forced into, when they were. Left
+    out, the rewrite writes in each question's own language -- which would
+    quietly translate an Arabic question's English answer back into Arabic.
+    """
+    instruction = preferences.load(user.email).instruction()
+    worth = [result for result in results if _has_answer(result)]
+    if not instruction or not worth:
+        return results
+
+    progress.start(run_id, stage="styling")
+    progress.set_total(run_id, len(worth))
+    try:
+        async def one(result: AnsweredQuestion) -> AnsweredQuestion:
+            try:
+                styled = await rewrite.rewrite(
+                    result, instruction, language, note="Reworded to your preferences.",
+                )
+            except Exception:  # noqa: BLE001 - one failure is one unstyled answer
+                logger.exception("Could not apply preferences to %s", result.question.id)
+                return result
+            finally:
+                progress.advance(run_id)
+            if styled is result:
+                return result
+            styled.drafted = result.answer
+            return styled
+
+        styled = {item.question.id: item for item in await asyncio.gather(*(one(r) for r in worth))}
+    finally:
+        progress.finish(run_id)
+    return [styled.get(result.question.id, result) for result in results]
+
+
+def restore_draft(user: User, batch_id: str, question_id: str) -> None:
+    """Put back the answer as it was drafted, before a style, a skill or a rewording changed it."""
+    batch = _require(user, batch_id)
+    existing = batches.answers(batch.id).get(question_id)
+    if existing is None or not existing.drafted.strip():
+        raise ToolError("That answer has not been reworded since it was drafted, so there is nothing to put back.")
+    restored = existing.model_copy(deep=True)
+    restored.answer = existing.drafted
+    restored.drafted = ""
+    restored.brief = ""
+    restored.by_hand = False
+    if restored.confidence_reason in (APPROVED, HAND):
+        restored.confidence_reason = ""
+    batches.save_answers(batch.id, [restored])
+    events.record(
+        user, events.BATCH_REVISED, subject_type=batches.SUBJECT, subject_id=batch.id,
+        question_id=question_id, restored_draft=True,
+    )
+
+
 async def revise(
-    user: User, batch_id: str, instruction: str, scope: Scope | None = None, *, run_id: str = ""
+    user: User,
+    batch_id: str,
+    instruction: str,
+    scope: Scope | None = None,
+    *,
+    run_id: str = "",
+    note: str = "",
+    include_written: bool = False,
+    language: Language | None = None,
 ) -> Outcome:
     """Rewrite answers that already exist, under an instruction.
 
@@ -497,6 +610,17 @@ async def revise(
 
     Progress is reported under the batch id, so a long rewording can be watched
     the same way a long run can.
+
+    An answer a person wrote is left alone unless `include_written` says
+    otherwise, and counted in `protected`. "Make them all more formal" is about
+    the drafts; rewording a reviewer's own sentence under it would put the
+    model's words where theirs were, and they would find out by reading the
+    file. The same rule `answer` keeps for existing answers, for the same reason.
+
+    A reworded answer has to be read again. Its approval was for different
+    words, so the approval does not carry over -- and nor does the mark that a
+    person wrote it, which is what keeps model text out of the answer memory.
+    Answers the rewrite could not reword are not written back at all.
     """
     if not instruction.strip():
         raise ToolError("Say how the answers should change.")
@@ -504,12 +628,18 @@ async def revise(
     batch = _require(user, batch_id)
     existing = batches.answers(batch.id)
     scope = scope or Scope()
-    chosen = [
+    candidates = [
         question for question in scope.select(batch.form, existing)
         if _has_answer(existing.get(question.id))
     ]
+    chosen = candidates if include_written else [
+        question for question in candidates if not written_by_a_person(existing[question.id])
+    ]
 
-    outcome = Outcome(batch_id=batch.id, attempted=len(chosen), scope=scope.describe())
+    outcome = Outcome(
+        batch_id=batch.id, attempted=len(chosen), scope=scope.describe(),
+        protected=len(candidates) - len(chosen),
+    )
     if not chosen:
         return outcome
 
@@ -522,25 +652,73 @@ async def revise(
     progress.set_total(run_id or batch.id, len(chosen))
     try:
         async def one(question: FormQuestion) -> AnsweredQuestion:
+            original = existing[question.id]
             try:
-                return await rewrite.rewrite(existing[question.id], instruction)
+                revised = await rewrite.rewrite(
+                    original, instruction,
+                    **({"language": language} if language else {}),
+                    **({"note": note} if note else {}),
+                )
             finally:
                 progress.advance(run_id or batch.id)
+            if revised is not original:
+                # The first rewording keeps the draft, so any of them can be
+                # undone. Not a person's words, though: "put the draft back"
+                # would then restore them marked as the model's.
+                if not revised.drafted and not written_by_a_person(original):
+                    revised.drafted = original.answer
+                revised.by_hand = False
+                if revised.confidence_reason in (APPROVED, HAND):
+                    revised.confidence_reason = ""
+            return revised
 
         results = list(await asyncio.gather(*(one(q) for q in chosen)))
     finally:
         progress.finish(run_id or batch.id)
 
-    batches.save_answers(batch.id, results)
+    changed = [r for r in results if r is not existing[r.question.id]]
+    batches.save_answers(batch.id, changed)
 
-    outcome.answered = sum(1 for r in results if not r.error)
-    outcome.failed = sum(1 for r in results if r.error)
-    outcome.needs_review = sum(1 for r in results if r.needs_review and not r.error)
+    outcome.answered = len(changed)
+    outcome.failed = len(results) - len(changed)
+    outcome.needs_review = sum(1 for r in changed if r.needs_review and not r.error)
     events.record(
         user, events.BATCH_REVISED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        scope=outcome.scope, instruction=instruction, attempted=outcome.attempted,
+        scope=outcome.scope, instruction=instruction[:400], attempted=outcome.attempted,
+        protected=outcome.protected,
     )
     return outcome
+
+
+async def apply_skill(
+    user: User,
+    batch_id: str,
+    skill_id: str,
+    scope: Scope | None = None,
+    *,
+    run_id: str = "",
+    include_written: bool = False,
+) -> tuple[preferences.Skill, Outcome]:
+    """Reword a selection of answers with one of this person's skills.
+
+    A skill is a saved instruction for `revise`, and nothing more: the same
+    rewrite path, the same protection for answers a person wrote, the same rule
+    that the sources outrank the instruction. Naming it is the whole of what it
+    adds, which is exactly what makes it safe to keep and reuse.
+    """
+    skill = preferences.get_skill(user.email, skill_id)
+    if skill is None:
+        raise ToolError("You have no skill like that. Your skills are on the preferences page.")
+    outcome = await revise(
+        user, batch_id, skill.instruction, scope, run_id=run_id,
+        note=f"Reworded with the skill \u201c{skill.name}\u201d.",
+        include_written=include_written,
+    )
+    events.record(
+        user, events.SKILL_APPLIED, subject_type=batches.SUBJECT, subject_id=batch_id,
+        skill=skill.name, reworded=outcome.answered, protected=outcome.protected,
+    )
+    return skill, outcome
 
 
 def set_answer(
@@ -579,6 +757,10 @@ def set_answer(
     answered.error = ""
     answered.confidence = 1.0
     answered.by_hand = True
+    # Their words now, so neither the draft the style reworded nor anything
+    # derived from it is a version of this answer any more.
+    if which == "answer":
+        answered.drafted = ""
     answered.confidence_reason = HAND
 
     batches.save_answers(batch.id, [answered], edited_by=user.email)

@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
+from src import llm  # noqa: E402
 from src.models import AssessmentResult  # noqa: E402
 
 from eval.dataset import align, load_golden_set  # noqa: E402
@@ -215,7 +216,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
     configure_logging()
-    return asyncio.run(main_async(args))
+    return llm.run(main_async(args))
 
 
 if __name__ == "__main__":

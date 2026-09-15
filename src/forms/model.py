@@ -29,6 +29,9 @@ from pydantic import BaseModel, Field
 
 from src.models import Language
 
+_UNFILLED = re.compile(r"^[\s\u2610\u25a1\u25cb\u25ef_\-\u2013\u2014.,:;/\\|()\[\]]*$")
+"""A cell holding only whitespace, unticked boxes (☐ □ ○ ◯) or punctuation."""
+
 
 class Role(str, Enum):
     """What a column, or a field in a document, is for."""
@@ -115,7 +118,15 @@ class Target(BaseModel):
 
     @property
     def is_empty(self) -> bool:
-        return not self.existing.strip()
+        """Nothing written here -- which includes a box nobody ticked.
+
+        A form that asks for Yes or No by ticking a box ships with "☐" in every
+        answer cell, and that is a blank form, not an answered one. Read as an
+        answer it was imported into the answer memory as what we said, and the
+        guard against overwriting existing answers protected it from ever being
+        answered. A ticked mark -- ☒, ☑, ✓ -- still counts: it is the answer.
+        """
+        return _UNFILLED.match(self.existing or "") is not None
 
 
 class FormQuestion(BaseModel):

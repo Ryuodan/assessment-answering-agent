@@ -37,13 +37,14 @@ job.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
-from src import batches, conversations, events, progress, service, tools
+from src import batches, conversations, events, preferences, progress, rewrite, service, store, tools
 from src.config import settings
 from src.conversations import Conversation
 from src.extraction import detect_question_language
@@ -76,6 +77,10 @@ DOING = {
     "propose_fill": "Working out what would be written…",
     "search_policies": "Searching the policies…",
     "answer_directly": "Drafting an answer…",
+    "list_skills": "Looking at your skills…",
+    "read_answers": "Reading the answers…",
+    "put_back_drafts": "Putting the drafts back…",
+    "apply_skill": "Rewording with your skill…",
 }
 """What to show a person while each tool runs.
 
@@ -110,10 +115,44 @@ def spoken(text: str) -> str:
     return text.split(UPLOAD_NOTE, 1)[0].strip()
 
 
-HISTORY_MESSAGES = 60
-"""How much of the conversation is resent. Long enough to hold a morning's
-work; short enough that a chat somebody has kept open for a week does not cost
-more with every sentence."""
+def uploaded_name(message: BaseMessage) -> str:
+    """The file a person's message came with, or "".
+
+    Recorded on the message since timestamps were; read back out of the note
+    for the messages stored before that.
+    """
+    stated = (getattr(message, "additional_kwargs", None) or {}).get("file")
+    if stated:
+        return str(stated)
+    text = str(getattr(message, "content", "") or "")
+    if UPLOAD_NOTE not in text:
+        return ""
+    rest = text.split(UPLOAD_NOTE, 1)[1].strip()
+    return rest.split(". Call open_questionnaire", 1)[0].strip()
+
+
+CHANGES_ANSWERS = frozenset({
+    "answer_questions", "reword_answers", "apply_skill", "write_one_answer", "set_aside",
+})
+"""The tools whose use means the answer panel has something new to show."""
+
+
+TURNS_REMEMBERED = 20
+"""How many of a conversation's turns the model is shown.
+
+Turns, not messages. The limit used to be sixty messages, and a turn is a
+person's message, a handful of tool calls, their results and a reply -- so it
+was eight or ten turns, and worse, a count of messages can cut a turn in half:
+a tool result arriving without the call that produced it is a request the model
+API refuses, and from then on every turn in that conversation failed.
+"""
+
+TURNS_IN_FULL = 3
+"""The most recent turns shown with their tool calls and results. Older ones are
+shown as what was asked and what was said: the ids in a three-hour-old question
+list are stale anyway and cost more than listing again, and the thread of the
+conversation -- which file, what was decided -- is all in the words."""
+
 
 
 @dataclass
@@ -156,15 +195,19 @@ WHAT YOU CAN DO
 
   open_questionnaire   read a file attached to this message
   describe_form        what is in the current questionnaire and how far it has got
-  list_questions       the questions a scope selects, with their ids. Free
+  list_questions       the questions a scope selects, with their ids and places. Free
+  read_answers         the answers already written, word for word, and why any are flagged. Free
   answer_questions     answer some or all of them, from the policy corpus
   reword_answers       change how existing answers are worded, not what they say
+  put_back_drafts      undo rewording: answers back as they were first drafted
   write_one_answer     replace one answer with words a person dictated
   set_aside            leave questions out, or bring them back in
   propose_fill         report what filling the file would write. It does NOT write
   read_existing        what a question already said when the file arrived
   search_policies      look something up in the organisation's own documents
   answer_directly      answer a question asked here, with no file involved
+  list_skills          the person's saved skills, by name
+  apply_skill          reword existing answers with one of those skills
 
 CHOOSING A SCOPE
 
@@ -196,6 +239,20 @@ HOW TO WORK
 * Call `describe_form` when you need to know what is in the file -- its sheets,
   its sections, how many are answered -- before choosing a scope. Do not guess
   at a sheet name.
+* ASKED WHAT AN ANSWER SAYS, READ IT BACK. "What is the answer to the second
+  question?", "what did you write for the encryption one?", "read me the
+  flagged answers", "why is question 5 flagged?", "is the answer to 3 going
+  into the file?" -- every one of those is `read_answers`, and the reply is the
+  answer text itself, relayed word for word, with its state. Never answer
+  such a question with instructions about filling the file, and never answer,
+  reword or fill anything because of it: nobody asked for a change.
+  "The second question" is `position="2"` -- its place in the file, counted
+  from 1 -- not an id and not a guess from a list.
+* WHEN A PERSON COUNTS QUESTIONS, PASS `position`. "Question 3", "the third
+  one", "the last question", "questions 2 to 4" are places in the file, and
+  every tool that acts on questions takes `position`. Never turn them into an
+  id yourself: the number inside an id like `Human Resources!3` is the row in
+  the spreadsheet, which is not the question's place -- that one is question 2.
 * Call `list_questions` when you need a question id, or when you are not sure a
   scope selects what you meant. It is free and instant, and answering the wrong
   set is neither. Anything that needs an id -- `set_aside`, `write_one_answer`
@@ -230,8 +287,15 @@ HOW TO WORK
   fill, and do not reach for it when the instruction was about the answers
   themselves -- "make them more formal" is `reword_answers`, and answering it
   with a fill report is answering a question nobody asked.
-* You cannot add, remove or re-index policy documents, and you cannot record
-  feedback on an answer. Both are done in the interface. If asked, say where.
+* "Undo that", "put the original back", "it was better before" after a
+  rewording is `put_back_drafts` over the same answers. It cannot undo an
+  answer a person wrote; say so if that is what they mean.
+* You cannot approve an answer: approving is a person putting their name to it,
+  and it is done on the answer card. If asked, say where.
+* You cannot add, remove or re-index policy documents, you cannot record
+  feedback on an answer, and you cannot create, change or read out a skill or
+  a preference. All three are done in the interface -- the knowledge base
+  panel, the answer card, the Preferences page. If asked, say where.
 * AN ANSWER THAT ALREADY EXISTS OUTRANKS ANYTHING YOU CAN PRODUCE. A
   questionnaire often arrives already filled in -- last year's submission, or
   the security team's own draft. Those answers were written by the people who
@@ -286,6 +350,36 @@ HOW TO WORK
   looking at a promise. Call the tool, then say what it reported.
 * If a tool refuses, say what it said. Do not try the same call again.
 
+PREFERENCES AND SKILLS
+
+The Preferences page holds two things, and both belong to the person alone.
+
+  PREFERENCES are how they want every answer to read -- verdict first, what to
+  call the organisation, no clause numbers, a tone. They are applied for you:
+  `answer_questions` and `answer_directly` reword every answer they draft to
+  them, and their result says when they did. Do not reword to them again, and
+  do not go looking for what they say.
+
+  A SKILL is a named rewording for a particular job, applied only when asked
+  for. Some are built in and everyone has them -- {builtin_skills} -- and
+  people add their own ("Zain format"). When someone asks for one by name ("put the privacy answers
+  in my Zain format", "give me the executive summary of these"), that is
+  `apply_skill` with the name they used and the scope they meant. Call
+  `list_skills` when you are not sure what they have, or when they ask. A
+  skill's name is not an instruction: never pass it to `reword_answers`, which
+  would reword the answers to the words "Zain format". For a question asked in
+  conversation, pass the name to `answer_directly` as `skill`.
+
+  Neither exists unless a tool says it does. Do not invent a skill, and when
+  `apply_skill` says more than one matches, ask which one they meant. A
+  built-in skill cannot be changed by anyone; on the Preferences page it can
+  be copied, and the copy changed.
+
+  Answers a person wrote are left alone by `reword_answers` and `apply_skill`,
+  which report how many they kept. Pass `include_written=true` only when the
+  person has asked for exactly those -- their own or a colleague's -- to be
+  reworded as well.
+
 HOW TO REPLY
 
 Briefly, and about what happened. "Answered 14 of the 23 governance questions;
@@ -311,6 +405,12 @@ policies are in both, the tool results are in English, and none of that
 changes who is being spoken to. The questions inside a file keep their own
 language whatever you are writing in, and that is handled for you."""
 
+# The built-in skills are named from the list that defines them, so the prompt
+# cannot go on offering one that has been renamed or removed.
+SYSTEM = SYSTEM.replace(
+    "{builtin_skills}", ", ".join(f'"{skill.name}"' for skill in preferences.BUILTIN_SKILLS)
+)
+
 
 def _tools(user: User, state: dict) -> list:
     """Everything the assistant can do, bound to one person and one conversation.
@@ -330,10 +430,22 @@ def _tools(user: User, state: dict) -> list:
     def _batch_id() -> str:
         return state.get("batch_id") or ""
 
-    def _scope(part: str, matching: str, unanswered_only: bool, ids: str) -> tools.Scope:
+    def _scope(
+        part: str, matching: str, unanswered_only: bool, ids: str, position: str = "",
+    ) -> tools.Scope:
         chosen = tuple(
             piece.strip() for piece in (ids or "").replace(";", ",").split(",") if piece.strip()
         )
+        if (position or "").strip():
+            # "Question 3" is the third question in the file. The 3 inside an id
+            # like `Human Resources!3` is a spreadsheet row, and taking one for
+            # the other reworded the training question when asked for the one
+            # after it. A place that is not in the file selects nothing rather
+            # than everything: an empty id list means "no restriction".
+            batch = batches.load(_batch_id(), team_id=user.team_id) if _batch_id() else None
+            order = [q.id for q in batch.form.questions] if batch else []
+            placed = tuple(order[place - 1] for place in _positions(position, len(order)))
+            chosen = tuple(dict.fromkeys(chosen + placed)) or ("(no question at that place)",)
         return tools.Scope(
             ids=chosen,
             part=(part or "").strip(),
@@ -451,20 +563,163 @@ def _tools(user: User, state: dict) -> list:
                     "not a query -- try one plain word, or call describe_form for the "
                     "sheets and sections this file actually has.")
         shown = chosen[: max(1, min(int(limit or 40), 100))]
-        lines = [f"{len(chosen)} question(s) matched {scope.describe()}:"]
+        place = {question["id"]: index for index, question in enumerate(report["questions"], start=1)}
+        lines = [f"{len(chosen)} question(s) matched {scope.describe()} "
+                 "(#n is a question's place in the file: \"the second question\" is #2):"]
         for question in shown:
-            if question.get("answer"):
-                mark = "answered"
-            elif question.get("existing"):
-                mark = "in file  "
-            else:
-                mark = "blank    "
-            if question.get("skip"):
-                mark = "set aside"
-            lines.append(f"  {question['id']}  [{mark}]  {question['text'][:110]}")
+            # The id first, because it is what every other tool takes. The
+            # place after it, because it is what a person says: "the second one".
+            lines.append(f"  {question['id']}  [{_LIST_MARKS.get(_mark(question), _mark(question))}]  "
+                         f"#{place[question['id']]}  {question['text'][:110]}")
         if len(chosen) > len(shown):
             lines.append(f"  ... and {len(chosen) - len(shown)} more")
         return "\n".join(lines)
+
+    _LIST_MARKS = {"blank": "blank    ", "in file": "in file  ", "flagged": "flagged  ", "approved": "approved "}
+
+    def _mark(question: dict) -> str:
+        if question.get("skip"):
+            return "set aside"
+        if question.get("blanked"):
+            return "left blank"
+        if question.get("answer"):
+            if question.get("approved"):
+                return "approved"
+            return "answered" if question.get("will_be_written") else "flagged"
+        if question.get("existing"):
+            return "in file"
+        return "blank"
+
+    def _positions(text: str, total: int) -> list[int]:
+        """ "2", "2-5", "1,3", "last", "first" -> places in the file, counting from 1."""
+        places: list[int] = []
+        for piece in (text or "").replace(";", ",").split(","):
+            piece = piece.strip().casefold()
+            if not piece:
+                continue
+            if piece in ("last", "final"):
+                places.append(total)
+            elif piece == "first":
+                places.append(1)
+            elif "-" in piece:
+                low, _, high = piece.partition("-")
+                if low.strip().isdigit() and high.strip().isdigit():
+                    places.extend(range(int(low), int(high) + 1))
+            elif piece.isdigit():
+                places.append(int(piece))
+        return [place for place in dict.fromkeys(places) if 1 <= place <= total]
+
+    def read_answers(
+        question_ids: str = "", matching: str = "", position: str = "",
+        only: str = "", limit: int = 5,
+    ) -> str:
+        """Read back the answers already written for questions. Free and instant.
+
+        The answer text itself, with whether it is flagged and why, its
+        confidence, and whether it will go into the file. For "what is the answer
+        to question 2", "what did you write about encryption", "read me the
+        flagged ones", "why is the third one flagged". Nothing is changed.
+
+        Args:
+            question_ids: specific question ids, comma separated.
+            matching: one literal phrase, to find them by topic.
+            position: by place in the file, counting from 1: "2" for the second
+                question, "2-4" for a range, "last".
+            only: "flagged" for answers held back from the file, "approved" for
+                approved ones, "" for any.
+            limit: how many to show.
+        """
+        _log(f"read_answers({question_ids or position or matching or only or 'answers'!r})")
+        if not _batch_id():
+            return "No questionnaire is open in this conversation."
+
+        report = tools.inspect(user, _batch_id(), _scope("", matching, False, question_ids))
+        questions = report["questions"]
+        if position.strip():
+            wanted = _positions(position, len(questions))
+            if not wanted:
+                return (f"This questionnaire has {len(questions)} questions; there is no "
+                        f"question at {position!r}.")
+            chosen = [questions[place - 1] for place in wanted]
+        else:
+            chosen = [q for q in questions if q["selected"]] if (question_ids or matching) else list(questions)
+        filtering = only.strip().casefold()
+        written = [q for q in questions if q.get("answer")]
+        if filtering == "flagged":
+            chosen = [q for q in chosen
+                      if q.get("answer") and not q.get("skip") and not q.get("will_be_written")]
+        elif filtering == "approved":
+            chosen = [q for q in chosen if q.get("approved")]
+        elif not (question_ids or matching or position):
+            chosen = [q for q in chosen if q.get("answer") or q.get("existing")]
+        if not chosen:
+            # Facts, not "nothing matched". Told only that no flagged answer
+            # matched, the assistant concluded aloud that every answer had been
+            # approved -- which nobody had done.
+            approved = sum(1 for q in written if q.get("approved"))
+            if filtering == "flagged":
+                return (f"None of the {len(written)} answers is flagged: all of them would go into "
+                        f"the file. {approved} of them have been approved by a person; approving "
+                        "is done on each answer card, not here.")
+            if filtering == "approved":
+                return (f"None of the {len(written)} answers has been approved by a person yet. "
+                        "Approving is done on each answer card, not here.")
+            return (f"No answers match that. {len(written)} of {len(questions)} questions have an "
+                    "answer; `list_questions` shows each one's state.")
+
+        place = {question["id"]: index for index, question in enumerate(questions, start=1)}
+        shown = chosen[: max(1, min(int(limit or 5), 20))]
+        lines = []
+        for question in shown:
+            lines.append(f"#{place[question['id']]}  {question['id']} -- {question['text']}")
+            answered = question.get("answered") or {}
+            if question.get("answer"):
+                length = question.get("length") or "full"
+                text = (question.get("brief") if length == "brief" and question.get("brief")
+                        else question["answer"])
+                lines.append(f"    state: {_mark(question)}, confidence {round(100 * (answered.get('confidence') or 0))}%"
+                             + (", written at brief length" if length == "brief" else ""))
+                lines.append(f"    answer, to relay word for word: {text[:1800]}")
+                if not question.get("will_be_written") and question.get("held_back_because"):
+                    lines.append(f"    held back from the file because: {question['held_back_because'][:400]}")
+            elif question.get("existing"):
+                lines.append(f"    no answer written here; the file arrived saying: {question['existing'][:600]}")
+            else:
+                lines.append(f"    state: {_mark(question)} -- nothing has been written for it yet.")
+        if len(chosen) > len(shown):
+            lines.append(f"... and {len(chosen) - len(shown)} more; ask for them by position or id.")
+        return "\n".join(lines)
+
+    def put_back_drafts(question_ids: str = "", matching: str = "", position: str = "") -> str:
+        """Undo rewording: put answers back as they were first drafted.
+
+        For "undo that", "put the original answers back", "that was better
+        before" after a rewording, a skill or preferences changed the wording.
+        Answers that were never reworded are left as they are.
+
+        Args:
+            question_ids: specific question ids, comma separated.
+            matching: one literal phrase, to find them by topic.
+            position: by place in the file, counting from 1.
+        """
+        _log(f"put_back_drafts({question_ids or position or matching or 'all'!r})")
+        if not _batch_id():
+            return "No questionnaire is open in this conversation."
+        report = tools.inspect(user, _batch_id(), _scope("", matching, False, question_ids))
+        questions = report["questions"]
+        if position.strip():
+            chosen = [questions[place - 1] for place in _positions(position, len(questions))]
+        elif question_ids or matching:
+            chosen = [q for q in questions if q["selected"]]
+        else:
+            chosen = list(questions)
+        reworded = [q for q in chosen if (q.get("answered") or {}).get("drafted")]
+        if not reworded:
+            return "None of those answers has been reworded since it was drafted, so nothing was put back."
+        for question in reworded:
+            tools.restore_draft(user, _batch_id(), question["id"])
+        state["refreshed"] = True
+        return f"Put {len(reworded)} answer(s) back as they were first drafted."
 
     def read_existing(question_ids: str = "", matching: str = "", limit: int = 20) -> str:
         """What questions already said when the file arrived. Free and instant.
@@ -500,7 +755,7 @@ def _tools(user: User, state: dict) -> list:
 
     async def answer_questions(
         part: str = "", matching: str = "", unanswered_only: bool = False, ids: str = "",
-        replace_existing: bool = False,
+        replace_existing: bool = False, position: str = "",
     ) -> str:
         """Answer questions from the organisation's policies. Slow and not free.
 
@@ -515,8 +770,11 @@ def _tools(user: User, state: dict) -> list:
             replace_existing: throw away answers that are already there and
                 write new ones. Only when the person asked for those questions
                 to be answered again.
+            position: by place in the file, counting from 1: "3" for the third
+                question, "2-4", "last". Use this when the person counts questions;
+                the number inside an id is a spreadsheet row, not a place.
         """
-        scope = _scope(part, matching, unanswered_only, ids)
+        scope = _scope(part, matching, unanswered_only, ids, position)
         again = ", replacing what is there" if replace_existing else ""
         _log(f"answer_questions({scope.describe()}{again})")
         if not _batch_id():
@@ -540,15 +798,27 @@ def _tools(user: User, state: dict) -> list:
                     "and were left exactly as they were. ")
             if not outcome.attempted:
                 return kept + "Nothing else there was blank, so nothing was answered."
+        styled = (f" {outcome.styled} were reworded to your preferences."
+                  if outcome.styled else "")
+        # Said here, in the result, and not only in the prompt: this is the
+        # moment the agent decides whether it is finished, and asked to "answer
+        # everything and keep each to one sentence" it answered, then reported
+        # every answer as one sentence without ever rewording one.
+        reminder = (" Answering applies no wording instruction: if the person asked for a "
+                    "length, tone or language, that is still to do with reword_answers, and "
+                    "it is not done until that has run.")
         return (kept + f"Answered {outcome.answered} of {outcome.attempted} "
                 f"({scope.describe()}). {outcome.failed} failed, "
-                f"{outcome.needs_review} flagged for review.")
+                f"{outcome.needs_review} flagged for review.{styled}{reminder}")
 
     async def reword_answers(
         instruction: str, part: str = "", matching: str = "",
-        unanswered_only: bool = False, ids: str = "",
+        unanswered_only: bool = False, ids: str = "", include_written: bool = False,
+        language: str = "", position: str = "",
     ) -> str:
         """Change how existing answers are worded, keeping what they say.
+
+        Answers a person wrote are left as they are unless `include_written`.
 
         Args:
             instruction: how they should change -- "keep each to one sentence",
@@ -557,33 +827,133 @@ def _tools(user: User, state: dict) -> list:
             matching: free text matched against the question and its section.
             unanswered_only: ignored here; rewording needs an existing answer.
             ids: specific question ids, comma separated.
+            include_written: reword answers a person wrote too. Only when the
+                person asked for exactly those to be reworded.
+            language: "ar" or "en" only when they asked for the answers in a
+                language -- "in Arabic", "translate them to English". Left
+                empty, each answer stays in its question's language.
+            position: by place in the file, counting from 1: "3" for the third
+                question, "2-4", "last". Use this when the person counts questions;
+                the number inside an id is a spreadsheet row, not a place.
         """
-        scope = _scope(part, matching, False, ids)
+        scope = _scope(part, matching, False, ids, position)
         _log(f"reword_answers({instruction!r}, {scope.describe()})")
+        if language and language not in ("ar", "en"):
+            return 'The language is "ar" or "en".' 
         if not _batch_id():
             return "No questionnaire is open in this conversation."
         try:
             outcome = await tools.revise(
                 user, _batch_id(), instruction, scope, run_id=state.get("run_id") or "",
+                include_written=include_written, language=language or None,
             )
         except tools.ToolError as refused:
             return str(refused)
         state["refreshed"] = True
+        return _reworded(outcome, scope)
+
+    def _reworded(outcome: tools.Outcome, scope: tools.Scope, skill: str = "") -> str:
+        kept = (f" {outcome.protected} written by a person were left exactly as they are."
+                if outcome.protected else "")
         if outcome.nothing_matched:
             return (f"No answered questions matched {scope.describe()}, so there was "
                     "nothing to reword. Rewording a blank question is answering it.")
-        return f"Reworded {outcome.answered} of {outcome.attempted} ({scope.describe()})."
+        if not outcome.attempted:
+            return f"Nothing was reworded ({scope.describe()}).{kept}"
+        how = f" with the skill {skill!r}" if skill else ""
+        failed = (f" {outcome.failed} could not be reworded and were left as they were."
+                  if outcome.failed else "")
+        return (f"Reworded {outcome.answered} of {outcome.attempted}{how} "
+                f"({scope.describe()}).{failed}{kept}")
 
-    def write_one_answer(question_id: str, text: str) -> str:
+    def list_skills() -> str:
+        """The skills the person can use: built-in ones, and any they wrote.
+
+        Names and what each is for. The instructions themselves stay on the
+        Preferences page.
+        """
+        _log("list_skills")
+
+        def line(skill: preferences.Skill) -> str:
+            return f"- {skill.name}" + (f": {skill.description}" if skill.description else "")
+
+        builtin = [s for s in preferences.skills(user.email) if s.builtin]
+        mine = preferences.own_skills(user.email)
+        said = ["Built in:", *map(line, builtin)]
+        said += (["Their own:", *map(line, mine)] if mine else
+                 ["They have not written any of their own; that is done on the Preferences page."])
+        return "\n".join(said)
+
+    def _which_skill(name: str) -> tuple[preferences.Skill | None, str]:
+        found, candidates = preferences.find_skill(user.email, name)
+        if found is not None:
+            return found, ""
+        if candidates:
+            return None, ("More than one skill matches "
+                          f"{name!r}: " + ", ".join(repr(s.name) for s in candidates)
+                          + ". Ask which one they meant.")
+        mine = preferences.skills(user.email)
+        return None, (f"There is no skill called {name!r}. "
+                      + ("Their skills are: " + ", ".join(repr(s.name) for s in mine) + "."
+                         if mine else "They have not saved any skills yet."))
+
+    async def apply_skill(
+        skill: str, part: str = "", matching: str = "", ids: str = "",
+        include_written: bool = False, position: str = "",
+    ) -> str:
+        """Reword existing answers with one of the person's saved skills.
+
+        The same rewording as `reword_answers`, with the skill's saved
+        instruction in place of one given now. Answers a person wrote are left
+        as they are unless `include_written`.
+
+        Args:
+            skill: the skill's name, as the person said it.
+            part: a sheet name, or the section the questions sit under.
+            matching: free text matched against the question and its section.
+            ids: specific question ids, comma separated.
+            include_written: reword answers a person wrote too. Only when the
+                person asked for exactly those to be reworded.
+            position: by place in the file, counting from 1: "3" for the third
+                question, "2-4", "last". Use this when the person counts questions;
+                the number inside an id is a spreadsheet row, not a place.
+        """
+        scope = _scope(part, matching, False, ids, position)
+        _log(f"apply_skill({skill!r}, {scope.describe()})")
+        found, refused = _which_skill(skill)
+        if found is None:
+            return refused
+        if not _batch_id():
+            return "No questionnaire is open in this conversation."
+        try:
+            found, outcome = await tools.apply_skill(
+                user, _batch_id(), found.skill_id, scope,
+                run_id=state.get("run_id") or "", include_written=include_written,
+            )
+        except tools.ToolError as refusal:
+            return str(refusal)
+        state["refreshed"] = True
+        return _reworded(outcome, scope, skill=found.name)
+
+    def write_one_answer(text: str, question_id: str = "", position: str = "") -> str:
         """Replace one answer with words a person dictated.
 
         Args:
-            question_id: the id from describe_form or an answer card.
             text: exactly what they said to put there.
+            question_id: the question's id, from list_questions or an answer card.
+            position: or its place in the file, counting from 1: "4" for the
+                fourth question. The number inside an id is a spreadsheet row.
         """
-        _log(f"write_one_answer({question_id!r})")
+        _log(f"write_one_answer({question_id or '#' + position!r})")
         if not _batch_id():
             return "No questionnaire is open in this conversation."
+        if not question_id and position:
+            placed = _scope("", "", False, "", position).ids
+            if len(placed) != 1 or placed[0].startswith("("):
+                return f"There is no single question at {position!r}. Name one question."
+            question_id = placed[0]
+        if not question_id:
+            return "Say which question: its place in the file, or its id."
         try:
             tools.set_answer(user, _batch_id(), question_id, text)
         except tools.ToolError as refused:
@@ -591,17 +961,22 @@ def _tools(user: User, state: dict) -> list:
         state["refreshed"] = True
         return f"Replaced the answer to {question_id} with the words given."
 
-    def set_aside(question_ids: str, include: bool = False) -> str:
+    def set_aside(question_ids: str = "", include: bool = False, position: str = "") -> str:
         """Leave questions out of the file, or bring them back in.
 
         Args:
             question_ids: ids to set aside, comma separated.
             include: true to bring them back rather than set them aside.
+            position: by place in the file, counting from 1: "3" for the third
+                question, "2-4", "last". Use this when the person counts questions;
+                the number inside an id is a spreadsheet row, not a place.
         """
-        _log(f"set_aside({question_ids!r}, include={include})")
+        _log(f"set_aside({question_ids or '#' + position!r}, include={include})")
         if not _batch_id():
             return "No questionnaire is open in this conversation."
         chosen = [piece.strip() for piece in question_ids.replace(";", ",").split(",") if piece.strip()]
+        if position:
+            chosen += [qid for qid in _scope("", "", False, "", position).ids if not qid.startswith("(")]
         if not chosen:
             return "Name the questions to set aside."
         try:
@@ -638,11 +1013,12 @@ def _tools(user: User, state: dict) -> list:
         # answer nobody has confirmed is held back, and the person needs to know
         # that before they press it rather than after.
         held = counts.get("held_back", 0)
-        going_in = counts["answered"] - held
+        going_in = sum(1 for q in report["questions"] if q.get("answer") and q.get("will_be_written"))
+        aside = counts.get("set_aside", 0)
         lines = [
             f"Ready to fill {report['source_name']}: {going_in} answer(s) would be written "
             f"across about {writable} cell(s). Evidence columns are left blank unless asked "
-            f"for, and set-aside questions are not written."
+            "for" + (f", and the {aside} set-aside question(s) are not written." if aside else ".")
         ]
         if held:
             lines.append(
@@ -683,7 +1059,7 @@ def _tools(user: User, state: dict) -> list:
             for hit in hits
         )
 
-    async def answer_directly(questions: str) -> str:
+    async def answer_directly(questions: str, skill: str = "") -> str:
         """Draft this organisation's answer to a question asked in conversation.
 
         NOT for "what does our policy say about X", "where is X written down",
@@ -701,9 +1077,21 @@ def _tools(user: User, state: dict) -> list:
 
         Args:
             questions: the question, or a few, one per line. At most five.
+            skill: the name of one of the person's skills to word the answer
+                with, when they asked for one. Otherwise their preferences, if
+                they chose any, are applied on their own.
         """
         asked = [line.strip() for line in (questions or "").splitlines() if line.strip()]
-        _log(f"answer_directly({len(asked)} question(s))")
+        # The step is drawn under the reply, so which wording was used is said
+        # there too -- a short answer is otherwise indistinguishable from a
+        # skill that was asked for and quietly not applied.
+        _log(f"answer_directly({len(asked)} question(s)"
+             + (f", skill {skill.strip()!r}" if skill.strip() else "") + ")")
+        chosen = None
+        if skill.strip():
+            chosen, refused = _which_skill(skill)
+            if chosen is None:
+                return refused
         if not asked:
             return "Nothing to answer -- pass the question itself."
         if len(asked) > DIRECT_QUESTIONS:
@@ -719,6 +1107,22 @@ def _tools(user: User, state: dict) -> list:
             for index, text in enumerate(asked)
         ])
 
+        # Worded after drafting and never before, exactly as a questionnaire's
+        # rows are: a named skill if one was asked for, their preferences if not.
+        if chosen is not None:
+            drafted = [
+                await rewrite.rewrite(
+                    result, chosen.instruction,
+                    note=f"Reworded with the skill \u201c{chosen.name}\u201d.",
+                ) if not result.error and result.answer.strip() else result
+                for result in drafted
+            ]
+            events.record(user, events.SKILL_APPLIED, subject_type="conversation",
+                          subject_id=state.get("batch_id") or "", skill=chosen.name,
+                          reworded=len(drafted))
+        else:
+            drafted = await tools.in_house_style(user, drafted)
+
         lines = []
         for result in drafted:
             lines.append(result.question.text)
@@ -730,6 +1134,8 @@ def _tools(user: User, state: dict) -> list:
             # reason they do under an answer card: a claim about the policies
             # is worth what the clause behind it is worth.
             lines.append(f"    answer, to relay word for word: {result.answer}")
+            if result.drafted:
+                lines.append("    (reworded to your preferences)")
             if result.needs_review:
                 lines.append(f"    flagged for review: {result.confidence_reason or 'low confidence'}")
             state.setdefault("sources", []).extend(
@@ -740,21 +1146,47 @@ def _tools(user: User, state: dict) -> list:
     return [
         open_questionnaire, describe_form, list_questions, read_existing,
         answer_questions, reword_answers, write_one_answer, set_aside,
-        propose_fill, search_policies, answer_directly,
+        propose_fill, search_policies, answer_directly, list_skills, apply_skill,
+        read_answers, put_back_drafts,
     ]
+
+
+IN_ARABIC = """
+
+THIS TURN: the person wrote to you in Arabic, so your reply is in Arabic -- all
+of it, however much of what the tools returned is in English. When you quote an
+answer, quote it exactly as it is written, in its own language, and write
+everything around the quotation in Arabic."""
+"""Restated for every model call, beside the rule it repeats.
+
+The rule was already the last paragraph of the prompt, and it lost to the tool
+results: asked "كم سؤالاً بقي بدون إجابة؟", with a question list and an answer
+report in English in front of it, the assistant replied "There are 3 questions
+remaining". Said again, next to the turn it is about, it holds.
+"""
+
+
+def _language_of_the_turn(messages: list[BaseMessage]) -> str:
+    last = next((m for m in reversed(messages)
+                 if isinstance(m, HumanMessage) and not _is_correction(m)), None)
+    return detect_question_language(spoken(str(last.content))) if last is not None else "en"
 
 
 def _agent(tool_list: list):
     from langchain.agents import create_agent
-    from langchain.agents.middleware import ClearToolUsesEdit, ContextEditingMiddleware
+    from langchain.agents.middleware import ClearToolUsesEdit, ContextEditingMiddleware, dynamic_prompt
+
+    @dynamic_prompt
+    def in_their_language(request) -> str:
+        return SYSTEM + (IN_ARABIC if _language_of_the_turn(request.messages) == "ar" else "")
 
     return create_agent(
         chat_llm(temperature=0.0),
         tools=tool_list,
-        system_prompt=SYSTEM,
-        middleware=[ContextEditingMiddleware(
-            edits=[ClearToolUsesEdit(trigger=40_000, keep=6)],
-        )],
+        middleware=[
+            in_their_language,
+            ContextEditingMiddleware(edits=[ClearToolUsesEdit(trigger=40_000, keep=6)]),
+        ],
     )
 
 
@@ -764,6 +1196,61 @@ def _account(state: dict, turn: Turn) -> None:
         if usage:
             turn.input_tokens += usage.get("input_tokens", 0) or 0
             turn.output_tokens += usage.get("output_tokens", 0) or 0
+
+
+_JOINED = re.compile(r"(?<=[.!?\u061f])(?=[A-Z\u0600-\u06FF*\"'])")
+_WORD = re.compile(r"[\w\u0600-\u06FF]+")
+
+
+def without_repetition(text: str) -> str:
+    """A reply once, when the model wrote it twice back to back.
+
+    Seen on the real model three times in twenty turns of one conversation:
+    "The background-check question has been set aside and will not be written
+    to the file.The background-check question has been set aside and will be
+    excluded from the final submission." -- one message, two phrasings of the
+    same sentence, joined with no space, which is what two of the model's output
+    channels concatenated look like. Only a join like that is considered, and
+    only when the two halves are mostly the same words, so two different
+    sentences that happen to lack a space are left alone. The later half is kept.
+
+    Four in ten words shared is the bar: "…has been restored to the
+    questionnaire.The background-check question (question 4) is now back in the
+    questionnaire." shares 43%, and two unrelated sentences share almost none.
+    """
+    text = (text or "").strip()
+    for match in _JOINED.finditer(text):
+        head, tail = text[: match.start()].strip(), text[match.start():].strip()
+        first, second = set(_WORD.findall(head.casefold())), set(_WORD.findall(tail.casefold()))
+        if len(first) < 4 or len(second) < 4:
+            continue
+        if len(first & second) / len(first | second) >= 0.4:
+            return tail
+    return text
+
+
+_CITATION_MARK = re.compile(r"\s*\u3010[^\u3011]{0,120}\u3011")
+
+
+def tidy_reply(text: str, earlier: list[str] | tuple[str, ...] = ()) -> str:
+    """The reply as a person should read it.
+
+    Three things the model adds that nobody should see, each found reading a
+    long conversation turn by turn:
+
+    * a copy of a previous reply appended to this one -- "The background-check
+      question has been set aside…" followed, with no space, by the last turn's
+      "No answers are currently flagged…";
+    * the same reply written twice in two phrasings (see `without_repetition`);
+    * a citation marker in the model's own format, "【search_policies result #2】",
+      which points at nothing a person can open.
+    """
+    text = _CITATION_MARK.sub("", text or "").strip()
+    for before in earlier:
+        before = (before or "").strip()
+        if len(before) >= 20 and before in text and text != before:
+            text = text.replace(before, "", 1).strip()
+    return without_repetition(text)
 
 
 def _reply_from(state: dict) -> str:
@@ -776,7 +1263,7 @@ def _reply_from(state: dict) -> str:
                     block.get("text", "") for block in content if isinstance(block, dict)
                 )
             if str(content).strip():
-                return str(content).strip()
+                return without_repetition(str(content))
     return ""
 
 
@@ -851,20 +1338,39 @@ async def say(
             "Call open_questionnaire to read it.]"
         ).strip()
 
-    history = list(conversation.messages)[-HISTORY_MESSAGES:] + [HumanMessage(message)]
+    # When it was said and what came with it, on the message itself: a
+    # conversation kept open for a week reads as one undifferentiated scroll
+    # without the first, and "read this" means nothing without the second.
+    # Neither is sent to the model -- extra fields on a message stay local.
+    said = HumanMessage(message, additional_kwargs={
+        "at": store.utcnow(), **({"file": upload.name} if upload else {}),
+    })
+    history = _window(list(conversation.messages)) + [said]
     final: dict = {}
-    try:
-        async for chunk in _agent(_tools(user, state)).astream(
-            {"messages": history}, _trace_config(conversation, MAX_STEPS),
-            stream_mode="values",
-        ):
-            final = chunk
-    except Exception as failed:
-        logger.warning("The assistant stopped early: %s", failed)
-        turn.stopped_early = True
+    sending = history
+    tools_bound = _tools(user, state)
+    for attempt in range(1 + CARRY_ON):
+        try:
+            async for chunk in _agent(tools_bound).astream(
+                {"messages": sending}, _trace_config(conversation, MAX_STEPS),
+                stream_mode="values",
+            ):
+                final = chunk
+            break
+        except Exception as failed:
+            if attempt < CARRY_ON and _invented_a_tool(failed):
+                # Carried on from what the turn had finished, not started again:
+                # an answer_questions that already ran is not paid for twice.
+                logger.info("The model called a tool that does not exist; carrying on")
+                sending = _resume_from(history, final) + [_correction(failed)]
+                continue
+            logger.warning("The assistant stopped early: %s", failed)
+            turn.stopped_early = True
+            break
 
     _account(final, turn)
-    turn.reply = _reply_from(final) or (
+    earlier = [str(message.content) for message in history if _said(message)][-3:]
+    turn.reply = tidy_reply(_reply_from(final), earlier) or (
         "I ran out of room part way through that. What I did finish is in the answers beside this."
         if turn.stopped_early
         else "I could not work out what to do with that. Could you say it another way?"
@@ -872,7 +1378,9 @@ async def say(
     turn.batch_id = state.get("batch_id", "")
     turn.refreshed = bool(state.get("refreshed"))
 
-    conversation.messages = _remember(_keep(final, history, turn.reply), turn)
+    conversation.messages = _remember(
+        _keep(conversation.messages, history, final, turn.reply), turn,
+    )
     conversation.batch_id = turn.batch_id
     if not conversation.title:
         conversation.title = conversations.title_from(asked)
@@ -901,26 +1409,152 @@ def _remember(messages: list[BaseMessage], turn: Turn) -> list[BaseMessage]:
     """Attach what this turn did to the reply it produced."""
     for message in reversed(messages):
         if isinstance(message, AIMessage) and not getattr(message, "tool_calls", None):
+            # Stored as it was shown. A reply kept with an echo in it is re-sent
+            # with the history, and the model imitates what it is shown.
+            if turn.reply:
+                message.content = turn.reply
             message.additional_kwargs[UI_KEY] = {
                 "steps": list(turn.steps),
                 "sources": list(turn.sources),
+                "at": store.utcnow(),
+                # Whether the answers changed, so the reply can offer to show
+                # them -- a conversation reopened tomorrow included.
+                "changed": bool(turn.refreshed),
             }
             break
     return messages
 
 
-def _keep(final: dict, history: list[BaseMessage], reply: str) -> list[BaseMessage]:
-    """The conversation to store after a turn.
+def _turns(messages: list[BaseMessage]) -> list[list[BaseMessage]]:
+    """A conversation cut into turns, each starting with what a person said."""
+    turns: list[list[BaseMessage]] = []
+    for message in messages:
+        if isinstance(message, HumanMessage) or not turns:
+            turns.append([])
+        turns[-1].append(message)
+    return [turn for turn in turns if isinstance(turn[0], HumanMessage)]
 
-    Taken from the agent's own final state where there is one, so tool calls
-    and their results are kept and a follow-up can refer to them. A turn that
-    failed before the graph produced anything falls back to the history plus
-    whatever was said, so the person's message is never silently dropped.
+
+def _complete(turn: list[BaseMessage]) -> list[BaseMessage]:
+    """A turn with nothing in it the model API would refuse.
+
+    A turn that stopped part way through can end on a tool call whose result
+    never came, and a saved conversation is re-sent every time: one such call
+    left in the history failed every later turn. Calls without results, and
+    results without their call, are dropped; everything else stays.
     """
-    messages = list((final or {}).get("messages", []))
-    if messages:
-        return messages
-    return history + [AIMessage(reply)]
+    answered = {m.tool_call_id for m in turn if isinstance(m, ToolMessage)}
+    asked: set[str] = set()
+    kept: list[BaseMessage] = []
+    for message in turn:
+        if isinstance(message, AIMessage) and message.tool_calls:
+            ids = {call.get("id") for call in message.tool_calls}
+            if not ids <= answered:
+                continue
+            asked |= ids
+        elif isinstance(message, ToolMessage) and message.tool_call_id not in asked:
+            continue
+        kept.append(message)
+    return kept
+
+
+def _said(message: BaseMessage) -> bool:
+    return (isinstance(message, AIMessage) and not message.tool_calls
+            and bool(str(message.content or "").strip()))
+
+
+def _window(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """What the model is shown of a conversation: the recent past, whole.
+
+    Always starts at a person's message, so no turn arrives cut in half. The
+    last few turns keep their tool calls and results; older ones are reduced
+    to what was asked and what was replied. The stored conversation is not
+    touched -- this is only what is sent.
+    """
+    turns = _turns(messages)[-TURNS_REMEMBERED:]
+    window: list[BaseMessage] = []
+    for index, turn in enumerate(turns):
+        if index >= len(turns) - TURNS_IN_FULL:
+            window.extend(_complete(turn))
+            continue
+        window.append(turn[0])
+        reply = next((m for m in reversed(turn) if _said(m)), None)
+        if reply is not None:
+            window.append(AIMessage(str(reply.content)))
+    return window
+
+
+def _invented_a_tool(failed: Exception) -> bool:
+    """Whether the provider refused a call to a tool that was never offered.
+
+    The model on Groq now and then calls `repo_browser.open_file` -- a tool from
+    its own training, not from this request -- and Groq rejects the whole
+    request. In the assistant evaluation that ended two turns, one of them a
+    turn that had already answered four questions, and the next turn then
+    reported the broken one instead of doing what was asked.
+    """
+    text = str(failed)
+    return "tool_use_failed" in text or "not in request.tools" in text
+
+
+CARRY_ON = 2
+"""How many times a turn carries on after the model calls a tool that does not exist."""
+
+CORRECTION = "correction"
+"""Marks the note that tells the model so. It is sent, never stored or shown."""
+
+
+def _correction(failed: Exception) -> HumanMessage:
+    """A note that the last step called something that is not there.
+
+    Carrying on with the same messages is not enough: the model runs at
+    temperature 0, and in the evaluation it made the identical call again every
+    time. Something in front of it has to be different.
+    """
+    named = re.search(r"call tool '([^']{1,80})'", str(failed))
+    tool = f"`{named.group(1)}`" if named else "a tool"
+    return HumanMessage(
+        f"[Not from the person: your last step called {tool}, which does not exist here. "
+        "Carry on with what they asked, using only the tools you have.]",
+        additional_kwargs={CORRECTION: True},
+    )
+
+
+def _is_correction(message: BaseMessage) -> bool:
+    return bool((getattr(message, "additional_kwargs", None) or {}).get(CORRECTION))
+
+
+def _this_turn(sent: list[BaseMessage], final: dict) -> list[BaseMessage]:
+    """What this turn added after the person's message, corrections left out."""
+    produced = list((final or {}).get("messages", []))
+    new = produced[len(sent):] if len(produced) >= len(sent) else []
+    return [message for message in new if not _is_correction(message)]
+
+
+def _resume_from(history: list[BaseMessage], final: dict) -> list[BaseMessage]:
+    """The history plus whatever this turn completed before it was refused."""
+    return history[:-1] + _complete([history[-1], *_this_turn(history, final)])
+
+
+def _keep(
+    stored: list[BaseMessage], sent: list[BaseMessage], final: dict, reply: str,
+) -> list[BaseMessage]:
+    """The whole conversation after a turn: everything before, and this turn.
+
+    What was stored stays stored. The model is shown a window of it, and this
+    used to save that window back as though it were the conversation -- so past
+    about ten turns the start of every long conversation was deleted, turn by
+    turn, from the history a person scrolls back through.
+
+    This turn is taken from the agent's own final state where there is one, so
+    its tool calls and results are kept for the next turn to refer to. A turn
+    that failed before the graph produced anything keeps the person's message
+    and whatever was said, so nothing they typed is silently dropped.
+    """
+    turn = _complete([sent[-1], *_this_turn(sent, final)])
+    if not any(_said(message) for message in turn[1:]):
+        turn.append(AIMessage(reply))
+    return list(stored) + turn
 
 
 def start(user: User, message: str = "") -> Conversation:

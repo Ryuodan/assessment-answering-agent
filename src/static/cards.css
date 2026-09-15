@@ -145,6 +145,10 @@
   overflow: hidden;
 }
 .answer.review { border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); }
+/* Out of the file: still readable, plainly not part of what gets written. */
+.answer.set-aside { border-style: dashed; box-shadow: none; }
+.answer.set-aside .qtext, .answer.set-aside .rendered { opacity: .62; }
+.answer.set-aside .rendered { border-inline-start-color: var(--line-strong); }
 
 .answer-head {
   display: flex; gap: 13px; align-items: flex-start;
@@ -207,6 +211,8 @@
 }
 .held strong { font-weight: 640; }
 .held .how { display: block; margin-top: 3px; color: var(--ink-soft); }
+.held.aside { background: var(--surface-sunken); border-color: var(--line-strong); }
+.held.aside button { margin-inline-start: 6px; }
 .quiet.approve { color: var(--ok); font-weight: 600; }
 .quiet.approve:hover { background: var(--ok-soft); }
 
@@ -237,6 +243,25 @@
 .detail-pick button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .detail-pick button:disabled { opacity: .6; cursor: progress; }
 
+/* A saved skill, applied to the answers on screen. Sits beside the length
+   picker because it is the same kind of decision: how every card below reads. */
+.skill-pick { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-faint); flex-wrap: wrap; }
+.skill-pick[hidden] { display: none; }
+.skill-pick select {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-pill); padding: 3px 10px;
+  max-width: 220px;
+}
+.skill-pick button { padding: 3px 11px; font-size: 12px; border-radius: var(--radius-pill); }
+.skill-pick a { color: var(--accent-ink); font-size: 12px; text-decoration: none; }
+.skill-pick a:hover { text-decoration: underline; }
+
+/* The draft a house style reworded. Folded away: it is there to be checked
+   when something reads oddly, not to be read twice every time. */
+.drafted summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
+.drafted .rationale { margin-bottom: 9px; white-space: pre-wrap; }
+.drafted button { font-size: 12px; padding: 4px 11px; }
+
 /* The same choice for one answer, sized down: it lives in a label row beside
    Edit rather than above a whole panel. */
 .len-pick { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-pill); overflow: hidden; }
@@ -251,7 +276,7 @@
 .field { margin-top: 16px; }
 .field:first-child { margin-top: 0; }
 .field-label {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
   text-transform: uppercase; color: var(--ink-faint); margin-bottom: 7px;
 }

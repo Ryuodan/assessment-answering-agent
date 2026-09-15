@@ -26,6 +26,7 @@ from src.models import (
     AnsweredQuestion,
     AssessmentResult,
     Evidence,
+    ExtractedQAPair,
     IngestResult,
     Language,
     Question,
@@ -66,9 +67,8 @@ async def ingest(
                 duplicate_of=original,
             )
 
-        text = await extracted_document_text(path)
-
         if source_type is SourceType.GUIDELINE:
+            text = await extracted_document_text(path)
             chunks = store.add_guideline(path.name, text, content_hash, authority=authority)
             return IngestResult(
                 source_name=path.name,
@@ -77,7 +77,7 @@ async def ingest(
                 warning=_looks_like_a_questionnaire(text, path.name),
             )
 
-        pairs = await extract_qa_pairs(text)
+        pairs = await answered_pairs(path)
         if not pairs:
             # Indexing nothing and reporting success reads as "done". A policy
             # filed here is simply absent from the knowledge base afterwards,
@@ -111,6 +111,61 @@ async def ingest(
     except Exception as exc:  # noqa: BLE001 - reported per file, not fatal to the batch
         logger.exception("Failed to ingest %s", path.name)
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0, error=str(exc))
+
+
+async def answered_pairs(path: str | Path, text: str | None = None) -> list[ExtractedQAPair]:
+    """The questions a filled-in questionnaire answers, and what it answered.
+
+    A spreadsheet or Word form is read by the same reader that opens a
+    questionnaire for answering, and its answers are the ones that reader finds
+    already in the file -- status and comment joined, the author's instruction
+    column told apart from the answer. That is how the team's own 1,055 answers
+    were harvested. The earlier path turned every file into text and asked a
+    model to find the pairs, which was the only option for a PDF, could not take
+    a spreadsheet at all, and is what almost every questionnaire arrives as.
+
+    A PDF still goes that way, and so does a Word document the form reader
+    cannot make sense of.
+
+    The configured detection strategy reads it -- the one questionnaires are
+    opened with, chosen and tested for that -- and the rules alone read it
+    again, kept only if they find more answers. Opening a questionnaire to
+    answer it and harvesting what somebody already wrote in it are different
+    jobs: over the team's seventeen filled questionnaires the guarded reading
+    relabels PSAT's answer column and finds none of its 183 answers, where the
+    rules find all of them. Together the two find 1,087; either alone, at most
+    1,055. A wrong reading is not silent either way -- the pairs are shown to a
+    person before anything is imported.
+    """
+    from src import forms
+    from src.forms import reading
+
+    path = Path(path)
+    if path.suffix.lower() in forms.SUPPORTED:
+        best: list[ExtractedQAPair] = []
+        # The configured strategy first, so it is the reading kept on a tie.
+        for strategy in dict.fromkeys((settings.detection_strategy, "rules")):
+            try:
+                read = await asyncio.to_thread(reading.read, path, strategy)
+            except Exception:  # noqa: BLE001 - a form one reader cannot parse may suit the other
+                logger.info("The %s reader could not read '%s'", strategy, path.name)
+                continue
+            pairs = [
+                ExtractedQAPair(
+                    question=question.text.strip(),
+                    answer=question.existing_answer.strip(),
+                    section=(question.section or "").strip(),
+                )
+                for question in read.form.questions
+                if question.text.strip() and question.existing_answer.strip() and not question.skip
+            ]
+            if len(pairs) > len(best):
+                best = pairs
+        if best or path.suffix.lower() != ".docx":
+            return best
+    if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+        return []
+    return await extract_qa_pairs(text if text is not None else await extracted_document_text(path))
 
 
 # A questionnaire is mostly questions; a policy states things. Measured across
@@ -351,14 +406,33 @@ async def search_knowledge(
     }
 
 
+class NotADocument(ValueError):
+    """A name that is not a policy document, asked to be removed as one. Safe to show."""
+
+
 def delete_source(source_name: str) -> None:
-    """Remove one previously uploaded file from the knowledge base."""
+    """Remove one previously uploaded policy document from the knowledge base.
+
+    Only documents. Previous answers are indexed too, but they belong to the
+    answer memory, where each has a row -- who approved it, what it replaced --
+    that a delete by source name would orphan by the hundred.
+    """
+    if get_store().source_type_of(source_name) == SourceType.PRIOR_ANSWER.value:
+        raise NotADocument(
+            "Previous answers are part of the answer memory. Manage them on the Answer memory page."
+        )
     get_store().delete_source(source_name)
 
 
 def clear_knowledge() -> None:
-    """Empty the knowledge base."""
-    get_store().reset()
+    """Remove every policy document, and leave the answer memory standing.
+
+    It used to drop the whole collection, which took the memory's 698 vectors
+    with it and left their rows on the memory page -- listed, and never
+    retrieved again. Clearing the corpus and forgetting what the team has said
+    are different decisions, made in different places.
+    """
+    get_store().delete_type(SourceType.GUIDELINE)
 
 
 def save_upload(filename: str, content: bytes) -> Path:

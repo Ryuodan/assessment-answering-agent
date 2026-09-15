@@ -15,8 +15,11 @@ output, covering provider and model-specific structured-output edge cases:
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
+from collections.abc import Coroutine
 from functools import lru_cache
 from typing import Any, TypeVar
 
@@ -39,6 +42,7 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
+ResultT = TypeVar("ResultT")
 
 # Everything worth trying again. Rate limits matter most: questions fan out
 # concurrently, so a 429 is the expected response to a large assessment, not an
@@ -69,7 +73,51 @@ def chat_llm(temperature: float | None = None, model: str | None = None) -> Base
         kwargs["base_url"] = settings.groq_base_url
 
     logger.debug("Creating ChatGroq model=%s temperature=%s", kwargs["model"], kwargs["temperature"])
-    return ChatGroq(**kwargs)
+    model_made = ChatGroq(**kwargs)
+    _MADE.append(model_made)
+    return model_made
+
+
+_MADE: list[ChatGroq] = []
+"""Every model `chat_llm` handed out, so their connections can be closed."""
+
+
+async def close_clients() -> None:
+    """Close the models' connections while the event loop that opened them runs.
+
+    Left to the garbage collector, the connections are collected during
+    interpreter shutdown, after the loop has closed, and on Windows CPython
+    3.11's proactor transport crashes formatting itself in `__del__` (an access
+    violation). Every script that talked to the model ended with exit code 139,
+    whatever it had printed -- including the assistant evaluation, whose exit
+    code is its verdict.
+    """
+    from src import embeddings
+
+    made: list[Any] = list(_MADE)
+    _MADE.clear()
+    chat_llm.cache_clear()
+    # The embeddings client searches the policies with its own connections.
+    if embeddings.get_embeddings.cache_info().currsize:
+        made.append(embeddings.get_embeddings())
+        embeddings.get_embeddings.cache_clear()
+    for model in made:
+        client = getattr(getattr(model, "async_client", None), "_client", None)
+        if client is not None:
+            with contextlib.suppress(Exception):
+                await client.close()
+
+
+def run(main: Coroutine[Any, Any, ResultT]) -> ResultT:
+    """`asyncio.run`, closing the model's connections before the loop ends."""
+
+    async def closing() -> ResultT:
+        try:
+            return await main
+        finally:
+            await close_clients()
+
+    return asyncio.run(closing())
 
 
 def structured_llm(

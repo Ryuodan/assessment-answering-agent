@@ -252,6 +252,11 @@ class KnowledgeStore:
         self._reset_caches()
         self._store.delete(where={"source_name": source_name})
 
+    def delete_type(self, source_type: SourceType) -> None:
+        """Remove every chunk of one kind, and nothing of the other."""
+        self._reset_caches()
+        self._store.delete(where={"source_type": source_type.value})
+
     def reset(self) -> None:
         """Drop the whole collection. Used by the UI's 'clear knowledge base' action."""
         self._reset_caches()
@@ -734,8 +739,22 @@ class KnowledgeStore:
             "total_chunks": sum(counts.values()),
             "guideline_chunks": counts.get(SourceType.GUIDELINE.value, 0),
             "prior_answer_chunks": counts.get(SourceType.PRIOR_ANSWER.value, 0),
-            "sources": sorted(sources.values(), key=lambda source: source["name"]),
+            # Documents only. Previous answers are part of the answer memory,
+            # managed one answer at a time on a page of their own; listed here
+            # they were a single row reading "Answer memory (698)" with a
+            # remove button beside it that would have deleted every vector and
+            # left 698 rows on the memory page pointing at nothing.
+            "sources": sorted(
+                (source for source in sources.values()
+                 if source["source_type"] != SourceType.PRIOR_ANSWER.value),
+                key=lambda source: source["name"],
+            ),
         }
+
+    def source_type_of(self, source_name: str) -> str:
+        """Which kind of source a name is indexed as, or "" when it is not indexed."""
+        _counts, sources = self._catalog()
+        return (sources.get(source_name) or {}).get("source_type", "")
 
 
 _store_lock = threading.Lock()
