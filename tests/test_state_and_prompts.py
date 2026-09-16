@@ -457,8 +457,8 @@ async def test_agreement_counts_searches_not_copies(monkeypatch):
             return [Evidence(score=0.7, **shared)]
 
     store = Store()
-    monkeypatch.setattr(nodes, "get_store", lambda: store, raising=False)
-    monkeypatch.setattr("src.knowledge.get_store", lambda: store, raising=False)
+    monkeypatch.setattr(nodes, "get_store", lambda team_id=None: store, raising=False)
+    monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: store, raising=False)
     monkeypatch.setattr(settings, "top_k_guidelines", 8)
 
     queries = [f"query {n}" for n in range(6)]
@@ -509,8 +509,8 @@ async def _retrieve_with(monkeypatch, counts, queries):
     from src.graph import nodes
 
     store = CountingStore(counts)
-    monkeypatch.setattr(nodes, "get_store", lambda: store, raising=False)
-    monkeypatch.setattr("src.knowledge.get_store", lambda: store, raising=False)
+    monkeypatch.setattr(nodes, "get_store", lambda team_id=None: store, raising=False)
+    monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: store, raising=False)
     out = await nodes.retrieve({
         "question": Question(id="1", text="anything"),
         "search_queries": queries,

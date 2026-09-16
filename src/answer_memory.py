@@ -15,6 +15,12 @@ Three things feed it, and they are the same shape once they arrive:
 * **By hand.** Somebody types in what we say about something, because they know
   it and no questionnaire in the corpus happens to ask.
 
+**Every team has its own.** An entry belongs to the team that imported,
+approved or wrote it, is retrieved only for that team's questionnaires, and can
+be read, corrected or forgotten only by that team -- the same boundary as the
+knowledge base it is indexed beside. It used to be one memory for the whole
+organisation, so one team's answers were quoted in another team's files.
+
 Two stores, deliberately. Chroma holds the text and its vector and answers
 "what did we say about encryption"; SQLite holds who approved it, when, what it
 replaced and what it disagrees with. Neither is the other's index: the entry id
@@ -33,6 +39,7 @@ from dataclasses import dataclass
 from langchain_core.documents import Document
 
 from src import memory, store
+from src.config import settings
 from src.memory import Entry, Finding
 from src.models import SourceType
 
@@ -54,7 +61,12 @@ uploaded, and a `remove` there would quietly delete a memory entry. Under one
 name the list stays a list of files, plus this.
 """
 
-_synced: set[str] = set()
+_synced: set[tuple[str, str]] = set()
+
+
+def _team(team_id: str | None) -> str:
+    """The team an operation is for. Scripts and tests may leave it to the default."""
+    return team_id or settings.default_team
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +85,7 @@ def _entry(row) -> Entry:
         section=row["section"],
         origin=row["origin"],
         superseded_by=row["superseded_by"],
+        team_id=row["team_id"],
     )
 
 
@@ -126,16 +139,17 @@ def entry_id_of(metadata: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def get(entry_id: str) -> Entry | None:
+def get(entry_id: str, team_id: str | None = None) -> Entry | None:
     row = store.connect().execute(
-        "SELECT * FROM memory_entries WHERE entry_id = ?", (entry_id,)
+        "SELECT * FROM memory_entries WHERE team_id = ? AND entry_id = ?",
+        (_team(team_id), entry_id),
     ).fetchone()
     return _entry(row) if row else None
 
 
-def _matching(query: str, standing: bool | None, origin: str) -> tuple[str, list]:
+def _matching(query: str, standing: bool | None, origin: str, team_id: str) -> tuple[str, list]:
     """The WHERE clause the list and its total both have to agree on."""
-    where, params = ["1 = 1"], []
+    where, params = ["team_id = ?"], [team_id]
     if query.strip():
         where.append("(question LIKE ? OR answer LIKE ?)")
         params += [f"%{query.strip()}%"] * 2
@@ -156,15 +170,17 @@ def entries(
     origin: str = "",
     limit: int = 100,
     offset: int = 0,
+    team_id: str | None = None,
 ) -> list[Entry]:
-    """Remembered answers, newest first.
+    """One team's remembered answers, newest first.
 
     `standing` filters out the superseded ones — the default is everything,
     because the page that lists these is exactly where somebody goes to see what
     replaced what.
     """
-    ensure_synced()
-    clause, params = _matching(query, standing, origin)
+    team = _team(team_id)
+    ensure_synced(team)
+    clause, params = _matching(query, standing, origin, team)
     rows = store.connect().execute(
         f"SELECT * FROM memory_entries WHERE {clause} "
         "ORDER BY updated_at DESC, rowid DESC LIMIT ? OFFSET ?",
@@ -173,24 +189,19 @@ def entries(
     return [_entry(row) for row in rows]
 
 
-def count(*, query: str = "", standing: bool | None = None, origin: str = "") -> int:
+def count(
+    *, query: str = "", standing: bool | None = None, origin: str = "", team_id: str | None = None,
+) -> int:
     """How many entries match, for a page that has to say "showing 100 of 812"."""
-    ensure_synced()
-    clause, params = _matching(query, standing, origin)
+    team = _team(team_id)
+    ensure_synced(team)
+    clause, params = _matching(query, standing, origin, team)
     return store.connect().execute(
         f"SELECT COUNT(*) FROM memory_entries WHERE {clause}", params
     ).fetchone()[0]
 
 
-def count_from_file(source_name: str) -> int:
-    """How many entries importing this questionnaire contributed last time."""
-    return store.connect().execute(
-        "SELECT COUNT(*) FROM memory_entries WHERE from_file = ? AND origin = 'import'",
-        (source_name,),
-    ).fetchone()[0]
-
-
-def ids_from_batch(batch_id: str) -> set[str]:
+def ids_from_batch(batch_id: str, team_id: str | None = None) -> set[str]:
     """Which of a questionnaire's answers are in the memory, in one query.
 
     The interface asks this per batch rather than per question: a card that
@@ -204,38 +215,51 @@ def ids_from_batch(batch_id: str) -> set[str]:
         # id is built from a question id, which is the questionnaire's own text
         # and can hold anything, including the two characters LIKE treats as
         # wildcards.
-        "SELECT entry_id FROM memory_entries WHERE origin = 'approved'"
+        "SELECT entry_id FROM memory_entries WHERE team_id = ? AND origin = 'approved'",
+        (_team(team_id),),
     ).fetchall()
     return {row["entry_id"] for row in rows if row["entry_id"].startswith(prefix)}
 
 
-def superseded_ids() -> set[str]:
-    """Entries that must not be retrieved. Usually empty, and cheap when it is."""
+def superseded_ids(team_id: str | None = None) -> set[str]:
+    """Entries that must not be retrieved. Usually empty, and cheap when it is.
+
+    Only those whose replacement still exists. An answer replaced by nothing is
+    an answer that stopped being retrieved for no reason anybody could see.
+    """
+    team = _team(team_id)
     rows = store.connect().execute(
-        "SELECT entry_id FROM memory_entries WHERE superseded_by != ''"
+        "SELECT entry_id FROM memory_entries WHERE team_id = ? AND superseded_by != '' "
+        "AND superseded_by IN (SELECT entry_id FROM memory_entries WHERE team_id = ?)",
+        (team, team),
     ).fetchall()
     return {row["entry_id"] for row in rows}
 
 
-def conflicts(*, open_only: bool = True) -> list[Conflict]:
-    clause = "WHERE resolved_at = ''" if open_only else ""
+def conflicts(*, open_only: bool = True, team_id: str | None = None) -> list[Conflict]:
+    clause = " AND resolved_at = ''" if open_only else ""
     rows = store.connect().execute(
-        f"SELECT * FROM memory_conflicts {clause} ORDER BY raised_at DESC"
+        f"SELECT * FROM memory_conflicts WHERE team_id = ?{clause} ORDER BY raised_at DESC",
+        (_team(team_id),),
     ).fetchall()
     return [_conflict(row) for row in rows]
 
 
-def stats() -> dict:
-    ensure_synced()
+def stats(team_id: str | None = None) -> dict:
+    team = _team(team_id)
+    ensure_synced(team)
     conn = store.connect()
-    total = conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0]
+    total = conn.execute(
+        "SELECT COUNT(*) FROM memory_entries WHERE team_id = ?", (team,)
+    ).fetchone()[0]
     superseded = conn.execute(
-        "SELECT COUNT(*) FROM memory_entries WHERE superseded_by != ''"
+        "SELECT COUNT(*) FROM memory_entries WHERE team_id = ? AND superseded_by != ''", (team,)
     ).fetchone()[0]
     by_origin = {
         row["origin"]: row["n"]
         for row in conn.execute(
-            "SELECT origin, COUNT(*) AS n FROM memory_entries GROUP BY origin"
+            "SELECT origin, COUNT(*) AS n FROM memory_entries WHERE team_id = ? GROUP BY origin",
+            (team,),
         ).fetchall()
     }
     return {
@@ -244,21 +268,34 @@ def stats() -> dict:
         "superseded": superseded,
         "by_origin": by_origin,
         "open_conflicts": conn.execute(
-            "SELECT COUNT(*) FROM memory_conflicts WHERE resolved_at = ''"
+            "SELECT COUNT(*) FROM memory_conflicts WHERE team_id = ? AND resolved_at = ''", (team,)
         ).fetchone()[0],
         "unscanned": conn.execute(
-            "SELECT COUNT(*) FROM memory_entries WHERE scanned_at = ''"
+            "SELECT COUNT(*) FROM memory_entries WHERE team_id = ? AND scanned_at = ''", (team,)
         ).fetchone()[0],
     }
 
 
-def pending(*, limit: int = 25) -> list[Entry]:
-    """Entries that have not been compared against what we already remember."""
-    rows = store.connect().execute(
-        "SELECT * FROM memory_entries WHERE scanned_at = '' "
-        "ORDER BY created_at LIMIT ?",
-        (limit,),
-    ).fetchall()
+def pending(*, limit: int = 25, team_id: str | None = None) -> list[Entry]:
+    """Entries not yet compared against what their team already remembers.
+
+    Every team's by default, oldest first: the background sweep is one process
+    for everyone, and each entry it takes is compared only within its own team.
+    A person pressing the button asks for their own team's, and is shown only
+    those -- the findings name the other entry's question.
+    """
+    if team_id:
+        rows = store.connect().execute(
+            "SELECT * FROM memory_entries WHERE team_id = ? AND scanned_at = '' "
+            "ORDER BY created_at LIMIT ?",
+            (team_id, limit),
+        ).fetchall()
+    else:
+        rows = store.connect().execute(
+            "SELECT * FROM memory_entries WHERE scanned_at = '' "
+            "ORDER BY created_at LIMIT ?",
+            (limit,),
+        ).fetchall()
     return [_entry(row) for row in rows]
 
 
@@ -295,6 +332,7 @@ def record(
         raise ValueError(f"origin must be one of {ORIGINS}")
 
     entry_id = entry_id or new_id()
+    team = _team(team_id)
     now = store.utcnow()
     if origin != "import" and not approved_on:
         approved_on = now
@@ -304,14 +342,14 @@ def record(
         "(entry_id, team_id, question, answer, section, from_file, origin, "
         " approved_by, approved_on, created_at, updated_at, scanned_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (entry_id, team_id, question, answer, section, from_file, origin,
+        (entry_id, team, question, answer, section, from_file, origin,
          approved_by, approved_on, now, now, now if scanned else ""),
     )
     store.connect().commit()
 
     if index:
-        index_entry(get(entry_id))
-    return get(entry_id)
+        index_entry(get(entry_id, team))
+    return get(entry_id, team)
 
 
 def adopt_file(source_name: str, pairs, *, team_id: str = "") -> list[Entry]:
@@ -325,6 +363,7 @@ def adopt_file(source_name: str, pairs, *, team_id: str = "") -> list[Entry]:
     They arrive unscanned, which is what puts them in front of the sweep that
     looks for what they contradict.
     """
+    team = _team(team_id)
     conn = store.connect()
     keep = set()
     now = store.utcnow()
@@ -340,26 +379,30 @@ def adopt_file(source_name: str, pairs, *, team_id: str = "") -> list[Entry]:
             "(entry_id, team_id, question, answer, section, from_file, origin, "
             " created_at, updated_at, scanned_at) "
             "VALUES (?,?,?,?,?,?,'import',?,?,'')",
-            (entry_id, team_id, question, answer, getattr(pair, "section", "") or "",
+            (entry_id, team, question, answer, getattr(pair, "section", "") or "",
              source_name, now, now),
         )
     placeholders = ",".join("?" for _ in keep) or "''"
     conn.execute(
-        f"DELETE FROM memory_entries WHERE from_file = ? AND origin = 'import' "
+        f"DELETE FROM memory_entries WHERE team_id = ? AND from_file = ? AND origin = 'import' "
         f"AND entry_id NOT IN ({placeholders})",
-        (source_name, *keep),
+        (team, source_name, *keep),
     )
     conn.commit()
-    return [entry for entry in (get(entry_id) for entry_id in sorted(keep)) if entry]
+    return [entry for entry in (get(entry_id, team) for entry_id in sorted(keep)) if entry]
 
 
-def update(entry_id: str, *, question: str | None = None, answer: str | None = None) -> Entry | None:
+def update(
+    entry_id: str, *, question: str | None = None, answer: str | None = None,
+    team_id: str | None = None,
+) -> Entry | None:
     """Correct a remembered answer in place, and re-index it.
 
     A correction is not a supersession: nobody changed their mind, the entry was
     simply wrong or badly worded, and there is no earlier position worth keeping.
     """
-    entry = get(entry_id)
+    team = _team(team_id)
+    entry = get(entry_id, team)
     if entry is None:
         return None
     question = entry.question if question is None else question.strip()
@@ -370,68 +413,74 @@ def update(entry_id: str, *, question: str | None = None, answer: str | None = N
     changed = question != entry.question or answer != entry.answer
     store.connect().execute(
         "UPDATE memory_entries SET question = ?, answer = ?, updated_at = ?, "
-        "scanned_at = CASE WHEN ? THEN '' ELSE scanned_at END WHERE entry_id = ?",
-        (question, answer, store.utcnow(), 1 if changed else 0, entry_id),
+        "scanned_at = CASE WHEN ? THEN '' ELSE scanned_at END WHERE team_id = ? AND entry_id = ?",
+        (question, answer, store.utcnow(), 1 if changed else 0, team, entry_id),
     )
     store.connect().commit()
-    updated = get(entry_id)
+    updated = get(entry_id, team)
     if changed:
         index_entry(updated)
     return updated
 
 
-def remove(entry_id: str) -> bool:
+def remove(entry_id: str, team_id: str | None = None) -> bool:
     """Forget an entry entirely: the row, its vector, and the conflicts it raised.
 
     The one operation here that loses history, and it exists because the other
     two do not cover "this should never have been in here" -- a draft answer
     approved by mistake, or a pair the extractor invented out of a table.
     """
+    team = _team(team_id)
     conn = store.connect()
     deleted = conn.execute(
-        "DELETE FROM memory_entries WHERE entry_id = ?", (entry_id,)
+        "DELETE FROM memory_entries WHERE team_id = ? AND entry_id = ?", (team, entry_id)
     ).rowcount
     conn.execute(
-        "DELETE FROM memory_conflicts WHERE entry_id = ? OR other_id = ?",
-        (entry_id, entry_id),
+        "DELETE FROM memory_conflicts WHERE team_id = ? AND (entry_id = ? OR other_id = ?)",
+        (team, entry_id, entry_id),
     )
     # An entry that pointed at this one as its replacement stands again: the
     # thing that displaced it is gone, so the alternative is an entry that is
     # neither retrievable nor replaced by anything.
     conn.execute(
         "UPDATE memory_entries SET superseded_by = '', superseded_on = '', because = '' "
-        "WHERE superseded_by = ?",
-        (entry_id,),
+        "WHERE team_id = ? AND superseded_by = ?",
+        (team, entry_id),
     )
     conn.commit()
     if deleted:
-        unindex_entry(entry_id)
+        unindex_entry(entry_id, team)
     return bool(deleted)
 
 
-def supersede(entry_id: str, *, by: str, because: str = "") -> None:
+def supersede(entry_id: str, *, by: str, because: str = "", team_id: str | None = None) -> None:
     """Mark `entry_id` replaced by `by`. Kept, not deleted; simply not retrieved."""
     if entry_id == by:
         return
+    # Only while the replacement still exists, checked in the same statement.
+    # The sweep decides this after a model call, and an approval withdrawn in
+    # those seconds deletes the replacement: marked anyway, an imported answer
+    # was replaced by nothing and never retrieved again.
     store.connect().execute(
         "UPDATE memory_entries SET superseded_by = ?, superseded_on = ?, because = ? "
-        "WHERE entry_id = ?",
-        (by, store.utcnow(), because, entry_id),
+        "WHERE team_id = ? AND entry_id = ? "
+        "AND EXISTS (SELECT 1 FROM memory_entries WHERE team_id = ? AND entry_id = ?)",
+        (by, store.utcnow(), because, _team(team_id), entry_id, _team(team_id), by),
     )
     store.connect().commit()
 
 
-def restore(entry_id: str) -> None:
+def restore(entry_id: str, team_id: str | None = None) -> None:
     """Undo a supersession. For when the newer answer was the wrong one."""
     store.connect().execute(
         "UPDATE memory_entries SET superseded_by = '', superseded_on = '', because = '' "
-        "WHERE entry_id = ?",
-        (entry_id,),
+        "WHERE team_id = ? AND entry_id = ?",
+        (_team(team_id), entry_id),
     )
     store.connect().commit()
 
 
-def reopen_for_scan(*, origin: str = "") -> int:
+def reopen_for_scan(*, origin: str = "", team_id: str | None = None) -> int:
     """Put entries back in the sweep's queue. Returns how many.
 
     The adopted import is marked scanned as it arrives, because a person opening
@@ -439,24 +488,24 @@ def reopen_for_scan(*, origin: str = "") -> int:
     calls to see a list. Running that sweep is a decision, and this is how it is
     taken -- once, deliberately, from `scripts/build_answer_memory.py`.
     """
-    clause = "WHERE origin = ?" if origin else ""
+    clause = " AND origin = ?" if origin else ""
     cursor = store.connect().execute(
-        f"UPDATE memory_entries SET scanned_at = '' {clause}",
-        (origin,) if origin else (),
+        f"UPDATE memory_entries SET scanned_at = '' WHERE team_id = ?{clause}",
+        (_team(team_id), origin) if origin else (_team(team_id),),
     )
     store.connect().commit()
     return cursor.rowcount
 
 
-def mark_scanned(entry_id: str) -> None:
+def mark_scanned(entry_id: str, team_id: str | None = None) -> None:
     store.connect().execute(
-        "UPDATE memory_entries SET scanned_at = ? WHERE entry_id = ?",
-        (store.utcnow(), entry_id),
+        "UPDATE memory_entries SET scanned_at = ? WHERE team_id = ? AND entry_id = ?",
+        (store.utcnow(), _team(team_id), entry_id),
     )
     store.connect().commit()
 
 
-def raise_conflict(entry_id: str, other_id: str, because: str) -> None:
+def raise_conflict(entry_id: str, other_id: str, because: str, team_id: str | None = None) -> None:
     """Record a disagreement for a person. Idempotent, and unordered.
 
     The pair is stored one way round only. Which of the two arrived first is an
@@ -465,10 +514,14 @@ def raise_conflict(entry_id: str, other_id: str, because: str) -> None:
     reviewer twice.
     """
     first, second = sorted((entry_id, other_id))
+    # Both must still exist -- the same race as `supersede`, and a disagreement
+    # with an answer nobody can open is not one a person can settle.
+    team = _team(team_id)
     store.connect().execute(
-        "INSERT OR IGNORE INTO memory_conflicts (entry_id, other_id, because, raised_at) "
-        "VALUES (?,?,?,?)",
-        (first, second, because, store.utcnow()),
+        "INSERT OR IGNORE INTO memory_conflicts (team_id, entry_id, other_id, because, raised_at) "
+        "SELECT ?, ?, ?, ?, ? WHERE "
+        "(SELECT COUNT(*) FROM memory_entries WHERE team_id = ? AND entry_id IN (?, ?)) = 2",
+        (team, first, second, because, store.utcnow(), team, first, second),
     )
     store.connect().commit()
 
@@ -476,7 +529,9 @@ def raise_conflict(entry_id: str, other_id: str, because: str) -> None:
 RESOLUTIONS = ("keep_this", "keep_other", "keep_both")
 
 
-def apply_resolution(entry_id: str, other_id: str, *, resolution: str, by: str) -> None:
+def apply_resolution(
+    entry_id: str, other_id: str, *, resolution: str, by: str, team_id: str | None = None,
+) -> None:
     """Do what the reviewer decided, and close the disagreement.
 
     Keeping one of the two supersedes the other -- which is the same mark an
@@ -489,13 +544,15 @@ def apply_resolution(entry_id: str, other_id: str, *, resolution: str, by: str) 
         raise ValueError(f"resolution must be one of {RESOLUTIONS}")
     because = "a reviewer chose the other answer"
     if resolution == "keep_this":
-        supersede(other_id, by=entry_id, because=because)
+        supersede(other_id, by=entry_id, because=because, team_id=team_id)
     elif resolution == "keep_other":
-        supersede(entry_id, by=other_id, because=because)
-    resolve_conflict(entry_id, other_id, by=by, resolution=resolution)
+        supersede(entry_id, by=other_id, because=because, team_id=team_id)
+    resolve_conflict(entry_id, other_id, by=by, resolution=resolution, team_id=team_id)
 
 
-def resolve_conflict(entry_id: str, other_id: str, *, by: str, resolution: str) -> None:
+def resolve_conflict(
+    entry_id: str, other_id: str, *, by: str, resolution: str, team_id: str | None = None,
+) -> None:
     """Close a disagreement.
 
     `resolution` is one of `keep_this`, `keep_other`, `keep_both` — and it is
@@ -506,8 +563,8 @@ def resolve_conflict(entry_id: str, other_id: str, *, by: str, resolution: str) 
     first, second = sorted((entry_id, other_id))
     store.connect().execute(
         "UPDATE memory_conflicts SET resolved_at = ?, resolved_by = ?, resolution = ? "
-        "WHERE entry_id = ? AND other_id = ?",
-        (store.utcnow(), by, resolution, first, second),
+        "WHERE team_id = ? AND entry_id = ? AND other_id = ?",
+        (store.utcnow(), by, resolution, _team(team_id), first, second),
     )
     store.connect().commit()
 
@@ -554,45 +611,61 @@ def index_entry(entry: Entry | None) -> None:
     try:
         from src.knowledge import get_store
 
-        index = get_store()
+        index = get_store(_team(entry.team_id))
         index.remove_entry(entry.entry_id)
         index.add_entry(entry.entry_id, _document(entry))
     except Exception:  # noqa: BLE001 - never fail the write that produced this
         logger.exception("Could not index memory entry %s", entry.entry_id)
 
 
-def unindex_entry(entry_id: str) -> None:
+def unindex_entry(entry_id: str, team_id: str | None = None) -> None:
     try:
         from src.knowledge import get_store
 
-        get_store().remove_entry(entry_id)
+        get_store(_team(team_id)).remove_entry(entry_id)
     except Exception:  # noqa: BLE001
         logger.exception("Could not remove memory entry %s from the index", entry_id)
 
 
-def ensure_synced() -> None:
-    """Give every already-indexed prior answer a row here, once per database.
+def ensure_synced(team_id: str | None = None) -> None:
+    """Give every prior answer in a team's index a row here, once per database and team.
 
     The 698 imported answers were indexed before this record existed. They are
     the memory, so they have to be manageable, and re-uploading eleven
     questionnaires to get them back is not an answer. Reading them out of the
     index is: every field this table needs is already in their metadata.
     """
-    path = str(store.settings.db_path)
-    if path in _synced:
+    team = _team(team_id)
+    key = (str(store.settings.db_path), team)
+    if key in _synced:
         return
-    _synced.add(path)  # first, so a failure does not retry on every request
+    _synced.add(key)  # first, so a failure does not retry on every request
+
+    # Put back anything marked replaced by an entry that no longer exists --
+    # left by a sweep that finished after its entry was withdrawn, before
+    # `supersede` checked. Once per process, like the adoption below.
+    repaired = store.connect().execute(
+        "UPDATE memory_entries SET superseded_by = '', superseded_on = '', because = '' "
+        "WHERE team_id = ? AND superseded_by != '' "
+        "AND superseded_by NOT IN (SELECT entry_id FROM memory_entries WHERE team_id = ?)",
+        (team, team),
+    ).rowcount
+    store.connect().commit()
+    if repaired:
+        logger.warning("Answer memory: %d answer(s) were replaced by nothing; restored", repaired)
 
     try:
         from src.knowledge import get_store
 
-        found = get_store().prior_answer_metadata()
+        found = get_store(team).prior_answer_metadata()
     except Exception:  # noqa: BLE001 - an unreachable index must not break the page
         logger.exception("Could not read the index to sync the answer memory")
         return
 
     conn = store.connect()
-    known = {row["entry_id"] for row in conn.execute("SELECT entry_id FROM memory_entries")}
+    known = {row["entry_id"] for row in conn.execute(
+        "SELECT entry_id FROM memory_entries WHERE team_id = ?", (team,)
+    )}
     now = store.utcnow()
     added = 0
     for metadata in found:
@@ -605,10 +678,10 @@ def ensure_synced() -> None:
         origin = str(metadata.get("origin") or "import")
         conn.execute(
             "INSERT OR IGNORE INTO memory_entries "
-            "(entry_id, question, answer, section, from_file, origin, approved_by, "
+            "(entry_id, team_id, question, answer, section, from_file, origin, approved_by, "
             " approved_on, created_at, updated_at, scanned_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (entry_id, question, answer, str(metadata.get("section") or ""),
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (entry_id, team, question, answer, str(metadata.get("section") or ""),
              # The questionnaire this answer was actually given in, which is not
              # always the name it was indexed under: the bulk import filed 698
              # answers from eleven different questionnaires under one synthetic
@@ -718,10 +791,11 @@ async def scan(entry: Entry, *, k: int = 8) -> list[Finding]:
     """
     from src.knowledge import get_store
 
-    hits = await get_store().search(entry.question, SourceType.PRIOR_ANSWER, k, expand=False)
+    team = _team(entry.team_id)
+    hits = await get_store(team).search(entry.question, SourceType.PRIOR_ANSWER, k, expand=False)
     seen: dict[str, Entry] = {}
     for hit in hits:
-        other = get(hit.entry_id)
+        other = get(hit.entry_id, team)
         if other is None or other.entry_id == entry.entry_id or other.entry_id in seen:
             continue
         if not other.stands:
@@ -747,19 +821,21 @@ async def scan(entry: Entry, *, k: int = 8) -> list[Finding]:
             continue
         findings.append(finding)
         if finding.kind == "supersedes":
-            supersede(other.entry_id, by=entry.entry_id, because=finding.because)
+            supersede(other.entry_id, by=entry.entry_id, because=finding.because, team_id=team)
         elif finding.kind == "superseded_by":
-            supersede(entry.entry_id, by=other.entry_id, because=finding.because)
+            supersede(entry.entry_id, by=other.entry_id, because=finding.because, team_id=team)
             # It arrived already out of date, which happens when an older
             # questionnaire is imported after a newer one. Stop: an entry that
             # no longer stands has no standing to replace or contradict a third.
             break
         else:
-            raise_conflict(entry.entry_id, other.entry_id, finding.because)
+            raise_conflict(entry.entry_id, other.entry_id, finding.because, team_id=team)
     return findings
 
 
-async def scan_pending(*, limit: int = 25, concurrency: int = 4) -> list[Finding]:
+async def scan_pending(
+    *, limit: int = 25, concurrency: int = 4, team_id: str | None = None,
+) -> list[Finding]:
     """Compare everything that has arrived since the last scan.
 
     Runs after an import and after an approval rather than at answer time. By
@@ -768,7 +844,7 @@ async def scan_pending(*, limit: int = 25, concurrency: int = 4) -> list[Finding
     file -- and the person filling in the form is not the person who can say
     which of two answers is our position.
     """
-    waiting = pending(limit=limit)
+    waiting = pending(limit=limit, team_id=team_id)
     if not waiting:
         return []
 
@@ -781,7 +857,7 @@ async def scan_pending(*, limit: int = 25, concurrency: int = 4) -> list[Finding
             except Exception:  # noqa: BLE001 - one bad entry must not stop the sweep
                 logger.exception("Could not scan memory entry %s", entry.entry_id)
                 return []
-            mark_scanned(entry.entry_id)
+            mark_scanned(entry.entry_id, entry.team_id)
             return found
 
     found = await asyncio.gather(*(one(entry) for entry in waiting))

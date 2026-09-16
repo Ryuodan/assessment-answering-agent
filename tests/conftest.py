@@ -355,5 +355,5 @@ def memory_index(monkeypatch):
     """
     fake = FakeVectorStore([])
     index = bare_store(fake)
-    monkeypatch.setattr("src.knowledge.get_store", lambda: index)
+    monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: index)
     return fake

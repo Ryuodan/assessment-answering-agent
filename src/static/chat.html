@@ -8,8 +8,8 @@
 <!-- The design tokens, the answer card and the chunk renderer, shared with the
      workbench. A card looks the same in a conversation as it does on the
      workbench because it is the same card, drawn by the same rules. -->
-<link rel="stylesheet" href="/static/cards.css" />
-<script src="/static/cards.js"></script>
+<link rel="stylesheet" href="static/cards.css" />
+<script src="static/cards.js"></script>
 
 <style>
   /* Three columns: history, conversation, answers. The middle one is the only
@@ -33,6 +33,15 @@
   }
   .ghost:hover { color: var(--ink); border-color: var(--line-strong); background: var(--surface-sunken); }
   .ghost.on { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+  /* The answer card's own small controls -- Edit, Approve, Leave blank, Set
+     aside. The other three pages style these; this one did not, so on the page
+     people use most they were the browser's grey system buttons. */
+  button.quiet {
+    background: none; border: none; color: var(--ink-faint);
+    padding: 3px 7px; font-size: 12.5px; border-radius: 6px; white-space: nowrap;
+  }
+  button.quiet:hover { color: var(--accent); background: var(--accent-soft); }
+  button.quiet.danger:hover { color: var(--err); background: var(--err-soft); }
   .primary {
     background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent);
     border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 550;
@@ -64,8 +73,24 @@
        the thread scrolls inside this column, so 16px -- which lines the button
        up with the address in the bar -- put it under the scrollbar's thumb. */
     position: absolute; top: 12px; inset-inline-end: 30px; z-index: 6;
-    background: var(--surface); box-shadow: var(--shadow-sm);
   }
+  /* The two ways to the answers -- the floating button and the one under a
+     reply that changed them. They were outlined in grey like every other
+     control in the bar, and the answers are the whole point of the page, so
+     they are the one filled, coloured control in the conversation. */
+  .ghost.to-answers {
+    background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+    font-weight: 600; padding: 7px 14px;
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 40%, transparent);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  .ghost.to-answers:hover {
+    color: var(--on-accent); border-color: var(--accent); background: var(--accent);
+    filter: brightness(1.08); transform: translateY(-1px);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+  .ghost.to-answers:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .ghost.to-answers, .ghost.to-answers:hover { transition: none; transform: none; } }
 
   .side {
     flex: 0 0 250px; background: var(--surface-sunken);
@@ -197,13 +222,35 @@
   @media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .5; } }
   .working-label { flex: 1; min-width: 0; }
 
-  .did { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
-  .did span {
-    background: var(--surface-sunken); border: 1px solid var(--line);
-    border-radius: var(--radius-pill); padding: 2px 9px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
-    color: var(--ink-faint);
+  /* What it did, folded to one line. Each call was a monospace pill, and in
+     the column beside the answers a long scope wrapped inside its pill: eleven
+     calls stacked into a ragged tower taller than the reply they explained. */
+  .did { margin-top: 8px; font-size: 12px; color: var(--ink-faint); max-width: 100%; }
+  .did > summary {
+    cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px;
+    max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius-pill);
+    padding: 3px 11px;
   }
+  .did > summary::-webkit-details-marker { display: none; }
+  .did > summary::before { content: "▸"; font-size: 10px; flex: none; }
+  .did[open] > summary::before { content: "▾"; }
+  .did > summary:hover { color: var(--accent-ink); border-color: var(--accent); }
+  .did .count { flex: none; font-weight: 600; color: var(--ink-soft); }
+  .did .gist { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .did ol {
+    list-style: none; counter-reset: step; margin: 6px 0 0 16px; padding: 2px 0 2px 12px;
+    border-inline-start: 2px solid var(--line);
+  }
+  .did li {
+    counter-increment: step; display: grid; grid-template-columns: 1.6em minmax(0, 1fr);
+    column-gap: 6px; padding: 3px 0; line-height: 1.45;
+  }
+  .did li::before {
+    content: counter(step); text-align: end; font-size: 11px; color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .did .action { color: var(--ink-soft); }
+  .did .scope { display: block; font-size: 11.5px; color: var(--ink-faint); overflow-wrap: anywhere; }
   /* Sources under a reply use the same bubbles as an answer card, so a claim
      about the policies can be opened and checked the same way. */
   .turn .cites { margin-top: 9px; }
@@ -369,11 +416,11 @@
   <button class="ghost" id="newChat">New conversation</button>
   <span class="spacer"></span>
   <button class="ghost" id="openKb">Knowledge base</button>
-  <a class="ghost" href="/memory" style="text-decoration:none"
+  <a class="ghost" href="memory" style="text-decoration:none"
      title="What we have said before, and which of it still stands">Answer memory</a>
-  <a class="ghost" href="/preferences" style="text-decoration:none"
+  <a class="ghost" href="preferences" style="text-decoration:none"
      title="How you want answers to read, and your skills">Preferences</a>
-  <a class="ghost" href="/workbench" style="text-decoration:none">Workbench →</a>
+  <a class="ghost" href="workbench" style="text-decoration:none">Workbench →</a>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
   <span class="whoami" id="whoami"></span>
 </div>
@@ -384,7 +431,7 @@
        place. It goes away while the panel is open: the panel has its own ✕,
        and a button that opens what is already open is a button that does
        nothing. -->
-  <button class="ghost pane-toggle" id="toggleAnswers" hidden>Answers →</button>
+  <button class="ghost pane-toggle to-answers" id="toggleAnswers" hidden>Answers →</button>
 
   <aside class="side" id="history">
     <div class="side-head"><span>Conversations</span></div>
@@ -479,7 +526,7 @@
           must do, which is not evidence that we do it.</span></label>
     </fieldset>
     <p class="status" style="margin:4px 0 0">The team&rsquo;s own answers are not documents and
-       are not kept here: they are in the <a href="/memory">answer memory</a>.</p>
+       are not kept here: they are in the <a href="memory">answer memory</a>.</p>
     <div class="status" id="kbStatus"></div>
 
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin:20px 0 4px">
@@ -516,7 +563,14 @@
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (error) { data = null; }
     if (!response.ok) {
-      throw new Error((data && (data.detail || data.message)) || text || response.statusText);
+      const detail = data && (data.detail || data.message);
+      // Validation failures arrive as a list of objects, which printed as
+      // "[object Object]". A person needs the sentence inside.
+      const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
+      // A session that ran out mid-conversation brings back the sign-in form
+      // rather than leaving "Sign in to continue." in a bubble with no way to.
+      if (response.status === 401) whoAmI();
+      throw new Error(said || text || response.statusText);
     }
     return data;
   }
@@ -639,7 +693,7 @@
     if (role === "assistant" && data && (data.changed || data.refreshed)) {
       const show = document.createElement("button");
       show.type = "button";
-      show.className = "ghost show-answers";
+      show.className = "ghost show-answers to-answers";
       show.textContent = "Show the answers →";
       show.onclick = async () => {
         showAnswersPane(true);
@@ -652,16 +706,7 @@
        summary is the part a person cannot check -- "answered the governance
        ones" means more with the scope it used visible beside it. */
     const steps = data && data.steps;
-    if (steps && steps.length) {
-      const did = document.createElement("div");
-      did.className = "did";
-      steps.forEach((step) => {
-        const chip = document.createElement("span");
-        chip.textContent = step;
-        did.append(chip);
-      });
-      turn.append(did);
-    }
+    if (steps && steps.length) turn.append(stepList(steps));
 
     /* Policy clauses it looked up, as the same bubbles an answer card uses.
        A claim about what the policies say is worth what the clause behind it
@@ -669,6 +714,83 @@
     const sources = data && data.sources;
     if (sources && sources.length) turn.append(sourceBubbles(sources));
     return turn;
+  }
+
+  /* Each tool, as something a person would say it did. A step arrives as the
+     call it was -- `answer_questions(in 'Vendor Info', not yet answered)` --
+     which is exact and is kept, underneath, as the scope; the name alone is
+     jargon. An unknown tool keeps its own name rather than disappearing. */
+  const DID = {
+    open_questionnaire: "Read the file",
+    describe_form: "Looked at what is in it",
+    list_questions: "Listed questions",
+    read_existing: "Read what the file already says",
+    read_answers: "Read the answers",
+    answer_questions: "Answered questions",
+    reword_answers: "Reworded answers",
+    put_back_drafts: "Put the drafts back",
+    write_one_answer: "Wrote in an answer",
+    set_aside: "Set questions aside",
+    propose_fill: "Checked what filling would write",
+    search_policies: "Searched the policies",
+    answer_directly: "Drafted an answer",
+    list_skills: "Looked at your skills",
+    apply_skill: "Applied a skill",
+  };
+
+  function parseStep(step) {
+    const text = String(step || "");
+    const open = text.indexOf("(");
+    const name = (open < 0 ? text : text.slice(0, open)).trim();
+    let scope = open < 0 ? "" : text.slice(open + 1).replace(/\)\s*$/, "").trim();
+    if (scope === "''" || scope === '""') scope = "";
+    return { name: name, action: DID[name] || name, scope: scope };
+  }
+
+  /* One line under the reply -- how many steps, and what kinds -- opening onto
+     the numbered list. The line names each kind once, with a count, in the
+     order it first happened: "Answered questions ×7" says what eleven pills
+     said, and fits. */
+  function stepList(steps) {
+    const parsed = steps.map(parseStep);
+    const details = document.createElement("details");
+    details.className = "did";
+
+    const summary = document.createElement("summary");
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = parsed.length === 1 ? "1 step" : parsed.length + " steps";
+    const kinds = new Map();
+    parsed.forEach((step) => kinds.set(step.action, (kinds.get(step.action) || 0) + 1));
+    const gist = document.createElement("span");
+    gist.className = "gist";
+    gist.textContent = Array.from(kinds, ([action, times]) => times > 1 ? action + " ×" + times : action)
+      .join(" · ");
+    summary.title = gist.textContent;
+    summary.append(count, gist);
+    details.append(summary);
+
+    const list = document.createElement("ol");
+    parsed.forEach((step, index) => {
+      const row = document.createElement("li");
+      const what = document.createElement("span");
+      const action = document.createElement("span");
+      action.className = "action";
+      action.textContent = step.action;
+      what.append(action);
+      if (step.scope) {
+        const scope = document.createElement("span");
+        scope.className = "scope";
+        scope.textContent = step.scope;
+        if (Cards.isArabic(step.scope)) scope.dir = "auto";
+        what.append(scope);
+      }
+      row.title = String(steps[index]);
+      row.append(what);
+      list.append(row);
+    });
+    details.append(list);
+    return details;
   }
 
   /* Folded, and de-duplicated across every search in the turn. Asked one
@@ -1148,7 +1270,7 @@
     if (!batchId || !item.question) return;
     item.answer = text;
     try {
-      await request("/api/forms/" + batchId + "/answers", {
+      showUpdated(await request("/api/forms/" + batchId + "/answers", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question_id: item.question.id, text: text,
@@ -1156,10 +1278,9 @@
           // two cannot disagree about what this organisation says.
           which: (item.length || detailLevel) === "brief" && item.brief ? "brief" : "answer",
         }),
-      });
-      await reloadAnswers();
+      }));
     } catch (error) {
-      addTurn("assistant", "That edit could not be saved: " + error.message);
+      sayInPane("That edit could not be saved: " + error.message, "err");
     }
   };
 
@@ -1169,17 +1290,16 @@
   Cards.onBlank = async (item, index, blank) => {
     if (!batchId || !item.question) return;
     try {
-      await request("/api/forms/" + batchId + "/blank", {
+      showUpdated(await request("/api/forms/" + batchId + "/blank", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: item.question.id, blank: blank }),
-      });
-      await reloadAnswers();
+      }));
       if (!blank) {
-        addTurn("assistant", "That one is blank again rather than left blank on purpose. " +
+        sayInPane("That one is blank again rather than left blank on purpose. " +
           "Ask me to answer it and I will.");
       }
     } catch (error) {
-      addTurn("assistant", "That could not be changed: " + error.message);
+      sayInPane("That could not be changed: " + error.message, "err");
     }
   };
 
@@ -1192,7 +1312,7 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: item.question.id, approved: approved }),
       });
-      await reloadAnswers();
+      showUpdated(updated);
       // Approving does two things, and the second one used to happen in
       // silence: nothing on this page said whether the memory had learned
       // anything, which is the half that changes the next questionnaire.
@@ -1200,7 +1320,7 @@
         ? (updated.remembered
             ? "Approved. It will be written into the file, and your wording is now in the answer memory."
             : "Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
-        : "Approval withdrawn. It will be held back again, and is out of the answer memory.");
+        : Cards.withdrawnMessage((updated.questions || []).find((q) => q.id === item.question.id)));
     } catch (error) {
       sayInPane("That could not be approved: " + error.message, "err");
     }
@@ -1259,11 +1379,10 @@
   Cards.onRestoreDraft = async (item) => {
     if (!batchId || !item.question) return;
     try {
-      await request("/api/forms/" + batchId + "/answers/draft", {
+      showUpdated(await request("/api/forms/" + batchId + "/answers/draft", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: item.question.id }),
-      });
-      await reloadAnswers();
+      }));
       sayInPane("The original draft is back, as it was before it was reworded.");
     } catch (error) {
       sayInPane("That could not be put back: " + error.message, "err");
@@ -1273,15 +1392,23 @@
   Cards.onLength = async (item, index, prefer) => {
     if (!batchId || !item.question) return;
     try {
-      await request("/api/forms/" + batchId + "/answers/length", {
+      showUpdated(await request("/api/forms/" + batchId + "/answers/length", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: item.question.id, prefer: prefer }),
-      });
-      await reloadAnswers();
+      }));
     } catch (error) {
-      addTurn("assistant", "That could not be changed: " + error.message);
+      sayInPane("That could not be changed: " + error.message, "err");
     }
   };
+
+  /* Every change to one answer already answers with the whole questionnaire as
+     it now stands. Drawing that, rather than asking for it again, halves what
+     each click costs: on a 183-question file that was two 3 MB transfers per
+     Approve, uncompressed behind the deployment's proxy. */
+  function showUpdated(report) {
+    if (report && Array.isArray(report.questions)) showAnswers(report);
+    else reloadAnswers();
+  }
 
   async function reloadAnswers() {
     if (!batchId) return;

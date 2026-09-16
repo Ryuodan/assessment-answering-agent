@@ -159,7 +159,7 @@ async def retrieve(state: QuestionState) -> dict:
     """
     from src.knowledge import get_store
 
-    store = get_store()
+    store = get_store(state.get("team_id") or None)
     queries = state.get("search_queries") or [state["question"].text]
 
     # A collection holding nothing still costs a full embedding round trip per

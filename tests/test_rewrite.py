@@ -164,6 +164,84 @@ async def test_a_question_with_no_answer_is_left_alone(model):
     assert model.messages == [], "the model should not have been called at all"
 
 
+# --- many at once ------------------------------------------------------------
+#
+# Preferences reword every answer a run drafts, Brief condenses every answer in
+# the file, and "make them shorter" rewords a whole scope -- each one call per
+# answer, all at once. Measured against Groq, 80 at once lost 44 of them to the
+# rate limit, and each lost one quietly stayed as it was.
+
+
+def _rate_limited():
+    import httpx
+    from groq import RateLimitError
+
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    return RateLimitError("Rate limit reached", response=httpx.Response(429, request=request), body=None)
+
+
+@pytest.mark.asyncio
+async def test_a_busy_provider_is_asked_again_rather_than_giving_up(monkeypatch):
+    calls = []
+
+    class Busy(Model):
+        async def ainvoke(self, messages):
+            calls.append(1)
+            if len(calls) < 3:
+                raise _rate_limited()
+            return Reply("Reworded.")
+
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setattr(rewrite, "chat_llm", lambda **_: Busy())
+    monkeypatch.setattr(rewrite, "_pause", no_wait)
+
+    revised = await rewrite.rewrite(_answered(), "Shorter.")
+
+    assert revised.answer == "Reworded." and len(calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_mistake_is_not_asked_again(monkeypatch):
+    """Only the provider being busy or unreachable is worth another try."""
+    calls = []
+
+    class Wrong(Model):
+        async def ainvoke(self, messages):
+            calls.append(1)
+            raise RuntimeError("a bad request")
+
+    monkeypatch.setattr(rewrite, "chat_llm", lambda **_: Wrong())
+    original = _answered()
+    assert await rewrite.rewrite(original, "Shorter.") is original
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_only_so_many_rewrites_reach_the_provider_at_once(monkeypatch):
+    import asyncio
+
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "max_concurrent_rewrites", 3)
+    flight = {"now": 0, "most": 0}
+
+    class Slow(Model):
+        async def ainvoke(self, messages):
+            flight["now"] += 1
+            flight["most"] = max(flight["most"], flight["now"])
+            await asyncio.sleep(0.01)
+            flight["now"] -= 1
+            return Reply("Reworded.")
+
+    monkeypatch.setattr(rewrite, "chat_llm", lambda **_: Slow())
+    results = await asyncio.gather(*(rewrite.rewrite(_answered(), "Shorter.") for _ in range(20)))
+
+    assert all(result.answer == "Reworded." for result in results)
+    assert flight["most"] == 3
+
+
 # --- what the model is shown -----------------------------------------------
 
 

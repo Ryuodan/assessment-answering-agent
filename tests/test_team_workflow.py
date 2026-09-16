@@ -200,12 +200,15 @@ def test_who_changed_the_corpus_is_recorded(team, tmp_path, monkeypatch):
     """Managing the knowledge base is a team activity, so it is attributable."""
     from src.models import IngestResult
 
-    async def indexed(path, source_type, authority="ours"):
+    async def indexed(path, source_type, authority="ours", team_id=None):
         return IngestResult(
             source_name=path.name, source_type=source_type, chunks_indexed=12,
         )
 
     monkeypatch.setattr("src.api.service.ingest", indexed)
+    # Indexing is stubbed, so there is nothing real to remove; this is about
+    # who is recorded, and removing a name that was never indexed is a 404.
+    monkeypatch.setattr("src.api.service.delete_source", lambda name, team_id=None: None)
     alice = as_person(ALICE)
     policy = tmp_path / "T2 - Access Control Policy.pdf"
     policy.write_bytes(b"%PDF-1.4 anything")

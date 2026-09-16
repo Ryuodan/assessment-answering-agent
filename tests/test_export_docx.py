@@ -191,3 +191,19 @@ def test_a_flag_without_deterministic_reasons_still_says_something():
     """Question 26 is flagged only for its score, and must not be left blank."""
     text = _text(render_docx(_result(), ExportOptions(include_flagged=True)))
     assert "confidence is below the review threshold" in text
+
+
+def test_a_character_xml_cannot_hold_does_not_cost_the_export():
+    """python-docx refuses a vertical tab or a form feed outright, and a model's
+    answer, rationale or citation can carry one: the whole download failed."""
+    question = Question(id="1", text="Do you\x0b encrypt data?", language="en")
+    answered = AnsweredQuestion(
+        question=question, answer="Yes,\x0b we do\x0c.", confidence=0.9,
+        rationale="Because\x01 the policy says so.", citations=["T2 Policy §1\x02"],
+    )
+    result = AssessmentResult(run_id="x", source_name="t.xlsx", language="en",
+                              questions_found=1, answers=[answered])
+
+    text = _text(render_docx(result, ExportOptions(include_flagged=True, include_reasoning=True)))
+
+    assert "we do" in text and "Because the policy says so." in text

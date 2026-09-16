@@ -121,3 +121,38 @@ def test_plain_text_keeps_list_structure_and_drops_emphasis():
 
 def test_plain_text_of_an_empty_answer_is_empty():
     assert to_plain_text("") == ""
+
+
+# --- what goes into a questionnaire's cell -----------------------------------
+#
+# A spreadsheet cell and a Word table cell show text, not Markdown. Written as
+# the drafter wrote it, the NMDC questionnaire went back to its customer with
+# "**Identifiers** –" in a cell, asterisks and all.
+
+
+def test_a_cell_gets_no_markdown_markers():
+    from src.formatting import to_cell_text
+
+    written = to_cell_text("**Yes.** T2 encrypts data at rest.\n\n**Identifiers** – name, ID number")
+    assert "**" not in written
+    assert written == "Yes. T2 encrypts data at rest.\n\nIdentifiers – name, ID number"
+
+
+def test_a_cell_keeps_its_lists_and_paragraph_breaks():
+    from src.formatting import to_cell_text
+
+    written = to_cell_text(
+        "T2 requires:\n\n- multi-factor authentication\n* quarterly access reviews\n"
+        "1. one numbered item\n\n## Retention\nData is kept for 90 days."
+    )
+    assert written == (
+        "T2 requires:\n\n• multi-factor authentication\n• quarterly access reviews\n"
+        "1. one numbered item\n\nRetention\nData is kept for 90 days."
+    )
+
+
+def test_a_cell_keeps_arabic_and_plain_text_as_it_is():
+    from src.formatting import to_cell_text
+
+    assert to_cell_text("نعم، يتم تشفير البيانات.") == "نعم، يتم تشفير البيانات."
+    assert to_cell_text("Yes. 2 * 3 = 6, and a_b stays.") == "Yes. 2 * 3 = 6, and a_b stays."

@@ -122,6 +122,19 @@ class Case:
     in the file, counting from 1. Read back from the batch after the case, so
     the check holds whatever the pipeline happened to write."""
 
+    names_sources_of: int = 0
+    """The reply must name the documents the stored answer at this place cites.
+
+    Asked which sources an answer used, the assistant searched the policies
+    again and listed what that search found -- a similar list, not the one on
+    the answer's card. Each cited document counts as named when the reply has
+    its file name (without the extension) or the clause it was cited at, with
+    dashes and spacing ignored: the model writes "T2 \u2013 Human Resources
+    Policy", and an Arabic reply translates the name and keeps "\u00a73.1-3.1.4".
+    Only policy documents are held to this: a remembered answer has neither a
+    file name nor a clause, and "the team's previous answers" in Arabic is the
+    right way to name one."""
+
     answers_in: str = ""
     """Every stored answer must be written in this language, "ar" or "en"."""
 
@@ -390,6 +403,24 @@ CASES: list[Case] = [
         quotes_answer=3,
     ),
     Case(
+        name="says-which-sources-an-answer-used",
+        says=["Read this and answer all of it.", "What sources did you use for the answer to question 2?"],
+        answered=4,
+        last_wants=("read_answers",),
+        last_forbids=("search_policies", "answer_questions", "reword_answers", "propose_fill",
+                      "answer_directly"),
+        names_sources_of=2,
+    ),
+    Case(
+        name="says-which-sources-an-answer-used-in-arabic",
+        says=["Read this and answer all of it.", "ما هي المصادر التي اعتمدت عليها في إجابة السؤال الأول؟"],
+        answered=4,
+        last_wants=("read_answers",),
+        last_forbids=("search_policies", "answer_questions", "reword_answers", "propose_fill",
+                      "answer_directly"),
+        names_sources_of=1,
+    ),
+    Case(
         name="says-which-are-flagged-and-why",
         says=["Read this and answer all of it.", "Are any of the answers flagged? Why?"],
         answered=4,
@@ -552,7 +583,8 @@ async def run_case(case: Case, user) -> Result:
         )
 
     stored = []
-    if conversation.batch_id and (case.quotes_answer or case.answers_in or case.answer_contains):
+    if conversation.batch_id and (case.quotes_answer or case.answers_in or case.answer_contains
+                                  or case.names_sources_of):
         stored = tools.inspect(user, conversation.batch_id)["questions"]
 
     def at_place(place: int) -> str:
@@ -568,6 +600,33 @@ async def run_case(case: Case, user) -> Result:
         (result.passed if quoted else result.failed).append(
             f"quoted answer #{case.quotes_answer}" if quoted
             else f"did not quote answer #{case.quotes_answer} ({answer[:60]!r})"
+        )
+
+    if case.names_sources_of:
+        place = case.names_sources_of
+        answered = (stored[place - 1].get("answered") or {}) if 0 < place <= len(stored) else {}
+        cited = set(answered.get("citations") or [])
+
+        def flat(text: str) -> str:
+            return re.sub(r"[\s*_`]+", "", re.sub(r"[\u2010-\u2015\u2212]", "-", text)).casefold()
+
+        # Each cited document, as the two ways a reply can name it.
+        documents: dict[str, set[str]] = {}
+        for item in answered.get("evidence") or []:
+            locator = item.get("locator") or item.get("source_name") or ""
+            if locator in cited and item.get("source_name") and item.get("source_type") != "prior_answer":
+                ways = documents.setdefault(Path(item["source_name"]).stem, set())
+                ways.add(flat(Path(item["source_name"]).stem))
+                if "\u00a7" in locator:
+                    ways.add(flat(locator.split("\u00a7", 1)[1].split("(", 1)[0]))
+        spoken = flat(result.reply)
+        missing = sorted(name for name, ways in documents.items()
+                         if not any(way and way in spoken for way in ways))
+        named = bool(documents) and not missing
+        (result.passed if named else result.failed).append(
+            f"named the sources answer #{place} cites" if named
+            else f"answer #{place} cites nothing to name" if not documents
+            else f"did not name {missing} that answer #{place} cites"
         )
 
     if case.answers_in:
@@ -708,7 +767,29 @@ async def main_async(args) -> int:
     return 0 if overall >= args.floor else 1
 
 
+def _use_a_scratch_database() -> Path | None:
+    """Point the run at a throwaway database unless one was named.
+
+    Every case opens questionnaires and starts conversations as the local
+    stand-in, and run against the deployment's own database that is where they
+    went: 140 test conversations and an account nobody had added, in the list a
+    team scrolls through. `DB_PATH` set explicitly still wins, for a run that
+    means to keep its record.
+    """
+    import os
+
+    from src.config import settings
+
+    if os.environ.get("DB_PATH"):
+        return None
+    settings.db_path = Path(tempfile.mkdtemp(prefix="eval_assistant_db_")) / "eval.db"
+    return settings.db_path
+
+
 def main() -> int:
+    scratch = _use_a_scratch_database()
+    if scratch:
+        print(f"Recording into a scratch database: {scratch}")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repeat", type=int, default=1, help="Run every case this many times")
     parser.add_argument("--only", default="", help="Only cases whose name contains this")

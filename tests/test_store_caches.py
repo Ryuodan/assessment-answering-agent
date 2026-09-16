@@ -81,6 +81,48 @@ def test_the_literal_matcher_sees_a_document_added_after_it_ran(store):
     assert store.text_search("intrusion", SourceType.GUIDELINE, 5)
 
 
+@pytest.mark.parametrize("write", ["guideline", "entry", "remove_entry", "delete_source"])
+def test_a_read_while_a_write_is_in_flight_does_not_leave_the_catalog_stale(store, monkeypatch, write):
+    """The caches were cleared before a write rather than after it. Embedding a
+    long policy takes seconds, and anybody who opened the knowledge base in that
+    window rebuilt the catalog without the new document -- which then stayed
+    missing until the next upload or delete."""
+    from tests.conftest import FakeDocument
+
+    store.add_guideline("old.pdf", "## 1 Scope\n\nRetention is 30 days.")
+    store.add_entry("MEM-1", FakeDocument("Q: a\nA: b", {
+        "source_type": "prior_answer", "source_name": "Answer memory", "entry_id": "MEM-1", "chunk": 0,
+    }))
+
+    writing, deleting = store._store.add_documents, store._store.delete
+
+    def add_while_someone_reads(documents, ids=None):
+        store.stats()                    # a page load, mid-embedding
+        return writing(documents, ids=ids)
+
+    def delete_while_someone_reads(where=None, ids=None):
+        store.stats()
+        return deleting(where=where, ids=ids)
+
+    monkeypatch.setattr(store._store, "add_documents", add_while_someone_reads)
+    monkeypatch.setattr(store._store, "delete", delete_while_someone_reads)
+
+    if write == "guideline":
+        store.add_guideline("new.pdf", "## 1 Scope\n\nBackups run nightly.")
+        assert "new.pdf" in store.documents_indexed()
+    elif write == "entry":
+        store.add_entry("MEM-2", FakeDocument("Q: c\nA: d", {
+            "source_type": "prior_answer", "source_name": "Answer memory", "entry_id": "MEM-2", "chunk": 1,
+        }))
+        assert store.counts_by_type()["prior_answer"] == 2
+    elif write == "remove_entry":
+        store.remove_entry("MEM-1")
+        assert store.counts_by_type().get("prior_answer", 0) == 0
+    else:
+        store.delete_source("old.pdf")
+        assert "old.pdf" not in store.documents_indexed()
+
+
 def test_caches_are_built_once_under_concurrency(store, monkeypatch):
     """Several threads arriving together must not each rebuild the collection."""
     import concurrent.futures as cf

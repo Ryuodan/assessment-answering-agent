@@ -90,7 +90,7 @@ def trace_config(question: Question, language: Language, run_id: str = "") -> di
 
 
 async def answer_one_question(
-    question: Question, language: Language, *, run_id: str = ""
+    question: Question, language: Language, *, run_id: str = "", team_id: str | None = None,
 ) -> AnsweredQuestion:
     """Answer a single question through the inner graph.
 
@@ -106,6 +106,7 @@ async def answer_one_question(
         {
             "question": question,
             "language": language,
+            "team_id": team_id or "",
             "search_queries": [question.text],
             "attempt": 0,
             "evidence": [],
@@ -175,6 +176,7 @@ def _fan_out(state: AssessmentState) -> list[Send] | str:
                 "question": question,
                 "language": forced_language or question.language,
                 "run_id": state.get("run_id", ""),
+                "team_id": state.get("team_id", ""),
                 "search_queries": [question.text],
                 "attempt": 0,
                 "evidence": [],

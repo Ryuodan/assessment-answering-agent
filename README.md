@@ -359,6 +359,13 @@ after the fix: none loses a word.
 document code alone is not something a reader can find in a folder of eighty
 files. The code stays alongside it, since assessors ask for it.
 
+**A card lists its sources once.** Under *Sources cited* each citation opens its
+clause, with its relevance, the formatted or raw text and a button to open the
+document. The card also had an *All n retrieved source(s)* list, which read as
+though it held everything the search found. It did not: `finalize` keeps only
+the chunks the answer cites, so it showed the same sources a second time --
+true of all 1,817 answers stored when it was removed.
+
 **Every answer is reviewed before you see it.** A second model call checks each
 claim against the retrieved sources and can send the question back for one more
 retrieval round with a differently-worded query. Answers that stay ungrounded,
@@ -620,29 +627,104 @@ there is no region to choose and no transfer to justify. It is the sensible
 default for developing against this corpus, and LangSmith is the one to think
 twice about.
 
-Two installs, deliberately separate — the collector is a server with its own
-database and does not belong in the dependency set of the application it
-watches:
+Two pieces, deliberately separate: the **collector** (Phoenix itself, a server
+with its own database and UI) and the **exporter** (two packages inside this
+app that send it spans). The collector does not belong in the dependency set of
+the application it watches, and it could not live there anyway — **the Phoenix
+server needs Python 3.12 or newer**, and this application runs on 3.11. `uv`
+handles that without you managing a second environment by hand.
 
-```bash
-pip install -e ".[phoenix]"    # this app: the exporter and the instrumentation
-pip install arize-phoenix      # the collector and its UI, ideally in its own venv
-phoenix serve                  # http://localhost:6006
-```
+#### Once per machine
 
-`docker run -p 6006:6006 arizephoenix/phoenix:latest` does the same without the
-second environment. **The Phoenix server needs Python 3.12 or newer** — this
-application runs on 3.11, and the current release of the server fails at import
-there — so give it its own interpreter or use the image. The `[phoenix]` extra
-that goes into *this* venv is fine on 3.11.
+1. **Install the exporter into this app's `.venv`.** `uv pip`, not `pip` — the
+   `.venv` is built by uv and has no pip of its own:
 
-Then:
+   ```bash
+   uv pip install -e ".[phoenix]"
+   ```
 
-```bash
-PHOENIX_TRACING=true
-PHOENIX_ENDPOINT=http://localhost:6006/v1/traces
-PHOENIX_PROJECT=assessment-answer
-```
+2. **Install the collector as a standalone tool, on Python 3.12.** uv downloads
+   the interpreter if you do not have one, keeps Phoenix in an isolated
+   environment of its own, and puts a `phoenix` command on your `PATH`:
+
+   ```bash
+   uv tool install --python 3.12 arize-phoenix
+   ```
+
+   (No install at all: `uvx --python 3.12 --from arize-phoenix phoenix serve`
+   does the same each time from uv's cache. With Docker:
+   `docker run -p 6006:6006 arizephoenix/phoenix:latest`.)
+
+3. **Switch the exporter on** in `.env`:
+
+   ```bash
+   PHOENIX_TRACING=true
+   PHOENIX_ENDPOINT=http://localhost:6006/v1/traces
+   PHOENIX_PROJECT=assessment-answer
+   ```
+
+#### Every time
+
+1. **Start Phoenix first**, in its own terminal, and leave it running:
+
+   ```bash
+   phoenix serve
+   ```
+
+   It is ready when it prints `Phoenix is up and running` — open
+   <http://localhost:6006>.
+
+2. **Start the app** in a second terminal, from this directory, the usual way:
+
+   ```bash
+   .venv/Scripts/python.exe -m uvicorn src.api:app --reload
+   ```
+
+   Look for this line in its log — if it is not there, nothing is being traced
+   (see *When it does not work* below):
+
+   ```
+   INFO  src.config: Phoenix tracing is ON — project 'assessment-answer' to http://localhost:6006/v1/traces. ...
+   ```
+
+3. **Use the app** as normal, then go to <http://localhost:6006> →
+   **assessment-answer**. Spans are sent in batches, so a trace can take a few
+   seconds to appear after the answer does.
+
+   - **Traces** — one per question (`answer[12]`) and one per chat turn
+     (`assistant[<conversation>]`). Click one for the span tree: `plan →
+     retrieve → rerank → draft → review → finalize`, every `ChatGroq` call with
+     its prompt, output and token counts.
+   - **Sessions** — a whole questionnaire run, or a whole conversation, grouped.
+   - The CLI, `scripts/` and the eval harness are traced too, with no extra
+     step. An eval run is thousands of spans; that is fine, but it is why a
+     project name per experiment (`PHOENIX_PROJECT=eval-precedence`) is worth
+     setting.
+
+4. **Stop** with Ctrl+C in each terminal. Set `PHOENIX_TRACING=false` when you
+   are done — the app does not need Phoenix to run, it just warns while it
+   cannot reach one.
+
+#### When it does not work
+
+| What you see | Why, and what to do |
+|---|---|
+| No `Phoenix tracing is ON` line | `.env` still says `false`, or the app is not reading this directory's `.env` — start it from this directory. |
+| `PHOENIX_TRACING is on but the tracing packages are not installed` | Step 1 of *Once per machine*, into this `.venv`. |
+| `Transient error … Failed to establish a new connection … while exporting span batch`, then `Failed to export span batch due to timeout, max retries or shutdown` | Phoenix is not running, or not on the port in `PHOENIX_ENDPOINT`. Start it; the warnings stop on their own. Those spans are lost, the answers are not. |
+| `phoenix serve` fails with `mutable default <class 'mappingproxy'>` | Phoenix was installed on Python 3.11. `uv tool install --python 3.12 --reinstall arize-phoenix`. |
+| Port 6006 already in use | Set `PHOENIX_PORT=6007` before `phoenix serve` (`$env:PHOENIX_PORT=6007` in PowerShell), and change `PHOENIX_ENDPOINT` to match. |
+| The app runs but no traces appear from the test suite | Correct — the suite never traces, whatever `.env` says. |
+| `phoenix: command not found` | uv's tool directory is not on `PATH`: run `uv tool update-shell` and open a new terminal. |
+
+#### Clearing it out
+
+Phoenix keeps everything under `PHOENIX_WORKING_DIR` — `%USERPROFILE%\.phoenix`
+by default on Windows (`~/.phoenix` elsewhere) — in a SQLite file. Delete a
+project in the UI, or stop Phoenix and delete that directory, to remove every
+trace. `uv tool uninstall arize-phoenix` removes the collector.
+
+#### How it works
 
 `config.start_phoenix_tracing()` is the bridge, and it is a different mechanism
 from the LangSmith one rather than a second destination for it. LangSmith is
@@ -877,10 +959,41 @@ real file and every cell comment from another, and mangled most conditional
 formatting. A cell holding a formula is refused outright, because one workbook
 scores itself from 93 formulas on a hidden sheet.
 
+**Even the sheets holding answers keep every byte but the answers.** The
+answered cells are spliced into the worksheet's own XML. It used to be parsed
+and serialised again, which renamed every namespace prefix but the main one and
+dropped the declarations it did not see used -- so the `mc:Ignorable="x14ac xr
+xr2 xr3"` that Excel writes on every worksheet named prefixes that no longer
+existed, and **Excel refused to open the filled file**. Google Sheets exports do
+not carry that attribute, which is why the files tested day to day never showed
+it; the team's Zain form does. Checked with Excel itself: the Zain form's filled
+copy failed to open before and opens now, as do all twenty-one real
+questionnaires filled in every writable cell, and an Excel-saved form taken
+through the assistant, the fill button and the download. A sheet shaped in a way
+the splice does not recognise -- rows without numbers, say -- still falls back to
+the old rewrite.
+
+Text is made safe for the file before it goes in, for every format: characters
+XML may not hold (a vertical tab, a form feed -- a model's output can carry
+them) are removed, and an Excel cell is capped at the 32,767 characters Excel
+accepts. One such character used to fail a whole Word fill, and the Word export
+beside it.
+
+**A cell gets text, not Markdown.** The drafter writes `**bold**`, bullets and
+the occasional heading, which the answer cards and the exports render. A
+spreadsheet or Word cell shows them literally: 96 of the 1,687 answers stored
+against questionnaires carried bold markers, and a filled NMDC questionnaire
+went back with `**Identifiers** –` in a cell. The fill now writes
+`formatting.to_cell_text` -- emphasis removed, bullets as `•`, numbering kept, a
+blank line between paragraphs kept.
+
 Word documents go through python-docx, which re-serialises every XML part it
 loads. That reformatting is cosmetic -- nothing is lost or added, relationships
 come out identical, and every image and embedded font is byte-identical -- but
-it is a weaker guarantee than the workbook side, and worth knowing.
+it is a weaker guarantee than the workbook side, and worth knowing. An Arabic
+answer marks its paragraph and runs right-to-left once: filling a document that
+had already been filled used to append a second `w:bidi` to every answer, which
+Word forgives and the schema does not.
 
 **Detection has to survive its own output.** Filling the answer column made it
 the column with the most prose, because plenty of real questions are as short as
@@ -1256,6 +1369,17 @@ answer takes no clear position, or the file has no word for the one it takes,
 nothing is written and the reason is reported: a blank dropdown is a question
 somebody looks at, a confidently wrong one is a question nobody looks at.
 
+**The word an answer opens with decides.** "Yes.", "No;", "**Yes.**",
+"Partially.", "N/A", "نعم", "لا ينطبق" -- when an answer starts with a verdict,
+that is its position, and a "Yes" qualified in its own clause ("Yes, partially:
+…") is a partial. Phrases are read only when there is no opening word. They used
+to be read first, and prose about controls is full of "no longer required", "are
+not left in use" and "will be reviewed": over the 1,088 drafted answers in the
+deployment's own history that open with a verdict, 19 that said Yes were read as
+No -- the dropdown beside them would have said Non Compliant -- and 16 that said
+No were read as nothing. Both counts are now zero, and so is the same check over
+the team's 698 remembered answers.
+
 A **batch** outlives the request that made it. Answering 183 questions takes
 minutes, corrections come afterwards, and the file is filled in later still --
 so answers are keyed by question rather than by position, and answering twice
@@ -1397,6 +1521,26 @@ whether it will go into the file. "The second question" is a *place in the file*
 (`position="2"`, or `"last"`, or `"2-4"`), which `list_questions` now shows beside
 every id.
 
+**"What sources did you use for question 3?"** is a question about the same
+answer, and it got a different answer from the card. The assistant searched the
+policies again and listed what that search found: a similar list, not the one
+the answer was written from, and the person was holding it up against the
+card. `read_answers` now names the sources each answer cites, and with
+`with_sources=true` it reads out what each cited clause says, whether it is our
+own policy, a regulation or a previous answer, and the reasoning the answer was
+drafted with -- all from what was stored with the answer, so nothing is looked
+up again. An answer drafted in the conversation with `answer_directly` carries
+its cited clauses in what that tool returns, so a question about them later is
+answered from those too. Two eval cases, one in Arabic, check that the reply
+names the documents the stored answer cites; both pass every run.
+
+That guidance lives in the tool's description, not the system prompt, and a
+plain read-back does not list sources. Both were tried the other way. A
+paragraph in the prompt, and a sources line after every answer read back, each
+made "what is the answer to question 3?" asked in Arabic come back *translated*
+rather than quoted: with the paragraph, three runs in five quoted it; without,
+five in five. The source questions were answered correctly either way.
+
 Every tool that acts on questions takes `position` too, and the prompt says why:
 "make the answer to question 3 more formal" once reworded the *training*
 question, whose id is `Human Resources!3` -- a spreadsheet row -- and which is
@@ -1458,7 +1602,17 @@ result without the call that produced it is a request the model API refuses, and
 from then on every turn failed.
 
 Every message now records when it was said and which file it came with, and a
-reply that changed the answers carries a **Show the answers** button.
+reply that changed the answers carries a **Show the answers** button. That
+button and the floating **Answers →** are the one filled, coloured control in
+the conversation: they were outlined in grey like everything in the header, and
+the answers are what the page is for.
+
+What a turn did is folded to one line under the reply -- *11 steps · Read the
+file · Answered questions ×8 · Listed questions* -- which opens onto a numbered
+list, each step in words with the scope it used beneath. Each tool call used to
+be a monospace pill, and in the column beside the answers a long scope wrapped
+inside its pill: eleven calls stacked into a ragged tower taller than the reply
+they explained.
 
 ### Answers that already exist are not ours to overwrite
 
@@ -1663,6 +1817,15 @@ back. Taking it back is an undo rather than a reversal: the stored answer is
 forgotten and the question is unanswered again, because storing something in
 its place would only be a second decision made on the person's behalf.
 
+**Clearing an answer is not leaving it blank.** The ✕ on a card, and emptying an
+answer in its editor, take *our* answer away and nothing more: the cell is left
+exactly as the file had it -- empty if it arrived empty, last year's answer if
+it arrived with one. *Leave blank* is the one action that writes an empty cell
+over what was there, and the card says so before anything is written. Emptying
+the editor used to store an empty answer "written by hand", which was neither
+state: nothing was written, the card said no answer had been produced, and the
+workbench counted it as an edit on its way into the file.
+
 **A question typed beside a spreadsheet's rows has no cell to go into.** It is
 answered like any other and leaves through the exports, which is useful --
 somebody notices the form is missing something and asks anyway -- but the one
@@ -1823,7 +1986,9 @@ sweep runs as a background task after an upload, an approval or a correction,
 inline at the end of a `cli answers` import, and on demand from the page — where
 a press compares fifty and says how many are left, because a button that returns
 in twenty seconds gets pressed again and one that hangs for four minutes gets
-reloaded.
+reloaded. Background sweeps run one at a time: approvals clicked through in a row
+used to start a sweep each, over the same pending entries, and a request that
+arrives while one is running now makes it go round once more instead.
 
 Three things feed it:
 
@@ -1972,6 +2137,17 @@ what is true.
   them shorter"* — so undo always means what the pipeline wrote.
 - A rewording that fails leaves the draft exactly as it was, and is not written
   back to the store at all.
+- **Many at once are paced, not lost.** Every rewording path sends one call per
+  answer — preferences over a run's drafts, Brief over a whole file, a skill over
+  a scope — and they used to all go at once. Against Groq, 80 at once lost 44 to
+  the rate limit, each one silently left as drafted. They now go at most
+  `MAX_CONCURRENT_REWRITES` (8) at a time and are retried with a growing pause
+  while the provider says it is busy: the same 80 came back 80 of 80, in 16
+  seconds.
+- Rewording an answer also drops its brief form, which was condensed from the
+  words just replaced, and derives it again where the brief form is what the
+  questionnaire writes. Kept, a Brief questionnaire went on showing and filling
+  the old text, and *"make them more formal"* appeared to do nothing.
 - **Try it on a sample**, on the Preferences page, runs the same rewording over
   one illustrative answer (or one you paste) and shows the two side by side.
   Nothing is saved; it is there so a bad instruction is noticed before it
@@ -1992,12 +2168,22 @@ answer memory as though a person had written it.
 ### Why the pages name their scripts by content
 
 Every page loads the shared `cards.js` and `cards.css` as
-`/static/cards.js?v=<fingerprint>`, and every page and static file is served
+`static/cards.js?v=<fingerprint>`, and every page and static file is served
 `Cache-Control: no-cache`. Without it, a browser that had yesterday's `cards.js`
 kept it on its own heuristic while fetching today's page; the page called a
 function the old script did not have, and the assistant's answer panel opened
 empty. A changed script is now a new URL, which no cache can hold an older copy
 of — and an unchanged one still costs only a 304.
+
+**Relative, because the deployment serves the app under a prefix.** nginx puts
+it at `/assessment/` and rewrites `/api/` in pages and scripts, and nothing else
+(`deploy/nginx-assessment.conf`). So the shared assets and the links between
+pages are written `static/cards.js`, `memory`, `./` -- every page sits one level
+below the app's root, so those land in the same place at `/` and under the
+prefix. Written from the root, as they were, `/static/cards.js` asked the domain
+rather than the app on the server, and every page that draws an answer card
+stopped working. `tests/test_pages.py` serves each page the way nginx does and
+follows every link.
 
 ## Our policy, or a law we are subject to
 
@@ -2058,6 +2244,18 @@ Until somebody is added, everything runs open and is attributed to
 `local@localhost`, which is right on a laptop and wrong anywhere else. Adding
 the first user is what closes the door — there is no separate flag that could
 disagree with the user list.
+
+That stand-in is an administrator with no password, and a row with no password
+signs in with the team's code — so, left as it was, anyone who knew the code
+could type `local@localhost` and be an administrator. The deployment's database
+had exactly that row. It is now refused at sign-in like an unknown address, a
+session for it is never honoured, and it is neither listed on the access panel
+nor counted as an administrator (counted, it let the one real administrator
+demote themselves). And once anybody has been added, startup deletes the row
+outright, with its sessions; the events it recorded stay, because the history
+is the history. It was never a person. All 140 of its conversations were runs of
+`scripts/eval_assistant.py` against the deployment's own database, and that
+script now works in a scratch database of its own unless `DB_PATH` names one.
 
 **What this is and is not.** It is a good door lock: it keeps strangers out of a
 publicly reachable service, it puts a name against every answer, and it can be
@@ -2140,6 +2338,40 @@ Writing that history never costs answers. A run takes minutes, so a failure to
 save it is logged loudly and the answers are still returned — losing the history
 is bad, losing the work is worse.
 
+### Each team's knowledge base and memory are its own
+
+Batches and conversations were always a team's. The two things every answer is
+drafted *from* were not: one Chroma collection and one table of remembered
+answers served the whole deployment. With a second team, its questionnaires
+would have been answered from the first team's policies and would have quoted
+the first team's answers -- and any member of either team could correct, forget
+or remove the other's. Now each team has its own:
+
+* **Knowledge base.** A Chroma collection per team. The default team keeps
+  `COLLECTION_NAME` unchanged, so nothing is re-indexed; any other team's
+  collection is named from it, the team id and a hash of the id, which keeps
+  every name inside Chroma's 63 characters.
+* **Answer memory.** Rows are keyed by `(team_id, entry_id)`. The team had to be
+  part of the key rather than a column beside it: an imported entry is named
+  `<file>::<n>`, so two teams importing files of the same name would have
+  overwritten each other's answers. The sweep compares an entry only with its
+  own team's, and a disagreement belongs to the team whose answers disagree.
+* **Documents.** The default team's uploads stay in `UPLOAD_DIR`; another
+  team's go to `data/teams/<team>/uploads`, and the document list opens only
+  the team's own. Because a team id now names a directory, it is limited to
+  lower-case letters, digits, `.`, `_` and `-`, and the admin page refuses
+  anything else.
+
+Another team's entry, document or source answers **404**, not 403: to anyone
+outside the team it does not exist. The CLI takes `--team` on every command and
+defaults to `DEFAULT_TEAM`.
+
+**Upgrading** is migration 10, which gives every remembered answer that has no
+team to `DEFAULT_TEAM` -- on this deployment all 698 answers, to `cybersecurity`,
+the team the system was set up for. The existing collection is already that
+team's, so the upgrade is a restart. `tests/test_team_isolation.py` holds the
+boundary from both sides, through the routes a person uses.
+
 ## Facing a network
 
 Three properties were established by attack rather than by reading, and the
@@ -2170,6 +2402,54 @@ process-wide client registry -- a bare `KeyError` on the persist directory, and
 a 500 for whichever request lost. It surfaced only when the search drawer began
 loading its file list at the same moment the page asked for knowledge stats.
 Under a lock now, and asserted by having eight threads construct it at once.
+Its caches had the same shape of problem: cleared before a write and not after,
+so anyone who opened the knowledge base while a long policy was being embedded
+rebuilt the catalog without it, and the new document stayed missing from the
+list until the next upload.
+
+**Server text is never markup on the page.** The workbench wrote its status
+messages as HTML, and those messages carry what the server said -- file names
+and the text of errors. A name typed as markup, which an upload through the API
+can carry, ran as a page for whoever next read the message. Status lines are
+text now, and a test uploads exactly such a name.
+
+## Keeping storage within a limit
+
+Questionnaires arrive from other companies and are confidential, and every one
+uploaded used to stay on the server for good, with its filled copy beside it.
+Each team now has a **storage limit**, `STORAGE_LIMIT_PER_TEAM_MB` (2 GB by
+default), and the rule is deliberately lopsided:
+
+* **Under the limit, nothing is touched**, however old it is.
+* **Over it, the work nobody has come back to longest goes first** -- the
+  uploaded questionnaire, its filled copy, and the text read out of it -- until
+  the team is under again. Between a file and its filled copy the copy goes
+  first, because pressing *Fill* writes it again and nothing brings back an
+  upload.
+
+Two things are never removed, whatever the limit says:
+
+* **A document the team's knowledge base was built from.**
+* **Anything used in the last `STORAGE_KEEP_DAYS` days** (30). A questionnaire
+  uploaded a year ago and answered this week is in use: "last used" is the
+  later of the file's own date and the last change to any batch reading it.
+
+The second rule is what makes a forgotten limit harmless. The limit is a number
+somebody chose for the usage they had then; if more people start using the
+system and nobody raises it, the team simply stays over its limit, and the log
+says so and names the setting, rather than a questionnaire disappearing from
+under the person answering it. The limit is per team, so a new team brings its
+own allowance instead of sharing the first team's.
+
+The answers themselves are never removed -- only files. A batch whose upload
+has gone keeps every answer, and says, when somebody presses *Fill*, that the
+file has to be uploaded again. Every removal is recorded as a `files_removed`
+event naming the files.
+
+It runs when the server starts and every hour after. Under the limit that costs
+two directory listings; the index is only opened when there is something to
+decide. `STORAGE_LIMIT_PER_TEAM_MB=0` turns it off. At the time of writing the
+security team stores 125 MB.
 
 ## Cost of a request
 
@@ -2213,6 +2493,9 @@ to change:
 | `GROQ_BASE_URL` | `https://api.me-central-1.groqcloud.com` | ME-Central-1 region; clear it for `api.groq.com` |
 | `MAX_ANSWER_ATTEMPTS` | `3` | Draft/review rounds per question |
 | `MAX_CONCURRENT_QUESTIONS` | `4` | Raise carefully — Groq rate limits apply |
+| `MAX_CONCURRENT_REWRITES` | `8` | Rewordings (preferences, skills, Brief) sent at once; past it they wait |
+| `STORAGE_LIMIT_PER_TEAM_MB` | `2048` | Past it, old questionnaires and filled copies are removed; `0` turns it off -- see [Keeping storage within a limit](#keeping-storage-within-a-limit) |
+| `STORAGE_KEEP_DAYS` | `30` | Nothing used this recently is removed, even over the limit |
 | `QUERY_EXPANSION` | `true` | Split a multi-part question into one search per part |
 | `HYBRID_SEARCH` | `false` | Fuse a BM25 pass with the dense search — see Evaluation |
 | `RERANKER_ENABLED` | `false` | Cross-encoder reranking; downloads ~2.3 GB on first use |
@@ -2266,6 +2549,12 @@ detailed ones; eleven words is what you write when a questionnaire has 183 rows
 and it is due on Thursday. So length is a choice rather than a target, and it is
 made per questionnaire *and* per answer: 183 rows can go brief while the one the
 assessor will actually read stays full.
+
+Every answer card offers **Full | Brief** for itself, whether or not a brief
+form exists yet; choosing Brief there shortens that one answer on the spot. The
+choice used to appear only once a brief form existed -- that is, only after the
+whole questionnaire had been switched to Brief at least once, so the
+per-answer control was reachable only through the bulk one it exists to avoid.
 
 The brief form is **derived from the full one**, never drafted beside it. It
 goes through `src.rewrite`, which re-retrieves nothing and cannot introduce a
@@ -2844,6 +3133,7 @@ src/
   tools.py        the operations the interface and the agent both call
   preferences.py  a person's preferences, and the built-in and personal skills
   batches.py      an uploaded questionnaire and the answers written for it
+  storage.py      each team's storage limit, and which old files go past it
   store.py        SQLite: connections, schema, migrations
   credentials.py  scrypt hashing, and generating typeable access codes
   identity.py     users, teams, access codes, roles and sessions

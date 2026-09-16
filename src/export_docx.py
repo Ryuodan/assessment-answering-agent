@@ -22,6 +22,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
+from src.forms.xlsx_package import xml_safe
 from src.export_pdf import ExportOptions, cover_note, has_arabic, selected_answers
 from src.formatting import parse
 from src.models import AnsweredQuestion, AssessmentResult
@@ -86,6 +87,9 @@ def _shade(paragraph, colour: str) -> None:
 
 def _run(paragraph, text: str, *, bold: bool = False, size: float = 10.5,
          colour: RGBColor | None = None, italic: bool = False):
+    # A model's text can carry a character XML may not hold, and python-docx
+    # refuses the whole document over one. Every word in the file passes here.
+    text = xml_safe(text)
     run = paragraph.add_run(text)
     run.bold = bold
     run.italic = italic

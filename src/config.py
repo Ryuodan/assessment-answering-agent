@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -198,6 +199,19 @@ class Settings(BaseSettings):
     # drafter's context instead of trading one retrieval for another.
     max_answer_attempts: int = Field(default=3, ge=1, le=5)
     max_concurrent_questions: int = Field(default=4, ge=1, le=32)
+    # Rewordings reaching the model at once: preferences, skills, "make them
+    # shorter", and the brief form, each one call per answer. Unbounded, 80 at
+    # once lost 44 to Groq's rate limit and every lost one stayed as it was.
+    max_concurrent_rewrites: int = Field(default=8, ge=1, le=64)
+
+    # Stored files per team: uploaded questionnaires and policies, and filled
+    # copies. Under the limit nothing is removed; over it, the files of the
+    # work nobody has used longest go first -- never a policy the knowledge base
+    # was built from, and never anything used in the last STORAGE_KEEP_DAYS
+    # days, whatever the limit says. Per team, so a new team brings its own
+    # allowance. 0 turns the limit off.
+    storage_limit_per_team_mb: int = Field(default=2048, ge=0)
+    storage_keep_days: int = Field(default=30, ge=1)
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # 1200, not the 1800 this carried while Markdown tables still held Docling's
@@ -353,6 +367,22 @@ class Settings(BaseSettings):
         """
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
 
+    def team_upload_dir(self, team_id: str | None = None) -> Path:
+        """Where one team's uploads live: its policies and its questionnaires.
+
+        The default team keeps `upload_dir` itself, where everything uploaded
+        before teams had their own already is. Another team's files go under
+        `teams/<team>/uploads` beside it, so no team can list, open or preview
+        another's documents by name. The id is checked before it becomes part
+        of a path: team ids come from the admin page, and `../x` is not a team.
+        """
+        team = team_id or self.default_team
+        if team == self.default_team:
+            return self.upload_dir
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", team) or ".." in team:
+            raise ValueError(f"{team!r} cannot name a directory.")
+        return self.upload_dir.parent / "teams" / team / "uploads"
+
     def ensure_directories(self) -> None:
         """Create the directories the app writes to. Safe to call repeatedly."""
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
@@ -412,7 +442,8 @@ def start_phoenix_tracing() -> bool:
     The imports are inside the function and the failure is a warning rather
     than a crash: the packages are an optional extra, and an application that
     refuses to start because its *observability* is missing has the priority
-    backwards. `pip install -e ".[phoenix]"` installs them.
+    backwards. `uv pip install -e ".[phoenix]"` installs them -- `uv pip`,
+    because the project's `.venv` is built by uv and has no pip of its own.
 
     Nothing is started here. Phoenix itself -- the collector and its UI -- is a
     separate process that the operator runs; if it is not listening, the
@@ -429,7 +460,7 @@ def start_phoenix_tracing() -> bool:
     except ImportError as error:
         logger.warning(
             "PHOENIX_TRACING is on but the tracing packages are not installed "
-            "(%s). Install them with: pip install -e \".[phoenix]\"", error,
+            "(%s). Install them with: uv pip install -e \".[phoenix]\"", error,
         )
         return False
 

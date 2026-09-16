@@ -48,6 +48,78 @@ def test_the_local_user_does_not_count_as_gating():
     assert not identity.sign_in_required()
 
 
+def _plant_the_stand_in():
+    """The row as an older version left it on a deployment: an administrator, no password."""
+    store.connect().execute(
+        "INSERT OR IGNORE INTO users (email, team_id, created_at, last_seen_at, role) VALUES (?, ?, ?, ?, ?)",
+        (identity.LOCAL_EMAIL, settings.default_team, store.utcnow(), store.utcnow(), identity.ADMIN),
+    )
+    store.connect().commit()
+
+
+def test_the_local_stand_in_cannot_be_signed_in_to(team):
+    """It is created, as an administrator with no password, the first time the
+    app is opened before anyone is added -- and a row with no password signs in
+    with the team's code. So everyone who knew the code could have signed in as
+    an administrator. The deployment's database had exactly that row."""
+    _plant_the_stand_in()
+
+    with pytest.raises(identity.AccessDenied, match="do not match"):
+        identity.sign_in(identity.LOCAL_EMAIL, CODE)
+
+
+def test_a_session_for_the_local_stand_in_is_not_honoured(team):
+    _plant_the_stand_in()
+    token = "a-token-issued-before-this-was-closed"
+    store.connect().execute(
+        "INSERT INTO sessions (token_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        (identity._hash_token(token), identity.LOCAL_EMAIL, store.utcnow(), "9999-01-01T00:00:00"),
+    )
+    store.connect().commit()
+
+    assert identity.resolve(token) is None
+
+
+def test_startup_removes_the_stand_in_once_people_sign_in(team):
+    """It exists for a laptop with nobody added. On a deployment it was an
+    account nobody had created, left behind by an evaluation run."""
+    _plant_the_stand_in()
+    store.connect().execute(
+        "INSERT INTO sessions (token_hash, email, created_at, expires_at) VALUES ('t', ?, ?, ?)",
+        (identity.LOCAL_EMAIL, store.utcnow(), "9999-01-01T00:00:00"),
+    )
+    store.connect().commit()
+
+    identity.bootstrap()
+
+    assert identity.find_user_any(identity.LOCAL_EMAIL) is None
+    assert not store.connect().execute(
+        "SELECT COUNT(*) FROM sessions WHERE email = ?", (identity.LOCAL_EMAIL,)
+    ).fetchone()[0]
+
+
+def test_a_script_run_against_a_deployment_does_not_recreate_the_stand_in(team):
+    user = identity.local_user()
+
+    assert user.email == identity.LOCAL_EMAIL and user.team_id == settings.default_team
+    assert not user.is_admin, "nobody is an administrator by being a script"
+    assert identity.find_user_any(identity.LOCAL_EMAIL) is None
+
+
+def test_an_open_laptop_still_has_its_stand_in():
+    user = identity.local_user()
+    identity.bootstrap()
+    assert identity.find_user_any(identity.LOCAL_EMAIL) == user
+
+
+def test_the_local_stand_in_is_not_an_administrator_anyone_manages(team):
+    identity.add_user(BOB, role=identity.ADMIN)
+    _plant_the_stand_in()
+
+    assert identity.admin_count() == 1, "the last real administrator is still protected"
+    assert identity.LOCAL_EMAIL not in [u["email"] for u in identity.list_users()]
+
+
 @pytest.mark.parametrize("given", [ALICE, "M.Alsaif@T2.sa", f"  {ALICE}  ", "M.ALSAIF@T2.SA"])
 def test_addresses_match_regardless_of_case_or_padding(team, given):
     _, user = identity.sign_in(given, CODE)

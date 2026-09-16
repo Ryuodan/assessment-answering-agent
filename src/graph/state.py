@@ -241,6 +241,9 @@ class QuestionState(TypedDict, total=False):
     run_id: str
     """Which run this question belongs to, so progress can be reported."""
 
+    team_id: str
+    """Whose knowledge base answers it. Retrieval never reaches another team's."""
+
     search_queries: list[str]
     """Queries for the current retrieval round.
 
@@ -277,6 +280,9 @@ class AssessmentState(TypedDict, total=False):
 
     run_id: str
     """Identifier the caller can poll for progress while the run is in flight."""
+
+    team_id: str
+    """Whose knowledge base every question in the document is answered from."""
 
 
     language: Language | None

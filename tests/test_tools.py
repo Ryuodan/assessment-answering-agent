@@ -566,6 +566,74 @@ async def test_fill_writes_whichever_length_was_chosen(batch, user, answers_yes,
 
 
 @pytest.mark.asyncio
+async def test_rewording_a_brief_questionnaire_rewords_what_is_written(
+    batch, user, answers_yes, monkeypatch
+):
+    """The brief form is condensed from the full answer. Rewording the full one
+    kept the old brief, so on a questionnaire filled in briefly "make them more
+    formal" changed nothing on the card and nothing in the file."""
+    async def shorten(answered):
+        return "Brief of: " + answered.answer
+
+    async def formal(answered, instruction, language=None, **_):
+        revised = answered.model_copy(deep=True)
+        revised.answer = "More formal."
+        return revised
+
+    monkeypatch.setattr(tools.rewrite, "shorten", shorten)
+    await tools.answer(user, batch.id)
+    tools.set_detail(user, batch.id, "brief")
+    await tools.make_brief(user, batch.id)
+
+    monkeypatch.setattr(tools.rewrite, "rewrite", formal)
+    await tools.revise(user, batch.id, "More formal.")
+
+    stored = batches.answers(batch.id)
+    assert {a.brief for a in stored.values()} == {"Brief of: More formal."}
+    assert {tools.written_text(a, "brief") for a in stored.values()} == {"Brief of: More formal."}
+
+
+@pytest.mark.asyncio
+async def test_rewording_a_full_questionnaire_drops_the_stale_brief_without_deriving_one(
+    batch, user, answers_yes, monkeypatch
+):
+    calls = []
+
+    async def shorten(answered):
+        calls.append(answered.answer)
+        return "Brief of: " + answered.answer
+
+    async def formal(answered, instruction, language=None, **_):
+        revised = answered.model_copy(deep=True)
+        revised.answer = "More formal."
+        return revised
+
+    monkeypatch.setattr(tools.rewrite, "shorten", shorten)
+    await tools.answer(user, batch.id)
+    await tools.make_brief(user, batch.id)
+    calls.clear()
+
+    monkeypatch.setattr(tools.rewrite, "rewrite", formal)
+    await tools.revise(user, batch.id, "More formal.")
+
+    assert not calls, "nobody is writing this file briefly, so no brief is paid for"
+    assert {a.brief for a in batches.answers(batch.id).values()} == {""}
+
+
+@pytest.mark.asyncio
+async def test_deriving_the_brief_form_keeps_who_approved_an_answer(batch, user, answers_yes, shortens):
+    """Deriving saved every answer as edited by nobody, which erased the name of
+    whoever had approved or corrected it."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+
+    await tools.make_brief(user, batch.id)
+
+    assert batches.edited_by(batch.id) == {first: user.email}
+
+
+@pytest.mark.asyncio
 async def test_brief_falls_back_to_the_full_answer(batch, user, answers_yes):
     """Switching to brief and filling immediately must write the long answers,
     not blanks. The interface derives them first; this is what happens when
@@ -898,3 +966,66 @@ def test_a_second_correction_does_not_credit_the_file_with_the_first(dropdown_ba
     [finding] = [f for f in part["findings"] if f["subject"] == "column D"]
     assert "read from the file" not in finding["because"]
     assert finding["because"] == f"set by {user.email}"
+
+
+def test_the_file_gets_the_answer_without_its_markdown(batch, user):
+    """The drafter writes **bold** and bullet markers; a customer's cell shows them
+    literally. A filled NMDC questionnaire went back with "**Identifiers** –"."""
+    from src.forms.xlsx_package import Workbook
+
+    question = batch.form.questions[0]
+    tools.set_answer(user, batch.id, question.id, "**Yes.** It is documented.\n\n- approved yearly\n- owned by the CISO")
+
+    filled = tools.fill(user, batch.id)
+
+    target = next(t for t in question.writable)
+    sheet, ref = target.id.rsplit("!", 1)
+    with Workbook(filled.path) as workbook:
+        column, row = "".join(c for c in ref if c.isalpha()), int("".join(c for c in ref if c.isdigit()))
+        assert workbook[sheet].value(row, column) == "Yes. It is documented.\n\n• approved yearly\n• owned by the CISO"
+
+
+# --- clearing an answer --------------------------------------------------------
+#
+# Clearing is not "leave blank". A cell that was empty in the file stays empty,
+# and a cell the file arrived with an answer in keeps that answer: the team's
+# own words are not ours to wipe out because somebody removed a draft.
+
+
+def _cell(path, ref):
+    from src.forms.xlsx_package import Workbook
+
+    column, row = "".join(c for c in ref if c.isalpha()), int("".join(c for c in ref if c.isdigit()))
+    with Workbook(path) as workbook:
+        return workbook["Human Resources"].value(row, column)
+
+
+@pytest.mark.parametrize("clear", ["set aside", "emptied in the editor"])
+def test_clearing_leaves_each_cell_as_the_file_had_it(filled, user, clear):
+    answered_in_file, blank_in_file = filled.form.questions[0], filled.form.questions[2]
+    for question in (answered_in_file, blank_in_file):
+        tools.set_answer(user, filled.id, question.id, "A draft somebody decided against.")
+        if clear == "set aside":
+            tools.set_questions(user, filled.id, [{"id": question.id, "skip": True}])
+        else:
+            tools.set_answer(user, filled.id, question.id, "   ")
+
+    out = tools.fill(user, filled.id, destination=filled.source_path.with_name("cleared.xlsx"))
+
+    assert _cell(out.path, "D2") == "Yes. The HR process is documented and was approved in March."
+    assert _cell(out.path, "D4") == ""
+    assert "A draft somebody decided against." not in (_cell(out.path, "D2"), _cell(out.path, "D4"))
+
+
+def test_an_answer_emptied_in_the_editor_is_simply_not_answered(batch, user):
+    """Stored as an empty answer "written by hand" it was neither blank on
+    purpose nor unanswered: nothing was written, the card said no answer was
+    produced, and the workbench said the edit would be written into the file."""
+    question = batch.form.questions[0]
+    tools.set_answer(user, batch.id, question.id, "A draft.")
+
+    tools.set_answer(user, batch.id, question.id, "")
+
+    assert question.id not in batches.answers(batch.id)
+    view = next(q for q in tools.inspect(user, batch.id)["questions"] if q["id"] == question.id)
+    assert view["answered"] is None and not view["blanked"]

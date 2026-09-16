@@ -60,7 +60,7 @@ def test_the_front_door_is_the_conversation(client):
     body = client.get("/").text
     assert 'id="prompt"' in body, "the composer, so this is the conversation"
     assert '<title>Assessment Answering Agent</title>' in body
-    assert '"/workbench"' in body, "and it has to say how to reach the other one"
+    assert 'href="workbench"' in body, "and it has to say how to reach the other one"
 
 
 def test_the_workbench_has_its_own_address(client):
@@ -72,7 +72,8 @@ def test_the_workbench_has_its_own_address(client):
 def test_the_old_chat_address_still_arrives(client):
     """Somebody has this bookmarked. A moved page is a redirect, not a 404."""
     moved = client.get("/chat", follow_redirects=False)
-    assert moved.status_code == 308 and moved.headers["location"] == "/"
+    # Relative, so it stays inside the prefix the deployment serves the app under.
+    assert moved.status_code == 308 and moved.headers["location"] == "./"
     assert 'id="prompt"' in client.get("/chat").text
 
 

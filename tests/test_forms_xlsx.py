@@ -299,6 +299,155 @@ def test_written_text_is_marked_space_preserving(simple, tmp_path):
     assert "  padded  " in sheet
 
 
+# --- a sheet Excel wrote ------------------------------------------------------
+#
+# Excel declares half a dozen namespaces on every worksheet and lists four of
+# them in `mc:Ignorable`. Re-serialising the part renamed them ns1, ns2... and
+# dropped the unused ones, leaving `mc:Ignorable` naming prefixes that no longer
+# existed -- and Excel refused to open the filled file. The team's own Zain form
+# was one of those.
+
+EXCEL_SHEET = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x14ac xr xr2 xr3" '
+    'xmlns:x14ac="http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac" '
+    'xmlns:xr="http://schemas.microsoft.com/office/spreadsheetml/2014/revision" '
+    'xmlns:xr2="http://schemas.microsoft.com/office/spreadsheetml/2015/revision2" '
+    'xmlns:xr3="http://schemas.microsoft.com/office/spreadsheetml/2016/revision3" '
+    'xr:uid="{00000000-0001-0000-0000-000000000000}">'
+    '<dimension ref="A1:C5"/><sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+    '<sheetFormatPr defaultRowHeight="15" x14ac:dyDescent="0.25"/>'
+    '<sheetData>'
+    '<row r="1" spans="1:3" x14ac:dyDescent="0.25"><c r="A1" t="inlineStr"><is><t>S.No</t></is></c>'
+    '<c r="B1" t="inlineStr"><is><t>Vendor Due Diligence Questions</t></is></c>'
+    '<c r="C1" t="inlineStr"><is><t>Vendor Response</t></is></c></row>'
+    '<row r="2" spans="1:3" x14ac:dyDescent="0.25"><c r="A2"><v>1</v></c>'
+    '<c r="B2" t="inlineStr"><is><t>Does the vendor have documented information security policies?</t></is></c>'
+    '<c r="C2" s="4"/></row>'
+    '<row r="3" spans="1:3" x14ac:dyDescent="0.25"><c r="A3"><v>2</v></c>'
+    '<c r="B3" t="inlineStr"><is><t>Does the vendor review those policies at least annually?</t></is></c></row>'
+    '<row r="5" spans="1:3" x14ac:dyDescent="0.25"/>'
+    '</sheetData>'
+    '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
+    '<extLst><ext uri="{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}" '
+    'xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">'
+    '<x14:dataValidations count="0" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"/>'
+    '</ext></extLst></worksheet>'
+)
+
+
+def _excel_workbook(tmp_path, sheet_xml=EXCEL_SHEET):
+    path = shapes.simple(tmp_path / "excel.xlsx")
+    rebuilt = tmp_path / "excel-authored.xlsx"
+    with zipfile.ZipFile(path) as source, zipfile.ZipFile(rebuilt, "w", zipfile.ZIP_DEFLATED) as out:
+        for item in source.infolist():
+            data = sheet_xml.encode("utf-8") if item.filename == "xl/worksheets/sheet1.xml" else source.read(item)
+            out.writestr(item, data)
+    return rebuilt
+
+
+def _sheet_text(path) -> str:
+    with zipfile.ZipFile(path) as package:
+        return package.read("xl/worksheets/sheet1.xml").decode("utf-8")
+
+
+def test_an_excel_sheets_namespaces_survive_answering(tmp_path):
+    import re as regex
+
+    path = _excel_workbook(tmp_path)
+    out = tmp_path / "answered.xlsx"
+    forms.write(path, out, {
+        "Questionnaire!C2": "Yes, reviewed annually.",
+        "Questionnaire!C3": "Yes.",
+        "Questionnaire!C4": "A row that was never there.",
+        "Questionnaire!C5": "A row that was empty.",
+    })
+
+    text = _sheet_text(out)
+    root = regex.search(r"<worksheet[^>]*>", text).group(0)
+    declared = set(regex.findall(r"xmlns:(\w+)=", root))
+    ignorable = regex.search(r'mc:Ignorable="([^"]*)"', root).group(1).split()
+    assert set(ignorable) <= declared, "Excel will not open a file whose mc:Ignorable names an undeclared prefix"
+    assert root == regex.search(r"<worksheet[^>]*>", EXCEL_SHEET).group(0)
+
+    with Workbook(out) as workbook:
+        sheet = workbook["Questionnaire"]
+        assert [sheet.value(row, "C") for row in (2, 3, 4, 5)] == [
+            "Yes, reviewed annually.", "Yes.", "A row that was never there.", "A row that was empty.",
+        ]
+
+
+def test_only_the_answered_cells_change(tmp_path):
+    path = _excel_workbook(tmp_path)
+    out = tmp_path / "answered.xlsx"
+    forms.write(path, out, {"Questionnaire!C3": "Yes."})
+
+    before, after = EXCEL_SHEET, _sheet_text(out)
+    cell = '<c r="C3" t="inlineStr"><is><t xml:space="preserve">Yes.</t></is></c>'
+    assert after == before.replace(
+        "annually?</t></is></c></row>", "annually?</t></is></c>" + cell + "</row>", 1
+    ), "every byte but the answered cell is the file's own"
+
+
+def test_a_cell_keeps_its_style_when_answered(tmp_path):
+    out = tmp_path / "answered.xlsx"
+    forms.write(_excel_workbook(tmp_path), out, {"Questionnaire!C2": "Yes."})
+    assert '<c r="C2" s="4" t="inlineStr">' in _sheet_text(out)
+
+
+def test_text_that_xml_cannot_hold_is_made_safe(tmp_path):
+    """A model's answer can carry a vertical tab or a form feed, which XML 1.0
+    does not allow anywhere -- one of those made the whole part unreadable."""
+    out = tmp_path / "answered.xlsx"
+    forms.write(_excel_workbook(tmp_path), out, {"Questionnaire!C2": "Yes & <always>\x0b reviewed\x00."})
+
+    with Workbook(out) as workbook:
+        assert workbook["Questionnaire"].value(2, "C") == "Yes & <always> reviewed."
+
+
+def test_a_sheet_written_with_a_namespace_prefix_is_answered_in_it(tmp_path):
+    """Some generators write `<x:worksheet xmlns:x=...>` rather than a default namespace."""
+    prefixed = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<x:sheetData><x:row r="1"><x:c r="B1" t="inlineStr"><x:is><x:t>Question</x:t></x:is></x:c>'
+        '<x:c r="C1" t="inlineStr"><x:is><x:t>Response</x:t></x:is></x:c></x:row></x:sheetData>'
+        '</x:worksheet>'
+    )
+    out = tmp_path / "answered.xlsx"
+    forms.write(_excel_workbook(tmp_path, prefixed), out, {"Questionnaire!C2": "Yes."})
+
+    assert '<x:row r="2"><x:c r="C2" t="inlineStr"><x:is><x:t xml:space="preserve">Yes.' in _sheet_text(out)
+    with Workbook(out) as workbook:
+        assert workbook["Questionnaire"].value(2, "C") == "Yes."
+
+
+def test_an_empty_sheet_is_given_its_first_row(tmp_path):
+    empty = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>'
+    )
+    out = tmp_path / "answered.xlsx"
+    forms.write(_excel_workbook(tmp_path, empty), out, {"Questionnaire!C2": "Yes."})
+    with Workbook(out) as workbook:
+        assert workbook["Questionnaire"].value(2, "C") == "Yes."
+
+
+def test_a_shape_the_splice_does_not_know_still_writes(tmp_path):
+    """Rows without a reference are legal, and rare; the whole-part rewrite takes those."""
+    unnumbered = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row><c r="B1" t="inlineStr"><is><t>Question</t></is></c></row></sheetData></worksheet>'
+    )
+    out = tmp_path / "answered.xlsx"
+    forms.write(_excel_workbook(tmp_path, unnumbered), out, {"Questionnaire!C2": "Yes."})
+    with Workbook(out) as workbook:
+        assert workbook["Questionnaire"].value(2, "C") == "Yes."
+
+
 # --- the invariant that matters --------------------------------------------
 
 

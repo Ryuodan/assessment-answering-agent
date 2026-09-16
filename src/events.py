@@ -62,6 +62,9 @@ SKILL_APPLIED = "skill_applied"
 ASSISTANT_STARTED = "assistant_started"
 ASSISTANT_TURN = "assistant_turn"
 
+# Housekeeping: files removed because a team went over its storage limit.
+FILES_REMOVED = "files_removed"
+
 
 @dataclass(frozen=True)
 class Event:

@@ -86,6 +86,15 @@ def _tokens(usage) -> tuple[int, int]:
     return inputs, outputs
 
 
+def _sheet_of(question) -> str:
+    """The sheet a question is on. Its id is "sheet!row", and a sheet name may hold "!".
+
+    Split at the first "!", every question on a sheet called "Q! Section" was
+    filed under "Q", and the guarded and hybrid readings dropped the sheet.
+    """
+    return question.id.rsplit("!", 1)[0]
+
+
 def _lost(form: DetectedForm) -> set[str]:
     """Sheets a reading produced nothing from, and might have been wrong about.
 
@@ -190,7 +199,7 @@ def _merge(rules: DetectedForm, agent: DetectedForm, lost: set[str]) -> Detected
     by_name = {part.name: part for part in agent.parts}
     found: dict[str, list] = {}
     for question in agent.questions:
-        found.setdefault(question.id.split("!", 1)[0], []).append(question)
+        found.setdefault(_sheet_of(question), []).append(question)
 
     merged = DetectedForm(
         source_name=rules.source_name, format=rules.format, warnings=list(rules.warnings)
@@ -204,7 +213,7 @@ def _merge(rules: DetectedForm, agent: DetectedForm, lost: set[str]) -> Detected
             merged.parts.append(part)
             merged.questions.extend(
                 question for question in rules.questions
-                if question.id.split("!", 1)[0] == part.name
+                if _sheet_of(question) == part.name
             )
     if merged.questions:
         merged.warnings = [w for w in merged.warnings if not w.startswith("No questions")]
@@ -225,7 +234,7 @@ def _floor(agent: DetectedForm, rules: DetectedForm) -> tuple[DetectedForm, set[
     by_name = {part.name: part for part in rules.parts}
     rules_questions: dict[str, list] = {}
     for question in rules.questions:
-        rules_questions.setdefault(question.id.split("!", 1)[0], []).append(question)
+        rules_questions.setdefault(_sheet_of(question), []).append(question)
 
     floored = DetectedForm(
         source_name=agent.source_name, format=agent.format, warnings=list(agent.warnings)
@@ -241,7 +250,7 @@ def _floor(agent: DetectedForm, rules: DetectedForm) -> tuple[DetectedForm, set[
         floored.parts.append(part)
         floored.questions.extend(
             question for question in agent.questions
-            if question.id.split("!", 1)[0] == part.name
+            if _sheet_of(question) == part.name
         )
 
     # A sheet the agent never mentioned at all, which is the same omission by a

@@ -57,6 +57,15 @@ _RETRYABLE += tuple(
 
 _MAX_ATTEMPTS = 5
 
+TRANSIENT: tuple[type[BaseException], ...] = tuple(
+    error for error in (GroqRateLimitError, GroqConnectionError, GroqServerError) if error is not None
+)
+"""The provider being busy or unreachable, as opposed to the request being wrong.
+
+Worth asking again, after a pause. A bad request is not: it fails the same way
+every time, and five tries is five times the wait for the same answer.
+"""
+
 
 @lru_cache(maxsize=8)
 def chat_llm(temperature: float | None = None, model: str | None = None) -> BaseChatModel:

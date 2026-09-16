@@ -65,6 +65,11 @@ correction or two and stops a confused turn from running all afternoon.
 SOURCES_SHOWN = 6
 """Search hits kept per query -- shown to the model, and drawn under the reply."""
 
+SOURCE_CHARS = 700
+"""How much of each cited clause is read back when somebody asks what an answer
+was based on. Enough to quote the sentence that matters; a whole chunk for every
+source of five answers would crowd out the conversation."""
+
 DOING = {
     "open_questionnaire": "Reading the file…",
     "describe_form": "Looking at what is in it…",
@@ -493,12 +498,14 @@ def _tools(user: User, state: dict) -> list:
         # four-question file and replied "one remaining" -- the arithmetic was
         # the only thing between it and a right answer, so it should not have
         # had to do it.
-        blank = counts["questions"] - counts["answered"]
+        blank = counts["still_blank"]
         lines = [
             f"{report['source_name']}: {counts['questions']} question(s) in total — "
             f"{counts['answered']} answered here, {blank} still blank, "
             f"{counts['needs_review']} flagged for review."
         ]
+        if counts.get("set_aside"):
+            lines.append(f"{counts['set_aside']} question(s) are set aside and will not be written.")
         # A file that arrives already filled in is a normal thing to be handed:
         # last year's submission, or a colleague's half-finished draft. Saying
         # it has no answers because we did not write them is simply wrong.
@@ -611,14 +618,22 @@ def _tools(user: User, state: dict) -> list:
 
     def read_answers(
         question_ids: str = "", matching: str = "", position: str = "",
-        only: str = "", limit: int = 5,
+        only: str = "", limit: int = 5, with_sources: bool = False,
     ) -> str:
         """Read back the answers already written for questions. Free and instant.
 
         The answer text itself, with whether it is flagged and why, its
-        confidence, and whether it will go into the file. For "what is the answer
-        to question 2", "what did you write about encryption", "read me the
-        flagged ones", "why is the third one flagged". Nothing is changed.
+        confidence, and whether it will go into the file. For "what is the answer to question 2", "what did you write about
+        encryption", "read me the flagged ones", "why is the third one flagged".
+        Nothing is changed.
+
+        With `with_sources=true`, also the sources it cites, what each one says,
+        whether it is our own policy, a regulation or a previous answer, and the
+        reasoning the answer was drafted with. For "what sources did you use for question 3",
+        "which clause is that answer based on", "why does it say that", "is that
+        from our policy or from a regulation". These are the sources that answer
+        was written from; a fresh `search_policies` finds what matches now, which
+        is a different list, so never search to answer this.
 
         Args:
             question_ids: specific question ids, comma separated.
@@ -628,8 +643,11 @@ def _tools(user: User, state: dict) -> list:
             only: "flagged" for answers held back from the file, "approved" for
                 approved ones, "" for any.
             limit: how many to show.
+            with_sources: include the text of every cited source, what kind of
+                source it is, and the reasoning.
         """
-        _log(f"read_answers({question_ids or position or matching or only or 'answers'!r})")
+        _log(f"read_answers({question_ids or position or matching or only or 'answers'!r}"
+             + (", with sources" if with_sources else "") + ")")
         if not _batch_id():
             return "No questionnaire is open in this conversation."
 
@@ -668,7 +686,7 @@ def _tools(user: User, state: dict) -> list:
                     "answer; `list_questions` shows each one's state.")
 
         place = {question["id"]: index for index, question in enumerate(questions, start=1)}
-        shown = chosen[: max(1, min(int(limit or 5), 20))]
+        shown = chosen[: max(1, min(int(limit or 5), 5 if with_sources else 20))]
         lines = []
         for question in shown:
             lines.append(f"#{place[question['id']]}  {question['id']} -- {question['text']}")
@@ -682,6 +700,7 @@ def _tools(user: User, state: dict) -> list:
                 lines.append(f"    answer, to relay word for word: {text[:1800]}")
                 if not question.get("will_be_written") and question.get("held_back_because"):
                     lines.append(f"    held back from the file because: {question['held_back_because'][:400]}")
+                lines.extend(_sources_of(answered, detailed=with_sources))
             elif question.get("existing"):
                 lines.append(f"    no answer written here; the file arrived saying: {question['existing'][:600]}")
             else:
@@ -689,6 +708,44 @@ def _tools(user: User, state: dict) -> list:
         if len(chosen) > len(shown):
             lines.append(f"... and {len(chosen) - len(shown)} more; ask for them by position or id.")
         return "\n".join(lines)
+
+    def _sources_of(answered: dict, *, detailed: bool) -> list[str]:
+        """What one answer was written from, exactly as its card shows it.
+
+        The citations are the answer's own list and the text beside each is the
+        chunk the drafter was given, so "which sources did you use" is answered
+        from the record rather than re-searched. Searching again returned a
+        similar list, not the same one -- and a person comparing the reply with
+        the card saw sources the answer never cited.
+        """
+        # Only when asked. A plain read-back is the answer and its state: with a
+        # list of sources after it, an answer asked for in Arabic came back
+        # translated rather than quoted more often -- two runs in three against
+        # one in three without.
+        if not detailed:
+            return []
+        cited = [c for c in (answered.get("citations") or []) if c]
+
+        found: dict[str, dict] = {}
+        for item in answered.get("evidence") or []:
+            found.setdefault(item.get("locator") or item.get("source_name") or "", item)
+        lines = [] if cited else ["    sources cited: none"]
+        for citation in cited:
+            item = found.get(citation)
+            if item is None:
+                lines.append(f"    cited: {citation} -- named in the answer; the text of it was not kept")
+                continue
+            kind = ("a previous answer of ours" if item.get("source_type") == "prior_answer"
+                    else "a law or external requirement, not our own policy"
+                    if item.get("authority") == "external" else "our own policy")
+            said = " ".join(str(item.get("snippet") or "").split())
+            if len(said) > SOURCE_CHARS:
+                said = said[:SOURCE_CHARS].rsplit(" ", 1)[0] + " ..."
+            lines.append(f"    cited: {citation} ({kind})")
+            lines.append(f"      it says: {said}")
+        if (answered.get("rationale") or "").strip():
+            lines.append(f"    reasoning when it was drafted: {answered['rationale'].strip()[:800]}")
+        return lines
 
     def put_back_drafts(question_ids: str = "", matching: str = "", position: str = "") -> str:
         """Undo rewording: put answers back as they were first drafted.
@@ -1041,7 +1098,7 @@ def _tools(user: User, state: dict) -> list:
         """
         _log(f"search_policies({query!r})")
         try:
-            found = await tools.search(query)
+            found = await tools.search(query, team_id=user.team_id)
         except Exception as failed:
             return f"The search failed: {failed}"
         hits = found.get("results", [])[:SOURCES_SHOWN]
@@ -1105,7 +1162,7 @@ def _tools(user: User, state: dict) -> list:
                 language=detect_question_language(text),
             )
             for index, text in enumerate(asked)
-        ])
+        ], team_id=user.team_id)
 
         # Worded after drafting and never before, exactly as a questionnaire's
         # rows are: a named skill if one was asked for, their preferences if not.
@@ -1138,6 +1195,10 @@ def _tools(user: User, state: dict) -> list:
                 lines.append("    (reworded to your preferences)")
             if result.needs_review:
                 lines.append(f"    flagged for review: {result.confidence_reason or 'low confidence'}")
+            # What it cites, in the reply's own history, so "where did that come
+            # from" a few messages later is answered from this and not from a
+            # new search that finds something similar.
+            lines.extend(_sources_of(result.model_dump(), detailed=True))
             state.setdefault("sources", []).extend(
                 item.model_dump() for item in result.evidence[:SOURCES_SHOWN]
             )

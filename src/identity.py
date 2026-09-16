@@ -306,13 +306,14 @@ def find_user_any(email: str) -> User | None:
 def list_users(team_id: str | None = None) -> list[dict]:
     """Everyone, for the admin page. Never includes a hash."""
     conn = store.connect()
+    # Not the local stand-in: it is nobody, and it cannot be signed in to.
     sql = (
         "SELECT email, team_id, role, disabled, created_at, last_seen_at, added_by, "
-        "password_hash != '' AS has_password FROM users"
+        "password_hash != '' AS has_password FROM users WHERE email != ?"
     )
-    params: list[object] = []
+    params: list[object] = [LOCAL_EMAIL]
     if team_id:
-        sql += " WHERE team_id = ?"
+        sql += " AND team_id = ?"
         params.append(team_id)
     rows = conn.execute(sql + " ORDER BY created_at", params).fetchall()
     return [
@@ -331,10 +332,15 @@ def list_users(team_id: str | None = None) -> list[dict]:
 
 
 def admin_count() -> int:
-    """Enabled admins. Used to refuse removing the last one."""
+    """Enabled admins. Used to refuse removing the last one.
+
+    The local stand-in is an administrator on paper and nobody in fact. Counted,
+    it let the one real administrator demote or remove themselves.
+    """
     conn = store.connect()
     return conn.execute(
-        "SELECT COUNT(*) FROM users WHERE role = ? AND disabled = 0", (ADMIN,)
+        "SELECT COUNT(*) FROM users WHERE role = ? AND disabled = 0 AND email != ?",
+        (ADMIN, LOCAL_EMAIL),
     ).fetchone()[0]
 
 
@@ -421,7 +427,12 @@ def sign_in(email: str, secret: str) -> tuple[str, User]:
     # from a login form, and none of them help the person who simply mistyped.
     refusal = AccessDenied("That email and access code do not match.")
 
-    if row is None or row["disabled"]:
+    # The local stand-in is refused like an unknown address. It is created as an
+    # administrator with no password the first time the app is opened before
+    # anybody is added, and a row with no password signs in with the team's
+    # code -- so, left open, everyone who knew the code could become an
+    # administrator by typing `local@localhost`.
+    if row is None or row["disabled"] or address == LOCAL_EMAIL:
         # Verify against a decoy so an unknown address costs what a known one
         # does. Without this the identical message is undone by the clock:
         # measured, a known address took 50 ms to refuse and an unknown one
@@ -478,6 +489,8 @@ def resolve(token: str | None) -> User | None:
     ).fetchone()
     if row is None or row["disabled"] or row["expires_at"] <= store.utcnow():
         return None
+    if row["email"] == LOCAL_EMAIL:
+        return None  # never a session of its own; see `sign_in`
     return _row_to_user(row)
 
 
@@ -530,9 +543,16 @@ def local_user() -> User:
     The row is created for real, so events and runs recorded in local
     development have a valid author and behave exactly as they will in a
     deployment — the code path is the same, only the name differs.
+
+    Only while nobody has been added. On a deployment it is no one: a script
+    run against the real database -- the assistant evaluation -- used to plant
+    it there as an administrator, and 140 of its test conversations went into
+    the team's history under it. There it is a member that exists in no table.
     """
-    now = store.utcnow()
     team = ensure_team(settings.default_team)
+    if sign_in_required():
+        return User(email=LOCAL_EMAIL, team_id=team, role=MEMBER)
+    now = store.utcnow()
     conn = store.connect()
     conn.execute(
         """
@@ -585,6 +605,9 @@ def bootstrap() -> None:
             add_user(address, team_id=settings.default_team, added_by="environment")
         logger.info("Seeded %d member(s) from ALLOWED_EMAILS.", len(seeds))
 
+    if sign_in_required():
+        _remove_the_stand_in()
+
     if sign_in_required() and not team_has_code(settings.default_team):
         code = set_access_code(settings.default_team)
         logger.warning(
@@ -592,6 +615,20 @@ def bootstrap() -> None:
             "        Give it to the team, or replace it on the admin page.",
             settings.default_team, code,
         )
+
+
+def _remove_the_stand_in() -> None:
+    """Take the local stand-in out of a deployment where people sign in.
+
+    Its conversations and events stay with the team: whatever was done under
+    it happened, and the record is not unmade by removing the name.
+    """
+    conn = store.connect()
+    conn.execute("DELETE FROM sessions WHERE email = ?", (LOCAL_EMAIL,))
+    removed = conn.execute("DELETE FROM users WHERE email = ?", (LOCAL_EMAIL,)).rowcount
+    conn.commit()
+    if removed:
+        logger.info("Removed the local stand-in account; people sign in here.")
 
 
 def _seeded_before() -> bool:

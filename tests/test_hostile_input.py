@@ -88,7 +88,7 @@ def test_a_supported_suffix_is_still_required(client):
 @pytest.mark.parametrize("name", ["../../.env.pdf", "a/b/c.pdf", r"..\..\evil.pdf"])
 def test_an_upload_lands_inside_the_upload_directory(client, isolated, monkeypatch, name):
     """A crafted name must be reduced to a bare filename before it is written."""
-    async def stub(path, source_type, authority='ours'):
+    async def stub(path, source_type, authority='ours', team_id=None):
         from src.models import IngestResult
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0)
 
@@ -112,6 +112,27 @@ def test_an_unusable_name_or_type_is_refused_not_crashed(client, name):
         files={"files": (name, b"stub", "application/octet-stream")},
     )
     assert response.status_code in (400, 415, 422), response.status_code
+
+
+def test_one_unusable_file_refuses_the_upload_before_any_of_it_is_indexed(client, isolated, monkeypatch):
+    """The type was checked file by file, as each was indexed, so a policy
+    uploaded beside a stray .zip went into the corpus and the request still
+    failed -- leaving the person to guess which half had happened."""
+    indexed = []
+
+    async def stub(path, source_type, authority="ours"):
+        from src.models import IngestResult
+        indexed.append(path.name)
+        return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=1)
+
+    monkeypatch.setattr(service, "ingest", stub)
+    response = client.post("/api/knowledge/guidelines", files=[
+        ("files", ("Access Policy.pdf", b"%PDF-1.4 stub", "application/pdf")),
+        ("files", ("archive.zip", b"PK stub", "application/zip")),
+    ])
+
+    assert response.status_code == 415
+    assert indexed == [] and not list(isolated.rglob("*.pdf"))
 
 
 def test_an_upload_with_no_files_is_refused(client):

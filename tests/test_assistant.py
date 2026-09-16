@@ -593,6 +593,19 @@ def test_answers_the_file_arrived_with_are_counted(filled):
     assert "0 answered here" in said, "they are the file's answers, not ours"
 
 
+def test_still_blank_does_not_count_what_the_file_answered_or_what_was_set_aside(filled):
+    """Blank was the question count minus our answers, so the file's own answers
+    and the rows set aside were all "still blank" -- and on this file the
+    assistant was told 4 were left beside a line saying 2 came answered."""
+    tool, state = filled
+    assert "0 answered here, 2 still blank" in tool["describe_form"]()
+
+    blank = [q["id"] for q in tools.inspect(identity.local_user(), state["batch_id"])["questions"]
+             if not q["existing"]]
+    tool["set_aside"](blank[0])
+    assert "0 answered here, 1 still blank" in tool["describe_form"]()
+
+
 def test_a_question_answered_only_by_a_status_still_counts(filled, user, state=None):
     """"Partially Compliant" with no comment beside it is an answer."""
     tool, batch_state = filled

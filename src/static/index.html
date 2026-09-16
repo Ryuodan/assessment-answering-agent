@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Workbench — Assessment Answering</title>
-<link rel="stylesheet" href="/static/cards.css" />
+<link rel="stylesheet" href="static/cards.css" />
 <style>
   /* This page's own rules. The design tokens, the answer card and the chunk
      renderer live in cards.css, shared with the assistant. */
@@ -129,7 +129,7 @@
     font-weight: 550; word-break: break-all;
   }
 
-  .status { font-size: 13px; color: var(--ink-faint); min-height: 20px; margin-top: 11px; }
+  .status { font-size: 13px; color: var(--ink-faint); min-height: 20px; margin-top: 11px; white-space: pre-line; }
   .status.error { color: var(--err); }
   .status.ok { color: var(--ok); }
   .status strong { color: var(--ink); font-weight: 650; }
@@ -346,9 +346,6 @@
   .search-hit .badge.bm25 { background: color-mix(in srgb, var(--warn, #b26a00) 14%, transparent); color: var(--warn, #b26a00); }
   .search-empty { color: var(--ink-faint); font-size: 12.5px; padding: 22px 4px; text-align: center; }
 
-  .ev-controls { display: flex; justify-content: flex-end; padding: 6px 0 10px; }
-  .ev-head { display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
-  .ev-head .src { flex: 1; min-width: 0; }
   body.answering .qrow textarea:disabled { opacity: .7; }
   body.answering #questionListPanel, body.answering .composer { position: relative; }
   /* --- fill a questionnaire ---------------------------------------------- */
@@ -549,11 +546,11 @@
   <!-- The assistant is a separate page rather than a mode of this one: the two
        are different shapes, and a control that had to know which mode it was in
        would be a control with a bug waiting in it. -->
-  <a class="ghost" href="/" title="Ask for this in a conversation instead"
+  <a class="ghost" href="./" title="Ask for this in a conversation instead"
      style="text-decoration:none;display:inline-flex;align-items:center">Assistant →</a>
-  <a class="ghost" href="/memory" title="What we have said before, and which of it still stands"
+  <a class="ghost" href="memory" title="What we have said before, and which of it still stands"
      style="text-decoration:none;display:inline-flex;align-items:center">Answer memory</a>
-  <a class="ghost" href="/preferences" title="How you want answers to read, and your skills"
+  <a class="ghost" href="preferences" title="How you want answers to read, and your skills"
      style="text-decoration:none;display:inline-flex;align-items:center">Preferences</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
@@ -602,7 +599,7 @@
         <p class="hint">Kept in the answer memory, not here, and added one at a time: written
           on that page, or edited and approved on an answer card.</p>
         <div class="row">
-          <a class="ghost-link" href="/memory">Open the answer memory →</a>
+          <a class="ghost-link" href="memory">Open the answer memory →</a>
         </div>
       </div>
     </div>
@@ -895,7 +892,7 @@
   </div>
 </dialog>
 
-<script src="/static/cards.js"></script>
+<script src="static/cards.js"></script>
 <script>
 // --- sign-in -----------------------------------------------------------------
 // Its own block, ahead of the main script: whether anyone may use the page is
@@ -1003,7 +1000,8 @@
     }, options || {}));
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || `Request failed (${response.status})`);
+      const said = Array.isArray(body.detail) ? body.detail.map((d) => d.msg || String(d)).join("; ") : body.detail;
+      throw new Error(said || `Request failed (${response.status})`);
     }
     return response.json();
   }
@@ -1303,9 +1301,19 @@
 
   // --- helpers -------------------------------------------------------------
 
+  /* Always text, never markup. Messages carry what the server said, and that
+     includes file names and the text of an error -- a name typed as markup
+     would otherwise run as a page for whoever next read the message. Line
+     breaks in a message are kept by the style. */
   function setStatus(el, message, kind) {
     el.className = "status" + (kind ? " " + kind : "");
-    el.innerHTML = kind === "busy" ? '<span class="spinner"></span>' + message : message;
+    el.replaceChildren();
+    if (kind === "busy") {
+      const spinner = document.createElement("span");
+      spinner.className = "spinner";
+      el.append(spinner);
+    }
+    el.append(document.createTextNode(message == null ? "" : String(message)));
   }
 
   async function request(url, options) {
@@ -1313,7 +1321,9 @@
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       const detail = body && body.detail;
-      throw new Error(typeof detail === "string" ? detail : "Request failed (" + response.status + ")");
+      // Validation failures arrive as a list; a person needs the sentence.
+      const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
+      throw new Error(typeof said === "string" && said ? said : "Request failed (" + response.status + ")");
     }
     return body;
   }
@@ -1594,11 +1604,11 @@
         let message = "Indexed " + indexed + "/" + results.length +
                       " file(s) — " + chunks + " chunks" + (pairs ? ", " + pairs + " Q/A pairs" : "") + ".";
         if (duplicates.length) {
-          message += "<br>" + duplicates.map((r) => "– " + r.source_name +
-                     ": skipped, identical to " + r.duplicate_of).join("<br>");
+          message += "\n" + duplicates.map((r) => "– " + r.source_name +
+                     ": skipped, identical to " + r.duplicate_of).join("\n");
         }
         if (failed.length) {
-          message += "<br>" + failed.map((r) => "✗ " + r.source_name + ": " + r.error).join("<br>");
+          message += "\n" + failed.map((r) => "✗ " + r.source_name + ": " + r.error).join("\n");
         }
         setStatus(status, message, failed.length ? "error" : "ok");
 
@@ -1625,7 +1635,7 @@
           // The previous answers are the one part of the corpus with a page of
           // its own: they are managed one answer at a time rather than one file
           // at a time, which is why the count links there.
-          '<span><a href="/memory" title="Manage the answer memory">' +
+          '<span><a href="memory" title="Manage the answer memory">' +
             stats.prior_answer_chunks.toLocaleString() + " previous answers</a></span>"
         : "Nothing indexed yet. Upload your policies above.";
 
@@ -2179,7 +2189,7 @@
 
     const status = $("answerStatus");
     try {
-      await request("/api/forms/" + formBatch.id + "/answers", {
+      const updated = await request("/api/forms/" + formBatch.id + "/answers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2189,7 +2199,11 @@
         }),
       });
       storedEdits[entry.formId] = text;
-      setStatus(status, "Your edit is saved, and is what will be written into the file.", "ok");
+      // A cleared answer is gone from the batch, so its card goes too.
+      if (!text.trim()) await adoptBatch(updated, { quiet: true });
+      setStatus(status, text.trim()
+        ? "Your edit is saved, and is what will be written into the file."
+        : "Cleared. Nothing is written for it: the file keeps whatever that cell already held.", "ok");
     } catch (error) {
       setStatus(status, "That edit could not be saved: " + error.message, "error");
     }
@@ -2239,6 +2253,13 @@
     }
   }
 
+  /* What withdrawing an approval did. An answer a person wrote is still theirs
+     without the approval and still goes into the file; saying it would be held
+     back told them the opposite of what happens next. */
+  function withdrawnMessage(report, questionId) {
+    return Cards.withdrawnMessage((report.questions || []).find((q) => q.id === questionId));
+  }
+
   /* Accepting an answer as it stands, so the gate lets it through. The other
      way through is to edit it, which the card already offers; this is for the
      answers that are right as written and only need a name against them. */
@@ -2259,7 +2280,7 @@
         ? (updated.remembered
             ? "Approved. It will be written into the file, and your wording is now in the answer memory."
             : "Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
-        : "Approval withdrawn. It will be held back again, and is out of the answer memory.", "ok");
+        : withdrawnMessage(updated, entry.formId), "ok");
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     }

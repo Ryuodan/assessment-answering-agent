@@ -101,6 +101,40 @@ def parse(text: str) -> list[Block]:
     return blocks
 
 
+def to_cell_text(text: str) -> str:
+    """The answer as it should read inside a questionnaire's own cell.
+
+    A spreadsheet cell and a Word table cell show text, not Markdown, and the
+    drafter writes Markdown: the NMDC questionnaire went back to its customer
+    with "**Identifiers** –" in a cell, asterisks and all. Emphasis goes, bullets
+    become a real bullet character, a heading becomes its words -- and unlike
+    `to_plain_text` a blank line between paragraphs stays, because in a cell
+    holding four paragraphs it is most of what makes them readable.
+    """
+    lines: list[str] = []
+    for raw in strip_source_markers(text or "").splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            if lines and lines[-1] != "":
+                lines.append("")
+            continue
+        heading = _HEADING.match(line)
+        bullet = _BULLET.match(line)
+        numbered = _NUMBERED.match(line)
+        if heading:
+            body, prefix = heading.group("text"), ""
+        elif numbered:
+            body, prefix = numbered.group("text"), numbered.group("marker") + ". "
+        elif bullet:
+            body, prefix = bullet.group("text"), "• "
+        else:
+            body, prefix = line.strip(), ""
+        lines.append(prefix + "".join(span for span, _ in _split_bold(body)))
+    while lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines)
+
+
 def to_plain_text(text: str) -> str:
     """The answer with its markup resolved, for CSV and other flat outputs.
 

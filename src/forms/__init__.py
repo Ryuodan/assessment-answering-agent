@@ -82,7 +82,8 @@ def detect(path: str | Path, *, assist: bool | None = None) -> DetectedForm:
 def write(path: str | Path, destination: str | Path, values: dict[str, str]) -> WriteReport:
     """Write answers into a copy of the questionnaire, leaving the rest alone."""
     path = Path(path)
-    return _module(path).write(path, destination, values)
+    safe = {target: xlsx_package.xml_safe(text) for target, text in values.items()}
+    return _module(path).write(path, destination, safe)
 
 
 __all__ = [

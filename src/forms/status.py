@@ -59,17 +59,53 @@ _AFFIRMATIVE = ("yes", "we have", "we do", "we maintain", "we enforce", "نعم"
 _LEAD = 160
 """Characters of the answer to read. The position is stated up front or not at all."""
 
+_OPENING = re.compile(
+    r"^[\s\"'(\[*_]*"
+    r"(not applicable|لا ينطبق|partially|partly|partial|n/a|yes|no|نعم|لا)"
+    r"(?=$|[\s.,;:!)\]*_\-–—،])",
+)
+"""The verdict an answer opens with, when it opens with one.
+
+Longer words first, so "not applicable" is not read as "no" and "لا ينطبق" not
+as "لا". The lookahead keeps "Nothing…" and "Notably…" from counting as a no.
+"""
+
+_OPENED = {
+    "yes": Stance.YES, "نعم": Stance.YES,
+    "no": Stance.NO, "لا": Stance.NO,
+    "partially": Stance.PARTIAL, "partly": Stance.PARTIAL, "partial": Stance.PARTIAL,
+    "not applicable": Stance.NOT_APPLICABLE, "n/a": Stance.NOT_APPLICABLE,
+    "لا ينطبق": Stance.NOT_APPLICABLE,
+}
+
+_QUALIFIED = re.compile(r"^[^.;:\n]*\b(partially|partly|in part)\b")
+"""A "Yes" qualified in its own clause -- "Yes, partially: …" -- which is a partial."""
+
 
 def stance_of(answer: str) -> Stance:
     """What the answer commits to.
 
-    Negation is tested before affirmation, because 'No, we do not...' contains
-    'we do' and would otherwise read as a yes. 'Not applicable' is tested first
-    of all, because it contains 'not' and would otherwise read as a no.
+    The verdict an answer opens with decides, when there is one. The drafter
+    states its position first and the verdict-first preference asks for exactly
+    that, and everything after it is prose about controls -- which is full of
+    "no longer required", "are not left in use" and "will be reviewed". Read for
+    those phrases before the opening word, 19 of 1,088 drafted answers that
+    began "Yes" came out as No, and the dropdown beside a yes said Non Compliant.
+
+    Without an opening word the phrases are read as before: negation before
+    affirmation, because 'we do not…' contains 'we do'; 'not applicable' first of
+    all, because it contains 'not'.
     """
     text = " ".join(answer.split()).lower()[:_LEAD]
     if not text:
         return Stance.UNCLEAR
+
+    opened = _OPENING.match(text)
+    if opened:
+        stance = _OPENED[opened.group(1)]
+        if stance is Stance.YES and _QUALIFIED.match(text):
+            return Stance.PARTIAL
+        return stance
     if any(phrase in text for phrase in _NOT_APPLICABLE):
         return Stance.NOT_APPLICABLE
     if any(phrase in text for phrase in _PARTIAL):

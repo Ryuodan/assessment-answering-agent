@@ -122,6 +122,25 @@ def test_the_merge_clears_a_no_questions_warning_it_has_disproved(tmp_path):
     assert merged.warnings == []
 
 
+@pytest.mark.parametrize("sheet", ["Q! Section", "2024!Review!"])
+def test_a_sheet_whose_name_holds_a_bang_keeps_its_questions(sheet):
+    """A question id is "sheet!row". Splitting it at the first "!" filed every
+    question on a sheet named "Q! Section" under "Q", so the guarded reading --
+    the default -- and the hybrid both dropped that sheet's questions."""
+    rules = _form((sheet, "questions", 3), ("Other", "questions", 2))
+    agent = _form((sheet, "questions", 3), ("Other", "questions", 2))
+
+    floored, rescued = reading_module._floor(agent, rules)
+    assert len(floored.questions) == 5 and not rescued
+
+    fewer = _form((sheet, "questions", 1), ("Other", "questions", 2))
+    floored, rescued = reading_module._floor(fewer, rules)
+    assert rescued == {sheet} and len(floored.questions) == 5
+
+    merged = reading_module._merge(_form((sheet, "no questions", 0)), agent, {sheet})
+    assert len(merged.questions) == 3
+
+
 # --- reporting the difference ----------------------------------------------
 
 

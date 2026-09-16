@@ -77,6 +77,15 @@ def test_a_document_can_still_be_removed(corpus, client):
     assert [r["metadata"]["source_name"] for r in memory_index.records] == ["Answer memory"]
 
 
+def test_removing_a_document_that_is_not_indexed_says_so(corpus, client):
+    _index_a_policy_and_some_answers(corpus)
+
+    response = client.delete("/api/knowledge/sources/Never Uploaded.pdf")
+
+    assert response.status_code == 404
+    assert len(corpus.records) == 2
+
+
 def test_clearing_the_knowledge_base_leaves_the_answer_memory_standing(corpus, client):
     memory_index = corpus
     _index_a_policy_and_some_answers(memory_index)
@@ -170,7 +179,7 @@ def test_no_page_offers_an_import(client):
         body = client.get(page).text
         assert 'id="priorInput"' not in body
         assert "importPanel" not in body and "/api/memory/import" not in body
-    assert 'href="/memory"' in client.get("/").text, "the knowledge base points at the memory"
+    assert 'href="memory"' in client.get("/").text, "the knowledge base points at the memory"
 
 
 def test_add_an_answer_comes_before_the_list_it_lands_in(client):

@@ -1,6 +1,13 @@
 """The knowledge base: guidelines and previously answered assessments.
 
-Both kinds of material live in a single persistent Chroma collection,
+**One per team.** Each team's policies and remembered answers are a Chroma
+collection of their own, and every search, upload and removal names the team it
+is for. It was one collection for the whole organisation, so a team answering a
+questionnaire was quoting another team's policies and another team's answers.
+The collection that existed before the split keeps its name and belongs to the
+default team, so nothing was re-embedded.
+
+Both kinds of material live in a team's persistent Chroma collection,
 distinguished by a `source_type` metadata field. One collection rather than two
 means one client, one embedding function and one search path; the retriever
 simply issues a filtered query per type and asks for the mix it wants.
@@ -14,9 +21,11 @@ whole point of keeping the history.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import re
 import threading
-from functools import lru_cache
+from contextlib import contextmanager
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -64,18 +73,38 @@ def cosine_from_relevance(relevance: float, space: str) -> float:
     return 1.0 - (1.0 - relevance) * _SQRT2 / 2.0
 
 
+def collection_for(team_id: str) -> str:
+    """The Chroma collection a team's knowledge lives in.
+
+    The default team keeps the collection that existed before teams had their
+    own, so the corpus already indexed is still its corpus. Any other team gets
+    a name derived from its id: readable where the id allows, and always within
+    Chroma's rules (3-63 characters, letters, digits, dot, dash and underscore,
+    starting and ending with a letter or digit), with a hash so two ids that
+    tidy to the same letters cannot share a collection.
+    """
+    if team_id == settings.default_team:
+        return settings.collection_name
+    slug = re.sub(r"[^a-z0-9]+", "-", team_id.lower()).strip("-")[:24] or "team"
+    digest = hashlib.sha256(team_id.encode("utf-8")).hexdigest()[:10]
+    return f"{settings.collection_name[:20].rstrip('-_.')}-{slug}-{digest}"
+
+
 class KnowledgeStore:
-    """Persistent store of guidelines and prior answers."""
+    """One team's persistent store of guidelines and prior answers."""
 
     # Declared on the class, not just assigned in `__init__`, so a store built
     # around a stubbed collection still resolves the metric instead of raising.
     _space: str | None = None
+    team_id: str | None = None
+    """Whose store this is. None, for a store a test built by hand, means the default team."""
 
-    def __init__(self) -> None:
+    def __init__(self, team_id: str | None = None) -> None:
         settings.ensure_directories()
         self._reset_caches()
+        self.team_id = team_id or settings.default_team
         self._store = Chroma(
-            collection_name=settings.collection_name,
+            collection_name=collection_for(self.team_id),
             embedding_function=get_embeddings(),
             persist_directory=str(settings.chroma_dir),
         )
@@ -92,6 +121,22 @@ class KnowledgeStore:
         self._chunk_cache: dict = {}
         self._catalog_cache: tuple[dict[str, int], dict[str, dict]] | None = None
         self._build_lock = threading.Lock()
+
+    @contextmanager
+    def _writing(self):
+        """Clear the derived caches around a write -- before it, and after it too.
+
+        Only before, a read that arrived while the write was in flight rebuilt
+        the catalog from the collection as it was, and that stale copy was then
+        kept. Embedding a long policy takes seconds, so anybody opening the
+        knowledge base during an upload left the new document missing from it
+        until the next upload or delete.
+        """
+        self._reset_caches()
+        try:
+            yield
+        finally:
+            self._reset_caches()
 
     # -- writing ------------------------------------------------------------
 
@@ -156,8 +201,8 @@ class KnowledgeStore:
         file: an approved answer arrives alone and must not clear the source it
         joins.
         """
-        self._reset_caches()
-        self._store.add_documents([document], ids=[entry_id])
+        with self._writing():
+            self._store.add_documents([document], ids=[entry_id])
 
     def remove_entry(self, entry_id: str) -> None:
         """Take one entry back out of the index.
@@ -170,9 +215,9 @@ class KnowledgeStore:
         forgotten them -- and re-adopted, row and all, the next time the process
         started and read the index.
         """
-        self._reset_caches()
-        self._store.delete(ids=[entry_id])
-        self._store.delete(where={"entry_id": entry_id})
+        with self._writing():
+            self._store.delete(ids=[entry_id])
+            self._store.delete(where={"entry_id": entry_id})
 
     def prior_answer_metadata(self) -> list[dict]:
         """The metadata of every indexed prior answer.
@@ -210,13 +255,13 @@ class KnowledgeStore:
         the old text stays in the index and keeps being retrieved alongside the new.
         """
         self.delete_source(source_name)
-        self._reset_caches()
         if not documents:
             return 0
 
         # Deterministic ids keep a retried upload idempotent even if it fails midway.
         ids = [f"{source_name}::{index}" for index in range(len(documents))]
-        self._store.add_documents(documents, ids=ids)
+        with self._writing():
+            self._store.add_documents(documents, ids=ids)
         logger.info("Indexed %d chunks for '%s'", len(documents), source_name)
         return len(documents)
 
@@ -249,18 +294,18 @@ class KnowledgeStore:
 
     def delete_source(self, source_name: str) -> None:
         """Remove every chunk belonging to one uploaded file."""
-        self._reset_caches()
-        self._store.delete(where={"source_name": source_name})
+        with self._writing():
+            self._store.delete(where={"source_name": source_name})
 
     def delete_type(self, source_type: SourceType) -> None:
         """Remove every chunk of one kind, and nothing of the other."""
-        self._reset_caches()
-        self._store.delete(where={"source_type": source_type.value})
+        with self._writing():
+            self._store.delete(where={"source_type": source_type.value})
 
     def reset(self) -> None:
         """Drop the whole collection. Used by the UI's 'clear knowledge base' action."""
-        self._reset_caches()
-        self._store.reset_collection()
+        with self._writing():
+            self._store.reset_collection()
         logger.warning("Knowledge base cleared")
 
     # -- reading ------------------------------------------------------------
@@ -353,7 +398,7 @@ class KnowledgeStore:
         entry rather than by re-embedding it.
         """
         try:
-            replaced = answer_memory.superseded_ids()
+            replaced = answer_memory.superseded_ids(self.team_id)
         except Exception:  # noqa: BLE001 - retrieval must not fail on bookkeeping
             logger.exception("Could not read which memory entries were superseded")
             return evidence
@@ -758,28 +803,34 @@ class KnowledgeStore:
 
 
 _store_lock = threading.Lock()
+_stores: dict[str, KnowledgeStore] = {}
 
 
-@lru_cache(maxsize=1)
-def _build_store() -> KnowledgeStore:
-    return KnowledgeStore()
+def get_store(team_id: str | None = None) -> KnowledgeStore:
+    """A team's store, built exactly once per team.
 
+    Built under a lock. Construction is not safe to race: Chroma's process-wide
+    client registry is not reentrant, and two threads constructing at once died
+    with a bare `KeyError` on the persist directory. FastAPI runs sync endpoints
+    in a threadpool, and the interface opens with two independent calls that
+    both want the store, so this is the ordinary path rather than a rare one.
 
-def get_store() -> KnowledgeStore:
-    """Return the shared store, built exactly once.
-
-    `lru_cache` alone is not enough: it does not hold a lock while the wrapped
-    function runs, so two threads arriving together both construct a
-    `KnowledgeStore`, and Chroma's process-wide client registry is not
-    reentrant -- the second construction raced the first through
-    `SharedSystemClient` and the request died with a bare `KeyError` on the
-    persist directory. FastAPI runs sync endpoints in a threadpool, and the
-    interface opens with two independent calls that both want the store, so
-    this is the ordinary path rather than a rare one.
+    `team_id` left out means the default team -- for scripts and the command
+    line, which act for the team the system was set up for. Everything a person
+    does through the interface names their own team.
     """
+    team = team_id or settings.default_team
     with _store_lock:
-        return _build_store()
+        store = _stores.get(team)
+        if store is None:
+            store = _stores[team] = KnowledgeStore(team)
+        return store
+
+
+def _forget_stores() -> None:
+    with _store_lock:
+        _stores.clear()
 
 
 # Callers reset the store between tests; keep the name they already use.
-get_store.cache_clear = _build_store.cache_clear
+get_store.cache_clear = _forget_stores

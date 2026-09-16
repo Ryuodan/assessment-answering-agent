@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Answer memory — Assessment Answering</title>
-<link rel="stylesheet" href="/static/cards.css" />
+<link rel="stylesheet" href="static/cards.css" />
 <style>
   /* The third page. The workbench is one questionnaire in front of you and the
      assistant is a conversation about one; this is everything the organisation
@@ -209,7 +209,7 @@
     <div class="brand-mark" aria-hidden="true">A</div>
     <div class="brand-text">
       <h1>Answer memory</h1>
-      <p>What this organisation has said before, and which of it still stands</p>
+      <p>What your team has said before, and which of it still stands</p>
     </div>
   </div>
   <div class="spacer"></div>
@@ -217,9 +217,9 @@
     <b id="whoamiEmail"></b>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
   </div>
-  <a class="ghost" href="/">Assistant</a>
-  <a class="ghost" href="/workbench">Workbench</a>
-  <a class="ghost" href="/preferences">Preferences</a>
+  <a class="ghost" href="./">Assistant</a>
+  <a class="ghost" href="workbench">Workbench</a>
+  <a class="ghost" href="preferences">Preferences</a>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
@@ -383,7 +383,10 @@
     }, options || {}));
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error((body && body.detail) || ("Request failed (" + response.status + ")"));
+      const detail = body && body.detail;
+      // Validation failures arrive as a list; a person needs the sentence.
+      const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
+      throw new Error(said || ("Request failed (" + response.status + ")"));
     }
     return body;
   }

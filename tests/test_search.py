@@ -56,7 +56,7 @@ def store(monkeypatch):
         dense=[hit("a.pdf", 1, 0.80), hit("a.pdf", 2, 0.70)],
         lexical=[hit("b.pdf", 9, 1.0, lexical=True), hit("a.pdf", 1, 0.5, lexical=True)],
     )
-    monkeypatch.setattr(service, "get_store", lambda: fake)
+    monkeypatch.setattr(service, "get_store", lambda team_id=None: fake)
     return fake
 
 
@@ -138,7 +138,7 @@ def test_a_slow_embedding_host_falls_back_to_text(monkeypatch):
         lexical=[hit("b.pdf", 9, 1.0, lexical=True)],
         dense_error=TimeoutError("embedding host did not answer"),
     )
-    monkeypatch.setattr(service, "get_store", lambda: fake)
+    monkeypatch.setattr(service, "get_store", lambda team_id=None: fake)
 
     body = get(q="retention", mode="semantic").json()
 

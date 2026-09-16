@@ -206,6 +206,22 @@ def test_an_arabic_answer_is_marked_right_to_left(prose, tmp_path):
     assert ARABIC in answer.text
 
 
+@pytest.mark.parametrize("shape", ["prose", "tables"])
+def test_filling_an_arabic_answer_twice_marks_it_right_to_left_once(shape, prose, tables, tmp_path):
+    """Re-uploading a filled document and filling it again appended a second
+    w:bidi to every answer paragraph. Word forgives it; the schema allows one."""
+    path = prose if shape == "prose" else tables
+    once, twice = tmp_path / "once.docx", tmp_path / "twice.docx"
+    forms.write(path, once, {forms.detect(path).questions[0].targets[Role.ANSWER].id: ARABIC})
+    forms.write(once, twice, {forms.detect(once).questions[0].targets[Role.ANSWER].id: ARABIC})
+
+    body = Document(str(twice)).element.body
+    for properties in body.iter(qn("w:pPr")):
+        assert len(properties.findall(qn("w:bidi"))) <= 1
+    for properties in body.iter(qn("w:rPr")):
+        assert len(properties.findall(qn("w:rtl"))) <= 1
+
+
 def test_question_ids_survive_being_answered(prose, tmp_path):
     """A positional id would move for every question the moment the first one
     was answered, because inserting shifts the paragraphs after it."""
@@ -240,6 +256,25 @@ def test_a_table_answer_is_written_into_its_cell(tables, tmp_path):
     forms.write(tables, out, {form.questions[0].targets[Role.ANSWER].id: "T2 Business Research."})
 
     assert Document(str(out)).tables[0].rows[1].cells[2].text == "T2 Business Research."
+
+
+@pytest.mark.parametrize("shape", ["prose", "tables"])
+def test_a_character_xml_cannot_hold_does_not_cost_the_whole_file(shape, prose, tables, tmp_path):
+    """A model's answer can carry a vertical tab or a form feed. python-docx
+    refuses those outright, and one of them used to fail the entire fill -- every
+    answer in the document, for one invisible character in one of them."""
+    path = prose if shape == "prose" else tables
+    form = forms.detect(path)
+    target = form.questions[0].targets[Role.ANSWER].id
+    out = tmp_path / "out.docx"
+
+    report = forms.write(path, out, {target: "Yes,\x0b documented\x0c and\x00 approved."})
+
+    assert report.written == 1
+    assert "Yes, documented and approved." in "\n".join(
+        [p.text for p in Document(str(out)).paragraphs]
+        + [cell.text for table in Document(str(out)).tables for row in table.rows for cell in row.cells]
+    )
 
 
 def test_a_table_cell_is_a_rewrite_not_an_insertion(tmp_path):

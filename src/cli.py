@@ -13,14 +13,14 @@ import sys
 from pathlib import Path
 
 from src import answer_memory, llm, service
-from src.config import configure_logging
+from src.config import configure_logging, settings
 from src.models import SourceType
 
 
-async def _ingest(paths: list[str], source_type: SourceType) -> int:
+async def _ingest(paths: list[str], source_type: SourceType, team: str) -> int:
     failed = 0
     for path in paths:
-        result = await service.ingest(path, source_type)
+        result = await service.ingest(path, source_type, team_id=team)
         if result.error:
             failed += 1
             print(f"✗ {result.source_name}: {result.error}")
@@ -35,7 +35,7 @@ async def _ingest(paths: list[str], source_type: SourceType) -> int:
     # than being left for whoever next opens the memory page, because importing
     # from the command line is exactly when nobody is looking at that page.
     if source_type is SourceType.PRIOR_ANSWER:
-        found = await answer_memory.scan_pending(limit=500)
+        found = await answer_memory.scan_pending(limit=500, team_id=team)
         conflicts = [f for f in found if f.needs_a_person]
         if found:
             print()
@@ -45,8 +45,8 @@ async def _ingest(paths: list[str], source_type: SourceType) -> int:
     return 1 if failed else 0
 
 
-async def _answer(path: str, language: str | None, out: str | None) -> int:
-    result = await service.answer_assessment(path, language=language)
+async def _answer(path: str, language: str | None, out: str | None, team: str) -> int:
+    result = await service.answer_assessment(path, language=language, team_id=team)
 
     print(f"\n{result.source_name} — {result.questions_found} questions, "
           f"{result.needs_review_count} need review ({result.language})\n")
@@ -65,8 +65,8 @@ async def _answer(path: str, language: str | None, out: str | None) -> int:
     return 0
 
 
-def _stats() -> int:
-    stats = service.knowledge_stats()
+def _stats(team: str) -> int:
+    stats = service.knowledge_stats(team)
     print(f"{stats['total_chunks']} chunks — "
           f"{stats['guideline_chunks']} guideline, {stats['prior_answer_chunks']} previous answers")
     for source in stats["sources"]:
@@ -94,6 +94,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("stats", help="show what is indexed")
     subparsers.add_parser("clear", help="empty the knowledge base")
 
+    # Every team has its own knowledge base and answer memory. Left out, the
+    # command acts for the team the system was set up for.
+    for sub in subparsers.choices.values():
+        sub.add_argument("--team", default=settings.default_team,
+                         help="the team whose knowledge base this is (default: %(default)s)")
+
     return parser
 
 
@@ -118,16 +124,16 @@ def main() -> int:
     args = build_parser().parse_args()
 
     if args.command == "guidelines":
-        return llm.run(_ingest(args.paths, SourceType.GUIDELINE))
+        return llm.run(_ingest(args.paths, SourceType.GUIDELINE, args.team))
     if args.command == "answers":
-        return llm.run(_ingest(args.paths, SourceType.PRIOR_ANSWER))
+        return llm.run(_ingest(args.paths, SourceType.PRIOR_ANSWER, args.team))
     if args.command == "answer":
-        return llm.run(_answer(args.path, args.language, args.out))
+        return llm.run(_answer(args.path, args.language, args.out, args.team))
     if args.command == "stats":
-        return _stats()
+        return _stats(args.team)
 
-    service.clear_knowledge()
-    print("Knowledge base cleared.")
+    service.clear_knowledge(args.team)
+    print(f"Knowledge base cleared for {args.team}.")
     return 0
 
 

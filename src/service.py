@@ -42,6 +42,7 @@ _ARABIC_TEXT = re.compile(r"[؀-ۿ]")
 
 async def ingest(
     path: str | Path, source_type: SourceType, authority: str = "ours",
+    team_id: str | None = None,
 ) -> IngestResult:
     """Index one uploaded file as either a guideline or a previously answered assessment.
 
@@ -53,7 +54,7 @@ async def ingest(
     report which one was unreadable and index the other nine.
     """
     path = Path(path)
-    store = get_store()
+    store = get_store(team_id)
 
     try:
         content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -100,7 +101,7 @@ async def ingest(
         # arrives unscanned: what it supersedes and what it contradicts is
         # settled by the sweep the caller runs next, not here, because that
         # sweep is model calls and an upload should not wait for them.
-        answer_memory.adopt_file(path.name, pairs)
+        answer_memory.adopt_file(path.name, pairs, team_id=team_id)
         return IngestResult(
             source_name=path.name,
             source_type=source_type,
@@ -134,8 +135,8 @@ async def answered_pairs(path: str | Path, text: str | None = None) -> list[Extr
     jobs: over the team's seventeen filled questionnaires the guarded reading
     relabels PSAT's answer column and finds none of its 183 answers, where the
     rules find all of them. Together the two find 1,087; either alone, at most
-    1,055. A wrong reading is not silent either way -- the pairs are shown to a
-    person before anything is imported.
+    1,055. Only the command line imports this way now; in the app an answer
+    reaches the memory one at a time, written or approved by a person.
     """
     from src import forms
     from src.forms import reading
@@ -194,13 +195,14 @@ def _looks_like_a_questionnaire(text: str, name: str) -> str | None:
     return (
         f"'{name}' is mostly questions, so it may be an assessment form rather than a policy. "
         "It has been indexed as a guideline, which means its contents will be treated as "
-        "authoritative. If it is a completed assessment, remove it and upload it under "
-        "previous answers instead."
+        "authoritative. If it is a completed assessment, remove it: the team's answers "
+        "belong in the answer memory, not among the policies."
     )
 
 
 async def answer_assessment(
-    path: str | Path, language: Language | None = None, run_id: str | None = None
+    path: str | Path, language: Language | None = None, run_id: str | None = None,
+    team_id: str | None = None,
 ) -> AssessmentResult:
     """Answer every question in an assessment document.
 
@@ -219,6 +221,7 @@ async def answer_assessment(
             "document_text": text,
             "language": language,
             "run_id": run_id,
+            "team_id": team_id or settings.default_team,
             "questions": [],
             "answers": [],
         },
@@ -265,6 +268,7 @@ async def answer_questions(
     questions: list[Question],
     language: Language | None = None,
     run_id: str | None = None,
+    team_id: str | None = None,
 ) -> list[AnsweredQuestion]:
     """Answer a list of questions that did not come from a document.
 
@@ -285,7 +289,8 @@ async def answer_questions(
         async with semaphore:
             try:
                 return await answer_one_question(
-                    question, language or question.language, run_id=run_id or "")
+                    question, language or question.language, run_id=run_id or "",
+                    team_id=team_id)
             except Exception as exc:  # noqa: BLE001 - contained per question, as in the fan-out
                 # The document flow already contains a per-question failure; this
                 # path did not, so a single transient upstream error — a model
@@ -307,9 +312,9 @@ def run_progress(run_id: str) -> dict | None:
     return progress.snapshot(run_id)
 
 
-def knowledge_stats() -> dict:
+def knowledge_stats(team_id: str | None = None) -> dict:
     """Counts and indexed file names, for the UI's knowledge panel."""
-    return get_store().stats()
+    return get_store(team_id).stats()
 
 
 # A person waiting at a search box will not wait a minute for a remote
@@ -323,8 +328,9 @@ async def search_knowledge(
     mode: str = "hybrid",
     limit: int = 20,
     source_name: str = "",
+    team_id: str | None = None,
 ) -> dict:
-    """Search the indexed corpus directly, for a person rather than the drafter.
+    """Search a team's indexed corpus directly, for a person rather than the drafter.
 
     Two ways of matching, because they fail in opposite ways and someone
     verifying a claim needs to choose. `semantic` finds material that means the
@@ -341,7 +347,7 @@ async def search_knowledge(
     if not query:
         return {"query": "", "mode": mode, "results": [], "documents": []}
 
-    store = get_store()
+    store = get_store(team_id)
     limit = max(1, min(limit, 50))
     # An empty collection still costs an embedding round trip to search, and
     # the prior-answers one is usually empty.
@@ -410,21 +416,26 @@ class NotADocument(ValueError):
     """A name that is not a policy document, asked to be removed as one. Safe to show."""
 
 
-def delete_source(source_name: str) -> None:
+def delete_source(source_name: str, team_id: str | None = None) -> None:
     """Remove one previously uploaded policy document from the knowledge base.
 
     Only documents. Previous answers are indexed too, but they belong to the
     answer memory, where each has a row -- who approved it, what it replaced --
     that a delete by source name would orphan by the hundred.
     """
-    if get_store().source_type_of(source_name) == SourceType.PRIOR_ANSWER.value:
+    kind = get_store(team_id).source_type_of(source_name)
+    if kind == SourceType.PRIOR_ANSWER.value:
         raise NotADocument(
             "Previous answers are part of the answer memory. Manage them on the Answer memory page."
         )
-    get_store().delete_source(source_name)
+    if not kind:
+        # Said, rather than reported as deleted: a name that was never indexed,
+        # or already removed by somebody else, is not something this removed.
+        raise KeyError(source_name)
+    get_store(team_id).delete_source(source_name)
 
 
-def clear_knowledge() -> None:
+def clear_knowledge(team_id: str | None = None) -> None:
     """Remove every policy document, and leave the answer memory standing.
 
     It used to drop the whole collection, which took the memory's 698 vectors
@@ -432,10 +443,10 @@ def clear_knowledge() -> None:
     retrieved again. Clearing the corpus and forgetting what the team has said
     are different decisions, made in different places.
     """
-    get_store().delete_type(SourceType.GUIDELINE)
+    get_store(team_id).delete_type(SourceType.GUIDELINE)
 
 
-def save_upload(filename: str, content: bytes) -> Path:
+def save_upload(filename: str, content: bytes, team_id: str | None = None) -> Path:
     """Persist an uploaded file under the configured upload directory.
 
     Only the basename is used, so a crafted filename such as `../../.env` cannot
@@ -451,35 +462,37 @@ def save_upload(filename: str, content: bytes) -> Path:
     document helps nobody.
     """
     settings.ensure_directories()
+    directory = settings.team_upload_dir(team_id)
+    directory.mkdir(parents=True, exist_ok=True)
     name = Path(filename).name
-    destination = settings.upload_dir / name
+    destination = directory / name
     stem, suffix = destination.stem, destination.suffix
     attempt = 1
     while destination.exists() and destination.read_bytes() != content:
         attempt += 1
-        destination = settings.upload_dir / f"{stem} ({attempt}){suffix}"
+        destination = directory / f"{stem} ({attempt}){suffix}"
     destination.write_bytes(content)
     return destination
 
 
-def list_documents() -> list[dict]:
-    """The documents somebody has uploaded, for the interface to open."""
+def list_documents(team_id: str | None = None) -> list[dict]:
+    """The documents a team has uploaded, for the interface to open."""
     settings.ensure_directories()
     documents = [
         _document_info(path, origin="uploaded", category="uploaded")
-        for path in _document_files(settings.upload_dir)
+        for path in _document_files(settings.team_upload_dir(team_id))
     ]
     return sorted(documents, key=lambda document: document["name"])
 
 
-def resolve_document(origin: str, category: str, name: str) -> Path:
+def resolve_document(origin: str, category: str, name: str, team_id: str | None = None) -> Path:
     """Resolve a catalog document without allowing traversal outside its directory."""
     if not name or name != Path(name).name or Path(name).suffix.lower() not in SUPPORTED_SUFFIXES:
         raise ValueError("Invalid document name.")
 
     if origin != "uploaded" or category != "uploaded":
         raise ValueError("Invalid document location.")
-    directory = settings.upload_dir
+    directory = settings.team_upload_dir(team_id)
 
     base = directory.resolve()
     path = (base / name).resolve()

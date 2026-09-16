@@ -385,21 +385,6 @@
   font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); max-height: 340px; overflow: auto;
 }
 
-details.evidence { margin-top: 16px; }
-details.evidence summary {
-  cursor: pointer; font-size: 12.5px; color: var(--ink-faint); list-style: none;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-details.evidence summary::-webkit-details-marker { display: none; }
-details.evidence summary::before { content: "›"; font-size: 15px; transition: transform .15s; display: inline-block; }
-details.evidence[open] summary::before { transform: rotate(90deg); }
-.ev {
-  background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-sm);
-  padding: 11px 13px; margin-top: 9px; white-space: pre-wrap; font-size: 12.5px;
-  line-height: 1.6; color: var(--ink-soft); overflow-wrap: anywhere;
-}
-.ev .src { display: block; color: var(--ink-faint); font-size: 11.5px; margin-bottom: 6px; font-weight: 550; }
-
 [dir="rtl"] { text-align: right; }
 
 /* --- chunk rendering: raw markdown, or laid out ------------------------ */

@@ -138,6 +138,13 @@ def _detect_prose(document, form: DetectedForm) -> list[FormQuestion]:
     return questions
 
 
+def _mark(properties, tag: str) -> None:
+    """Add an empty property element once. Filling a filled document again
+    appended a second one each time, and the schema allows one."""
+    if properties.find(qn(tag)) is None:
+        properties.append(properties.makeelement(qn(tag), {}))
+
+
 def _insert_answer(document, anchor: Paragraph, text: str, *, replace: bool) -> None:
     """Put an answer after `anchor`, or rewrite `anchor` if it is already one.
 
@@ -170,11 +177,9 @@ def _insert_answer(document, anchor: Paragraph, text: str, *, replace: bool) -> 
     if _is_rtl(text):
         # Word lays Arabic out left-aligned with the punctuation in the wrong
         # place unless the paragraph and its runs say they are right-to-left.
-        properties = target._p.get_or_add_pPr()
-        properties.append(properties.makeelement(qn("w:bidi"), {}))
+        _mark(target._p.get_or_add_pPr(), "w:bidi")
         for run in target.runs:
-            run_properties = run._element.get_or_add_rPr()
-            run_properties.append(run_properties.makeelement(qn("w:rtl"), {}))
+            _mark(run._element.get_or_add_rPr(), "w:rtl")
 
 
 # --- table questionnaires ---------------------------------------------------
@@ -470,10 +475,8 @@ def _write_table_cell(
     run = paragraph.add_run()
     run.text = text
     if _is_rtl(text):
-        properties = paragraph._p.get_or_add_pPr()
-        properties.append(properties.makeelement(qn("w:bidi"), {}))
-        run_properties = run._element.get_or_add_rPr()
-        run_properties.append(run_properties.makeelement(qn("w:rtl"), {}))
+        _mark(paragraph._p.get_or_add_pPr(), "w:bidi")
+        _mark(run._element.get_or_add_rPr(), "w:rtl")
 
     (replaced if had else created).append(target_id)
 

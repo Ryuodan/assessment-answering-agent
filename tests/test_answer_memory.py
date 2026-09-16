@@ -220,7 +220,7 @@ def test_answers_indexed_before_the_record_existed_are_adopted(monkeypatch, memo
         },
         "id": "old.xlsx::0",
     }]))
-    monkeypatch.setattr("src.knowledge.get_store", lambda: index)
+    monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: index)
 
     entries = answer_memory.entries()
 
@@ -245,7 +245,7 @@ def test_an_approved_answer_is_still_an_approved_answer_after_a_rebuild(
         {"text": r["text"], "metadata": r["metadata"], "id": r["id"]}
         for r in memory_index.records
     ]))
-    monkeypatch.setattr("src.knowledge.get_store", lambda: rebuilt)
+    monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: rebuilt)
     store.connect().execute("DELETE FROM memory_entries")
     store.connect().commit()
     answer_memory.forget_sync()
@@ -289,7 +289,7 @@ def test_adoption_keeps_the_questionnaire_an_answer_was_actually_given_in(
             "id": "MEM-0002",
         },
     ]))
-    monkeypatch.setattr("src.knowledge.get_store", lambda: index)
+    monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: index)
 
     files = {entry.entry_id: entry.from_file for entry in answer_memory.entries()}
 
@@ -812,7 +812,7 @@ def test_the_sweep_can_be_asked_for_and_says_what_is_left(client, memory_index, 
     """Bounded per press, because a backlog is one model call per entry."""
     asked = []
 
-    async def nothing(limit=200):
+    async def nothing(limit=200, team_id=None):
         asked.append(limit)
         return []
 
@@ -843,3 +843,83 @@ def test_the_memory_is_the_teams_rather_than_one_persons(client, memory_index):
 def test_the_tools_id_for_an_approved_answer_is_stable():
     assert tools._memory_id("b1", "q1") == tools._memory_id("b1", "q1")
     assert tools._memory_id("b1", "q1") != tools._memory_id("b1", "q2")
+
+
+# --- the sweep that runs after an approval ----------------------------------
+
+
+async def test_approvals_in_a_row_share_one_sweep_rather_than_racing(monkeypatch):
+    """Each approval of a written answer schedules the sweep, and each sweep is a
+    model call per pending entry. Five approvals clicked through quickly started
+    five sweeps over the same five entries -- twenty-five comparisons for five."""
+    import asyncio
+
+    from src import api
+
+    started = []
+    release = asyncio.Event()
+
+    async def sweep(*, limit=25, concurrency=4):
+        started.append(limit)
+        if len(started) == 1:
+            await release.wait()
+        return []
+
+    monkeypatch.setattr(api.answer_memory, "scan_pending", sweep)
+
+    first = asyncio.create_task(api._scan_memory())
+    await asyncio.sleep(0)
+    await asyncio.gather(*(api._scan_memory() for _ in range(4)))
+    assert len(started) == 1, "the others join the sweep already running"
+
+    release.set()
+    await first
+    assert len(started) == 2, "and one more pass picks up what arrived while it ran"
+
+
+# --- an entry forgotten while the sweep was still looking at it ----------------
+
+
+async def test_an_entry_withdrawn_mid_sweep_replaces_nothing(memory_index, near_neighbour, monkeypatch):
+    """Approving a written answer starts the sweep; withdrawing it seconds later
+    deletes the entry. The sweep, still waiting on the model, then marked an
+    imported answer as replaced by an entry that no longer existed -- and a
+    replaced answer is never retrieved again."""
+    older = answer_memory.adopt_file("old.xlsx", [Pair("Do you have a CISO?", "Yes.")])[0]
+    newer = answer_memory.record(
+        "Do you have a chief information security officer?", "Yes, since 2024.",
+        origin="approved", entry_id="approved::b::q1",
+    )
+
+    async def slow_and_then_withdrawn(question, candidates):
+        answer_memory.remove(newer.entry_id)        # the reviewer withdraws meanwhile
+        return candidates
+
+    monkeypatch.setattr(answer_memory, "_same_question", slow_and_then_withdrawn)
+
+    await answer_memory.scan(newer)
+
+    assert answer_memory.get(older.entry_id).stands, "replaced by nothing"
+    assert older.entry_id not in answer_memory.superseded_ids()
+    assert not answer_memory.conflicts()
+
+
+def test_a_replacement_that_no_longer_exists_does_not_hide_an_answer(memory_index):
+    entry = answer_memory.adopt_file("old.xlsx", [Pair("Do you have a CISO?", "Yes.")])[0]
+    store.connect().execute(
+        "UPDATE memory_entries SET superseded_by = 'approved::gone::q1' WHERE entry_id = ?",
+        (entry.entry_id,),
+    )
+    store.connect().commit()
+
+    assert entry.entry_id not in answer_memory.superseded_ids(), "still retrieved"
+
+    answer_memory.forget_sync()
+    answer_memory.stats()                            # the first read of the memory repairs it
+    assert answer_memory.get(entry.entry_id).stands
+
+
+def test_a_disagreement_needs_both_answers_to_exist(memory_index):
+    kept = answer_memory.record("Do you have a CISO?", "Yes.")
+    answer_memory.raise_conflict(kept.entry_id, "approved::gone::q1", "they disagree")
+    assert not answer_memory.conflicts()

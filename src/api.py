@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from src import (
     answer_memory, batches, conversations, events, forms, identity, llm, preferences, progress,
-    rewrite, runs, service, store, tools,
+    rewrite, runs, service, storage, store, tools,
 )
 from src.agents import assistant
 from src.identity import User
@@ -73,10 +73,16 @@ def _fingerprint_of(name: str, mtime_ns: int, size: int) -> str:
 
 
 def _page(name: str) -> HTMLResponse:
-    """One of the pages, pointing at the exact version of the shared assets on disk."""
+    """One of the pages, pointing at the exact version of the shared assets on disk.
+
+    The pages name the assets and each other relatively -- `static/cards.js`,
+    `memory` -- because the deployment serves this app under a prefix, and nginx
+    rewrites only `/api/` into it. Every page is one level below the app's root,
+    so a relative reference lands in the same place at `/` and at `/assessment/`.
+    """
     html = (STATIC_DIR / name).read_text(encoding="utf-8")
     for asset in SHARED_ASSETS:
-        html = html.replace(f'"/static/{asset}"', f'"/static/{asset}?v={_fingerprint(asset)}"')
+        html = html.replace(f'"static/{asset}"', f'"static/{asset}?v={_fingerprint(asset)}"')
     return HTMLResponse(html, headers=NO_CACHE)
 
 
@@ -121,8 +127,14 @@ async def lifespan(_: FastAPI):
             "attributed to %s. Add someone before exposing this beyond localhost.",
             identity.LOCAL_EMAIL,
         )
-    yield
-    await llm.close_clients()
+    housekeeping = asyncio.create_task(storage.keep_within_limits())
+    try:
+        yield
+    finally:
+        housekeeping.cancel()
+        with suppress(asyncio.CancelledError):
+            await housekeeping
+        await llm.close_clients()
 
 
 app = FastAPI(
@@ -261,14 +273,18 @@ def sign_out(request: Request, response: Response) -> dict:
 # ---------------------------------------------------------------------------
 
 
+TEAM_ID = r"^[a-z0-9][a-z0-9._-]*$"
+"""What a team id may be. It names a directory and a knowledge base, so it is checked here."""
+
+
 class AddUserRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
-    team: str | None = None
+    team: str | None = Field(default=None, max_length=64, pattern=TEAM_ID)
     role: str = identity.MEMBER
 
 
 class UpdateUserRequest(BaseModel):
-    team: str | None = None
+    team: str | None = Field(default=None, max_length=64, pattern=TEAM_ID)
     role: str | None = None
     disabled: bool | None = None
 
@@ -493,7 +509,7 @@ async def open_questionnaire(
             detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
                    f"Supported: {', '.join(forms.SUPPORTED)}.",
         )
-    path = service.save_upload(name, await file.read())
+    path = service.save_upload(name, await file.read(), user.team_id)
     # In a thread: reading a workbook is a CPU-bound XML parse, and under the
     # assisted and agent strategies it is also a network call. Either way it is
     # not something to do on the event loop of a server answering other people.
@@ -798,16 +814,22 @@ def _check_suffix(filename: str) -> None:
 
 async def _ingest_files(
     files: list[UploadFile], source_type: SourceType, authority: str = "ours",
+    team_id: str | None = None,
 ) -> list[IngestResult]:
     """Save and index a batch of uploads. Shared by both ingestion endpoints."""
     if not files:
         raise HTTPException(status_code=400, detail="No files were uploaded.")
 
-    results = []
+    # Every name checked before any file is saved. Checked one at a time, a
+    # policy uploaded beside a stray .zip was indexed and the request still
+    # failed, leaving nobody sure which half had happened.
     for upload in files:
         _check_suffix(upload.filename or "")
-        path = service.save_upload(upload.filename or "upload", await upload.read())
-        results.append(await service.ingest(path, source_type, authority))
+
+    results = []
+    for upload in files:
+        path = service.save_upload(upload.filename or "upload", await upload.read(), team_id)
+        results.append(await service.ingest(path, source_type, authority, team_id))
     return results
 
 
@@ -825,8 +847,8 @@ async def _ingest_files(
 
 @app.get("/api/knowledge")
 def get_knowledge(user: User = Depends(current_user)) -> dict:
-    """What is currently indexed."""
-    return service.knowledge_stats()
+    """What is currently indexed for the caller's team."""
+    return service.knowledge_stats(user.team_id)
 
 
 @app.post("/api/knowledge/guidelines")
@@ -845,7 +867,7 @@ async def upload_guidelines(
     """
     if authority not in ("ours", "external"):
         raise HTTPException(status_code=400, detail="authority must be 'ours' or 'external'.")
-    results = await _ingest_files(files, SourceType.GUIDELINE, authority)
+    results = await _ingest_files(files, SourceType.GUIDELINE, authority, user.team_id)
     _record_indexing(user, results, authority=authority)
     return results
 
@@ -872,9 +894,13 @@ def _record_indexing(user: User, results: list[IngestResult], **payload) -> None
 def remove_source(source_name: str, user: User = Depends(current_user)) -> dict:
     """Remove one indexed policy document."""
     try:
-        service.delete_source(source_name)
+        service.delete_source(source_name, user.team_id)
     except service.NotADocument as refused:
         raise HTTPException(status_code=400, detail=str(refused)) from refused
+    except KeyError as missing:
+        raise HTTPException(
+            status_code=404, detail=f"{source_name!r} is not in the knowledge base.",
+        ) from missing
     events.record(
         user, events.SOURCE_REMOVED, subject_type="document", subject_id=source_name,
     )
@@ -884,7 +910,7 @@ def remove_source(source_name: str, user: User = Depends(current_user)) -> dict:
 @app.delete("/api/knowledge")
 def clear_knowledge(user: User = Depends(current_user)) -> dict:
     """Remove every policy document. The answer memory is left as it is."""
-    service.clear_knowledge()
+    service.clear_knowledge(user.team_id)
     events.record(user, events.SOURCE_REMOVED, subject_type="document", subject_id="*", all=True)
     return {"cleared": True}
 
@@ -892,10 +918,11 @@ def clear_knowledge(user: User = Depends(current_user)) -> dict:
 # ---------------------------------------------------------------------------
 # The answer memory
 #
-# Shared by the whole team, like the knowledge base and for the same reason:
-# what this organisation has said before is one fact about the organisation, not
-# a private note. Who added or approved each entry is recorded on it, so a
-# shared record is still an attributable one.
+# Shared by the whole team and by nobody else, like the knowledge base and for
+# the same reason: what the team has said before is one fact about the team, not
+# a private note, and not another team's to read or change. Who added or
+# approved each entry is recorded on it, so a shared record is still an
+# attributable one.
 # ---------------------------------------------------------------------------
 
 
@@ -927,12 +954,14 @@ def list_memory(
     keep = {"yes": True, "no": False}.get(standing.lower())
     found = answer_memory.entries(
         query=query, standing=keep, origin=origin,
-        limit=max(1, min(limit, 500)), offset=max(0, offset),
+        limit=max(1, min(limit, 500)), offset=max(0, offset), team_id=user.team_id,
     )
     return {
         "entries": [_memory_payload(entry) for entry in found],
-        "total": answer_memory.count(query=query, standing=keep, origin=origin),
-        "stats": answer_memory.stats(),
+        "total": answer_memory.count(
+            query=query, standing=keep, origin=origin, team_id=user.team_id,
+        ),
+        "stats": answer_memory.stats(user.team_id),
     }
 
 
@@ -940,8 +969,9 @@ def list_memory(
 def list_memory_conflicts(user: User = Depends(current_user)) -> dict:
     """Pairs that disagree, with both answers, for somebody to decide between."""
     pairs = []
-    for conflict in answer_memory.conflicts():
-        first, second = answer_memory.get(conflict.entry_id), answer_memory.get(conflict.other_id)
+    for conflict in answer_memory.conflicts(team_id=user.team_id):
+        first = answer_memory.get(conflict.entry_id, user.team_id)
+        second = answer_memory.get(conflict.other_id, user.team_id)
         if first is None or second is None:
             continue
         pairs.append({
@@ -998,7 +1028,9 @@ def edit_memory_entry(
     A corrected answer is compared again, because correcting one is one of the
     ways it comes to contradict another.
     """
-    entry = answer_memory.update(entry_id, question=body.question, answer=body.answer)
+    entry = answer_memory.update(
+        entry_id, question=body.question, answer=body.answer, team_id=user.team_id,
+    )
     if entry is None:
         raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
     events.record(
@@ -1011,7 +1043,7 @@ def edit_memory_entry(
 @app.delete("/api/memory/{entry_id:path}")
 def remove_memory_entry(entry_id: str, user: User = Depends(current_user)) -> dict:
     """Forget an entry: the row, its vector, and the conflicts it raised."""
-    if not answer_memory.remove(entry_id):
+    if not answer_memory.remove(entry_id, user.team_id):
         raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
     events.record(
         user, events.MEMORY_REMOVED, subject_type=tools.SUBJECT_MEMORY, subject_id=entry_id,
@@ -1022,14 +1054,14 @@ def remove_memory_entry(entry_id: str, user: User = Depends(current_user)) -> di
 @app.post("/api/memory/{entry_id:path}/restore")
 def restore_memory_entry(entry_id: str, user: User = Depends(current_user)) -> dict:
     """Put a superseded entry back into use, when the later answer was wrong."""
-    if answer_memory.get(entry_id) is None:
+    if answer_memory.get(entry_id, user.team_id) is None:
         raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
-    answer_memory.restore(entry_id)
+    answer_memory.restore(entry_id, user.team_id)
     events.record(
         user, events.MEMORY_EDITED, subject_type=tools.SUBJECT_MEMORY,
         subject_id=entry_id, restored=True,
     )
-    return _memory_payload(answer_memory.get(entry_id))
+    return _memory_payload(answer_memory.get(entry_id, user.team_id))
 
 
 class ResolveConflictRequest(BaseModel):
@@ -1044,10 +1076,11 @@ def resolve_memory_conflict(
 ) -> dict:
     """Say which of two disagreeing answers is our position, or that neither loses."""
     for entry_id in (body.entry_id, body.other_id):
-        if answer_memory.get(entry_id) is None:
+        if answer_memory.get(entry_id, user.team_id) is None:
             raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
     answer_memory.apply_resolution(
         body.entry_id, body.other_id, resolution=body.resolution, by=user.email,
+        team_id=user.team_id,
     )
     events.record(
         user, events.MEMORY_RESOLVED, subject_type=tools.SUBJECT_MEMORY,
@@ -1070,7 +1103,9 @@ async def scan_memory_now(limit: int = 50, user: User = Depends(current_user)) -
     saying what it found and what remains is a button somebody will press again,
     and one that hangs for four minutes is one they will reload the page on.
     """
-    findings = await answer_memory.scan_pending(limit=max(1, min(limit, 500)))
+    findings = await answer_memory.scan_pending(
+        limit=max(1, min(limit, 500)), team_id=user.team_id,
+    )
     return {
         "scanned": True,
         "found": [
@@ -1078,19 +1113,41 @@ async def scan_memory_now(limit: int = 50, user: User = Depends(current_user)) -
              "other_question": f.other_question}
             for f in findings
         ],
-        "stats": answer_memory.stats(),
+        "stats": answer_memory.stats(user.team_id),
     }
 
 
+_sweep = {"running": False, "again": False}
+"""Whether a background sweep is under way, and whether another was asked for meanwhile."""
+
+
 async def _scan_memory() -> None:
-    """The sweep as a background task: never raises, never blocks a response."""
-    try:
-        found = await answer_memory.scan_pending(limit=200)
-    except Exception:  # noqa: BLE001 - a background sweep must not take the app down
-        logger.exception("The answer-memory sweep failed")
+    """The sweep as a background task: never raises, never blocks a response.
+
+    One at a time. Every approval of a written answer asks for a sweep, and a
+    sweep is a model call per pending entry, so five approvals clicked through
+    in a row ran five sweeps over the same five entries. A request that arrives
+    while one is running is folded into it: the running sweep goes round once
+    more when it finishes, and picks up whatever arrived in the meantime.
+    """
+    if _sweep["running"]:
+        _sweep["again"] = True
         return
-    if found:
-        logger.info("Answer memory: %d finding(s) from the sweep", len(found))
+    _sweep["running"] = True
+    try:
+        while True:
+            _sweep["again"] = False
+            try:
+                found = await answer_memory.scan_pending(limit=200)
+            except Exception:  # noqa: BLE001 - a background sweep must not take the app down
+                logger.exception("The answer-memory sweep failed")
+                return
+            if found:
+                logger.info("Answer memory: %d finding(s) from the sweep", len(found))
+            if not _sweep["again"]:
+                return
+    finally:
+        _sweep["running"] = False
 
 
 # ---------------------------------------------------------------------------
@@ -1341,7 +1398,9 @@ async def search_knowledge(
     """
     if mode not in ("semantic", "keyword", "hybrid"):
         raise HTTPException(status_code=422, detail=f"unknown search mode '{mode}'")
-    return await service.search_knowledge(q, mode=mode, limit=limit, source_name=source)
+    return await service.search_knowledge(
+        q, mode=mode, limit=limit, source_name=source, team_id=user.team_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1352,13 +1411,13 @@ async def search_knowledge(
 @app.get("/api/documents")
 def get_documents(user: User = Depends(current_user)) -> dict:
     """The documents somebody has uploaded, for the interface to open."""
-    documents = service.list_documents()
+    documents = service.list_documents(user.team_id)
     return {"documents": documents, "uploaded_count": len(documents)}
 
 
-def _resolve_document(origin: str, category: str, name: str) -> Path:
+def _resolve_document(origin: str, category: str, name: str, user: User) -> Path:
     try:
-        return service.resolve_document(origin, category, name)
+        return service.resolve_document(origin, category, name, user.team_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -1370,7 +1429,7 @@ def view_document(
     origin: str, category: str, name: str, user: User = Depends(current_user)
 ) -> FileResponse:
     """Open or download the original PDF/DOCX document."""
-    path = _resolve_document(origin, category, name)
+    path = _resolve_document(origin, category, name, user)
     return FileResponse(path, filename=path.name, content_disposition_type="inline")
 
 
@@ -1379,7 +1438,7 @@ def preview_document(
     origin: str, category: str, name: str, user: User = Depends(current_user)
 ) -> Response:
     """Return a browser preview: the original PDF or safe HTML converted from DOCX."""
-    path = _resolve_document(origin, category, name)
+    path = _resolve_document(origin, category, name, user)
     if path.suffix.lower() == ".pdf":
         return FileResponse(path, filename=path.name, content_disposition_type="inline")
 
@@ -1403,7 +1462,7 @@ async def view_extracted_text(
     origin: str, category: str, name: str, user: User = Depends(current_user)
 ) -> dict:
     """Extract and return the document text, using the persistent extraction cache."""
-    path = _resolve_document(origin, category, name)
+    path = _resolve_document(origin, category, name, user)
     try:
         text = await service.extracted_document_text(path)
     except Exception as exc:  # noqa: BLE001 - normalize converter failures for the web client
@@ -1458,9 +1517,11 @@ async def answer_assessment(
     identifier has to be known before the work starts to be of any use.
     """
     _check_suffix(file.filename or "")
-    path = service.save_upload(file.filename or "assessment", await file.read())
+    path = service.save_upload(file.filename or "assessment", await file.read(), user.team_id)
 
-    result = await service.answer_assessment(path, language=language, run_id=run_id)
+    result = await service.answer_assessment(
+        path, language=language, run_id=run_id, team_id=user.team_id,
+    )
     if not result.answers:
         raise HTTPException(
             status_code=422,
@@ -1508,7 +1569,7 @@ async def extract_assessment(
     break, and a row of guidance can read as a question.
     """
     _check_suffix(file.filename or "")
-    path = service.save_upload(file.filename or "assessment", await file.read())
+    path = service.save_upload(file.filename or "assessment", await file.read(), user.team_id)
 
     language, questions = await service.extract_assessment_questions(path)
     if not questions:
@@ -1547,7 +1608,7 @@ async def answer_question_list(
     ]
 
     answers = await service.answer_questions(
-        questions, language=request.language, run_id=request.run_id
+        questions, language=request.language, run_id=request.run_id, team_id=user.team_id,
     )
     # Every answer somebody drafts gets their house style, however it was asked
     # for -- a typed question in the workbench as much as a spreadsheet row.
@@ -1799,7 +1860,7 @@ async def say_with_a_file(
             detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
                    f"Supported: {', '.join(forms.SUPPORTED)}.",
         )
-    path = service.save_upload(name, await file.read())
+    path = service.save_upload(name, await file.read(), user.team_id)
     conversation = (
         _conversation(conversation_id, user) if conversation_id
         else assistant.start(user, message or f"Read {name}")
@@ -1912,4 +1973,5 @@ def workbench_page() -> HTMLResponse:
 @app.get("/chat", include_in_schema=False)
 def chat_page() -> RedirectResponse:
     """Where the assistant used to live. Kept so old links and bookmarks work."""
-    return RedirectResponse("/", status_code=308)
+    # Relative, so it stays inside the prefix the app is served under.
+    return RedirectResponse("./", status_code=308)

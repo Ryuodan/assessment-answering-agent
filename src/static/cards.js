@@ -251,6 +251,18 @@ const Cards = (window.Cards = {
     }, extra || {});
   }
 
+  /* What withdrawing an approval did, from the question as the server now has
+     it. Three different outcomes, and "it will be held back again" was said of
+     all of them -- including an answer a person wrote, which still goes in. */
+  function withdrawnMessage(question) {
+    if (question && question.will_be_written) {
+      return question.by_hand
+        ? "Approval withdrawn. A person wrote this answer, so it still goes into the file; it is out of the answer memory."
+        : "Approval withdrawn. It is confident enough to go into the file without a person looking.";
+    }
+    return "Approval withdrawn. It will be held back until somebody edits or approves it.";
+  }
+
   function detailPicker(current, onPick) {
     const wrap = document.createElement("div");
     wrap.className = "detail-pick";
@@ -334,7 +346,7 @@ const Cards = (window.Cards = {
       }
     };
     const manage = document.createElement("a");
-    manage.href = "/preferences";
+    manage.href = "preferences";
     manage.textContent = "Manage";
     wrap.append(label, select, apply, manage);
     return wrap;
@@ -533,22 +545,43 @@ const Cards = (window.Cards = {
     /* Full or brief, for this one answer. The questionnaire-level control is
        the bulk action -- 183 rows, make them short -- and it is the wrong unit
        for the answer somebody actually cares about, which is usually the one
-       the assessor will read closely. Shown only where there is a choice to
-       make: an answer with no brief form yet has one length. */
-    if (item.length && (item.brief || item.length === "brief")) {
+       the assessor will read closely.
+
+       On every answer of a questionnaire, whether or not a brief form exists
+       yet. It used to appear only once one did, which meant only after the
+       whole file had been switched to Brief at least once: the per-answer
+       choice was reachable only through the bulk one it exists to avoid.
+       Choosing Brief here shortens this one answer on the spot. */
+    if (item.length && !item.blanked && (item.answer || "").trim()) {
       const lengths = document.createElement("span");
       lengths.className = "len-pick";
-      [["full", "Full"], ["brief", "Brief"]].forEach(([value, text]) => {
+      const buttons = [["full", "Full"], ["brief", "Brief"]].map(([value, text]) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "quiet";
         button.textContent = text;
+        button.dataset.mutates = "true";
         button.setAttribute("aria-pressed", String(item.length === value));
         button.title = value === "brief"
-          ? "Write this one briefly, whatever the rest of the file does"
+          ? item.brief
+            ? "Write this one briefly, whatever the rest of the file does"
+            : "Shorten this one answer and write it briefly, whatever the rest of the file does"
           : "Write this one in full, whatever the rest of the file does";
-        button.onclick = () => Cards.onLength(item, index, value);
+        button.onclick = async () => {
+          if (button.getAttribute("aria-pressed") === "true") return;
+          buttons.forEach((b) => { b.disabled = true; });
+          // Deriving a brief form is a model call; a button that sits there
+          // for five seconds reads as a button that did nothing.
+          if (value === "brief" && !item.brief) button.textContent = "Shortening…";
+          try {
+            await Cards.onLength(item, index, value);
+          } finally {
+            button.textContent = text;
+            buttons.forEach((b) => { b.disabled = false; });
+          }
+        };
         lengths.append(button);
+        return button;
       });
       field.querySelector(".field-label").append(lengths);
     }
@@ -926,49 +959,12 @@ const Cards = (window.Cards = {
       content.append(field);
     }
 
-    if (item.evidence && item.evidence.length) {
-      const details = document.createElement("details");
-      details.className = "evidence";
-      const summary = document.createElement("summary");
-      summary.textContent = "All " + item.evidence.length + " retrieved source(s)";
-      details.append(summary);
-
-      // The same controls as a citation bubble: this list shows the same kind
-      // of thing, and offering the switch in one place and not the other made
-      // the formatted view look like a property of some chunks and not others.
-      const evHead = document.createElement("div");
-      evHead.className = "ev-controls";
-      evHead.append(viewToggle());
-      details.append(evHead);
-
-      item.evidence.forEach((evidence) => {
-        const block = document.createElement("div");
-        block.className = "ev";
-        const label = document.createElement("span");
-        label.className = "src";
-        label.textContent =
-          (evidence.source_type === "prior_answer" ? "Previous answer" : "Guideline") +
-          " — " + (evidence.locator || evidence.source_name) + " (score " + evidence.score + ")";
-        const open = openDocumentButton(evidence.source_name, evidence.source_type);
-        const labelRow = document.createElement("div");
-        labelRow.className = "ev-head";
-        labelRow.append(label);
-        // Whose document this is, beside the document. `head` -- the card's own
-        // question header -- was in scope, and this line appended to it: an
-        // answer citing five external sources put five "external" badges next
-        // to the question number, whose combined nowrap width became the
-        // header's minimum. That crushed the question text to nothing and, in
-        // the chat, forced the answers panel to 917px against a 620px cap,
-        // leaving the conversation beside it 113px wide.
-        const evidenceMark = authorityBadge(evidence.authority);
-        if (evidenceMark) labelRow.append(evidenceMark);
-        if (open) labelRow.append(open);
-        block.append(labelRow, renderChunk(evidence.snippet));
-        details.append(block);
-      });
-
-      content.append(details);
-    }
+    /* There was a second list here, "All n retrieved source(s)". It showed
+       the same sources as the bubbles above, a second time: `finalize` keeps
+       only the chunks the answer cited, so an answer's evidence *is* its
+       citations -- true of every one of the 1,817 answers stored when it
+       was removed. Each bubble opens the clause with its relevance, the
+       formatted/raw switch and the document, which is all the list had. */
 
     card.append(head, content);
     return card;
@@ -1039,6 +1035,7 @@ const Cards = (window.Cards = {
   // What the pages use. Everything else above is private to the card.
   Object.assign(Cards, {
     render: renderAnswer,
+    withdrawnMessage: withdrawnMessage,
     stat: statCard,
     chunk: renderChunk,
     isArabic: isArabic,

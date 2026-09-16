@@ -286,7 +286,9 @@ async def test_a_questionnaire_filed_as_a_guideline_is_warned_about(monkeypatch,
 
     # It is indexed — refusing would be worse than warning — but not silently.
     assert result.chunks_indexed == 3
-    assert result.warning and "previous answers" in result.warning
+    # And where the team's answers belong instead -- the upload for previous
+    # answers it used to point at no longer exists.
+    assert result.warning and "answer memory" in result.warning
 
 
 async def test_a_real_policy_raises_no_warning(monkeypatch, tmp_path):

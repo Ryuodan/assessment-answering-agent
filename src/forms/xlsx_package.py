@@ -472,6 +472,38 @@ def _covers_column(sqref: str, column: str) -> bool:
     return False
 
 
+MAX_CELL_CHARACTERS = 32767
+"""The most text Excel holds in one cell. Past it, Excel reports the file damaged."""
+
+_NOT_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+"""Characters XML 1.0 does not allow anywhere, which a model's output can still carry."""
+
+
+def xml_safe(text: str) -> str:
+    """`text` without the characters no XML document may contain.
+
+    Every format this writes is XML inside a zip, and a model's answer can carry
+    a vertical tab or a form feed. python-docx refuses those outright, so one of
+    them failed a whole Word fill; ElementTree writes them, so one of them made
+    a worksheet part unreadable.
+    """
+    return _NOT_XML.sub("", text or "")
+
+_ATTRIBUTE = re.compile(r"""([^\s=/>]+)\s*=\s*("[^"]*"|'[^']*')""")
+
+
+def _cell_safe(text: str) -> str:
+    """Text a cell can hold: legal XML, and no longer than Excel accepts."""
+    text = xml_safe(text)
+    if len(text) > MAX_CELL_CHARACTERS:
+        text = text[: MAX_CELL_CHARACTERS - 1] + "\u2026"
+    return text
+
+
+class _Unspliceable(Exception):
+    """A worksheet shaped in a way the byte-level splice does not handle."""
+
+
 def _apply_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
     """Set cells in one worksheet part, leaving everything else as it was.
 
@@ -479,7 +511,160 @@ def _apply_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
     one fewer part to rewrite, and no index bookkeeping that could corrupt the
     strings every other sheet is sharing. The style index `s` is kept, so a cell
     written into a wrapped, bordered column still looks like its neighbours.
+
+    Spliced into the part's own bytes rather than parsed and serialised again.
+    A round trip through ElementTree renamed every namespace prefix but the main
+    one and dropped the declarations it did not see used, so the `mc:Ignorable`
+    list Excel puts on every worksheet ended up naming prefixes that no longer
+    existed -- and Excel would not open the filled file. The whole-part rewrite
+    stays as the fallback for a shape the splice does not recognise.
     """
+    edits = {ref: _cell_safe(text) for ref, text in edits.items()}
+    try:
+        return _splice_cell_edits(sheet_xml, edits)
+    except _Unspliceable:
+        return _rewrite_cell_edits(sheet_xml, edits)
+
+
+def _splice_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
+    try:
+        text = sheet_xml.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise _Unspliceable from error
+
+    opening = re.search(r"<((?:[A-Za-z_][\w.-]*:)?)sheetData\b([^>]*?)(/?)>", text)
+    if opening is None:
+        return sheet_xml
+    prefix = opening.group(1)
+    if opening.group(3):
+        head = text[: opening.start()] + f"<{prefix}sheetData{opening.group(2)}>"
+        inner = ""
+        tail = f"</{prefix}sheetData>" + text[opening.end():]
+    else:
+        closing = text.find(f"</{prefix}sheetData>", opening.end())
+        if closing < 0:
+            raise _Unspliceable
+        head, inner, tail = text[: opening.end()], text[opening.end(): closing], text[closing:]
+
+    tag = re.escape(prefix)
+    # [(row number or None for whitespace between rows, raw text)]
+    segments: list[list] = []
+    for start, end, match in _elements(inner, rf"<{tag}row\b([^>]*?)(/>|>(.*?)</{tag}row>)"):
+        if start < 0:
+            segments.append([None, inner[end:match]])
+            continue
+        number = _number_attribute(match.group(1))
+        segments.append([number, match])
+
+    wanted: dict[int, dict[str, str]] = {}
+    for ref, value in edits.items():
+        column, row_number = split_ref(ref)
+        wanted.setdefault(row_number, {})[ref] = value
+
+    rows = {segment[0]: segment for segment in segments if segment[0] is not None}
+    for row_number, cells in sorted(wanted.items()):
+        if row_number in rows:
+            match = rows[row_number][1]
+            body = _set_cells(match.group(3) or "", cells, prefix)
+            rows[row_number][1] = f"<{prefix}row{match.group(1)}>{body}</{prefix}row>"
+            continue
+        created = f'<{prefix}row r="{row_number}">{_set_cells("", cells, prefix)}</{prefix}row>'
+        later = next(
+            (index for index, segment in enumerate(segments)
+             if segment[0] is not None and segment[0] > row_number),
+            len(segments),
+        )
+        segments.insert(later, [row_number, created])
+        rows[row_number] = segments[later]
+
+    rebuilt = "".join(
+        segment[1] if isinstance(segment[1], str) else segment[1].group(0)
+        for segment in segments
+    )
+    return (head + rebuilt + tail).encode("utf-8")
+
+
+def _elements(text: str, pattern: str):
+    """Walk `text` as a run of `pattern` matches with only whitespace between.
+
+    Yields `(-1, gap_start, gap_end)` for the whitespace and `(start, end, match)`
+    for each element. Anything else between them -- a comment, an element the
+    splice does not know -- is refused rather than guessed around.
+    """
+    position = 0
+    for match in re.finditer(pattern, text, re.S):
+        if text[position: match.start()].strip():
+            raise _Unspliceable
+        if match.start() > position:
+            yield -1, position, match.start()
+        yield match.start(), match.end(), match
+        position = match.end()
+    if text[position:].strip():
+        raise _Unspliceable
+    if position < len(text):
+        yield -1, position, len(text)
+
+
+def _attributes(raw: str) -> list[tuple[str, str]]:
+    return _ATTRIBUTE.findall(raw)
+
+
+def _number_attribute(raw: str) -> int:
+    value = dict(_attributes(raw)).get("r")
+    if value is None or not value[1:-1].isdigit():
+        raise _Unspliceable  # a row without its number is legal, and left to the rewrite
+    return int(value[1:-1])
+
+
+def _set_cells(body: str, cells: dict[str, str], prefix: str) -> str:
+    """One row's cells with `cells` written in, in column order."""
+    tag = re.escape(prefix)
+    # [(column number or None for whitespace, raw text)]
+    segments: list[list] = []
+    for start, end, match in _elements(body, rf"<{tag}c\b([^>]*?)(/>|>(.*?)</{tag}c>)"):
+        if start < 0:
+            segments.append([None, body[end:match], ""])
+            continue
+        reference = dict(_attributes(match.group(1))).get("r")
+        if reference is None:
+            raise _Unspliceable
+        try:
+            column, _ = split_ref(reference[1:-1])
+        except ValueError as error:
+            raise _Unspliceable from error
+        segments.append([column_number(column), match.group(0), match.group(1)])
+
+    by_column = {segment[0]: segment for segment in segments if segment[0] is not None}
+    for ref, value in sorted(cells.items(), key=lambda item: column_number(split_ref(item[0])[0])):
+        number = column_number(split_ref(ref)[0])
+        if number in by_column:
+            kept = "".join(
+                f" {name}={quoted}" for name, quoted in _attributes(by_column[number][2])
+                if name not in ("r", "t")
+            )
+            by_column[number][1] = _inline_cell(ref, kept, value, prefix)
+            continue
+        created = [number, _inline_cell(ref, "", value, prefix), ""]
+        later = next(
+            (index for index, segment in enumerate(segments)
+             if segment[0] is not None and segment[0] > number),
+            len(segments),
+        )
+        segments.insert(later, created)
+        by_column[number] = created
+    return "".join(segment[1] for segment in segments)
+
+
+def _inline_cell(ref: str, attributes: str, text: str, prefix: str) -> str:
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        f'<{prefix}c r="{ref}"{attributes} t="inlineStr"><{prefix}is>'
+        f'<{prefix}t xml:space="preserve">{escaped}</{prefix}t></{prefix}is></{prefix}c>'
+    )
+
+
+def _rewrite_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
+    """The whole part parsed and serialised again. Only for what the splice refuses."""
     root = ET.fromstring(sheet_xml)
     data = root.find(f"{NS}sheetData")
     if data is None:

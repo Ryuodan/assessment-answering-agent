@@ -457,7 +457,7 @@ def test_the_question_endpoint_still_works_before_anyone_is_added(client, monkey
         return "en", [Question(id="1", text="Do you encrypt data at rest?")]
 
     monkeypatch.setattr("src.api.service.extract_assessment_questions", fake_extract)
-    monkeypatch.setattr("src.api.service.save_upload", lambda name, content: settings.upload_dir / name)
+    monkeypatch.setattr("src.api.service.save_upload", lambda name, content, team_id=None: settings.upload_dir / name)
 
     response = client.post(
         "/api/assessments/extract",

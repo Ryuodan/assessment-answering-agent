@@ -193,6 +193,141 @@ async def test_a_question_with_no_answer_yet_says_so(answered):
     assert "nothing has been written for it yet" in said
 
 
+# --- where an answer came from ---------------------------------------------------------
+#
+# Asked which sources an answer used, the assistant searched the policies again and
+# listed what it found. That is a similar list, not the same one, and the person was
+# holding it up against the answer's card.
+
+
+POLICY_TEXT = "Backups shall be encrypted at rest using AES-256 and tested every quarter."
+LAW_TEXT = "Controllers shall implement appropriate technical measures to protect personal data."
+
+
+@pytest.fixture
+def answers_citing(monkeypatch):
+    """Each answer cites one policy clause, and carries a chunk it did not cite.
+
+    The pipeline keeps only cited chunks, so the second is here to show that a
+    chunk is read out because the answer cites it, not because it is attached."""
+    from src.models import AnsweredQuestion, Evidence, SourceType
+
+    policy = Evidence(source_type=SourceType.GUIDELINE, source_name="T2 - Backup Policy.pdf",
+                      snippet=POLICY_TEXT, doc_id="T2-BKP", clause="4.2")
+    law = Evidence(source_type=SourceType.GUIDELINE, source_name="PDPL Implementing Regulation.pdf",
+                   snippet=LAW_TEXT, clause="23", authority="external")
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=question, answer="Yes. Backups are encrypted with AES-256.",
+                confidence=0.9, needs_review=False, citations=[policy.locator],
+                evidence=[law, policy], rationale="The backup policy states the encryption standard.",
+            )
+            for question in questions
+        ]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+    return policy, law
+
+
+@pytest.fixture
+def cited(user, tmp_path, answers_citing, monkeypatch):
+    async def no_searching(*args, **kwargs):
+        raise AssertionError("the sources of an answer were looked for by searching again")
+
+    monkeypatch.setattr(tools, "search", no_searching)
+    path = shapes.status_and_comment(tmp_path / "HR Assessment.xlsx")
+    state: dict = {"batch_id": "", "pending_upload": str(path), "steps": [], "refreshed": False}
+    tool = {t.__name__: t for t in assistant._tools(user, state)}
+    tool["open_questionnaire"]("")
+    return tool, state, answers_citing
+
+
+async def test_a_plain_read_back_is_the_answer_without_its_sources(cited):
+    tool, _state, (policy, law) = cited
+    await tool["answer_questions"]()
+
+    said = tool["read_answers"](position="1")
+
+    assert "answer, to relay word for word: Yes. Backups are encrypted" in said
+    assert policy.locator not in said and POLICY_TEXT not in said, "sources are read out when asked for"
+
+
+async def test_asked_for_its_sources_it_reads_back_what_the_card_shows(cited):
+    tool, _state, (policy, law) = cited
+    await tool["answer_questions"]()
+
+    said = tool["read_answers"](position="1", with_sources=True)
+
+    assert f"cited: {policy.locator} (our own policy)" in said
+    assert f"it says: {POLICY_TEXT}" in said
+    assert LAW_TEXT not in said and law.locator not in said, "only what the answer cites is read out"
+    assert "reasoning when it was drafted: The backup policy states" in said
+
+
+async def test_a_cited_regulation_is_said_to_be_one(user, tmp_path, monkeypatch):
+    from src.models import AnsweredQuestion, Evidence, SourceType
+
+    law = Evidence(source_type=SourceType.GUIDELINE, source_name="PDPL.pdf", snippet=LAW_TEXT,
+                   clause="23", authority="external")
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, needs_review=False,
+                                 citations=[law.locator], evidence=[law]) for q in questions]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+    path = shapes.status_and_comment(tmp_path / "HR Assessment.xlsx")
+    state: dict = {"batch_id": "", "pending_upload": str(path), "steps": [], "refreshed": False}
+    tool = {t.__name__: t for t in assistant._tools(user, state)}
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+
+    said = tool["read_answers"](position="1", with_sources=True)
+    assert "a law or external requirement, not our own policy" in said
+
+
+async def test_a_citation_whose_text_was_not_kept_is_still_named(user, tmp_path, monkeypatch):
+    from src.models import AnsweredQuestion
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, needs_review=False,
+                                 citations=["An older policy §2"]) for q in questions]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+    path = shapes.status_and_comment(tmp_path / "HR Assessment.xlsx")
+    state: dict = {"batch_id": "", "pending_upload": str(path), "steps": [], "refreshed": False}
+    tool = {t.__name__: t for t in assistant._tools(user, state)}
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+
+    said = tool["read_answers"](position="1", with_sources=True)
+    assert "cited: An older policy §2 -- named in the answer; the text of it was not kept" in said
+
+
+async def test_an_answer_drafted_in_conversation_carries_its_sources_forward(cited):
+    """Its sources go into the reply's history, so a question about them later is
+    answered from what it cited rather than from a new search."""
+    tool, _state, (policy, law) = cited
+
+    said = await tool["answer_directly"]("Do we encrypt our backups?")
+
+    assert f"cited: {policy.locator} (our own policy)" in said
+    assert f"it says: {POLICY_TEXT}" in said
+
+
+def test_the_tool_says_to_read_sources_back_rather_than_search(cited):
+    """In the tool's description and not the system prompt. A paragraph saying
+    the same in the prompt made an answer asked for in Arabic come back
+    translated instead of quoted -- three runs in five, against five in five
+    without it -- and the source questions were answered right either way."""
+    tool, _state, _sources = cited
+    described = " ".join(tool["read_answers"].__doc__.split())
+    assert "what sources did you use for question 3" in described
+    assert "never search to answer this" in described
+    assert "ASKED WHERE AN ANSWER CAME FROM" not in assistant.SYSTEM
+
+
 async def test_listing_gives_each_question_its_place(answered):
     tool, _state = answered
     said = tool["list_questions"]()

@@ -31,6 +31,7 @@ import asyncio
 
 from src.config import settings
 from src import answer_memory, batches, events, preferences, progress, rewrite, service
+from src.formatting import to_cell_text
 from src.batches import Batch
 from src.forms import status as status_map
 from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role, Target
@@ -345,7 +346,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
     selected = {q.id for q in (scope or Scope()).select(batch.form, answered)}
     # One query for the whole questionnaire: approving has a second effect, and
     # a card that cannot say whether it happened is a button working in silence.
-    remembered = answer_memory.ids_from_batch(batch.id)
+    remembered = answer_memory.ids_from_batch(batch.id, user.team_id)
 
     questions = []
     for question in batch.form.questions:
@@ -424,6 +425,14 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
                 and not ready_to_write(answered.get(q.id), edits.get(q.id, ""))[0]
             ),
             "set_aside": sum(1 for q in batch.form.questions if q.skip),
+            # Work still to do, counted the way `answer` decides it: not answered
+            # here, not answered in the file, not left blank on purpose, and not
+            # set aside. The question count minus our own answers called the
+            # file's answers and every set-aside row "still blank".
+            "still_blank": sum(
+                1 for q in batch.form.questions
+                if not q.skip and not _settled(answered.get(q.id), q)
+            ),
             "failed": sum(
                 1 for q in batch.form.questions
                 if (answered.get(q.id) and answered[q.id].error)
@@ -490,6 +499,7 @@ async def answer(
     results = await service.answer_questions(
         [_as_question(question) for question in chosen],
         run_id=run_id or batch.id,
+        team_id=user.team_id,
     )
     # Preferences are applied here, after drafting and review, and never
     # handed to `service`: see `src.preferences` for why the drafter must not
@@ -668,6 +678,10 @@ async def revise(
                 if not revised.drafted and not written_by_a_person(original):
                     revised.drafted = original.answer
                 revised.by_hand = False
+                # The brief form was condensed from the words just replaced.
+                # Kept, it went on being what a brief questionnaire showed and
+                # wrote, so the rewording appeared to do nothing at all.
+                revised.brief = ""
                 if revised.confidence_reason in (APPROVED, HAND):
                     revised.confidence_reason = ""
             return revised
@@ -678,6 +692,12 @@ async def revise(
 
     changed = [r for r in results if r is not existing[r.question.id]]
     batches.save_answers(batch.id, changed)
+    # Derived again only where somebody is going to read the brief form.
+    shown_brief = tuple(
+        r.question.id for r in changed if length_of(r, batch.detail) == "brief"
+    )
+    if shown_brief:
+        await make_brief(user, batch.id, Scope(ids=shown_brief))
 
     outcome.answered = len(changed)
     outcome.failed = len(results) - len(changed)
@@ -745,6 +765,23 @@ def set_answer(
 
     existing = batches.answers(batch.id).get(question_id)
     previous = (getattr(existing, which) if existing else "") or ""
+
+    # Emptying the answer is clearing it, not writing an empty one. Stored as
+    # an empty answer "written by hand", it was neither blank on purpose nor
+    # unanswered: nothing was written, and the card said no answer had been
+    # produced. Cleared, the question is simply unanswered, and the file keeps
+    # whatever its cell already held -- empty stays empty, and an answer the
+    # file arrived with stays. Leaving a cell empty over the file's own answer
+    # is "Leave blank", which is a decision rather than a deletion.
+    if which == "answer" and not text.strip():
+        if existing is not None:
+            batches.forget_answer(batch.id, question_id)
+            events.record(
+                user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
+                question_id=question_id, was=previous[:400], cleared=True,
+            )
+        return
+
     answered = existing.model_copy(deep=True) if existing else AnsweredQuestion(
         question=_as_question(question), answer="", confidence=0.0,
     )
@@ -886,7 +923,14 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> O
     finally:
         progress.finish(batch.id)
 
-    batches.save_answers(batch.id, results)
+    # Saved under whoever had put their name to each answer. One save for all of
+    # them recorded every answer as edited by nobody, which erased the name of
+    # the person who had approved or corrected it.
+    edits = batches.edited_by(batch.id)
+    for who in {edits.get(r.question.id, "") for r in results}:
+        batches.save_answers(
+            batch.id, [r for r in results if edits.get(r.question.id, "") == who], edited_by=who,
+        )
     outcome.answered = sum(1 for r in results if r.brief.strip())
     outcome.failed = outcome.attempted - outcome.answered
     return outcome
@@ -960,7 +1004,7 @@ def approve_answer(
 
     entry_id = _memory_id(batch.id, question_id)
     if not approved:
-        answer_memory.remove(entry_id)
+        answer_memory.remove(entry_id, user.team_id)
         return ""
     if not by_hand:
         return ""
@@ -1067,7 +1111,9 @@ def fill(
                 else:
                     blank[target.id] = choice.because
                 continue
-            values[target.id] = written_text(result, batch.detail)
+            # As text a cell can show: the drafter's Markdown went into the
+            # customer's file as literal asterisks.
+            values[target.id] = to_cell_text(written_text(result, batch.detail))
 
     destination = destination or _filled_path(batch)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1135,9 +1181,11 @@ def _filled_path(batch: Batch) -> Path:
     return settings.filled_dir / batch.id / f"{source.stem} - answered{source.suffix}"
 
 
-async def search(query: str, mode: str = "hybrid", limit: int = 8) -> dict:
-    """Look something up in the indexed policies, without touching a batch."""
-    return await service.search_knowledge(query, mode=mode, limit=limit)
+async def search(
+    query: str, mode: str = "hybrid", limit: int = 8, *, team_id: str | None = None,
+) -> dict:
+    """Look something up in a team's indexed policies, without touching a batch."""
+    return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id)
 
 
 def _as_question(question: FormQuestion) -> Question:

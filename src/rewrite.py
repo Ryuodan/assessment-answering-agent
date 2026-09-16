@@ -16,10 +16,14 @@ inventing something loses to the evidence.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
+import weakref
 
+from src.config import settings
 from src.graph.state import order_evidence
-from src.llm import chat_llm
+from src.llm import TRANSIENT, chat_llm
 from src.models import AnsweredQuestion, Language
 from src.prompts import BRIEF_INSTRUCTION, LANGUAGE_NAMES, REWRITE_SYSTEM, REWRITE_USER
 
@@ -27,6 +31,42 @@ logger = logging.getLogger(__name__)
 
 MAX_SOURCES = 8
 """Sources shown to the rewriter. The drafter cites about this many anyway."""
+
+ATTEMPTS = 5
+"""Tries per rewording when the provider says it is busy."""
+
+_pause = asyncio.sleep
+"""How a retry waits. A seam, so the tests of retrying need not sit through it."""
+
+_gates: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _gate() -> asyncio.Semaphore:
+    """The limit on rewordings in flight, one per event loop.
+
+    Every path that rewords sends one call per answer, all at once: preferences
+    over a run's drafts, the brief form over a whole file, a skill over a scope.
+    Against Groq, 80 at once lost 44 to the rate limit. Per loop because a
+    semaphore belongs to the loop it first waited on, and the tests and the CLI
+    each run their own.
+    """
+    loop = asyncio.get_running_loop()
+    gate = _gates.get(loop)
+    if gate is None:
+        gate = _gates[loop] = asyncio.Semaphore(settings.max_concurrent_rewrites)
+    return gate
+
+
+async def _ask(messages):
+    """One model call, tried again with a growing pause while the provider is busy."""
+    async with _gate():
+        for attempt in range(1, ATTEMPTS + 1):
+            try:
+                return await chat_llm(temperature=0.2).ainvoke(messages)
+            except TRANSIENT:
+                if attempt == ATTEMPTS:
+                    raise
+                await _pause(min(2 ** attempt, 20) * (0.5 + random.random()))
 
 
 def _sources_block(answered: AnsweredQuestion) -> str:
@@ -75,7 +115,7 @@ async def rewrite(
     ]
 
     try:
-        response = await chat_llm(temperature=0.2).ainvoke(messages)
+        response = await _ask(messages)
     except Exception:
         logger.exception("Could not rewrite the answer to %s", answered.question.id)
         return answered
@@ -87,6 +127,8 @@ async def rewrite(
     revised = answered.model_copy(deep=True)
     revised.answer = text
     revised.by_hand = False
+    # Condensed from the words just replaced, so no longer a version of this answer.
+    revised.brief = ""
     # Evidence and citations are carried over deliberately: the sources did not
     # change, so the clause a reader would go and check has not moved either.
     revised.rationale = (

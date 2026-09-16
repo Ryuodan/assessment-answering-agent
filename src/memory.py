@@ -144,6 +144,9 @@ class Entry:
     conflicts_with: list[str] = field(default_factory=list)
     """Entries this disagrees with, unresolved. Raised for a person."""
 
+    team_id: str = ""
+    """The team whose memory this is. Entries are only ever compared within one."""
+
     @property
     def stands(self) -> bool:
         return not self.superseded_by
