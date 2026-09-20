@@ -1,14 +1,17 @@
-"""Two people, one team, one questionnaire — and everything they share.
+"""Two people, one team — what they share, and what they do not.
 
-The other API tests each check one route. This checks the thing the team
-actually does: one person opens a file and answers it, another reads the same
-answers, corrects one, approves it, and the approval reaches the answer memory
-where the first person can see it. Then somebody else's team tries the same and
-gets nothing.
+The other API tests each check one route. This checks the thing a team actually
+does: somebody opens a questionnaire and answers it, corrects one answer and
+approves it, and the approval reaches the answer memory, where their colleague
+finds it the next time they answer the same question. The questionnaire itself
+is theirs -- it came from another company, usually under an NDA -- and a
+colleague cannot open it, list it or fill it. Then somebody on another team
+tries all of it and gets nothing.
 
 It is written as a sequence rather than as isolated cases because that is where
 the bugs in a shared system live: not in whether a route works, but in whether
-what one person did is visible, attributable and safe to the next.
+what one person did is visible where it should be, hidden where it should not,
+and attributable either way.
 """
 
 from __future__ import annotations
@@ -79,15 +82,25 @@ def _open(client, tmp_path, name="vendor.xlsx"):
         )}).json()
 
 
-# --- the shared questionnaire ----------------------------------------------
+# --- the questionnaire is the uploader's -------------------------------------
 
 
-def test_a_teammate_picks_up_the_file_the_other_one_opened(team, tmp_path, answers_yes):
+def test_a_teammate_cannot_open_the_file_somebody_else_uploaded(team, tmp_path, answers_yes):
+    """It was the team's: everyone's history listed everyone's questionnaires,
+    and any of them could be opened, answered, refilled or downloaded. These
+    files arrive from other companies under an NDA, and they belong to the
+    person doing the work."""
     alice, bob = as_person(ALICE), as_person(BOB)
     batch_id = _open(alice, tmp_path)["id"]
 
-    assert batch_id in [f["id"] for f in bob.get("/api/forms").json()["forms"]]
-    assert bob.get(f"/api/forms/{batch_id}").status_code == 200
+    assert bob.get("/api/forms").json()["forms"] == []
+    assert bob.get(f"/api/forms/{batch_id}").status_code == 400
+    assert bob.post(f"/api/forms/{batch_id}/answer", json={"scope": {}}).status_code == 400
+    assert bob.post(f"/api/forms/{batch_id}/fill").status_code == 400
+    assert bob.get(f"/api/forms/{batch_id}/file").status_code == 400
+
+    assert batch_id in [f["id"] for f in alice.get("/api/forms").json()["forms"]]
+    assert alice.get(f"/api/forms/{batch_id}").status_code == 200
 
 
 def test_another_team_cannot_see_it_at_all(team, tmp_path, answers_yes):
@@ -99,29 +112,34 @@ def test_another_team_cannot_see_it_at_all(team, tmp_path, answers_yes):
     assert carol.post(f"/api/forms/{batch_id}/fill").status_code == 400
 
 
-def test_one_answers_and_the_other_corrects_and_approves(
+def test_what_one_person_approves_reaches_the_whole_team(
     team, tmp_path, answers_yes, memory_index
 ):
+    """The questionnaire is Alice's. What she settles about how this
+    organisation answers is the team's, and it carries her name."""
     alice, bob = as_person(ALICE), as_person(BOB)
     batch_id = _open(alice, tmp_path)["id"]
     alice.post(f"/api/forms/{batch_id}/answer", json={"scope": {}})
 
-    question_id = bob.get(f"/api/forms/{batch_id}").json()["questions"][0]["id"]
-    bob.post(f"/api/forms/{batch_id}/answers", json={
+    question_id = alice.get(f"/api/forms/{batch_id}").json()["questions"][0]["id"]
+    alice.post(f"/api/forms/{batch_id}/answers", json={
         "question_id": question_id,
         "text": "Yes. Access rights are reviewed quarterly by the system owner.",
     })
-    approved = bob.post(f"/api/forms/{batch_id}/approve", json={"question_id": question_id}).json()
+    approved = alice.post(f"/api/forms/{batch_id}/approve", json={"question_id": question_id}).json()
 
-    # Alice sees Bob's correction, and the file is ready to be written.
     hers = alice.get(f"/api/forms/{batch_id}").json()["questions"][0]
     assert "system owner" in hers["answer"]
     assert hers["will_be_written"] is True
 
-    # And it is Bob's name on it, in the memory and in the event log.
+    # Bob never sees her file, and does see what she decided we say.
+    remembered = bob.get("/api/memory").json()["entries"]
+    assert [entry["entry_id"] for entry in remembered] == [approved["remembered"]]
+    assert "system owner" in remembered[0]["answer"]
+
     entry = answer_memory.get(approved["remembered"])
-    assert entry.approved_by == BOB
-    assert [e.actor_email for e in events.recent(settings.default_team, kind=events.MEMORY_ADDED)] == [BOB]
+    assert entry.approved_by == ALICE
+    assert [e.actor_email for e in events.recent(settings.default_team, kind=events.MEMORY_ADDED)] == [ALICE]
 
 
 def test_the_answer_memory_is_the_teams_not_one_persons(team, tmp_path, answers_yes, memory_index):
@@ -228,23 +246,38 @@ def test_who_changed_the_corpus_is_recorded(team, tmp_path, monkeypatch):
 
 
 def test_two_different_files_with_one_name_do_not_overwrite_each_other(team, tmp_path):
-    """Everybody's vendor questionnaire is called the vendor questionnaire.
+    """Every vendor questionnaire is called the vendor questionnaire.
 
     The second upload used to land on the first one's bytes, which silently
     repointed a batch that had already been read — column by column — at
-    somebody else's spreadsheet.
+    another spreadsheet. Two people cannot collide any more, since each keeps
+    their own folder; one person with two of them still can.
     """
-    alice, bob = as_person(ALICE), as_person(BOB)
+    alice = as_person(ALICE)
     mine = _open(alice, tmp_path / "a", "Vendor Questionnaire.xlsx")
-    theirs = shapes.legend_sheet(tmp_path / "b" / "Vendor Questionnaire.xlsx")
-    with open(theirs, "rb") as handle:
-        bob.post("/api/forms", files={"file": (
+    other = shapes.legend_sheet(tmp_path / "b" / "Vendor Questionnaire.xlsx")
+    with open(other, "rb") as handle:
+        alice.post("/api/forms", files={"file": (
             "Vendor Questionnaire.xlsx", handle.read(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )})
 
     still = alice.get(f"/api/forms/{mine['id']}").json()
     assert [q["text"] for q in still["questions"]] == [q["text"] for q in mine["questions"]]
+
+
+def test_one_name_in_two_hands_is_two_files(team, tmp_path):
+    """Alice's vendor questionnaire and Bob's are different companies' files."""
+    alice, bob = as_person(ALICE), as_person(BOB)
+    _open(alice, tmp_path / "a", "Vendor Questionnaire.xlsx")
+    _open(bob, tmp_path / "b", "Vendor Questionnaire.xlsx")
+
+    hers = settings.user_upload_dir(settings.default_team, ALICE)
+    his = settings.user_upload_dir(settings.default_team, BOB)
+    assert hers != his
+    assert [p.name for p in hers.glob("Vendor*")] == ["Vendor Questionnaire.xlsx"]
+    assert [p.name for p in his.glob("Vendor*")] == ["Vendor Questionnaire.xlsx"]
+    assert not list(settings.upload_dir.glob("Vendor*")), "neither is in the team's folder"
 
 
 def test_the_same_file_twice_is_the_same_file(team, tmp_path):
@@ -255,23 +288,25 @@ def test_the_same_file_twice_is_the_same_file(team, tmp_path):
     second = _open(alice, tmp_path, "Vendor Questionnaire.xlsx")
 
     assert first["id"] != second["id"], "two batches"
-    assert len(list((settings.upload_dir).glob("Vendor*"))) == 1, "one file"
+    kept = settings.user_upload_dir(settings.default_team, ALICE).glob("Vendor*")
+    assert len(list(kept)) == 1, "one file"
 
 
 def test_two_batches_over_one_questionnaire_fill_their_own_copies(
     team, tmp_path, answers_yes
 ):
-    """Both get their own answers back, not whichever was written last."""
-    alice, bob = as_person(ALICE), as_person(BOB)
+    """One file opened twice: both get their own answers back, not whichever
+    was written last."""
+    alice = as_person(ALICE)
     hers = _open(alice, tmp_path, "Shared.xlsx")["id"]
-    his = _open(bob, tmp_path, "Shared.xlsx")["id"]
+    again = _open(alice, tmp_path, "Shared.xlsx")["id"]
 
     alice.post(f"/api/forms/{hers}/answer", json={"scope": {}})
     written = alice.post(f"/api/forms/{hers}/fill").json()
-    empty = bob.post(f"/api/forms/{his}/fill").json()
+    empty = alice.post(f"/api/forms/{again}/fill").json()
 
     assert written["written"] > 0
-    assert empty["written"] == 0, "Bob answered nothing, so his copy holds nothing"
+    assert empty["written"] == 0, "nothing was answered there, so that copy holds nothing"
     assert alice.get(f"/api/forms/{hers}/file").status_code == 200
 
     # And the two copies are two files, so his empty fill did not replace hers.
@@ -279,24 +314,32 @@ def test_two_batches_over_one_questionnaire_fill_their_own_copies(
     from src import tools as ops
 
     mine = ops._filled_path(batch_store.load(hers))
-    theirs = ops._filled_path(batch_store.load(his))
-    assert mine != theirs
-    assert mine.exists() and theirs.exists()
-    assert mine.read_bytes() != theirs.read_bytes()
+    other = ops._filled_path(batch_store.load(again))
+    assert mine != other
+    assert mine.exists() and other.exists()
+    assert mine.read_bytes() != other.read_bytes()
 
-    alice, bob = as_person(ALICE), as_person(BOB)
+
+def test_every_step_is_attributable(team, tmp_path, answers_yes, memory_index):
+    """Who opened it, who answered it, who changed an answer and who put their
+    name to it. The work is private; the record of it is not anonymous.
+
+    This block had lost its own `def` line and was running as the tail of the
+    test above, which is why it went on passing while saying nothing.
+    """
+    alice = as_person(ALICE)
     batch_id = _open(alice, tmp_path)["id"]
     alice.post(f"/api/forms/{batch_id}/answer", json={"scope": {}})
-    question_id = bob.get(f"/api/forms/{batch_id}").json()["questions"][0]["id"]
-    bob.post(f"/api/forms/{batch_id}/answers", json={
+    question_id = alice.get(f"/api/forms/{batch_id}").json()["questions"][0]["id"]
+    alice.post(f"/api/forms/{batch_id}/answers", json={
         "question_id": question_id, "text": "Yes, every quarter, owned by the CISO.",
     })
-    bob.post(f"/api/forms/{batch_id}/approve", json={"question_id": question_id})
+    alice.post(f"/api/forms/{batch_id}/approve", json={"question_id": question_id})
 
     log = events.recent(settings.default_team, limit=50)
     kinds = {event.kind: event.actor_email for event in log}
 
     assert kinds[events.FORM_OPENED] == ALICE
     assert kinds[events.BATCH_ANSWERED] == ALICE
-    assert kinds[events.ANSWER_EDITED] == BOB
-    assert kinds[events.MEMORY_ADDED] == BOB
+    assert kinds[events.ANSWER_EDITED] == ALICE
+    assert kinds[events.MEMORY_ADDED] == ALICE

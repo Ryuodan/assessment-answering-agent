@@ -1602,7 +1602,14 @@ result without the call that produced it is a request the model API refuses, and
 from then on every turn failed.
 
 Every message now records when it was said and which file it came with, and a
-reply that changed the answers carries a **Show the answers** button. That
+reply that changed the answers carries a **Show the answers** button.
+
+The list of conversations beside them says, under each title, **when it was
+last used** -- a time today, "Yesterday", a weekday within the week, then a date
+-- and, for a conversation with a questionnaire in it, **the file's name** on a
+marked line. The title is written from the first sentence somebody typed, and
+for half of them that is "answer these"; the file is what a person recognises
+the work by. That
 button and the floating **Answers →** are the one filled, coloured control in
 the conversation: they were outlined in grey like everything in the header, and
 the answers are what the page is for.
@@ -2329,10 +2336,9 @@ Everything else lands in one SQLite file at `DB_PATH`: users, teams, sessions,
 an append-only event log, and every answered run with its evidence. Storing the
 evidence is the expensive choice — a large run is a few megabytes — and it is
 the right one, because an answer whose supporting chunks were thrown away cannot
-be audited, and auditing is most of why anyone reopens a run. Runs are scoped to
-a **team**, not a person: the team shares one knowledge base, so a colleague's
-submission to the same bank is exactly what someone needs to find before writing
-a new one.
+be audited, and auditing is most of why anyone reopens a run. A run belongs to
+the person who made it, like the questionnaire it answered -- see [A person's
+work is their own](#a-persons-work-is-their-own).
 
 Writing that history never costs answers. A run takes minutes, so a failure to
 save it is logged loudly and the answers are still returned — losing the history
@@ -2371,6 +2377,39 @@ team to `DEFAULT_TEAM` -- on this deployment all 698 answers, to `cybersecurity`
 the team the system was set up for. The existing collection is already that
 team's, so the upgrade is a restart. `tests/test_team_isolation.py` holds the
 boundary from both sides, through the routes a person uses.
+
+### A person's work is their own
+
+Inside a team, three things were shared that should not have been: the
+**conversations**, the **questionnaires** with their answers and files, and the
+**answered runs**. Every member's history listed every member's, and any of them
+could be opened by id. A questionnaire arrives from another company, usually
+under an NDA; a conversation is what somebody said while they were working --
+half-formed instructions, corrections, the file they were sent. None of that is
+the team's to read.
+
+Each of those now belongs to the person who created it, and a colleague's reads
+as absent rather than forbidden -- which ids exist is not something to learn
+from an error message. Three lookups carry it, and everything else goes through
+them: `conversations.load`, `batches.load` (behind `tools._require`, the single
+gate every operation on a questionnaire passes) and `runs.load`.
+
+Uploads follow. A questionnaire is saved under the person who uploaded it --
+`data/people/<name>-<hash>/uploads`, or `data/teams/<team>/people/…` for a
+second team -- while a **policy for the knowledge base still goes to the team's
+folder**, because that is who it answers for. The document list shows a person
+their own files and the team's; `resolve_document` applies the same rule, so a
+colleague's questionnaire cannot be opened by typing its name.
+
+Files uploaded before the split are still in the team's folder, and the batch
+that reads one says whose it is: claimed by somebody, it is theirs alone;
+claimed by nobody -- a policy, or anything put there by hand -- it stays the
+team's. Nothing had to be moved.
+
+What stays shared is what the team is bound by: the **knowledge base** and the
+**answer memory**. One person approving an answer is still how the next person
+answering that question gets it, and who approved it is still recorded on it.
+`tests/test_private_work.py` holds the line from both sides.
 
 ## Facing a network
 
@@ -2417,39 +2456,45 @@ text now, and a test uploads exactly such a name.
 
 Questionnaires arrive from other companies and are confidential, and every one
 uploaded used to stay on the server for good, with its filled copy beside it.
-Each team now has a **storage limit**, `STORAGE_LIMIT_PER_TEAM_MB` (2 GB by
-default), and the rule is deliberately lopsided:
+Each person now has a **storage limit**, `STORAGE_LIMIT_PER_USER_MB` (2 GB by
+default) -- per person because that is who a questionnaire belongs to. The rule
+is deliberately lopsided:
 
 * **Under the limit, nothing is touched**, however old it is.
-* **Over it, the work nobody has come back to longest goes first** -- the
+* **Over it, the work they have not come back to longest goes first** -- the
   uploaded questionnaire, its filled copy, and the text read out of it -- until
-  the team is under again. Between a file and its filled copy the copy goes
-  first, because pressing *Fill* writes it again and nothing brings back an
-  upload.
+  they are under again. Between a file and its filled copy the copy goes first,
+  because pressing *Fill* writes it again and nothing brings back an upload.
 
 Two things are never removed, whatever the limit says:
 
-* **A document the team's knowledge base was built from.**
+* **A document the team's knowledge base was built from.** Policies belong to
+  the team rather than to whoever uploaded them, and count against nobody.
 * **Anything used in the last `STORAGE_KEEP_DAYS` days** (30). A questionnaire
   uploaded a year ago and answered this week is in use: "last used" is the
-  later of the file's own date and the last change to any batch reading it.
+  later of the file's own date and the last change to any batch reading it --
+  anybody's batch, since two people can be reading one file from before uploads
+  were kept per person.
 
 The second rule is what makes a forgotten limit harmless. The limit is a number
-somebody chose for the usage they had then; if more people start using the
-system and nobody raises it, the team simply stays over its limit, and the log
-says so and names the setting, rather than a questionnaire disappearing from
-under the person answering it. The limit is per team, so a new team brings its
-own allowance instead of sharing the first team's.
+somebody chose for the usage they had then; if somebody's workload grows and
+nobody raises it, they simply stay over the limit, and the log says so and names
+the setting, rather than a questionnaire disappearing from under the person
+answering it. A new colleague brings their own allowance, so nothing has to be
+raised because the team grew.
 
 The answers themselves are never removed -- only files. A batch whose upload
 has gone keeps every answer, and says, when somebody presses *Fill*, that the
 file has to be uploaded again. Every removal is recorded as a `files_removed`
-event naming the files.
+event against the person, naming the files.
 
-It runs when the server starts and every hour after. Under the limit that costs
-two directory listings; the index is only opened when there is something to
-decide. `STORAGE_LIMIT_PER_TEAM_MB=0` turns it off. At the time of writing the
-security team stores 125 MB.
+Everybody is checked when the server starts and every hour after -- everybody
+who can sign in, and everybody a questionnaire is recorded against, which is not
+the same list: somebody removed from the access panel leaves their files behind,
+and those still age out. Under the limit a check costs two directory listings;
+the index is only opened when there is something to decide.
+`STORAGE_LIMIT_PER_USER_MB=0` turns it off. At the time of writing the whole
+deployment stores 125 MB.
 
 ## Cost of a request
 
@@ -2494,7 +2539,7 @@ to change:
 | `MAX_ANSWER_ATTEMPTS` | `3` | Draft/review rounds per question |
 | `MAX_CONCURRENT_QUESTIONS` | `4` | Raise carefully — Groq rate limits apply |
 | `MAX_CONCURRENT_REWRITES` | `8` | Rewordings (preferences, skills, Brief) sent at once; past it they wait |
-| `STORAGE_LIMIT_PER_TEAM_MB` | `2048` | Past it, old questionnaires and filled copies are removed; `0` turns it off -- see [Keeping storage within a limit](#keeping-storage-within-a-limit) |
+| `STORAGE_LIMIT_PER_USER_MB` | `2048` | Per person. Past it, their old questionnaires and filled copies are removed; `0` turns it off -- see [Keeping storage within a limit](#keeping-storage-within-a-limit) |
 | `STORAGE_KEEP_DAYS` | `30` | Nothing used this recently is removed, even over the limit |
 | `QUERY_EXPANSION` | `true` | Split a multi-part question into one search per part |
 | `HYBRID_SEARCH` | `false` | Fuse a BM25 pass with the dense search — see Evaluation |
@@ -3133,7 +3178,7 @@ src/
   tools.py        the operations the interface and the agent both call
   preferences.py  a person's preferences, and the built-in and personal skills
   batches.py      an uploaded questionnaire and the answers written for it
-  storage.py      each team's storage limit, and which old files go past it
+  storage.py      each person's storage limit, and which old files go past it
   store.py        SQLite: connections, schema, migrations
   credentials.py  scrypt hashing, and generating typeable access codes
   identity.py     users, teams, access codes, roles and sessions

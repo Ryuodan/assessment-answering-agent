@@ -112,18 +112,27 @@ def _row_to_conversation(row) -> Conversation:
     )
 
 
-def load(conversation_id: str, *, team_id: str | None = None) -> Conversation | None:
-    """One conversation, or None. Scoped to a team, like everything else."""
+def load(
+    conversation_id: str, *, team_id: str | None = None, actor_email: str | None = None,
+) -> Conversation | None:
+    """One conversation, or None.
+
+    A conversation belongs to the person who had it. Somebody else's reads as
+    absent rather than forbidden: which ids exist is not something a caller has
+    business learning. `actor_email=None` skips that check, for the places that
+    have already established who is asking -- or that are not a person at all,
+    like the storage housekeeping.
+    """
     conn = store.connect()
-    if team_id is None:
-        row = conn.execute(
-            "SELECT * FROM conversations WHERE conversation_id = ?", (conversation_id,)
-        ).fetchone()
-    else:
-        row = conn.execute(
-            "SELECT * FROM conversations WHERE conversation_id = ? AND team_id = ?",
-            (conversation_id, team_id),
-        ).fetchone()
+    sql = "SELECT * FROM conversations WHERE conversation_id = ?"
+    params: list[object] = [conversation_id]
+    if team_id is not None:
+        sql += " AND team_id = ?"
+        params.append(team_id)
+    if actor_email is not None:
+        sql += " AND actor_email = ?"
+        params.append(actor_email)
+    row = conn.execute(sql, params).fetchone()
     return _row_to_conversation(row) if row else None
 
 
@@ -147,21 +156,30 @@ def save(conversation: Conversation) -> None:
     conn.commit()
 
 
-def recent(team_id: str, *, limit: int = 30) -> list[dict]:
-    """The team's conversations, most recently used first."""
+def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> list[dict]:
+    """One person's conversations, most recently used first.
+
+    Theirs and nobody else's. A conversation is what somebody said while they
+    were working -- half-formed instructions, a file another company sent them,
+    corrections -- and it was listed for the whole team, so everyone read
+    everyone's. `actor_email=None` lists the team's, which only housekeeping
+    and the tests ask for.
+    """
     conn = store.connect()
-    rows = conn.execute(
-        """
+    sql = """
         SELECT conversation_id, title, batch_id, actor_email, created_at, updated_at,
                (SELECT source_name FROM form_batches b
                  WHERE b.batch_id = c.batch_id) AS source_name
           FROM conversations c
          WHERE team_id = ?
-         ORDER BY updated_at DESC, rowid DESC
-         LIMIT ?
-        """,
-        (team_id, limit),
-    ).fetchall()
+    """
+    params: list[object] = [team_id]
+    if actor_email is not None:
+        sql += " AND actor_email = ?"
+        params.append(actor_email)
+    sql += " ORDER BY updated_at DESC, rowid DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
     return [
         {
             "id": row["conversation_id"],
@@ -176,7 +194,18 @@ def recent(team_id: str, *, limit: int = 30) -> list[dict]:
     ]
 
 
-def delete(conversation_id: str) -> None:
+def delete(conversation_id: str, *, actor_email: str | None = None) -> bool:
+    """Forget one conversation. Returns whether there was one to forget.
+
+    `actor_email` is the owner it must belong to, so a delete cannot reach
+    somebody else's conversation even with the id in hand.
+    """
     conn = store.connect()
-    conn.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id,))
+    sql = "DELETE FROM conversations WHERE conversation_id = ?"
+    params: list[object] = [conversation_id]
+    if actor_email is not None:
+        sql += " AND actor_email = ?"
+        params.append(actor_email)
+    deleted = conn.execute(sql, params).rowcount
     conn.commit()
+    return bool(deleted)

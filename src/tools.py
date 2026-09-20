@@ -317,7 +317,7 @@ def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
     wanted = preferences.load(user.email).default_length
     if wanted != batch.detail:
         batches.set_detail(batch.id, wanted)
-        batch = batches.load(batch.id, team_id=user.team_id) or batch
+        batch = batches.load(batch.id, team_id=user.team_id, actor_email=user.email) or batch
     events.record(
         user, events.FORM_OPENED, subject_type=batches.SUBJECT, subject_id=batch.id,
         source_name=form.source_name, questions=len(form.questions),
@@ -329,7 +329,12 @@ def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
 
 
 def _require(user: User, batch_id: str) -> Batch:
-    batch = batches.load(batch_id, team_id=user.team_id)
+    """The one gate every operation on a questionnaire passes through.
+
+    Somebody else's questionnaire is "no questionnaire": the person who
+    uploaded it owns it and its answers.
+    """
+    batch = batches.load(batch_id, team_id=user.team_id, actor_email=user.email)
     if batch is None:
         raise ToolError(f"No questionnaire {batch_id!r}.")
     return batch

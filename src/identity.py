@@ -54,7 +54,7 @@ class NotAllowed(Exception):
 
 @dataclass(frozen=True)
 class User:
-    """A signed-in person and the team whose work they see."""
+    """A signed-in person: their own work, and the team they share a corpus with."""
 
     email: str
     team_id: str

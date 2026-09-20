@@ -8,6 +8,7 @@ looks wrong.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -204,13 +205,14 @@ class Settings(BaseSettings):
     # once lost 44 to Groq's rate limit and every lost one stayed as it was.
     max_concurrent_rewrites: int = Field(default=8, ge=1, le=64)
 
-    # Stored files per team: uploaded questionnaires and policies, and filled
-    # copies. Under the limit nothing is removed; over it, the files of the
-    # work nobody has used longest go first -- never a policy the knowledge base
-    # was built from, and never anything used in the last STORAGE_KEEP_DAYS
-    # days, whatever the limit says. Per team, so a new team brings its own
-    # allowance. 0 turns the limit off.
-    storage_limit_per_team_mb: int = Field(default=2048, ge=0)
+    # Stored files per person: the questionnaires they uploaded and the filled
+    # copies written from them. Under the limit nothing is removed; over it, the
+    # files of the work they have not used longest go first -- never a document
+    # the team's knowledge base was built from, and never anything used in the
+    # last STORAGE_KEEP_DAYS days, whatever the limit says. Per person, because
+    # that is who a questionnaire belongs to, so a new colleague brings their
+    # own allowance. 0 turns the limit off.
+    storage_limit_per_user_mb: int = Field(default=2048, ge=0)
     storage_keep_days: int = Field(default=30, ge=1)
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
@@ -296,7 +298,7 @@ class Settings(BaseSettings):
     # `1 + 2 * weight` times its similarity. 0 disables it; with query
     # expansion off it has no effect either way. See graph/state.py.
     query_agreement_weight: float = Field(default=0.15, ge=0.0, le=1.0)
-    extraction_window: int = 8000
+    extraction_window: int = 2000
 
     incomplete_list_confidence_cap: float = Field(default=0.5, ge=0.0, le=1.0)
 
@@ -366,6 +368,25 @@ class Settings(BaseSettings):
         to put in front of an assessor.
         """
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
+
+    def user_upload_dir(self, team_id: str | None, email: str) -> Path:
+        """Where one person's questionnaires are kept.
+
+        A questionnaire arrives from another company, usually under an NDA, and
+        belongs to the person working on it -- so it is not in a folder the
+        whole team's files share. Policies still are: the knowledge base is the
+        team's, and every answer is drafted from it.
+
+        The folder is named from the address so it can be read by a person
+        looking at the disk, with a hash after it so two addresses can never
+        collide and nothing in an address can shape a path.
+        """
+        if not email or not email.strip():
+            raise ValueError("A person's upload directory needs their address.")
+        settled = email.strip().casefold()
+        readable = re.sub(r"[^a-z0-9._-]+", "-", settled).strip("-.")[:40] or "person"
+        fingerprint = hashlib.sha256(settled.encode("utf-8")).hexdigest()[:10]
+        return self.team_upload_dir(team_id).parent / "people" / f"{readable}-{fingerprint}" / "uploads"
 
     def team_upload_dir(self, team_id: str | None = None) -> Path:
         """Where one team's uploads live: its policies and its questionnaires.

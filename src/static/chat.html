@@ -105,16 +105,31 @@
   .side-head .spacer { flex: 1; }
   .side-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
   .convo {
-    display: flex; align-items: center; gap: 6px; width: 100%;
+    display: flex; align-items: flex-start; gap: 6px; width: 100%;
     background: transparent; border: 0; border-radius: var(--radius-sm);
     padding: 8px 10px; text-align: start; color: var(--ink-soft); font-size: 13.5px;
   }
   .convo:hover { background: var(--surface); color: var(--ink); }
   .convo.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
-  .convo .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .convo .what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .convo .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* When it was, and -- the thing people actually scan for -- which
+     questionnaire it was about. A conversation with a file in it is a piece of
+     work; one without is a question that was asked once. */
+  .convo .when { font-size: 11.5px; color: var(--ink-faint); font-weight: 400; }
+  .convo.on .when { color: var(--accent-ink); opacity: .8; }
+  .convo .file {
+    display: inline-flex; align-items: baseline; gap: 4px; min-width: 0;
+    font-size: 11.5px; font-weight: 500; color: var(--accent-ink);
+    background: var(--accent-soft); border-radius: var(--radius-pill);
+    padding: 1px 8px; align-self: flex-start; max-width: 100%;
+  }
+  .convo.on .file { background: var(--surface); }
+  .convo .file .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .convo .forget { opacity: 0; border: 0; background: transparent; color: var(--ink-faint); padding: 0 4px; }
   .convo:hover .forget { opacity: 1; }
   .convo .forget:hover { color: var(--err); }
+  @media (hover: none) { .convo .forget { opacity: 1; } }
 
   .middle { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
@@ -1458,11 +1473,37 @@
       data.conversations.forEach((c) => {
         const row = document.createElement("button");
         row.className = "convo" + (c.id === conversationId ? " on" : "");
+        const what = document.createElement("span");
+        what.className = "what";
         const label = document.createElement("span");
         label.className = "label";
         label.textContent = c.title || "New conversation";
         label.title = c.title + (c.source_name ? " — " + c.source_name : "");
         if (Cards.isArabic(label.textContent)) label.dir = "rtl";
+        what.append(label);
+
+        const when = document.createElement("span");
+        when.className = "when";
+        when.textContent = said(c.updated_at);
+        when.title = exactly(c.updated_at);
+        what.append(when);
+
+        // The file is what a person recognises the work by -- "the Barq one" --
+        // and the list gave them a title the assistant wrote from the first
+        // sentence they typed, which for half of them is "answer these".
+        if (c.source_name) {
+          const file = document.createElement("span");
+          file.className = "file";
+          const mark = document.createElement("span");
+          mark.textContent = "📎";
+          mark.setAttribute("aria-hidden", "true");
+          const name = document.createElement("span");
+          name.className = "name";
+          name.textContent = c.source_name;
+          file.append(mark, name);
+          file.title = c.source_name;
+          what.append(file);
+        }
         const forget = document.createElement("span");
         forget.className = "forget";
         forget.textContent = "✕";
@@ -1473,13 +1514,38 @@
           if (c.id === conversationId) newConversation();
           loadHistory();
         };
-        row.append(label, forget);
+        row.append(what, forget);
         row.onclick = () => open(c.id);
         host.append(row);
       });
     } catch (error) {
       host.textContent = error.message;
     }
+  }
+
+  /* Dates the way somebody would say them: today and yesterday by the clock,
+     this year without the year, anything older with it. The stored stamp is
+     UTC to the second; `Date` renders it in the reader's own zone. */
+  function said(stamp) {
+    const at = new Date(stamp);
+    if (!stamp || isNaN(at)) return "";
+    const day = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+    const today = new Date();
+    const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = Math.round((midnight - day) / 86400000);
+    const clock = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (days <= 0) return clock;
+    if (days === 1) return "Yesterday " + clock;
+    if (days < 7) return at.toLocaleDateString([], { weekday: "long" });
+    const sameYear = at.getFullYear() === today.getFullYear();
+    return at.toLocaleDateString([], sameYear
+      ? { day: "numeric", month: "short" }
+      : { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  function exactly(stamp) {
+    const at = new Date(stamp);
+    return !stamp || isNaN(at) ? "" : "Last used " + at.toLocaleString();
   }
 
   async function open(id) {

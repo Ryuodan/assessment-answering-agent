@@ -125,27 +125,35 @@ def _row_to_summary(row) -> RunSummary:
     )
 
 
-def recent(team_id: str, *, limit: int = 25) -> list[RunSummary]:
-    """The team's runs, newest first.
+def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> list[RunSummary]:
+    """One person's runs, newest first.
 
-    Team-scoped rather than user-scoped on purpose: the team shares one
-    knowledge base and one set of answers, so a colleague's submission to the
-    same bank is exactly what someone needs to find before writing a new one.
+    These were the team's, on the reasoning that a colleague's submission to the
+    same bank is what somebody needs before writing a new one. What it meant in
+    practice is that everyone's history held everyone's questionnaires, which
+    arrive from other companies under an NDA. What the team shares is its
+    policies and its remembered answers -- both of which a new run draws on
+    whoever did the last one.
     """
     conn = store.connect()
-    rows = conn.execute(
-        _SUMMARY_SQL + " WHERE r.team_id = ? GROUP BY r.run_id ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?",
-        (team_id, max(1, limit)),
-    ).fetchall()
-    return [_row_to_summary(row) for row in rows]
+    sql = _SUMMARY_SQL + " WHERE r.team_id = ?"
+    params: list[object] = [team_id]
+    if actor_email is not None:
+        sql += " AND r.actor_email = ?"
+        params.append(actor_email)
+    sql += " GROUP BY r.run_id ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?"
+    params.append(max(1, limit))
+    return [_row_to_summary(row) for row in conn.execute(sql, params).fetchall()]
 
 
-def load(run_id: str, *, team_id: str | None = None) -> StoredRun | None:
+def load(
+    run_id: str, *, team_id: str | None = None, actor_email: str | None = None,
+) -> StoredRun | None:
     """One run with its answers, or None.
 
-    Pass `team_id` to scope the lookup: a run id from another team should read
-    as "not found" rather than "forbidden", since which ids exist is itself
-    something the caller has no business learning.
+    Scoped like everything else a person does: another team's run, or a
+    colleague's, reads as "not found" rather than "forbidden", since which ids
+    exist is itself something the caller has no business learning.
     """
     conn = store.connect()
     sql = _SUMMARY_SQL + " WHERE r.run_id = ?"
@@ -153,6 +161,9 @@ def load(run_id: str, *, team_id: str | None = None) -> StoredRun | None:
     if team_id is not None:
         sql += " AND r.team_id = ?"
         params.append(team_id)
+    if actor_email is not None:
+        sql += " AND r.actor_email = ?"
+        params.append(actor_email)
     row = conn.execute(sql + " GROUP BY r.run_id", params).fetchone()
     if row is None or row["run_id"] is None:
         return None

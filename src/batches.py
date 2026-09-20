@@ -88,12 +88,16 @@ def _row_to_batch(row) -> Batch:
     )
 
 
-def load(batch_id: str, *, team_id: str | None = None) -> Batch | None:
+def load(
+    batch_id: str, *, team_id: str | None = None, actor_email: str | None = None,
+) -> Batch | None:
     """One batch, or None.
 
-    Pass `team_id` to scope the lookup: a batch belonging to another team should
-    read as absent rather than forbidden, since which ids exist is not something
-    a caller has business learning.
+    A questionnaire belongs to the person who uploaded it, and its answers with
+    it: the file came from another company and is theirs to work on. One that
+    is somebody else's -- or another team's -- reads as absent rather than
+    forbidden, since which ids exist is not something a caller has business
+    learning. `actor_email=None` skips the owner check, for housekeeping.
     """
     conn = store.connect()
     sql = "SELECT * FROM form_batches WHERE batch_id = ?"
@@ -101,28 +105,55 @@ def load(batch_id: str, *, team_id: str | None = None) -> Batch | None:
     if team_id is not None:
         sql += " AND team_id = ?"
         params.append(team_id)
+    if actor_email is not None:
+        sql += " AND actor_email = ?"
+        params.append(actor_email)
     row = conn.execute(sql, params).fetchone()
     return _row_to_batch(row) if row else None
 
 
-def recent(team_id: str, *, limit: int = 25) -> list[dict]:
-    """The team's questionnaires, newest first, with how far each has got."""
-    conn = store.connect()
-    rows = conn.execute(
+def claimed_sources(team_id: str) -> dict[str, str]:
+    """Which uploaded file names in this team are somebody's questionnaire, and whose.
+
+    The earliest batch wins. `save_upload` gives byte-identical content one
+    name, so two people can end up reading one file, and it belongs to whoever
+    got there first rather than to both.
+    """
+    rows = store.connect().execute(
         """
+        SELECT source_path, actor_email FROM form_batches
+         WHERE team_id = ? ORDER BY created_at, rowid
+        """,
+        (team_id,),
+    ).fetchall()
+    claimed: dict[str, str] = {}
+    for row in rows:
+        claimed.setdefault(Path(row["source_path"]).name, row["actor_email"])
+    return claimed
+
+
+def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> list[dict]:
+    """One person's questionnaires, newest first, with how far each has got.
+
+    `actor_email=None` lists the team's, which nothing a person clicks asks for.
+    """
+    conn = store.connect()
+    sql = """
         SELECT b.batch_id, b.source_name, b.format, b.actor_email, b.created_at,
                b.updated_at, COUNT(a.question_id) AS answered
         FROM form_batches b
         LEFT JOIN batch_answers a ON a.batch_id = b.batch_id
         WHERE b.team_id = ?
-        GROUP BY b.batch_id
-        -- rowid breaks the tie: `created_at` is accurate to the second, and two
-        -- files uploaded together came back in an arbitrary order without it.
-        ORDER BY b.created_at DESC, b.rowid DESC
-        LIMIT ?
-        """,
-        (team_id, max(1, limit)),
-    ).fetchall()
+    """
+    params: list[object] = [team_id]
+    if actor_email is not None:
+        sql += " AND b.actor_email = ?"
+        params.append(actor_email)
+    # rowid breaks the tie: `created_at` is accurate to the second, and two
+    # files uploaded together came back in an arbitrary order without it.
+    sql += " GROUP BY b.batch_id ORDER BY b.created_at DESC, b.rowid DESC LIMIT ?"
+    params.append(max(1, limit))
+    rows = conn.execute(sql, params).fetchall()
     return [
         {
             "id": row["batch_id"],

@@ -446,7 +446,9 @@ def clear_knowledge(team_id: str | None = None) -> None:
     get_store(team_id).delete_type(SourceType.GUIDELINE)
 
 
-def save_upload(filename: str, content: bytes, team_id: str | None = None) -> Path:
+def save_upload(
+    filename: str, content: bytes, team_id: str | None = None, owner: str = "",
+) -> Path:
     """Persist an uploaded file under the configured upload directory.
 
     Only the basename is used, so a crafted filename such as `../../.env` cannot
@@ -462,7 +464,10 @@ def save_upload(filename: str, content: bytes, team_id: str | None = None) -> Pa
     document helps nobody.
     """
     settings.ensure_directories()
-    directory = settings.team_upload_dir(team_id)
+    # A questionnaire goes to the person who uploaded it; a policy for the
+    # knowledge base goes to the team, because that is who it answers for.
+    directory = (settings.user_upload_dir(team_id, owner) if owner
+                 else settings.team_upload_dir(team_id))
     directory.mkdir(parents=True, exist_ok=True)
     name = Path(filename).name
     destination = directory / name
@@ -475,32 +480,76 @@ def save_upload(filename: str, content: bytes, team_id: str | None = None) -> Pa
     return destination
 
 
-def list_documents(team_id: str | None = None) -> list[dict]:
-    """The documents a team has uploaded, for the interface to open."""
+def list_documents(team_id: str | None = None, owner: str = "") -> list[dict]:
+    """What one person may open: their own questionnaires, and the team's documents.
+
+    Everything in the team's folder used to be listed, which meant every
+    questionnaire anybody had ever uploaded. Policies still are listed for
+    everyone -- the knowledge base is the team's, an answer cites it, and the
+    citation has to open. What is hidden is a questionnaire somebody else is
+    working on.
+    """
     settings.ensure_directories()
+    paths = _document_files(settings.user_upload_dir(team_id, owner)) if owner else []
+    paths += [
+        path for path in _document_files(settings.team_upload_dir(team_id))
+        if _may_read_shared(path.name, team_id, owner)
+    ]
     documents = [
-        _document_info(path, origin="uploaded", category="uploaded")
-        for path in _document_files(settings.team_upload_dir(team_id))
+        _document_info(path, origin="uploaded", category="uploaded") for path in paths
     ]
     return sorted(documents, key=lambda document: document["name"])
 
 
-def resolve_document(origin: str, category: str, name: str, team_id: str | None = None) -> Path:
-    """Resolve a catalog document without allowing traversal outside its directory."""
+def _may_read_shared(name: str, team_id: str | None, owner: str) -> bool:
+    """Whether this person may open a file in the team's own folder.
+
+    Questionnaires are kept per person now, so what is left here is the team's:
+    the policies the knowledge base was built from, and -- from before the
+    split -- questionnaires that were uploaded into it. One of those belongs to
+    whoever opened it, and is hidden from everybody else; anything nobody has
+    opened is the team's, like the policies beside it.
+    """
+    if not owner:
+        return True  # nobody is asking: the CLI, a script, the tests
+    from src import batches
+    from src.knowledge import get_store
+
+    claimed = batches.claimed_sources(team_id or settings.default_team).get(name)
+    if claimed is None or claimed == owner:
+        return True
+    return name in set(get_store(team_id).documents_indexed())
+
+
+def resolve_document(
+    origin: str, category: str, name: str, team_id: str | None = None, owner: str = "",
+) -> Path:
+    """Resolve a catalog document without allowing traversal outside its directory.
+
+    Their own folder first, then the team's -- and there only the names
+    `list_documents` would have shown them, so a colleague's questionnaire is
+    not readable by typing its name.
+    """
     if not name or name != Path(name).name or Path(name).suffix.lower() not in SUPPORTED_SUFFIXES:
         raise ValueError("Invalid document name.")
 
     if origin != "uploaded" or category != "uploaded":
         raise ValueError("Invalid document location.")
-    directory = settings.team_upload_dir(team_id)
 
-    base = directory.resolve()
-    path = (base / name).resolve()
-    if path.parent != base:
-        raise ValueError("Invalid document path.")
-    if not path.is_file():
-        raise FileNotFoundError(name)
-    return path
+    directories = [settings.user_upload_dir(team_id, owner)] if owner else []
+    directories.append(settings.team_upload_dir(team_id))
+    for index, directory in enumerate(directories):
+        base = directory.resolve()
+        path = (base / name).resolve()
+        if path.parent != base:
+            raise ValueError("Invalid document path.")
+        if not path.is_file():
+            continue
+        their_own = index < len(directories) - 1 or not owner
+        if their_own or _may_read_shared(name, team_id, owner):
+            return path
+        break  # somebody else's: absent rather than forbidden
+    raise FileNotFoundError(name)
 
 
 async def extracted_document_text(path: str | Path) -> str:

@@ -447,7 +447,8 @@ def _tools(user: User, state: dict) -> list:
             # the other reworded the training question when asked for the one
             # after it. A place that is not in the file selects nothing rather
             # than everything: an empty id list means "no restriction".
-            batch = batches.load(_batch_id(), team_id=user.team_id) if _batch_id() else None
+            batch = (batches.load(_batch_id(), team_id=user.team_id, actor_email=user.email)
+                     if _batch_id() else None)
             order = [q.id for q in batch.form.questions] if batch else []
             placed = tuple(order[place - 1] for place in _positions(position, len(order)))
             chosen = tuple(dict.fromkeys(chosen + placed)) or ("(no question at that place)",)
@@ -1637,7 +1638,7 @@ def answers_for(user: User, conversation: Conversation) -> dict | None:
     """
     if not conversation.batch_id:
         return None
-    batch = batches.load(conversation.batch_id, team_id=user.team_id)
+    batch = batches.load(conversation.batch_id, team_id=user.team_id, actor_email=user.email)
     if batch is None:
         return None
     return tools.inspect(user, conversation.batch_id)

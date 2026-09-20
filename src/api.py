@@ -509,7 +509,7 @@ async def open_questionnaire(
             detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
                    f"Supported: {', '.join(forms.SUPPORTED)}.",
         )
-    path = service.save_upload(name, await file.read(), user.team_id)
+    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
     # In a thread: reading a workbook is a CPU-bound XML parse, and under the
     # assisted and agent strategies it is also a network call. Either way it is
     # not something to do on the event loop of a server answering other people.
@@ -519,7 +519,7 @@ async def open_questionnaire(
 
 @app.get("/api/forms")
 def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> dict:
-    return {"forms": batches.recent(user.team_id, limit=limit)}
+    return {"forms": batches.recent(user.team_id, actor_email=user.email, limit=limit)}
 
 
 @app.get("/api/forms/{batch_id}")
@@ -778,7 +778,9 @@ async def _atool(coroutine):
 @app.get("/api/runs")
 def list_runs(user: User = Depends(current_user), limit: int = 25) -> dict:
     """The team's answered runs, newest first."""
-    return {"runs": [vars(summary) for summary in runs.recent(user.team_id, limit=limit)]}
+    return {"runs": [
+        vars(summary) for summary in runs.recent(user.team_id, actor_email=user.email, limit=limit)
+    ]}
 
 
 @app.get("/api/runs/{run_id}")
@@ -788,7 +790,7 @@ def get_run(run_id: str, user: User = Depends(current_user)) -> dict:
     Scoped to the caller's team, so an id belonging to another team reads as
     absent rather than forbidden.
     """
-    stored = runs.load(run_id, team_id=user.team_id)
+    stored = runs.load(run_id, team_id=user.team_id, actor_email=user.email)
     if stored is None:
         raise HTTPException(status_code=404, detail=f"No run '{run_id}'.")
     return {
@@ -1411,13 +1413,13 @@ async def search_knowledge(
 @app.get("/api/documents")
 def get_documents(user: User = Depends(current_user)) -> dict:
     """The documents somebody has uploaded, for the interface to open."""
-    documents = service.list_documents(user.team_id)
+    documents = service.list_documents(user.team_id, owner=user.email)
     return {"documents": documents, "uploaded_count": len(documents)}
 
 
 def _resolve_document(origin: str, category: str, name: str, user: User) -> Path:
     try:
-        return service.resolve_document(origin, category, name, user.team_id)
+        return service.resolve_document(origin, category, name, user.team_id, owner=user.email)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -1517,7 +1519,9 @@ async def answer_assessment(
     identifier has to be known before the work starts to be of any use.
     """
     _check_suffix(file.filename or "")
-    path = service.save_upload(file.filename or "assessment", await file.read(), user.team_id)
+    path = service.save_upload(
+        file.filename or "assessment", await file.read(), user.team_id, owner=user.email,
+    )
 
     result = await service.answer_assessment(
         path, language=language, run_id=run_id, team_id=user.team_id,
@@ -1569,7 +1573,9 @@ async def extract_assessment(
     break, and a row of guidance can read as a question.
     """
     _check_suffix(file.filename or "")
-    path = service.save_upload(file.filename or "assessment", await file.read(), user.team_id)
+    path = service.save_upload(
+        file.filename or "assessment", await file.read(), user.team_id, owner=user.email,
+    )
 
     language, questions = await service.extract_assessment_questions(path)
     if not questions:
@@ -1788,7 +1794,9 @@ class SayRequest(BaseModel):
 
 
 def _conversation(conversation_id: str, user: User):
-    conversation = conversations.load(conversation_id, team_id=user.team_id)
+    conversation = conversations.load(
+        conversation_id, team_id=user.team_id, actor_email=user.email,
+    )
     if conversation is None:
         raise HTTPException(status_code=404, detail="That conversation no longer exists.")
     return conversation
@@ -1814,7 +1822,9 @@ def _turn_response(turn, conversation, user: User) -> dict:
 
 @app.get("/api/chat")
 def list_conversations(user: User = Depends(current_user), limit: int = 30) -> dict:
-    return {"conversations": conversations.recent(user.team_id, limit=limit)}
+    return {"conversations": conversations.recent(
+        user.team_id, actor_email=user.email, limit=limit,
+    )}
 
 
 @app.post("/api/chat")
@@ -1860,7 +1870,7 @@ async def say_with_a_file(
             detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
                    f"Supported: {', '.join(forms.SUPPORTED)}.",
         )
-    path = service.save_upload(name, await file.read(), user.team_id)
+    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
     conversation = (
         _conversation(conversation_id, user) if conversation_id
         else assistant.start(user, message or f"Read {name}")
@@ -1928,7 +1938,7 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
 @app.delete("/api/chat/{conversation_id}")
 def forget_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict:
     _conversation(conversation_id, user)
-    conversations.delete(conversation_id)
+    conversations.delete(conversation_id, actor_email=user.email)
     return {"deleted": conversation_id}
 
 
