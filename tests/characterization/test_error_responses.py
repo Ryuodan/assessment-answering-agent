@@ -30,9 +30,14 @@ ADMIN_PASSWORD = "a-long-admin-password"
 
 def body(response: Any) -> Any:
     try:
-        return response.json()
+        content = response.json()
     except ValueError:
         return response.text
+    # A fresh ID per request (plan 005): pinned as present and echoed in the header, not by value.
+    if isinstance(content, dict) and "request_id" in content:
+        assert content["request_id"] == response.headers["x-request-id"]
+        content["request_id"] = "<request-id>"
+    return content
 
 
 def record(scenarios: dict[str, Callable[[], Any]]) -> dict[str, Any]:

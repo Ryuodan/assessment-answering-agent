@@ -10,7 +10,7 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.models`, `src.progress`, `src.prompts`, `src.verification`
+- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.verification`
 
 ## 2. integrations
 
@@ -43,7 +43,7 @@ The use cases the web interface, the command line and the chat assistant share.
 
 How people and programs reach the system: the HTTP API with its pages, and the command line.
 
-- **Modules:** `src.api`, `src.cli`
+- **Modules:** `src.api`, `src.cli`, `src.web`
 - **Owns:** `fastapi`, `starlette`, `uvicorn`
 
 ## Owned by one module

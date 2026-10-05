@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 2101
+max_lines = 2045
 debt = "TD-006"
 
 [[size]]
@@ -127,3 +127,97 @@ debt = "TD-019"
 [[error]]
 class = "src.docling_client.DoclingError"
 debt = "TD-027"
+
+# Modules still logging prose through logging.getLogger (harness/log_rules.py), plan 005.
+
+[[log]]
+path = "src/agents/assistant.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/agents/excel_agent.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/answer_memory.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/conversations.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/docling_client.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/documents.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/embeddings.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/export_pdf.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/extraction.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/forms/llm_layout.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/forms/xlsx.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/graph/nodes.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/graph/workflow.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/knowledge.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/lexical.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/llm.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/memory.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/organisation.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/relevance.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/rerank.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/rewrite.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/service.py"
+debt = "TD-028"
+
+[[log]]
+path = "src/tools.py"
+debt = "TD-028"

@@ -25,17 +25,17 @@ door lock. It is not a safe.
 from __future__ import annotations
 
 import hashlib
-import logging
 import secrets
 from dataclasses import dataclass
 from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 
+from src.logs import get_logger
 from src import credentials, store
 from src.config import settings
 from src.errors import AccessDenied as AccessDenied, NotAllowed as NotAllowed
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SESSION_COOKIE = "session"
 LOCAL_EMAIL = "local@localhost"
@@ -574,15 +574,15 @@ def bootstrap() -> None:
             password=settings.admin_password,
             added_by="environment",
         )
-        logger.info("Break-glass admin %s applied from the environment.", normalise(settings.admin_email))
+        logger.info("identity.admin_applied", admin=normalise(settings.admin_email), source="environment")
     elif settings.admin_email:
-        logger.warning("ADMIN_EMAIL is set but ADMIN_PASSWORD is empty; no admin was created.")
+        logger.warning("identity.admin_not_created", reason="ADMIN_EMAIL is set but ADMIN_PASSWORD is empty")
 
     seeds = settings.allowed_emails_set
     if seeds and not _seeded_before():
         for address in sorted(seeds):
             add_user(address, team_id=settings.default_team, added_by="environment")
-        logger.info("Seeded %d member(s) from ALLOWED_EMAILS.", len(seeds))
+        logger.info("identity.members_seeded", members=len(seeds), source="ALLOWED_EMAILS")
 
     if sign_in_required():
         _remove_the_stand_in()
@@ -590,10 +590,10 @@ def bootstrap() -> None:
     if sign_in_required() and not team_has_code(settings.default_team):
         code = set_access_code(settings.default_team)
         logger.warning(
-            "No access code was set for team %r, so one was generated: %s\n"
-            "        Give it to the team, or replace it on the admin page.",
-            settings.default_team,
-            code,
+            "identity.access_code_generated",
+            team=settings.default_team,
+            code=code,  # deliberately logged once; see TD-029
+            action="give it to the team, or replace it on the admin page",
         )
 
 
@@ -608,7 +608,7 @@ def _remove_the_stand_in() -> None:
     removed = conn.execute("DELETE FROM users WHERE email = ?", (LOCAL_EMAIL,)).rowcount
     conn.commit()
     if removed:
-        logger.info("Removed the local stand-in account; people sign in here.")
+        logger.info("identity.stand_in_removed")
 
 
 def _seeded_before() -> bool:

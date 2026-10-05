@@ -43,6 +43,16 @@ one is tracked, not ignored, or changed without being re-sealed.
   writes it into `.env` and prints nothing. To rotate: unlock with the old key,
   empty the `EVAL_DATA_KEY=` line, run keygen, then `uv run poe eval-seal --force`.
 
+## Logs
+
+Every log line goes through one handler (`src/logs.py`) that replaces the
+values of `GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`,
+`ADMIN_PASSWORD` and `EVAL_DATA_KEY`, and anything shaped like an API key, with
+`[redacted]`. The per-request line records the route template, never the raw
+path or query string. Two exceptions remain, both for a decision: a generated
+team access code is logged once on upgrade (TD-029), and uvicorn's own access
+log, which bypasses this handler, records raw paths and queries (TD-031).
+
 ## Access model, in one paragraph
 
 Sign-in needs an address on the allow-list and the team's access code (an

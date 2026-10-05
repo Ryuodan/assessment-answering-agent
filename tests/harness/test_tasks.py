@@ -18,5 +18,5 @@ def test_every_task_runs_its_tool_as_python_dash_m():
 
 
 def test_the_gate_runs_tasks_that_exist_in_the_order_documented():
-    assert [name for name, _ in GATE] == ["fmt", "lint", "types", "arch", "docs", "test"]
+    assert [name for name, _ in GATE] == ["fmt", "lint", "types", "arch", "docs", "rules", "test"]
     assert all(name in TASKS for name, _ in GATE)

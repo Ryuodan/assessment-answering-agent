@@ -15,6 +15,7 @@ modules = [
     "src",
     "src.config",
     "src.errors",
+    "src.logs",
     "src.models",
     "src.formatting",
     "src.prompts",
@@ -85,6 +86,7 @@ about = "How people and programs reach the system: the HTTP API with its pages, 
 modules = [
     "src.api",
     "src.cli",
+    "src.web",
 ]
 
 # Which layers (or, for a single owner, which module) may import each IO or

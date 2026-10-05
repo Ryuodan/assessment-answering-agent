@@ -66,6 +66,7 @@ or docs and has not been verified by running anything.
 - **What:** read: stdlib logging with %-formatted sentences, no event names, no request IDs. `src/config.py` configures tracing (LangSmith, Phoenix) when it is imported and owns `logging.basicConfig`.
 - **Impact:** logs cannot be filtered by event or followed through a request; importing settings patches LangChain, which is why `tests/conftest.py` must set `PHOENIX_TRACING` before importing anything.
 - **Fix:** structured logs with event names and request IDs, and tracing started from the entry points rather than from config (Phase 2 and 4 plans).
+- **Partly resolved** 2026-10-05 (plan 005, D-014): structured logs with event names and request IDs exist (`src/logs.py`, `src/web.py`); `configure_logging` delegates to them. Remaining: tracing is still started when `src/config.py` is imported, and most modules still log prose (TD-028).
 - **Update** 2026-10-05 (plan 003): `src/config.py` importing `phoenix` and `openinference` is allow-listed under ARCH-OWNER against this item.
 
 ## TD-010: Possibly unused definitions
@@ -185,7 +186,7 @@ or docs and has not been verified by running anything.
 
 ## TD-028: Most modules still log prose sentences
 
-- **What:** measured 2026-10-05: 90 log calls in 24 modules of `src/`, each a %-formatted sentence with no event name. Plan 005 converts `api`, `storage`, `identity` and `config`; the others are allow-listed in ARCH-LOG.
+- **What:** measured 2026-10-05: 90 log calls in 24 modules of `src/`, each a %-formatted sentence with no event name. Plan 005 converted `api`, `storage`, `identity` and `config` (22 calls); 23 modules that make a standard-library logger (some never call it) are allow-listed in ARCH-LOG.
 - **Impact:** their lines cannot be filtered by event or read as fields; they still carry the request ID, which the logging filter adds to every record.
 - **Fix:** convert a module whenever it is next changed (`get_logger`, an event name, keyword fields), then delete its allow-list entry.
 
@@ -194,3 +195,15 @@ or docs and has not been verified by running anything.
 - **What:** read 2026-10-05 (Claude): on an upgrade where a team has no access code, `identity.bootstrap` generates one and logs it once at WARNING, in plaintext, so that someone can read it off the log ("Setting it up, and upgrading into it" in the README).
 - **Impact:** a credential sits in `logs/server.log`, and in anything that collects logs, for as long as they are kept.
 - **Fix (needs a decision):** show it once some other way (the admin page already issues codes; or print it to the console only, not the log file), or accept it as the documented break-glass path. Not changed: it is how an upgrade avoids locking everyone out.
+
+## TD-030: Real customer names in code, tests and the README
+
+- **What:** found 2026-10-05 (Claude, plan 005), counted without reading the passages: one customer's name appears in `src/static/chat.html` (1), `tests/test_private_work.py` (9) and `tests/test_storage.py` (3); another's in `README.md`, `src/formatting.py`, `tests/test_formatting.py` and `tests/test_tools.py` (1 each). Both are customers in the sealed house set.
+- **Impact:** the repository says who the customers are, which the sealing of the eval data (plan 002) was meant to keep out of git.
+- **Fix (needs a decision):** replace them with invented names (behaviour-neutral in tests and comments), and decide whether a check should refuse them; such a check would need the names without committing them, for example by comparing hashes or by reading the sealed data when it is unlocked.
+
+## TD-031: uvicorn's access log writes every raw path and query string
+
+- **What:** read 2026-10-05 (Claude): `serve.sh` and `run.sh` start uvicorn with its default access log, which writes `GET /api/documents/uploaded/uploaded/<file name>/file` and `GET /api/search?q=<search text>` lines to `logs/server.log` through uvicorn's own handler, so neither the redaction nor the route-template rule of `src/logs.py` applies. Since plan 005, `http.request` records every request without those details.
+- **Impact:** customer file names and search text are kept in the server log.
+- **Fix (needs a decision):** start uvicorn with `--no-access-log` in both scripts, relying on `http.request`.

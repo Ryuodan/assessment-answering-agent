@@ -122,6 +122,7 @@ source. The description is the comment above the field, the field's
 | `EXTRACTION_WINDOW` | `int` | `2000` |  |
 | `INCOMPLETE_LIST_CONFIDENCE_CAP` | `float` | `0.5` |  |
 | `LOG_LEVEL` | `str` | `"INFO"` |  |
+| `LOG_FORMAT` | `str` | `"text"` | How log lines are written: "text" for a person at a terminal, "json" for one object per line where a log collector reads them (src/logs.py). |
 
 ## Identity and history (Phase 0)
 

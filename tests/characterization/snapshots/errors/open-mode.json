@@ -2,63 +2,72 @@
   "assistant without a model": {
     "body": {
       "code": "assistant_unconfigured",
-      "detail": "No model is configured for the assistant."
+      "detail": "No model is configured for the assistant.",
+      "request_id": "<request-id>"
     },
     "status": 503
   },
   "conversation not found": {
     "body": {
       "code": "conversation_not_found",
-      "detail": "That conversation no longer exists."
+      "detail": "That conversation no longer exists.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "document location invalid": {
     "body": {
       "code": "document_path_invalid",
-      "detail": "Invalid document location."
+      "detail": "Invalid document location.",
+      "request_id": "<request-id>"
     },
     "status": 400
   },
   "document name invalid": {
     "body": {
       "code": "document_path_invalid",
-      "detail": "Invalid document name."
+      "detail": "Invalid document name.",
+      "request_id": "<request-id>"
     },
     "status": 400
   },
   "document not found": {
     "body": {
       "code": "document_not_found",
-      "detail": "Document 'missing.pdf' was not found."
+      "detail": "Document 'missing.pdf' was not found.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "export with nothing confident": {
     "body": {
       "code": "nothing_to_export",
-      "detail": "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts."
+      "detail": "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "memory entry not found": {
     "body": {
       "code": "memory_entry_not_found",
-      "detail": "No such entry in the answer memory."
+      "detail": "No such entry in the answer memory.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "policy to remove not found": {
     "body": {
       "code": "source_not_found",
-      "detail": "'missing.pdf' is not in the knowledge base."
+      "detail": "'missing.pdf' is not in the knowledge base.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "policy upload of an unsupported type": {
     "body": {
       "code": "document_type_unsupported",
-      "detail": "'notes.txt' is not supported. Upload .pdf or .docx."
+      "detail": "'notes.txt' is not supported. Upload .pdf or .docx.",
+      "request_id": "<request-id>"
     },
     "status": 415
   },
@@ -75,49 +84,56 @@
           "msg": "Field required",
           "type": "missing"
         }
-      ]
+      ],
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "preference refused": {
     "body": {
       "code": "preference_invalid",
-      "detail": "Write what to call us without quotation marks."
+      "detail": "Write what to call us without quotation marks.",
+      "request_id": "<request-id>"
     },
     "status": 400
   },
   "preview of a corrupt Word file": {
     "body": {
       "code": "preview_failed",
-      "detail": "Could not preview 'corrupt.docx': it could not be read as a Word document."
+      "detail": "Could not preview 'corrupt.docx': it could not be read as a Word document.",
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "progress not found": {
     "body": {
       "code": "run_not_in_progress",
-      "detail": "No run in progress with id 'nope'."
+      "detail": "No run in progress with id 'nope'.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "questionnaire not found": {
     "body": {
       "code": "questionnaire_not_found",
-      "detail": "No questionnaire 'nope'."
+      "detail": "No questionnaire 'nope'.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "questionnaire that cannot be read": {
     "body": {
       "code": "questionnaire_unreadable",
-      "detail": "broken.xlsx is not a readable .xlsx file."
+      "detail": "broken.xlsx is not a readable .xlsx file.",
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "questionnaire with an unsupported suffix": {
     "body": {
       "code": "questionnaire_type_unsupported",
-      "detail": ".txt is not a questionnaire this can read. Supported: .docx, .xlsm, .xlsx."
+      "detail": ".txt is not a questionnaire this can read. Supported: .docx, .xlsm, .xlsx.",
+      "request_id": "<request-id>"
     },
     "status": 400
   },
@@ -137,49 +153,56 @@
           "msg": "String should match pattern '^(as_drafted|formal|plain)$'",
           "type": "string_pattern_mismatch"
         }
-      ]
+      ],
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "run not found": {
     "body": {
       "code": "run_not_found",
-      "detail": "No run 'nope'."
+      "detail": "No run 'nope'.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "search mode unknown": {
     "body": {
       "code": "search_mode_unknown",
-      "detail": "unknown search mode 'bogus'"
+      "detail": "unknown search mode 'bogus'",
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "skill not found": {
     "body": {
       "code": "skill_not_found",
-      "detail": "You have no skill like that."
+      "detail": "You have no skill like that.",
+      "request_id": "<request-id>"
     },
     "status": 404
   },
   "text of a corrupt Word file": {
     "body": {
       "code": "extraction_failed",
-      "detail": "Could not extract text from 'corrupt.docx'."
+      "detail": "Could not extract text from 'corrupt.docx'.",
+      "request_id": "<request-id>"
     },
     "status": 422
   },
   "unexpected failure": {
     "body": {
       "code": "internal_error",
-      "detail": "Something went wrong on the server. The details are in its log."
+      "detail": "Something went wrong on the server. The details are in its log.",
+      "request_id": "<request-id>"
     },
     "status": 500
   },
   "unknown route": {
     "body": {
       "code": "route_not_found",
-      "detail": "Not Found"
+      "detail": "Not Found",
+      "request_id": "<request-id>"
     },
     "status": 404
   }

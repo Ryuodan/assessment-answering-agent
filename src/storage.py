@@ -31,16 +31,16 @@ uploaded again.
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from src.logs import get_logger
 from src import events, store
 from src.config import settings
 from src.identity import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CHECK_EVERY_SECONDS = 60 * 60
 """How often everybody is checked while the server runs. Uploads are a few a
@@ -222,7 +222,7 @@ def enforce(person: Person, *, now: datetime | None = None) -> Checked:
                 _extracted_text_cache_path(item.path).unlink(missing_ok=True)
             item.path.unlink()
         except OSError:
-            logger.warning("Storage: could not remove %s", item.path, exc_info=True)
+            logger.warning("storage.remove_failed", file=str(item.path), exc_info=True)
             continue
         checked.used_bytes -= item.size
         checked.freed_bytes += item.size
@@ -232,11 +232,11 @@ def enforce(person: Person, *, now: datetime | None = None) -> Checked:
 
     if checked.removed:
         logger.info(
-            "Storage: %s was over the %d MB limit; removed %d old file(s), %.1f MB.",
-            person.email,
-            settings.storage_limit_per_user_mb,
-            len(checked.removed),
-            checked.freed_bytes / MB,
+            "storage.files_removed",
+            person=person.email,
+            limit_mb=settings.storage_limit_per_user_mb,
+            files=len(checked.removed),
+            freed_mb=round(checked.freed_bytes / MB, 1),
         )
         events.record(
             User(email=person.email, team_id=person.team_id),
@@ -250,13 +250,13 @@ def enforce(person: Person, *, now: datetime | None = None) -> Checked:
         )
     if checked.over:
         logger.warning(
-            "Storage: %s is using %.0f MB, over the %d MB limit. Everything left is either in "
-            "the knowledge base or was used in the last %d days, so nothing more was removed. "
-            "Raise STORAGE_LIMIT_PER_USER_MB if they need the room.",
-            person.email,
-            checked.used_bytes / MB,
-            settings.storage_limit_per_user_mb,
-            settings.storage_keep_days,
+            "storage.over_limit",
+            person=person.email,
+            used_mb=round(checked.used_bytes / MB),
+            limit_mb=settings.storage_limit_per_user_mb,
+            keep_days=settings.storage_keep_days,
+            reason="everything left is in the knowledge base or was used recently",
+            fix="raise STORAGE_LIMIT_PER_USER_MB if they need the room",
         )
     return checked
 
@@ -288,7 +288,7 @@ def enforce_all() -> list[Checked]:
         try:
             results.append(enforce(person))
         except Exception:  # noqa: BLE001 - one person's check must not stop the others'
-            logger.exception("Storage: could not check %s", person.email)
+            logger.exception("storage.check_failed", person=person.email)
     return results
 
 
@@ -298,5 +298,5 @@ async def keep_within_limits(every: float = CHECK_EVERY_SECONDS) -> None:
         try:
             await asyncio.to_thread(enforce_all)
         except Exception:  # noqa: BLE001 - housekeeping must never take the server down
-            logger.exception("Storage: the check failed")
+            logger.exception("storage.sweep_failed")
         await asyncio.sleep(every)

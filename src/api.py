@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import unicodedata
 import uuid
 from functools import lru_cache
@@ -17,14 +16,13 @@ from urllib.parse import quote
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
-from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from src import web
+from src.logs import get_logger
 from src import (
     answer_memory,
     batches,
@@ -47,7 +45,6 @@ from src.identity import User
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
 from src.errors import (
-    AppError,
     Forbidden,
     Invalid,
     NotFound,
@@ -70,7 +67,7 @@ from src.models import (
 )
 
 configure_logging()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -135,9 +132,9 @@ _detect_language = detect_question_language
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings.ensure_directories()
-    logger.info("Chat model: %s | Embeddings: %s", settings.groq_chat_model, settings.embedding_model)
+    logger.info("startup.models", chat_model=settings.groq_chat_model, embedding_model=settings.embedding_model)
     if not settings.groq_api_key:
-        logger.warning("GROQ_API_KEY is not set — answering will fail until it is.")
+        logger.warning("startup.no_model_key", setting="GROQ_API_KEY", effect="answering will fail")
 
     store.connect()  # applies the schema before the first request rather than during it
     identity.bootstrap()
@@ -145,19 +142,17 @@ async def lifespan(_: FastAPI):
     identity.purge_old_attempts()
     if identity.sign_in_required():
         logger.info(
-            "Sign-in required; %d user(s), %d admin(s).",
-            len(identity.list_users()),
-            identity.admin_count(),
+            "startup.sign_in_required",
+            users=len(identity.list_users()),
+            admins=identity.admin_count(),
         )
         if not identity.admin_count():
-            logger.warning(
-                "No administrator exists, so nobody can manage access. Set ADMIN_EMAIL and ADMIN_PASSWORD and restart."
-            )
+            logger.warning("startup.no_administrator", fix="set ADMIN_EMAIL and ADMIN_PASSWORD and restart")
     else:
         logger.warning(
-            "No users have been added — the API is open and every action will be "
-            "attributed to %s. Add someone before exposing this beyond localhost.",
-            identity.LOCAL_EMAIL,
+            "startup.open_access",
+            acting_as=identity.LOCAL_EMAIL,
+            fix="add someone before exposing this beyond localhost",
         )
     housekeeping = asyncio.create_task(storage.keep_within_limits())
     try:
@@ -175,58 +170,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
-
-
-# Every error response has the same shape: {"detail": <message>, "code": <code>}.
-# `detail` is what a person reads (the pages show it); `code` is stable, for a
-# client or a test to branch on. See src/errors.py and docs/generated/errors.md.
-
-# Codes for the errors FastAPI raises itself (an unknown route, a wrong method).
-_FRAMEWORK_CODES = {404: "route_not_found", 405: "method_not_allowed"}
-
-
-@app.exception_handler(AppError)
-async def _app_error(request: Request, error: AppError) -> JSONResponse:
-    """An error the application raised on purpose: its message is safe to show."""
-    if error.status >= 500:
-        logger.warning("%s on %s %s: %s", error.code, request.method, request.url.path, error.message)
-    return JSONResponse(status_code=error.status, content={"detail": error.message, "code": error.code})
-
-
-@app.exception_handler(StarletteHTTPException)
-async def _framework_error(request: Request, error: StarletteHTTPException) -> JSONResponse:
-    """FastAPI's own refusals, given a code like everything else."""
-    code = _FRAMEWORK_CODES.get(error.status_code, "http_error")
-    return JSONResponse(
-        status_code=error.status_code,
-        content={"detail": error.detail, "code": code},
-        headers=getattr(error, "headers", None),
-    )
-
-
-@app.exception_handler(RequestValidationError)
-async def _invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
-    """A body or parameter that does not match its model: FastAPI's detail, plus a code."""
-    return JSONResponse(
-        status_code=422, content={"detail": jsonable_encoder(error.errors()), "code": "validation_failed"}
-    )
-
-
-@app.exception_handler(Exception)
-async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-    """Turn an unexpected failure into a clean 500 rather than a traceback.
-
-    Everything below this line talks to something that can be down -- Chroma,
-    the embedding host, Groq, Docling, the disk. Without a handler FastAPI
-    returns the default error page, which carries file paths from the server
-    into the browser and tells the person nothing they can act on. The detail
-    stays in the log, where it belongs.
-    """
-    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Something went wrong on the server. The details are in its log.", "code": "internal_error"},
-    )
+web.install(app)
 
 
 # ---------------------------------------------------------------------------
@@ -1221,10 +1165,10 @@ async def _scan_memory() -> None:
             try:
                 found = await answer_memory.scan_pending(limit=200)
             except Exception:  # noqa: BLE001 - a background sweep must not take the app down
-                logger.exception("The answer-memory sweep failed")
+                logger.exception("memory.sweep_failed")
                 return
             if found:
-                logger.info("Answer memory: %d finding(s) from the sweep", len(found))
+                logger.info("memory.sweep_found", findings=len(found))
             if not _sweep["again"]:
                 return
     finally:
@@ -1543,7 +1487,7 @@ def preview_document(origin: str, category: str, name: str, user: User = Depends
     try:
         preview = service.docx_preview_html(path)
     except Exception as exc:  # noqa: BLE001 - normalize malformed Word files for the web client
-        logger.exception("Could not preview %s", path.name)
+        logger.exception("document.preview_failed", document=path.name)
         raise Unprocessable(
             f"Could not preview '{path.name}': it could not be read as a Word document.", code="preview_failed"
         ) from exc
@@ -1564,7 +1508,7 @@ async def view_extracted_text(origin: str, category: str, name: str, user: User 
     try:
         text = await service.extracted_document_text(path)
     except Exception as exc:  # noqa: BLE001 - normalize converter failures for the web client
-        logger.exception("Could not extract text from %s", path.name)
+        logger.exception("document.extraction_failed", document=path.name)
         raise Unprocessable(f"Could not extract text from '{path.name}'.", code="extraction_failed") from exc
     return {"name": path.name, "text": text, "characters": len(text)}
 
@@ -1595,7 +1539,7 @@ def _persist_run(user: User, result: AssessmentResult) -> None:
             errors=sum(1 for answer in result.answers if answer.error),
         )
     except Exception:
-        logger.exception("Could not save run %s; the answers were still returned.", result.run_id)
+        logger.exception("run.save_failed", run_id=result.run_id, effect="the answers were still returned")
 
 
 @app.post("/api/assessments/answer")

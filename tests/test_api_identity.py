@@ -364,7 +364,7 @@ def test_a_failure_to_save_does_not_lose_the_answers(client, monkeypatch, caplog
     )
     assert response.status_code == 200
     assert response.json()["answers"][0]["answer"] == "Yes."
-    assert "Could not save run" in caplog.text
+    assert "run.save_failed" in caplog.text
 
 
 @pytest.mark.usefixtures("gated")

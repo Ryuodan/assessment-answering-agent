@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     write(tmp_path, "src/config.py", CONFIG)
-    write(tmp_path, "src/app.py", "import logging\n\nlogger = logging.getLogger(__name__)\n")
+    write(tmp_path, "src/app.py", "from src.logs import get_logger\n\nlogger = get_logger(__name__)\n")
     write(tmp_path, ".env.example", "GROQ_API_KEY=\n# MAX_EVIDENCE_CHUNKS=14\n")
     write(tmp_path, "docs/plans/tech-debt.md", "# Debt\n\n## TD-001: big modules\n")
     return tmp_path

@@ -53,4 +53,6 @@ def test_the_api_answers_every_app_error_the_same_way():
 
     response = TestClient(app).get("/api/runs/does-not-exist")
     assert response.status_code == 404
-    assert response.json() == {"detail": "No run 'does-not-exist'.", "code": "run_not_found"}
+    body = response.json()
+    assert body == {"detail": "No run 'does-not-exist'.", "code": "run_not_found", "request_id": body["request_id"]}
+    assert body["request_id"] == response.headers["x-request-id"]

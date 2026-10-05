@@ -65,6 +65,19 @@ an internal exception goes to the log, never to the response. Every class and
 code: [docs/generated/errors.md](docs/generated/errors.md). ARCH-ERROR keeps
 new exceptions inside the hierarchy.
 
+## Logs and request IDs
+
+Application code logs events, not sentences (D-014): `logger = get_logger(__name__)`,
+then `logger.info("storage.files_removed", person=email, files=3)`. `src/logs.py`
+writes them as text or one JSON object per line (`LOG_FORMAT`), adds the request
+ID to every record made during a request, and redacts configured secrets and
+key-shaped strings from every line. `src/web.py` assigns the ID (or keeps a
+well-formed `X-Request-ID` from a proxy), returns it in the `X-Request-ID`
+header and in every error body, and logs each request once as `http.request`
+with its route template. To follow a failure: take `request_id` from the error
+the person saw and search the log for it. Modules not yet converted
+(TD-028) still log prose, but their lines carry the ID too.
+
 ## The browser
 
 `src/static/` holds the workbench (`index.html`), the chat, memory and

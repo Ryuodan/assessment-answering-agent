@@ -185,3 +185,29 @@ reorganised (roadmap M4).
   by their modules), which also took 75 lines out of the oversized modules.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user approved
   the plan; the design is Claude's.
+
+## D-014: structured logs with event names, and a request ID everywhere
+
+- **Context:** 90 prose log calls with no event names, no request context,
+  `logging.basicConfig` in `src/config.py`, and errors a person could not
+  match to a log line (TD-009).
+- **Decision:** `src/logs.py` wraps the standard library: `get_logger(name)`
+  gives a logger whose calls take a dotted event name and keyword fields; one
+  handler writes `text` or `json` (`LOG_FORMAT`); a filter adds the current
+  request's ID to every record, from any logger; the formatter replaces
+  configured secret values and key-shaped strings with `[redacted]`.
+  `src/web.py` gives every request an ID (a well-formed `X-Request-ID` is kept),
+  returns it in the response header and every error body, and logs each
+  request once as `http.request` with the route template, never the raw path
+  or query string. ARCH-LOG stops new prose logging; unconverted modules are
+  allow-listed (TD-028).
+- **Alternatives considered (Claude):** structlog (rejected: a dependency for
+  what four small classes do); logging the raw path (rejected: file names and
+  search text can be a customer's).
+- **Consequences:** an event's record message is its rendered form, so any
+  handler (pytest's capture included) shows the fields. The error-response
+  snapshots gained `request_id` and nothing else, compared as data. The
+  catch-all 500 runs outside the middleware, so it re-enters the request's
+  context to log under the same ID.
+- **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user chose
+  this plan; the design is Claude's.

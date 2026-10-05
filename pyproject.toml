@@ -149,6 +149,7 @@ types-baseline = { cmd = "python -m harness.typecheck --shrink", help = "Drop fi
 arch = { cmd = "python -m harness.arch", help = "Architecture invariants (rule IDs in harness/arch.py)" }
 docs = { cmd = "python -m harness.docs", help = "Docs exist, links resolve, nothing orphaned, plans well-formed" }
 gen = { cmd = "python -m harness.gen", help = "Regenerate docs/generated/ (never edit those by hand)" }
+rules = { cmd = "python -m pytest tests/harness -q", help = "The checks' own tests, fast, before the full suite" }
 test = { cmd = "python -m pytest -q", help = "Offline test suite (live_ai tests excluded)" }
 snapshots = { cmd = "python -m pytest tests/characterization -q", env = { UPDATE_SNAPSHOTS = "1" }, help = "Re-record characterization snapshots (then review git diff)" }
 cov = { cmd = "python -m pytest -q --cov=src --cov=harness --cov-report=term", help = "Line coverage per module (measured, not gated)" }

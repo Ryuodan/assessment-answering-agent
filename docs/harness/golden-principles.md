@@ -15,7 +15,7 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-06 | No `print` in `src/` outside `src/cli.py`; use logging. | `arch` ARCH-PRINT |
 | GP-07 | Configuration is read only in `src/config.py`. | `arch` ARCH-ENV |
 | GP-08 | Every setting is listed in `.env.example`, and nothing else is. | `arch` ARCH-ENVEX |
-| GP-09 | No secrets in tracked files. | `arch` ARCH-SECRET; review for logs |
+| GP-09 | No secrets in tracked files or in logs. | `arch` ARCH-SECRET for files; `src/logs.py` redaction for logs (`tests/test_logs.py`); review for TD-029 |
 | GP-10 | Every doc is reachable from `CLAUDE.md`, and every link resolves. | `docs` DOCS-LINK, DOCS-ANCHOR, DOCS-ORPHAN |
 | GP-11 | Every plan has the required sections and a status matching its folder. | `docs` DOCS-PLAN |
 | GP-12 | Generated docs are produced by `uv run poe gen`, never edited by hand, never stale. | `test` (`tests/harness/test_generated.py`) |
@@ -28,3 +28,4 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-19 | Imports go down the layers of `harness/layers.toml`, never up, and every module has a layer. | `arch` ARCH-LAYER |
 | GP-20 | An IO or framework library is imported only by the layer that owns it. | `arch` ARCH-OWNER |
 | GP-21 | Errors are `AppError`s with a stable code and a message safe to show; internal exception text goes to the log, never into a response. | `arch` ARCH-ERROR; `tests/test_errors.py`; review for message content |
+| GP-22 | Application code logs events (`get_logger`, a dotted event name, keyword fields), and a request's ID is on its log lines, its response header and its error body. | `arch` ARCH-LOG; `tests/test_web.py` |

@@ -16,6 +16,7 @@ Rules (each violation prints rule, file:line and a FIX line):
     ARCH-LAYER   an import against the layers of src/ (harness/layers.py)
     ARCH-OWNER   an IO or framework library imported outside its owning layer
     ARCH-ERROR   an exception outside src/errors.py's hierarchy (harness/error_rules.py)
+    ARCH-LOG     prose logging instead of events (harness/log_rules.py)
     ARCH-SEALED  sealed eval data (eval/sealed/): a plaintext is tracked or not
                  gitignored, differs from its sealed copy, or a sealed file is missing
 
@@ -36,7 +37,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from harness import error_rules, layers
+from harness import error_rules, layers, log_rules
 from harness.report import ROOT, Violation, finish
 
 MAX_LINES = 400
@@ -74,6 +75,7 @@ class Allowlist:
     layer: dict[tuple[str, str], str] = field(default_factory=dict)  # (module, imported module) -> debt
     owner: dict[tuple[str, str], str] = field(default_factory=dict)  # (module, library) -> debt
     error: dict[str, str] = field(default_factory=dict)  # qualified class name -> debt
+    log: dict[str, str] = field(default_factory=dict)  # path -> debt
 
     @classmethod
     def load(cls, path: Path) -> Allowlist:
@@ -87,6 +89,7 @@ class Allowlist:
             layer={(e["module"], e["imports"]): e["debt"] for e in data.get("layer", [])},
             owner={(e["module"], e["library"]): e["debt"] for e in data.get("owner", [])},
             error={e["class"]: e["debt"] for e in data.get("error", [])},
+            log={e["path"]: e["debt"] for e in data.get("log", [])},
         )
 
 
@@ -341,6 +344,7 @@ def check_allowlist_debts(root: Path, allow: Allowlist) -> list[Violation]:
     named += [(f"{m} -> {i}", d) for (m, i), d in allow.layer.items()]
     named += [(f"{m} -> {lib}", d) for (m, lib), d in allow.owner.items()]
     named += list(allow.error.items())
+    named += list(allow.log.items())
     return [
         Violation(
             "ARCH-ALLOW",
@@ -491,6 +495,25 @@ def check_errors(root: Path, allow: Allowlist) -> list[Violation]:
     return violations
 
 
+def check_logs(root: Path, allow: Allowlist) -> list[Violation]:
+    """ARCH-LOG, plus allow-list entries it no longer needs."""
+    if not (root / "src").is_dir():
+        return []
+    violations, used = log_rules.check(root, allow.log)
+    violations += [
+        Violation(
+            "ARCH-ALLOW",
+            "harness/arch-allowlist.toml",
+            1,
+            f"[[log]] {path} no longer makes a standard-library logger",
+            f"delete that entry, and mark {debt} resolved when the list is empty",
+        )
+        for path, debt in allow.log.items()
+        if path not in used
+    ]
+    return violations
+
+
 def rel_to(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
@@ -506,6 +529,7 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
         + check_sealed(root, indexed_files(root), git_ignores(root))
         + check_layers(root, allow)
         + check_errors(root, allow)
+        + check_logs(root, allow)
     )
 
 

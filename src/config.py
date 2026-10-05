@@ -9,7 +9,6 @@ looks wrong.
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import re
 from pathlib import Path
@@ -17,7 +16,11 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.logs import configure as configure_logs
+from src.logs import get_logger
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+logger = get_logger(__name__)
 
 
 class Settings(BaseSettings):
@@ -323,6 +326,9 @@ class Settings(BaseSettings):
     incomplete_list_confidence_cap: float = Field(default=0.5, ge=0.0, le=1.0)
 
     log_level: str = "INFO"
+    # How log lines are written: "text" for a person at a terminal, "json" for
+    # one object per line where a log collector reads them (src/logs.py).
+    log_format: str = Field(default="text", pattern="^(text|json)$")
 
     # --- Identity and history (Phase 0) ------------------------------------
     # One SQLite file holds users, teams, sessions, the event log and answered
@@ -452,9 +458,7 @@ def configure_tracing() -> bool:
     if not settings.langsmith_tracing:
         return False
     if not settings.langsmith_api_key:
-        logging.getLogger(__name__).warning(
-            "LANGSMITH_TRACING is on but LANGSMITH_API_KEY is empty; traces will not be sent."
-        )
+        logger.warning("tracing.langsmith_not_started", setting="LANGSMITH_API_KEY", reason="the key is empty")
         return False
 
     for name, value in (
@@ -492,15 +496,14 @@ def start_phoenix_tracing() -> bool:
     if not settings.phoenix_tracing:
         return False
 
-    logger = logging.getLogger(__name__)
     try:
         from openinference.instrumentation.langchain import LangChainInstrumentor
         from phoenix.otel import register
     except ImportError as error:
         logger.warning(
-            "PHOENIX_TRACING is on but the tracing packages are not installed "
-            '(%s). Install them with: uv pip install -e ".[phoenix]"',
-            error,
+            "tracing.phoenix_not_started",
+            reason=f"packages missing ({error})",
+            fix='uv pip install -e ".[phoenix]"',
         )
         return False
 
@@ -524,28 +527,30 @@ _PHOENIX_ON = start_phoenix_tracing()
 
 
 def configure_logging() -> None:
-    """Apply the configured log level once, at process start."""
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    """Configure logging once, at process start: level, format, and what to redact."""
+    configure_logs(
+        settings.log_level,
+        settings.log_format,
+        secrets=[
+            settings.groq_api_key,
+            settings.langsmith_api_key,
+            settings.embedding_api_key,
+            settings.admin_password,
+            settings.eval_data_key,
+        ],
     )
-    # Chroma and httpx are chatty at INFO; they only matter when debugging.
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("chromadb").setLevel(logging.WARNING)
 
     if _TRACING_ON:
-        logging.getLogger(__name__).warning(
-            "LangSmith tracing is ON — project %r at %s. Prompts, and so the "
-            "policy text retrieved to answer each question, are sent there. "
-            "LangSmith has no Saudi region, so this leaves the country.",
-            settings.langsmith_project,
-            settings.langsmith_endpoint,
+        logger.warning(
+            "tracing.langsmith_on",
+            project=settings.langsmith_project,
+            endpoint=settings.langsmith_endpoint,
+            note="prompts, and the policy text in them, leave the country",
         )
     if _PHOENIX_ON:
-        logging.getLogger(__name__).info(
-            "Phoenix tracing is ON — project %r to %s. Traces stay on this "
-            "machine, and they carry the policy text and the questionnaire, so "
-            "Phoenix's own store is as sensitive as the corpus.",
-            settings.phoenix_project,
-            settings.phoenix_endpoint,
+        logger.info(
+            "tracing.phoenix_on",
+            project=settings.phoenix_project,
+            endpoint=settings.phoenix_endpoint,
+            note="traces stay on this machine and are as sensitive as the corpus",
         )
