@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     # should not mark its own homework.
     eval_judge_model: str = "openai/gpt-oss-120b"
 
+    # --- Sealed evaluation data ---------------------------------------------
+    # Key for eval/sealed/ (eval/vault.py): URL-safe base64 of 32 bytes. Read
+    # only by the evaluation tooling, never by the application. Empty means the
+    # house set and the answer memory cannot be unlocked on this machine.
+    eval_data_key: str = ""
+
     # --- Tracing (LangSmith) -----------------------------------------------
     # Every LLM call, retrieval and graph step recorded as a trace.
     #

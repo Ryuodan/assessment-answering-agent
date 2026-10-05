@@ -19,6 +19,12 @@ source. The description is the comment above the field, the field's
 | `LLM_TEMPERATURE` | `float` | `0.0` |  |
 | `EVAL_JUDGE_MODEL` | `str` | `"openai/gpt-oss-120b"` | Grading model for eval/. Deliberately not the drafting model: a system should not mark its own homework. |
 
+## Sealed evaluation data
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `EVAL_DATA_KEY` | `str` | `""` | Key for eval/sealed/ (eval/vault.py): URL-safe base64 of 32 bytes. Read only by the evaluation tooling, never by the application. Empty means the house set and the answer memory cannot be unlocked on this machine. |
+
 ## Tracing (LangSmith)
 
 | Variable | Type | Default | Description |

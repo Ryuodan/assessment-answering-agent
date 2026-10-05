@@ -2657,6 +2657,11 @@ questionnaires the security team filled in themselves, paired with **the answer
 they actually wrote**. It measures whether we write what *they* would have
 written. See `eval/house.py`.
 
+The house set and the answer memory (`eval/answer_memory.json`) are sealed in
+git, because they are customers' questions and the team's real answers: run
+`uv run poe eval-unlock` before any of the commands below (see
+[SECURITY.md](SECURITY.md#sealed-eval-data)).
+
 The two pull in opposite directions and that is the point. Measuring only fact
 coverage is what produced answers with a median of 152 words against a team
 median of 11: the drafting prompt was told completeness is a correctness

@@ -11,23 +11,37 @@ and [Facing a network](README.md#facing-a-network).
 |---|---|---|
 | Customer questionnaires and their filled copies | `data/` (per team, per person), gitignored | arrive from other companies, often under NDA |
 | Internal policies and the text indexed from them | `data/`, `chroma_db/` (Chroma stores each chunk's raw text), gitignored | the organisation's internal controls |
-| The team's past answers | the answer memory (SQLite and Chroma), `eval/answer_memory.json`, `eval/house_set.json` | real answers given to named customers |
+| The team's past answers | the answer memory (SQLite and Chroma); `eval/answer_memory.json` and `eval/house_set.json`, committed only sealed in `eval/sealed/` (plaintext gitignored) | real answers given to named customers |
 | Accounts, sessions, the event log | SQLite at `DB_PATH` (`data/app.db`), gitignored | who did what; session tokens (stored as SHA-256) |
-| Secrets | `.env`, gitignored: `GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`, `ADMIN_PASSWORD` | access to paid services and to the system |
+| Secrets | `.env`, gitignored: `GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`, `ADMIN_PASSWORD`, `EVAL_DATA_KEY` | access to paid services, to the system, and to the sealed eval data |
 | Traces, when switched on | LangSmith (EU or US) or a local Phoenix store | each trace is a copy of the prompt: policy text and the questionnaire |
 
 ## Known exposure
 
 - **Eval data in git history (TD-013).** `eval/house_set.json` and
-  `eval/answer_memory.json` were committed in plaintext. Plan 002 seals them
-  going forward; by decision of 2026-10-05 history is not rewritten. **Before
-  this repository is pushed to any remote, purge those files from history**
-  (for example `git filter-repo --path eval/house_set.json --path
-  eval/answer_memory.json --invert-paths`), and only then add the sealed
-  copies.
+  `eval/answer_memory.json` were committed in plaintext until plan 002 sealed
+  them (2026-10-05); by the user's decision history is not rewritten, so every
+  commit before the sealing still holds the plaintext. **Before this repository
+  is pushed to any remote, purge those two paths from history** (for example
+  `git filter-repo --path eval/house_set.json --path eval/answer_memory.json
+  --invert-paths`); the sealed copies in `eval/sealed/` are unaffected.
 - **Data residency.** LangSmith has no Saudi region; `LANGSMITH_TRACING` is off
   by default and switching it on sends policy text and questionnaires abroad.
   That is a decision for whoever owns the documents.
+
+## Sealed eval data
+
+`eval/sealed/*.enc` is AES-256-GCM, keyed by `EVAL_DATA_KEY` in `.env`
+(`eval/vault.py`, D-011). `uv run poe eval-unlock` writes the plaintexts to
+`eval/`, where `.gitignore` keeps them out of commits and ARCH-SEALED fails if
+one is tracked, not ignored, or changed without being re-sealed.
+
+- **The key is the data.** Lose it and the sealed files cannot be read. Keep a
+  copy outside this machine (a password manager), and hand it to a colleague
+  only over a channel you would trust with the questionnaires themselves.
+- A new key is made once with `uv run python -m eval.vault keygen`, which
+  writes it into `.env` and prints nothing. To rotate: unlock with the old key,
+  empty the `EVAL_DATA_KEY=` line, run keygen, then `uv run poe eval-seal --force`.
 
 ## Access model, in one paragraph
 
@@ -56,7 +70,7 @@ the person who made them. With no users added the API runs open, as
 1. Never commit `.env`, `data/`, `chroma_db/`, `eval/results/` or any customer
    file. `.gitignore` covers them; do not override it.
 2. Never print or log a secret, and never read `.env` values into a
-   conversation or a commit message.
+   conversation or a commit message. That includes `EVAL_DATA_KEY`.
 3. Tests use temporary directories only (`tests/conftest.py` redirects every
    storage path). A test must never need the real database, index or `.env`.
 4. Do not run a script that writes to the real Chroma index (TD-012) unless the

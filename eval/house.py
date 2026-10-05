@@ -60,6 +60,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from eval.vault import require
 from src.config import PROJECT_ROOT
 from src.models import Question, QuestionType
 
@@ -111,7 +112,8 @@ def load_memory_set(path: Path | str = ANSWER_MEMORY) -> list[HouseCase]:
 
 
 def _load(path: Path | str) -> list[HouseCase]:
-    rows = json.loads(Path(path).read_text(encoding="utf-8"))
+    # Both sets are sealed in git (plan 002): say how to unlock rather than a bare FileNotFoundError.
+    rows = json.loads(require(Path(path)).read_text(encoding="utf-8"))
     return [
         HouseCase(
             test_id=row["test_id"],

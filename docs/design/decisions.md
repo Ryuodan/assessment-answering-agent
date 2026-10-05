@@ -61,7 +61,7 @@ reorganised (roadmap M4).
 - **Decision:** commit only an encrypted copy; decrypt on demand with a key
   held in `.env`; encrypt forward only, without rewriting history.
 - **Consequences:** the plaintext stays in old commits (TD-013) and must be
-  purged before any remote is added. Implemented by plan 002.
+  purged before any remote is added. Implemented by plan 002. Format in D-011.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user.
 
 ## D-006: the README is kept and reorganised, not replaced
@@ -109,3 +109,34 @@ reorganised (roadmap M4).
   the development environment carries the OpenTelemetry client libraries,
   not the Phoenix server.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 001.
+
+## D-010: ARCH-SIZE does not count the Settings class
+
+- **Context:** adding `EVAL_DATA_KEY` (plan 002) took `src/config.py` from 545
+  to 551 lines, past its allow-listed ceiling, while D-003's companion rule says
+  ceilings never rise. Adding a setting is that module's job; the module's real
+  excess is the tracing and logging setup (TD-009).
+- **Decision:** ARCH-SIZE subtracts the `Settings` class body from
+  `src/config.py`'s length (`SIZE_EXEMPT_CLASSES` in `harness/arch.py`). The
+  module then counts 142 lines and leaves the allow-list.
+- **Alternatives rejected:** raising the ceiling once (breaks "only shrinks",
+  and recurs with every setting); moving tracing out first (M3 work, changes
+  when tracing starts); keeping the key outside Settings (breaks configuration
+  in one place).
+- **Consequences:** logic placed inside the Settings class would escape the
+  size rule; review watches for it.
+- **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user, from options Claude proposed.
+
+## D-011: how the eval data is sealed
+
+- **Context:** D-005 decided to seal the house set and the answer memory with a
+  key in `.env`.
+- **Decision:** AES-256-GCM (`cryptography`), a random 96-bit nonce per seal,
+  the file name as associated data (two sealed files cannot be swapped), a
+  32-byte key as URL-safe base64. `eval/sealed/manifest.json` records each
+  plaintext's SHA-256, so the arch check needs no key and sealing an unchanged
+  file writes nothing. Unlock decrypts and verifies everything before writing
+  anything, and will not overwrite a differing local copy unless forced.
+- **Consequences:** the manifest reveals whether a guessed plaintext is exactly
+  right, which only matters to someone who already holds the file.
+- **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 002.

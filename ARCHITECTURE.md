@@ -86,7 +86,7 @@ download for the optional reranker. Data-residency and secret handling are in
 | users, teams, sessions, events, runs, questionnaires, chats, preferences | SQLite at `DB_PATH` (`data/app.db`) | `store` and the modules above it |
 | uploaded and filled files, extracted text | `data/` (per team, per person) | `service`, `tools`, `storage` (which also deletes old files over a person's limit) |
 | the policy corpus and the answer-memory vectors | Chroma at `CHROMA_DIR` (`chroma_db/`) | `knowledge`, `answer_memory` |
-| evaluation sets and history | `eval/` | `eval/`, `scripts/` |
+| evaluation sets and history | `eval/`; the house set and answer memory only sealed in git (`eval/sealed/`, plaintext gitignored) | `eval/`, `scripts/`; `eval/vault.py` seals and unlocks |
 
 All of `data/` and `chroma_db/` is gitignored. Tests redirect every path to a
 temporary directory (`tests/conftest.py`).

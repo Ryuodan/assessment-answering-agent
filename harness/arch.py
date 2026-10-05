@@ -5,13 +5,16 @@
 Rules (each violation prints rule, file:line and a FIX line):
 
     ARCH-SIZE    a module in src/ is longer than 400 lines, or longer than its
-                 allow-listed ceiling; a ceiling that could be lower must be lowered
+                 allow-listed ceiling; a ceiling that could be lower must be lowered.
+                 The Settings class in src/config.py is not counted (D-010)
     ARCH-PRINT   `print` in src/ outside src/cli.py: use logging
     ARCH-ENV     the environment is read outside src/config.py
     ARCH-ENVEX   a Settings field is missing from .env.example, or .env.example
                  lists something that is not a setting
     ARCH-SECRET  a tracked file contains something shaped like a credential
     ARCH-ALLOW   an allow-list entry is stale, or names no tech-debt item
+    ARCH-SEALED  sealed eval data (eval/sealed/): a plaintext is tracked or not
+                 gitignored, differs from its sealed copy, or a sealed file is missing
 
 Existing violations live in harness/arch-allowlist.toml, each tied to a TD
 item; entries may only be removed or tightened. Layer import rules come with
@@ -21,10 +24,13 @@ plan 003.
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import re
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -33,6 +39,9 @@ from harness.report import ROOT, Violation, finish
 MAX_LINES = 400
 PRINT_ALLOWED = {"src/cli.py"}
 ENV_OWNER = "src/config.py"
+# Declaration lists that ARCH-SIZE does not count (D-010): one field and its doc
+# comment per setting is data, not logic, and adding a setting is that module's job.
+SIZE_EXEMPT_CLASSES = {ENV_OWNER: "Settings"}
 ALLOWLIST = ROOT / "harness" / "arch-allowlist.toml"
 
 _SECRET_SHAPES = [
@@ -79,12 +88,23 @@ def python_modules(root: Path) -> list[Path]:
 # --- rules -----------------------------------------------------------------
 
 
+def counted_lines(path: str, text: str) -> int:
+    """A module's length for ARCH-SIZE: every line, less any exempt declaration class."""
+    total = len(text.splitlines())
+    exempt = SIZE_EXEMPT_CLASSES.get(path)
+    if exempt:
+        for node in ast.parse(text).body:
+            if isinstance(node, ast.ClassDef) and node.name == exempt and node.end_lineno is not None:
+                total -= node.end_lineno - node.lineno + 1
+    return total
+
+
 def check_size(root: Path, allow: Allowlist) -> list[Violation]:
     violations: list[Violation] = []
     seen: set[str] = set()
     for module in python_modules(root):
         path = rel_to(module, root)
-        lines = len(module.read_text(encoding="utf-8").splitlines())
+        lines = counted_lines(path, module.read_text(encoding="utf-8"))
         ceiling, debt = allow.size.get(path, (MAX_LINES, ""))
         if path in allow.size:
             seen.add(path)
@@ -322,6 +342,97 @@ def check_allowlist_debts(root: Path, allow: Allowlist) -> list[Violation]:
     ]
 
 
+def indexed_files(root: Path) -> set[str]:
+    """Paths in the git index; empty outside a repository (the tests)."""
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "--cached"], cwd=root, capture_output=True, text=True, encoding="utf-8", check=True
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return set()
+    return set(listed.splitlines())
+
+
+def git_ignores(root: Path) -> Callable[[str], bool]:
+    def ignored(path: str) -> bool:
+        try:
+            return subprocess.run(["git", "check-ignore", "-q", path], cwd=root, check=False).returncode in (0, 128)
+        except FileNotFoundError:
+            return True
+
+    return ignored
+
+
+def check_sealed(root: Path, indexed: set[str], ignored: Callable[[str], bool]) -> list[Violation]:
+    """Sealed eval data stays sealed (plan 002, GP-16).
+
+    Reads the manifest's SHA-256 of each plaintext, so it needs no key: a local
+    plaintext that hashes differently is one somebody changed without sealing.
+    """
+    sealed_dir = root / "eval" / "sealed"
+    manifest = sealed_dir / "manifest.json"
+    if not manifest.exists():
+        return []
+    hashes: dict[str, str] = json.loads(manifest.read_text(encoding="utf-8"))["sha256"]
+    violations: list[Violation] = []
+    for name, expected in sorted(hashes.items()):
+        plain = f"eval/{name}"
+        if plain in indexed:
+            violations.append(
+                Violation(
+                    "ARCH-SEALED",
+                    plain,
+                    1,
+                    "the plaintext of a sealed file is tracked by git",
+                    f"`git rm --cached {plain}` (the file stays on disk), and keep it listed in .gitignore",
+                )
+            )
+        elif not ignored(plain):
+            violations.append(
+                Violation(
+                    "ARCH-SEALED",
+                    ".gitignore",
+                    1,
+                    f"{plain} is sealed but not gitignored, so `git add` would commit the plaintext",
+                    f"add `{plain}` to .gitignore",
+                )
+            )
+        if not (sealed_dir / f"{name}.enc").exists():
+            violations.append(
+                Violation(
+                    "ARCH-SEALED",
+                    "eval/sealed/manifest.json",
+                    1,
+                    f"the manifest lists {name}, but eval/sealed/{name}.enc is missing",
+                    "restore it with `git checkout -- eval/sealed`, or seal again with `uv run poe eval-seal`",
+                )
+            )
+        local = root / plain
+        if local.exists() and hashlib.sha256(local.read_bytes()).hexdigest() != expected:
+            violations.append(
+                Violation(
+                    "ARCH-SEALED",
+                    plain,
+                    1,
+                    "differs from its sealed copy",
+                    "if you changed it on purpose, run `uv run poe eval-seal` and commit eval/sealed/; "
+                    "if not, restore the sealed version with `uv run poe eval-unlock --force`",
+                )
+            )
+    for enc in sorted(sealed_dir.glob("*.enc")):
+        if enc.name.removesuffix(".enc") not in hashes:
+            violations.append(
+                Violation(
+                    "ARCH-SEALED",
+                    rel_to(enc, root),
+                    1,
+                    "a sealed file the manifest does not list",
+                    "seal through `uv run poe eval-seal`, which writes both, or delete the stray file",
+                )
+            )
+    return violations
+
+
 def rel_to(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
@@ -334,6 +445,7 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
         + check_env_example(root)
         + check_secrets(root)
         + check_allowlist_debts(root, allow)
+        + check_sealed(root, indexed_files(root), git_ignores(root))
     )
 
 

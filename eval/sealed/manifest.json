@@ -1,0 +1,7 @@
+{
+  "about": "SHA-256 of each plaintext sealed in this folder; see eval/vault.py. Do not edit by hand.",
+  "sha256": {
+    "answer_memory.json": "b559ff368ec39f19623c10247cb5902271c50fc87779658bf58cbaa8917ec06c",
+    "house_set.json": "5e2612c89adaf9c1043f261f340cbd743c34741c7e9183e5152b9fb486eee519"
+  }
+}

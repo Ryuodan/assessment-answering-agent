@@ -48,6 +48,8 @@ dev = [
     "ruff",
     "mypy>=1.15",
     "poethepoet>=0.34",
+    # eval/vault.py: sealing the confidential eval data (plan 002).
+    "cryptography>=42",
     # The optional extras below, repeated so that a plain `uv sync` builds the
     # environment the gate expects (D-009): without them mypy cannot see the
     # Phoenix imports in src/config.py and one report test is skipped. Keep in
@@ -108,7 +110,7 @@ select = ["E4", "E7", "E9", "F401", "F841"]
 # Strict, over the application and the harness. Errors that predate plan 001
 # live in harness/mypy-baseline.txt and may only shrink; see harness/typecheck.py.
 python_version = "3.11"
-files = ["src", "harness"]
+files = ["src", "harness", "eval/vault.py"]
 strict = true
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
@@ -150,3 +152,6 @@ gen = { cmd = "python -m harness.gen", help = "Regenerate docs/generated/ (never
 test = { cmd = "python -m pytest -q", help = "Offline test suite (live_ai tests excluded)" }
 snapshots = { cmd = "python -m pytest tests/characterization -q", env = { UPDATE_SNAPSHOTS = "1" }, help = "Re-record characterization snapshots (then review git diff)" }
 cov = { cmd = "python -m pytest -q --cov=src --cov=harness --cov-report=term", help = "Line coverage per module (measured, not gated)" }
+eval-status = { cmd = "python -m eval.vault status", help = "Sealed eval data: what is sealed, unlocked, changed" }
+eval-unlock = { cmd = "python -m eval.vault unlock", help = "Decrypt eval/sealed/ into eval/ (needs EVAL_DATA_KEY)" }
+eval-seal = { cmd = "python -m eval.vault seal", help = "Re-encrypt the eval plaintexts that changed" }

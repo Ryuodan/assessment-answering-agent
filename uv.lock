@@ -184,6 +184,7 @@ reports = [
 [package.dev-dependencies]
 dev = [
     { name = "arize-phoenix-otel" },
+    { name = "cryptography" },
     { name = "mypy" },
     { name = "openinference-instrumentation-langchain" },
     { name = "openpyxl" },
@@ -229,6 +230,7 @@ provides-extras = ["demo", "reports", "phoenix"]
 [package.metadata.requires-dev]
 dev = [
     { name = "arize-phoenix-otel", specifier = ">=0.6" },
+    { name = "cryptography", specifier = ">=42" },
     { name = "mypy", specifier = ">=1.15" },
     { name = "openinference-instrumentation-langchain", specifier = ">=0.1.29" },
     { name = "openpyxl", specifier = ">=3.1" },

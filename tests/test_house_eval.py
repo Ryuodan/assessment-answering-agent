@@ -10,7 +10,11 @@ which side of the review gate a count is on.
 
 from __future__ import annotations
 
+import pytest
+
 from eval.house import (
+    ANSWER_MEMORY,
+    HOUSE_SET,
     NEAR_TWIN,
     HouseCase,
     HouseResult,
@@ -20,6 +24,14 @@ from eval.house import (
     load_house_set,
     load_memory_set,
     summarise,
+)
+
+
+# The real house set and answer memory are sealed in git (plan 002) and only
+# present where someone has unlocked them.
+needs_eval_data = pytest.mark.skipif(
+    not (HOUSE_SET.exists() and ANSWER_MEMORY.exists()),
+    reason="eval data is sealed: run `uv run poe eval-unlock` (needs EVAL_DATA_KEY in .env)",
 )
 
 
@@ -99,6 +111,7 @@ def test_finding_its_own_answer_is_reported_as_a_share():
 # --- the sets themselves ----------------------------------------------------
 
 
+@needs_eval_data
 def test_the_two_sets_share_no_questionnaire():
     """What makes the held-out number an estimate of the real thing.
 
@@ -113,6 +126,7 @@ def test_the_two_sets_share_no_questionnaire():
     assert not ({c.file for c in held_out} & {c.file for c in remembered})
 
 
+@needs_eval_data
 def test_every_case_carries_a_reference_answer():
     """A case with no reference cannot be graded, and would be averaged in as
     a zero rather than excluded."""

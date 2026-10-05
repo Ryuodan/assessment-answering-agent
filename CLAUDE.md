@@ -19,6 +19,7 @@ uv run poe types-baseline                       # drop fixed errors from the myp
 uv run poe gen                                  # regenerate docs/generated/
 uv run poe snapshots                            # re-record characterization snapshots; review the diff
 uv run poe cov                                  # line coverage per module (measured, not gated)
+uv run poe eval-unlock | eval-seal | eval-status # sealed eval data (needs EVAL_DATA_KEY in .env)
 uv run python -m pytest tests/test_x.py -x      # one test file
 uv run python -m uvicorn src.api:app --reload   # the app on :8000
 ```
@@ -54,7 +55,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | `src/config.py`, `models.py`, `llm.py`, `prompts.py` | settings, data models, the model client, every prompt |
 | `src/static/` | the browser pages |
 | `harness/` | the checks behind `poe` (not application code) |
-| `eval/`, `scripts/` | evaluation; operational scripts (some write the real index) |
+| `eval/`, `scripts/` | evaluation (house set and answer memory sealed in `eval/sealed/`); operational scripts (some write the real index) |
 | `tests/` | offline suite; `tests/harness/` tests the checks; `tests/characterization/` pins today's behaviour |
 
 ## Non-negotiables

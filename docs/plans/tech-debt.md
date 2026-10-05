@@ -45,7 +45,7 @@ or docs and has not been verified by running anything.
 - **What:** measured 2026-10-05: `api.py` 1987, `agents/assistant.py` 1653, `tools.py` 1403, `chunking.py` 1103, `forms/xlsx.py` 886, `answer_memory.py` 864, `knowledge.py` 836, `service.py` 740, `forms/xlsx_package.py` 705, `identity.py` 644, `export_pdf.py` 643, `config.py` 544, `agents/excel_agent.py` 513, `forms/docx.py` 486, `preferences.py` 479, `store.py` 475, `models.py` 430, `documents.py` 427. The static pages are larger still (`index.html` 3412).
 - **Impact:** a module that does many things is hard to change safely and hard to read into an agent's context.
 - **Fix:** allow-listed in ARCH-SIZE at their current length so they cannot grow; split them one at a time, behind characterization tests, in later plans.
-- **Update** 2026-10-05: after the format commit `4a7c3c6` the count is 19 (`src/graph/nodes.py` went from 399 to 406 lines through formatting alone); the current ceilings are in `harness/arch-allowlist.toml`.
+- **Update** 2026-10-05: after the format commit `4a7c3c6` the count is 19 (`src/graph/nodes.py` went from 399 to 406 lines through formatting alone); the current ceilings are in `harness/arch-allowlist.toml`. Since D-010 (plan 002) `src/config.py` is measured without its Settings class (142 lines) and has left the list: 18 remain.
 
 ## TD-007: Import cycles and upward imports
 
@@ -88,6 +88,7 @@ or docs and has not been verified by running anything.
 - **What:** `eval/house_set.json` (135 question/answer pairs from five named customers' questionnaires) and `eval/answer_memory.json` (698 of the team's answers) are tracked in plaintext in all commits up to and including the start of plan 001. Plan 002 seals them going forward; by the user's decision (2026-10-05) history is not rewritten.
 - **Impact:** anyone with a copy of the history has the plaintext. There is no remote today.
 - **Fix:** purge them from history (for example with `git filter-repo`) before this repository is ever pushed to a remote. Recorded in `SECURITY.md`.
+- **Partly resolved** 2026-10-05 (plan 002): sealed from commit onward (`eval/sealed/`, ARCH-SEALED); the plaintext remains in the history before it.
 
 ## TD-014: The evaluation has no clean held-out split
 
@@ -154,3 +155,9 @@ or docs and has not been verified by running anything.
 - **What:** found 2026-10-05 by Claude while recording `tests/characterization/snapshots/pipeline/`; not observed in production. The drafting prompt says "Never put a source number in the answer text", but nothing enforces it: `strip_source_markers` removes only the `【1†source】` shape, and `to_cell_text("... 24 hours [1].")` returns the `[1]` unchanged. A model that disobeys writes `[1]` into the answer, the card, the exports and, through `fill`, the customer's file. The pinned behaviour is in `pipeline/grounded-first-draft.json` (the scripted draft contains `[1]`, and so does the final answer).
 - **Impact:** a citation that points at nothing, in a document sent to a customer. How often real models do it is unmeasured.
 - **Fix (needs a decision):** strip `[n]` markers mechanically where plain text becomes an answer, as `without_reasoning` does for thinking, or count their occurrence in the evaluation first. Not fixed: changing what reaches a customer's file is the user's call.
+
+## TD-025: The README gives two sizes for the house set
+
+- **What:** measured 2026-10-05 (Claude): `eval/house_set.json` holds 135 cases. The README's "Evaluation" introduction says it "holds 122 questions"; its "Splitting the team's answers" section says 135.
+- **Impact:** a reader cannot tell which number a reported score is over.
+- **Fix:** correct it when the README is reorganised (M4); numbers about a dataset should come from the dataset (a generated summary) rather than be typed.

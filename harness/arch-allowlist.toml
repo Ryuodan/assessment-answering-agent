@@ -58,11 +58,6 @@ max_lines = 632
 debt = "TD-006"
 
 [[size]]
-path = "src/config.py"
-max_lines = 545
-debt = "TD-006"
-
-[[size]]
 path = "src/agents/excel_agent.py"
 max_lines = 525
 debt = "TD-006"

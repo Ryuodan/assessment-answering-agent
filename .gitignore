@@ -89,3 +89,8 @@ chroma_db.backup*/
 # Reference articles kept beside the docs that cite them. Someone else's
 # published work: link to it, do not redistribute it (plan 001 decision).
 docs/harness/*.pdf
+
+# Sealed eval data (plan 002, D-005): only eval/sealed/*.enc is committed.
+# `uv run poe eval-unlock` writes these plaintexts; ARCH-SEALED keeps them out.
+eval/house_set.json
+eval/answer_memory.json

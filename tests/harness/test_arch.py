@@ -148,3 +148,75 @@ def test_every_violation_carries_a_fix(tree):
     found = arch.check(tree, tree / "none.toml")
     assert {v.rule for v in found} == {"ARCH-SIZE", "ARCH-PRINT", "ARCH-ENV"}
     assert all(v.fix for v in found)
+
+
+# --- the Settings class is not counted (D-010) -------------------------------
+
+
+def test_the_settings_class_does_not_count_towards_config_size(tree):
+    fields = "".join(f"    setting_{i}: int = {i}\n" for i in range(arch.MAX_LINES + 50))
+    write(tree, "src/config.py", f"class Settings(BaseSettings):\n{fields}\n")
+    write(tree, ".env.example", "".join(f"SETTING_{i}={i}\n" for i in range(arch.MAX_LINES + 50)))
+    assert rules(tree) == []
+
+
+def test_code_outside_the_settings_class_still_counts(tree):
+    write(tree, "src/config.py", CONFIG + lines(arch.MAX_LINES))
+    assert [r for r in rules(tree) if r[0] == "ARCH-SIZE"] == [("ARCH-SIZE", "src/config.py", arch.MAX_LINES + 1)]
+
+
+# --- sealed eval data (plan 002) --------------------------------------------
+
+
+def sealed(root: Path, plaintext: bytes = b"[]", *, enc: bool = True) -> None:
+    import hashlib
+    import json
+
+    write(
+        root, "eval/sealed/manifest.json", json.dumps({"sha256": {"set.json": hashlib.sha256(plaintext).hexdigest()}})
+    )
+    if enc:
+        (root / "eval/sealed/set.json.enc").write_bytes(b"AASEAL1\n...")
+
+
+def sealed_rules(root: Path, indexed=(), ignored=lambda path: True) -> list[tuple[str, str, int]]:
+    return [(v.rule, v.path, v.line) for v in arch.check_sealed(root, set(indexed), ignored)]
+
+
+def test_sealed_data_in_step_passes(tree):
+    sealed(tree)
+    write(tree, "eval/set.json", "[]")
+    assert sealed_rules(tree) == []
+
+
+def test_a_tracked_plaintext_fails(tree):
+    sealed(tree)
+    assert sealed_rules(tree, indexed={"eval/set.json"}) == [("ARCH-SEALED", "eval/set.json", 1)]
+
+
+def test_a_plaintext_that_is_not_gitignored_fails(tree):
+    sealed(tree)
+    assert sealed_rules(tree, ignored=lambda path: False) == [("ARCH-SEALED", ".gitignore", 1)]
+
+
+def test_a_changed_plaintext_must_be_resealed(tree):
+    sealed(tree)
+    write(tree, "eval/set.json", "[1]")
+    [violation] = arch.check_sealed(tree, set(), lambda path: True)
+    assert violation.path == "eval/set.json" and "eval-seal" in violation.fix
+
+
+def test_a_missing_sealed_file_fails(tree):
+    sealed(tree, enc=False)
+    assert sealed_rules(tree) == [("ARCH-SEALED", "eval/sealed/manifest.json", 1)]
+
+
+def test_a_sealed_file_the_manifest_does_not_list_fails(tree):
+    sealed(tree)
+    (tree / "eval/sealed/stray.json.enc").write_bytes(b"x")
+    assert sealed_rules(tree) == [("ARCH-SEALED", "eval/sealed/stray.json.enc", 1)]
+
+
+def test_no_manifest_means_nothing_is_sealed(tree):
+    write(tree, "eval/set.json", "[]")
+    assert sealed_rules(tree, indexed={"eval/set.json"}) == []

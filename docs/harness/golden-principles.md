@@ -22,6 +22,6 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-13 | Tests never touch the real database, index, uploads or `.env`. | partly `tests/conftest.py` (`isolated_storage`); review for the rest (TD-011) |
 | GP-14 | Behaviour changes only behind tests: refactors are preceded by characterization tests, and a suspected bug is recorded in tech-debt.md, not fixed silently. | partly `test` (`tests/characterization/`: questionnaire reading and filling, the answering pipeline with its prompts, fixture chunking, exports); review for paths not yet pinned |
 | GP-15 | Tools run as `python -m <tool>`, never through `.venv` launchers. | `test` (`tests/harness/test_tasks.py`) |
-| GP-16 | Customer data never enters git in plaintext. | review until plan 002 |
+| GP-16 | Customer data never enters git in plaintext. | `arch` ARCH-SEALED for the sealed eval sets; `.gitignore` and review for everything else |
 | GP-17 | A commit doing a plan's work names the plan in its subject, and updates the plan's logs in the same commit. | review |
 | GP-18 | Records are honest: every number in a doc was measured or given by someone named; Claude's own reasoning is marked as such; rejected attempts are recorded with their numbers. | review |
