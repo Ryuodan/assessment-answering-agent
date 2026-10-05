@@ -52,6 +52,7 @@ or docs and has not been verified by running anything.
 - **What:** read (AST scan of imports, most of them inside functions): `knowledge` and `answer_memory` import each other; `forms.xlsx` and `forms.llm_layout` import each other; `forms.reading` imports `agents.excel_agent`, which imports `forms`; `storage` imports `service`; `rewrite` imports `graph.state` for `order_evidence`; `export_docx` imports `forms.xlsx_package`; `agents.assistant` imports `store`, `service` and `tools` directly.
 - **Impact:** no layer can be changed or tested without pulling in the others; function-level imports hide the cycles from readers.
 - **Fix:** plan 003 defines layers and an `arch` import rule; existing violations go on its allow-list and are removed one by one.
+- **Update** 2026-10-05 (plan 003): under the layers of D-012, two of these are violations, `knowledge` -> `answer_memory` and `storage` -> `service`, allow-listed in ARCH-LAYER. `forms.reading` -> `agents.excel_agent` is now within one layer (answering), as are `rewrite` -> `graph.state`, `export_docx` -> `forms.xlsx_package` and `agents.assistant` -> `store`/`service`/`tools`, which import downwards. The cycle `forms.xlsx` <-> `forms.llm_layout` is inside one layer and is not caught by any rule yet.
 
 ## TD-008: No error hierarchy
 
@@ -64,6 +65,7 @@ or docs and has not been verified by running anything.
 - **What:** read: stdlib logging with %-formatted sentences, no event names, no request IDs. `src/config.py` configures tracing (LangSmith, Phoenix) when it is imported and owns `logging.basicConfig`.
 - **Impact:** logs cannot be filtered by event or followed through a request; importing settings patches LangChain, which is why `tests/conftest.py` must set `PHOENIX_TRACING` before importing anything.
 - **Fix:** structured logs with event names and request IDs, and tracing started from the entry points rather than from config (Phase 2 and 4 plans).
+- **Update** 2026-10-05 (plan 003): `src/config.py` importing `phoenix` and `openinference` is allow-listed under ARCH-OWNER against this item.
 
 ## TD-010: Possibly unused definitions
 
@@ -125,6 +127,7 @@ or docs and has not been verified by running anything.
 - **What:** read: `python-docx` is imported by `documents`, `export_docx`, `forms.docx` and `service`; `langchain_core` by seven modules.
 - **Impact:** a library upgrade or replacement touches many modules; no single owner.
 - **Fix:** assign each IO or framework library to one layer and enforce it in `arch` (plan 003).
+- **Partly resolved** 2026-10-05 (plan 003): ownership is enforced (ARCH-OWNER); the one remaining exception, `service` importing `docx` for the Word preview, is allow-listed. `langchain_core` is deliberately not owned (D-012).
 
 ## TD-020: Commented-out implementation in `src/embeddings.py`
 

@@ -1,44 +1,64 @@
 # Architecture
 
-How the code is organised **today**, as measured in the Phase 0 survey
-(2026-10-05), and how a request moves through it. The target layers, and the
-`arch` rule that enforces their import directions, are chosen in plan 003;
-until then this document describes rather than prescribes. Known violations
-are tracked in [tech-debt.md](docs/plans/tech-debt.md) (TD-007, TD-019).
+How the code in `src/` is layered, why the lines are drawn where they are, and
+how a request moves through it. The layers are defined in
+`harness/layers.toml` and enforced by `uv run poe arch` (ARCH-LAYER,
+ARCH-OWNER); [docs/generated/layers.md](docs/generated/layers.md) lists every
+module's layer and is regenerated from that file. Decision: D-012 in
+[decisions.md](docs/design/decisions.md).
 
-## The parts
+## Layers
 
-| Group | Modules | What they own |
+Six layers, lowest first. A module may import modules of its own layer and of
+any layer below it, never above, including from inside a function.
+
+| Layer | What it holds | Examples |
 |---|---|---|
-| Entry points | `src/api.py`, `src/cli.py`, `scripts/`, `eval/` | HTTP (FastAPI, 70 operations, 5 pages), the command line, operational scripts, evaluation |
-| Orchestration | `src/tools.py`, `src/service.py`, `src/agents/assistant.py` | the operations the UI and the chat assistant share (`tools`); ingestion, answering and document access (`service`); the conversational agent and its tools (`assistant`) |
-| Answering pipeline | `src/graph/`, `src/prompts.py`, `src/extraction.py`, `src/verification.py`, `src/relevance.py`, `src/rerank.py`, `src/rewrite.py` | LangGraph: plan, retrieve, rerank, draft, review, finalize; question extraction; mechanical checks; rewording |
-| Knowledge | `src/knowledge.py`, `src/chunking.py`, `src/documents.py`, `src/docling_client.py`, `src/embeddings.py`, `src/lexical.py`, `src/answer_memory.py`, `src/memory.py` | the Chroma index per team, document conversion and chunking, embeddings, BM25, the answer memory and its conflict sweep |
-| Forms | `src/forms/`, `src/agents/excel_agent.py` | reading a customer's .xlsx/.docx questionnaire, deciding where answers go, writing them back into a copy |
-| Persistence and identity | `src/store.py`, `src/identity.py`, `src/credentials.py`, `src/events.py`, `src/runs.py`, `src/batches.py`, `src/conversations.py`, `src/preferences.py`, `src/storage.py` | SQLite (schema and migrations in `store`), users, teams, sessions, the event log, saved runs, questionnaires, chats, preferences and skills, per-person storage limits |
-| Output | `src/export_pdf.py`, `src/export_docx.py`, `src/formatting.py` | PDF and Word exports (Arabic shaping in PDF), the Markdown subset answers use |
-| Foundation | `src/config.py`, `src/models.py`, `src/llm.py`, `src/organisation.py`, `src/progress.py` | settings (the only reader of the environment), domain and LLM-output models, the Groq client factory, organisation profile, run progress |
-| Browser | `src/static/` | the workbench (`index.html`), chat, memory and preferences pages, and the shared answer card (`cards.js`, `cards.css`) |
+| 1. foundation | settings, domain types, prompts, pure text rules; reads configuration and nothing else | `config`, `models`, `prompts`, `formatting`, `chunking`, `verification` |
+| 2. integrations | everything that talks to something outside the process: the model provider, the embedding host, Docling, SQLite, Chroma, and the customer's PDF, Word and Excel files | `llm`, `embeddings`, `documents`, `store`, `knowledge`, `export_pdf`, `forms/` |
+| 3. records | what the system remembers about people and their work | `identity`, `events`, `runs`, `batches`, `conversations`, `answer_memory`, `storage` |
+| 4. answering | turning a question into a grounded answer | `graph/`, `extraction`, `relevance`, `rewrite`, `forms/reading.py`, `agents/excel_agent.py` |
+| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `tools`, `agents/assistant.py` |
+| 6. interfaces | how people and programs reach the system | `api`, `cli` |
 
-Each IO or framework library has, mostly, one owner: FastAPI in `api`, the
-Groq SDK in `llm`, Chroma in `knowledge`, pdfplumber in `documents`, SQLite in
-`store`. The exceptions are `python-docx` (four modules) and `langchain_core`
-(seven); see TD-019.
+Why these lines (Claude's reasoning, recorded as D-012):
 
-## Dependency directions, as they are
+- **Integrations sit low, under records and answering**, because both of those
+  are built on them: a run is saved in SQLite, an answer is drafted by a model
+  over a Chroma search. Keeping every outside system in one layer is what lets
+  the layers above be tested with fakes (the suite already does this for the
+  vector store and the model).
+- **Reading a questionnaire is split by whether a model decides.** The rules
+  that read a sheet and write a cell (`forms/`) are deterministic file
+  handling, so they are integrations. Choosing a strategy and letting an agent
+  explore the workbook (`forms/reading.py`, `agents/excel_agent.py`) is
+  answering, as the `agents` package's own docstring argues.
+- **Records sit below answering**, not beside it: the answer memory feeds the
+  drafter, and the pipeline must never be needed to read what was saved.
+- **Operations is the only layer that composes everything**, which is why the
+  chat assistant lives there with `tools`: its tools are the same operations
+  the web interface calls.
 
-Broadly top-down: entry points import orchestration, orchestration imports the
-pipeline, knowledge, forms and persistence, and everything imports the
-foundation. Where the code goes against that (most of these are imports inside
-functions, which hide them from a reader):
+Each IO or framework library is owned by one layer (ARCH-OWNER): FastAPI by
+interfaces; the model, embedding, Chroma, SQLite and document libraries by
+integrations; LangGraph by answering; LangChain's agent framework by answering
+and operations; `pydantic_settings` by `src/config.py` alone. Libraries used
+everywhere as plain types (pydantic, LangChain's message and document classes)
+are deliberately not owned.
 
-- `knowledge` and `answer_memory` import each other.
-- `forms.xlsx` and `forms.llm_layout` import each other.
-- `forms.reading` imports `agents.excel_agent`, which imports `forms`.
-- `storage` imports `service`.
-- `rewrite` imports `graph.state` (for `order_evidence`).
-- `export_docx` imports `forms.xlsx_package`.
-- `agents.assistant` imports `store`, `service` and `tools` directly.
+**Exceptions allowed today**, each against a tech-debt item and listed in
+[layers.md](docs/generated/layers.md): `knowledge` imports `answer_memory` and
+`storage` imports `service`, the upward halves of two cycles (TD-007); `config`
+starts the Phoenix tracing libraries (TD-009); `service` renders Word previews
+with python-docx itself (TD-019). Not caught by the layers, because both ends
+are in one layer: `forms.xlsx` and `forms.llm_layout` import each other
+(TD-007).
+
+## The browser
+
+`src/static/` holds the workbench (`index.html`), the chat, memory and
+preferences pages, and the shared answer card (`cards.js`, `cards.css`). They
+talk to `src/api.py` over HTTP only.
 
 ## How a request flows
 

@@ -46,6 +46,7 @@ REQUIRED = [
     "docs/harness/golden-principles.md",
     "docs/generated/openapi.json",
     "docs/generated/settings.md",
+    "docs/generated/layers.md",
 ]
 
 PLAN_SECTIONS = ["Goal", "Acceptance criteria", "Plan", "Progress log", "Decision log"]

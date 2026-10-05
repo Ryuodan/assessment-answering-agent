@@ -31,7 +31,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | Need | Go to |
 |---|---|
 | What the product is | [docs/project/DESCRIPTION.md](docs/project/DESCRIPTION.md), [overview](docs/project/overview.md) |
-| How the code is organised, how a request flows | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| How the code is layered, how a request flows | [ARCHITECTURE.md](ARCHITECTURE.md), [layers.md](docs/generated/layers.md) |
 | Secrets, sensitive data, access model | [SECURITY.md](SECURITY.md) |
 | Why things are the way they are | [decisions.md](docs/design/decisions.md); design history in [README.md](README.md) |
 | Current work | [docs/plans/active/](docs/plans/README.md), [roadmap](docs/plans/roadmap.md) |
@@ -72,6 +72,8 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 5. Never commit `.env`, `data/`, `chroma_db/` or customer files; never print a
    secret. See [SECURITY.md](SECURITY.md).
 6. Configuration only through `src/config.py`; every setting in `.env.example`.
+   Imports go down the layers in `harness/layers.toml` (see ARCHITECTURE.md);
+   a new module gets a layer there.
 7. Allow-lists and baselines only shrink. A new violation is fixed, not listed.
 8. Generated docs come from `uv run poe gen`; never edit them by hand.
 9. A lesson that matters goes into the repo (a test, a check, a doc), not

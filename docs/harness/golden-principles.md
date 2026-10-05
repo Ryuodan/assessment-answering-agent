@@ -25,3 +25,5 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-16 | Customer data never enters git in plaintext. | `arch` ARCH-SEALED for the sealed eval sets; `.gitignore` and review for everything else |
 | GP-17 | A commit doing a plan's work names the plan in its subject, and updates the plan's logs in the same commit. | review |
 | GP-18 | Records are honest: every number in a doc was measured or given by someone named; Claude's own reasoning is marked as such; rejected attempts are recorded with their numbers. | review |
+| GP-19 | Imports go down the layers of `harness/layers.toml`, never up, and every module has a layer. | `arch` ARCH-LAYER |
+| GP-20 | An IO or framework library is imported only by the layer that owns it. | `arch` ARCH-OWNER |

@@ -95,3 +95,30 @@ debt = "TD-006"
 [[env]]
 path = "src/export_pdf.py"
 debt = "TD-022"
+
+# Imports against the layers (harness/layers.toml), plan 003.
+[[layer]]
+module = "src.knowledge"
+imports = "src.answer_memory"
+debt = "TD-007"
+
+[[layer]]
+module = "src.storage"
+imports = "src.service"
+debt = "TD-007"
+
+# Owned libraries imported from the wrong layer, plan 003.
+[[owner]]
+module = "src.config"
+library = "phoenix"
+debt = "TD-009"
+
+[[owner]]
+module = "src.config"
+library = "openinference"
+debt = "TD-009"
+
+[[owner]]
+module = "src.service"
+library = "docx"
+debt = "TD-019"

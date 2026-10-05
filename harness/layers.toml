@@ -1,0 +1,116 @@
+# The layers of src/, lowest first (plan 003, D-012). A module may import
+# modules of its own layer and of any layer below it, never above.
+#
+# Assign a module by its exact name, or a package and every module in it with
+# "package.*"; an exact name wins over a pattern. A module assigned to no layer
+# fails ARCH-LAYER, so a new module is placed on purpose.
+#
+# Why the lines are drawn here: ARCHITECTURE.md#layers.
+# Generated summary: docs/generated/layers.md (`uv run poe gen`).
+
+[[layer]]
+name = "foundation"
+about = "Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else."
+modules = [
+    "src",
+    "src.config",
+    "src.models",
+    "src.formatting",
+    "src.prompts",
+    "src.credentials",
+    "src.verification",
+    "src.progress",
+    "src.chunking",
+]
+
+[[layer]]
+name = "integrations"
+about = "Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written."
+modules = [
+    "src.llm",
+    "src.embeddings",
+    "src.docling_client",
+    "src.documents",
+    "src.store",
+    "src.knowledge",
+    "src.lexical",
+    "src.rerank",
+    "src.organisation",
+    "src.export_pdf",
+    "src.export_docx",
+    "src.forms.*",
+]
+
+[[layer]]
+name = "records"
+about = "What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits."
+modules = [
+    "src.identity",
+    "src.events",
+    "src.runs",
+    "src.batches",
+    "src.conversations",
+    "src.preferences",
+    "src.answer_memory",
+    "src.memory",
+    "src.storage",
+]
+
+[[layer]]
+name = "answering"
+about = "Turning a question into a grounded answer: the LangGraph pipeline, question extraction, relevance, rewording, and reading a questionnaire with a model's help."
+modules = [
+    "src.graph.*",
+    "src.extraction",
+    "src.relevance",
+    "src.rewrite",
+    "src.forms.reading",
+    "src.agents",
+    "src.agents.excel_agent",
+]
+
+[[layer]]
+name = "operations"
+about = "The use cases the web interface, the command line and the chat assistant share."
+modules = [
+    "src.service",
+    "src.tools",
+    "src.agents.assistant",
+]
+
+[[layer]]
+name = "interfaces"
+about = "How people and programs reach the system: the HTTP API with its pages, and the command line."
+modules = [
+    "src.api",
+    "src.cli",
+]
+
+# Which layers (or, for a single owner, which module) may import each IO or
+# framework library, by its top-level import name. Libraries used everywhere
+# as plain types -- pydantic, langchain_core's messages and documents -- are
+# deliberately not owned.
+[owners]
+fastapi = ["interfaces"]
+starlette = ["interfaces"]
+uvicorn = ["interfaces"]
+groq = ["integrations"]
+langchain_groq = ["integrations"]
+langchain_openai = ["integrations"]
+langchain_chroma = ["integrations"]
+langchain_huggingface = ["integrations"]
+chromadb = ["integrations"]
+sqlite3 = ["integrations"]
+httpx = ["integrations"]
+pdfplumber = ["integrations"]
+docx = ["integrations"]
+reportlab = ["integrations"]
+arabic_reshaper = ["integrations"]
+bidi = ["integrations"]
+sentence_transformers = ["integrations"]
+rank_bm25 = ["integrations"]
+phoenix = ["integrations"]
+openinference = ["integrations"]
+langgraph = ["answering"]
+langchain = ["answering", "operations"]
+pydantic_settings = ["src.config"]

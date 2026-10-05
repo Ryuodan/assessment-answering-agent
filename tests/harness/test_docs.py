@@ -36,32 +36,31 @@ x
 
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
-    """A minimal documentation tree that passes every rule."""
+    """A minimal documentation tree that passes every rule.
+
+    Built from `docs.REQUIRED`, so adding a required document does not break
+    every test here (it did once, with docs/generated/layers.md).
+    """
     files = {
         "CLAUDE.md": "[a](README.md) [b](ARCHITECTURE.md) [c](SECURITY.md) [d](docs/index.md)\n",
         "README.md": "# Readme\n\n## Getting started\n",
-        "ARCHITECTURE.md": "# Architecture\n",
-        "SECURITY.md": "# Security\n",
-        "docs/index.md": (
-            "[](project/DESCRIPTION.md) [](project/overview.md) [](design/decisions.md) "
-            "[](plans/README.md) [](plans/roadmap.md) [](plans/tech-debt.md) "
-            "[](harness/golden-principles.md) [](generated/openapi.json) [](generated/settings.md)\n"
-        ),
-        "docs/project/DESCRIPTION.md": "# What\n",
-        "docs/project/overview.md": "# Overview\n",
         "docs/design/decisions.md": "# Decisions\n\n## D-001: one\n",
-        "docs/plans/README.md": "# Plans\n",
         "docs/plans/roadmap.md": "[001](active/001-example.md)\n",
         "docs/plans/tech-debt.md": "# Debt\n\n## TD-001: one\n",
         "docs/plans/active/001-example.md": PLAN.format(status="active", box=" "),
         "docs/harness/golden-principles.md": "| ID | Rule |\n|---|---|\n| GP-01 | one |\n",
-        "docs/generated/openapi.json": "{}\n",
-        "docs/generated/settings.md": "# Settings\n",
     }
+    required_files = [path for path in docs.REQUIRED if "." in Path(path).name]
+    for path in required_files:
+        files.setdefault(path, "{}\n" if path.endswith(".json") else f"# {Path(path).stem}\n")
+    in_docs = [path for path in required_files if path.startswith("docs/")]
+    files["docs/index.md"] = " ".join(f"[]({Path(path).relative_to('docs').as_posix()})" for path in in_docs) + "\n"
     for name, text in files.items():
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text(text, encoding="utf-8")
-    (tmp_path / "docs/plans/completed").mkdir()
+    for path in docs.REQUIRED:
+        if "." not in Path(path).name:
+            (tmp_path / path).mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 

@@ -36,7 +36,14 @@ validated boundaries are later plans.
 ## Progress log
 
 - 2026-10-05: Plan written; the user asked to proceed with plan 003 without reviewing its text first.
+- 2026-10-05: Before this plan's work, TD-024 was measured and fixed as the user asked (commit `2334e02`); not part of this plan.
+- 2026-10-05: Step 2. `harness/layers.toml` (six layers, 22 owned libraries) and `harness/layers.py`. Measured against the code before adopting it: 2 upward imports (`knowledge` -> `answer_memory`, `storage` -> `service`) and 5 ownership exceptions (`config` -> `phoenix`, `openinference`; `service` -> `docx` on three lines), all already known (TD-007, TD-009, TD-019). `forms.reading` -> `agents.excel_agent`, an upward import in the survey's reading, is within one layer here.
+- 2026-10-05: Step 3. ARCH-LAYER and ARCH-OWNER wired into `harness/arch.py` with 5 allow-list entries; stale entries fail as ARCH-ALLOW. 13 rule tests in `tests/harness/test_layers.py`. Two corrections on the way: the existing arch tests' trees have no layers file, so the rule now applies only where one exists (and a test requires it here); and `package.*` did not cover the package itself, which a test tree exposed.
+- 2026-10-05: Step 4. `docs/generated/layers.md` from `harness/layers.toml` and the allow-list (stale-checked by the existing generated-docs test, and required by the docs check). ARCHITECTURE.md rewritten around the layers, with the reasons marked as Claude's; D-012; TD-007, TD-009, TD-019 updated; GP-19 and GP-20; CLAUDE.md.
+- 2026-10-05: The first full `check` failed: 12 tests in `tests/harness/test_docs.py`, because adding `docs/generated/layers.md` to the required documents made their minimal tree incomplete (1698 passed, 12 failed). The fixture now builds its tree from `docs.REQUIRED`, so a new required document cannot break those tests again.
 
 ## Decision log
 
 - 2026-10-05: M3 is split into several plans so each can be verified on its own; this one only adds checks and documentation and changes no application code. Fixing the allow-listed violations is follow-up work. My choice.
+- 2026-10-05: Lazy imports count as dependencies, and imports guarded by `TYPE_CHECKING` count too: a type-only import of a higher layer is still coupling. My choice.
+- 2026-10-05: The layers live in a TOML file read by the check and rendered into `docs/generated/layers.md`, rather than in a table inside ARCHITECTURE.md parsed by the check: the data and the prose change for different reasons. My choice.

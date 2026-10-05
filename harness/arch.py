@@ -13,12 +13,13 @@ Rules (each violation prints rule, file:line and a FIX line):
                  lists something that is not a setting
     ARCH-SECRET  a tracked file contains something shaped like a credential
     ARCH-ALLOW   an allow-list entry is stale, or names no tech-debt item
+    ARCH-LAYER   an import against the layers of src/ (harness/layers.py)
+    ARCH-OWNER   an IO or framework library imported outside its owning layer
     ARCH-SEALED  sealed eval data (eval/sealed/): a plaintext is tracked or not
                  gitignored, differs from its sealed copy, or a sealed file is missing
 
 Existing violations live in harness/arch-allowlist.toml, each tied to a TD
-item; entries may only be removed or tightened. Layer import rules come with
-plan 003.
+item; entries may only be removed or tightened.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from harness import layers
 from harness.report import ROOT, Violation, finish
 
 MAX_LINES = 400
@@ -68,6 +70,8 @@ class Allowlist:
     size: dict[str, tuple[int, str]] = field(default_factory=dict)  # path -> (max_lines, debt)
     env: dict[str, str] = field(default_factory=dict)  # path -> debt
     print_: dict[str, str] = field(default_factory=dict)  # path -> debt
+    layer: dict[tuple[str, str], str] = field(default_factory=dict)  # (module, imported module) -> debt
+    owner: dict[tuple[str, str], str] = field(default_factory=dict)  # (module, library) -> debt
 
     @classmethod
     def load(cls, path: Path) -> Allowlist:
@@ -78,6 +82,8 @@ class Allowlist:
             size={e["path"]: (int(e["max_lines"]), e["debt"]) for e in data.get("size", [])},
             env={e["path"]: e["debt"] for e in data.get("env", [])},
             print_={e["path"]: e["debt"] for e in data.get("print", [])},
+            layer={(e["module"], e["imports"]): e["debt"] for e in data.get("layer", [])},
+            owner={(e["module"], e["library"]): e["debt"] for e in data.get("owner", [])},
         )
 
 
@@ -329,6 +335,8 @@ def check_allowlist_debts(root: Path, allow: Allowlist) -> list[Violation]:
         else set()
     )
     named = [(p, d) for p, (_, d) in allow.size.items()] + list(allow.env.items()) + list(allow.print_.items())
+    named += [(f"{m} -> {i}", d) for (m, i), d in allow.layer.items()]
+    named += [(f"{m} -> {lib}", d) for (m, lib), d in allow.owner.items()]
     return [
         Violation(
             "ARCH-ALLOW",
@@ -433,6 +441,33 @@ def check_sealed(root: Path, indexed: set[str], ignored: Callable[[str], bool]) 
     return violations
 
 
+def check_layers(root: Path, allow: Allowlist, layers_file: Path | None = None) -> list[Violation]:
+    """ARCH-LAYER and ARCH-OWNER, plus allow-list entries they no longer need.
+
+    A tree without a layers file has no layers to enforce (the other rules'
+    tests build such trees); tests/harness/test_layers.py holds that this
+    repository has one.
+    """
+    path = layers_file or root / "harness" / "layers.toml"
+    if not path.exists():
+        return []
+    layering = layers.Layering.load(path)
+    violations, used_layer, used_owner = layers.check(root, layering, allow.layer, allow.owner)
+    stale = [(f"[[layer]] {m} -> {i}", d) for (m, i), d in allow.layer.items() if (m, i) not in used_layer]
+    stale += [(f"[[owner]] {m} -> {lib}", d) for (m, lib), d in allow.owner.items() if (m, lib) not in used_owner]
+    violations += [
+        Violation(
+            "ARCH-ALLOW",
+            "harness/arch-allowlist.toml",
+            1,
+            f"{entry} no longer happens",
+            f"delete that entry, and mark {debt} resolved if nothing else remains",
+        )
+        for entry, debt in stale
+    ]
+    return violations
+
+
 def rel_to(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
@@ -446,6 +481,7 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
         + check_secrets(root)
         + check_allowlist_debts(root, allow)
         + check_sealed(root, indexed_files(root), git_ignores(root))
+        + check_layers(root, allow)
     )
 
 

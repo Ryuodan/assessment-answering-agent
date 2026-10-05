@@ -140,3 +140,24 @@ reorganised (roadmap M4).
 - **Consequences:** the manifest reveals whether a guessed plaintext is exactly
   right, which only matters to someone who already holds the file.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 002.
+
+## D-012: six layers, enforced by the arch check
+
+- **Context:** the survey found the dependency directions only as a habit,
+  with two cycles and several upward imports hidden inside functions (TD-007)
+  and IO libraries used from several places (TD-019).
+- **Decision:** `src/` has six layers, lowest first: foundation, integrations,
+  records, answering, operations, interfaces, defined in `harness/layers.toml`.
+  A module imports only its own layer and those below, including inside
+  functions (ARCH-LAYER); each IO or framework library is imported only by the
+  layer that owns it (ARCH-OWNER); a new module must be given a layer. The
+  reasons for each line are in ARCHITECTURE.md#layers. The layering was measured
+  before it was adopted: 2 upward imports and 5 ownership exceptions, all
+  allow-listed against TD-007, TD-009 and TD-019.
+- **Alternatives considered (Claude):** splitting forms into its own layer
+  (rejected: its rules are file handling like the exports, and its
+  model-driven reading is answering); a generic types-config-repo-service-UI
+  stack (rejected by the brief: it does not name what this system does).
+- **Consequences:** cycles inside one layer are not caught (forms.xlsx and
+  forms.llm_layout); a layer can grow large, which ARCH-SIZE watches per module.
+- **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 003; the user delegated the plan.
