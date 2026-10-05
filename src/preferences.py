@@ -39,6 +39,7 @@ from dataclasses import dataclass, replace
 
 from src import store
 from src.identity import normalise
+from src.errors import PreferenceError as PreferenceError
 
 LENGTHS = ("full", "brief")
 TONES = ("as_drafted", "formal", "plain")
@@ -56,10 +57,6 @@ MAX_INSTRUCTION = 2000
 MAX_SKILLS = 40
 """Skills one person can write. Their names are offered to the assistant, so the
 list has to stay the length of a menu."""
-
-
-class PreferenceError(ValueError):
-    """A preference or skill that cannot be saved as given. Safe to show."""
 
 
 # ---------------------------------------------------------------------------

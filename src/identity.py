@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 
 from src import credentials, store
 from src.config import settings
+from src.errors import AccessDenied as AccessDenied, NotAllowed as NotAllowed
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +43,6 @@ LOCAL_EMAIL = "local@localhost"
 MEMBER = "member"
 ADMIN = "admin"
 ROLES = (MEMBER, ADMIN)
-
-
-class AccessDenied(Exception):
-    """Sign-in was refused. The message is safe to show the person."""
-
-
-class NotAllowed(Exception):
-    """An administrative action the caller may not perform."""
 
 
 @dataclass(frozen=True)

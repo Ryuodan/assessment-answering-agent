@@ -27,3 +27,4 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-18 | Records are honest: every number in a doc was measured or given by someone named; Claude's own reasoning is marked as such; rejected attempts are recorded with their numbers. | review |
 | GP-19 | Imports go down the layers of `harness/layers.toml`, never up, and every module has a layer. | `arch` ARCH-LAYER |
 | GP-20 | An IO or framework library is imported only by the layer that owns it. | `arch` ARCH-OWNER |
+| GP-21 | Errors are `AppError`s with a stable code and a message safe to show; internal exception text goes to the log, never into a response. | `arch` ARCH-ERROR; `tests/test_errors.py`; review for message content |

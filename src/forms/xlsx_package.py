@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Iterator
 
 import xml.etree.ElementTree as ET
+from src.errors import FormatError as FormatError
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -132,10 +133,6 @@ largest real sample decompresses to under two megabytes.
 
 MAX_CELLS = 400_000
 """Most cells one workbook may hold. The largest real sample has 1,288."""
-
-
-class FormatError(Exception):
-    """The file is not a workbook this can read. The message is safe to show."""
 
 
 class Workbook:

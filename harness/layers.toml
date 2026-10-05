@@ -14,6 +14,7 @@ about = "Settings, domain types, prompts and pure text rules. Reads configuratio
 modules = [
     "src",
     "src.config",
+    "src.errors",
     "src.models",
     "src.formatting",
     "src.prompts",

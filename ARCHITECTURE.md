@@ -54,6 +54,17 @@ with python-docx itself (TD-019). Not caught by the layers, because both ends
 are in one layer: `forms.xlsx` and `forms.llm_layout` import each other
 (TD-007).
 
+## Errors
+
+Every error the application raises on purpose is an `AppError` from
+`src/errors.py` (D-013): a message written for a person, a stable `code`, and an
+HTTP status. Lower layers raise them; only `src/api.py` turns them into a
+response, in one handler, always as `{"detail": <message>, "code": <code>}`.
+FastAPI's own errors and the catch-all 500 answer in the same shape. The text of
+an internal exception goes to the log, never to the response. Every class and
+code: [docs/generated/errors.md](docs/generated/errors.md). ARCH-ERROR keeps
+new exceptions inside the hierarchy.
+
 ## The browser
 
 `src/static/` holds the workbench (`index.html`), the chat, memory and

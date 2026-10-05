@@ -59,6 +59,7 @@ or docs and has not been verified by running anything.
 - **What:** read: eleven unrelated exception classes (`DoclingError`, `UnsupportedDocumentError`, `ExportError`, `FormatError`, `UnsupportedForm`, `AccessDenied`, `NotAllowed`, `PreferenceError`, `NotADocument`, `ToolError`, ...); four separate exception-to-HTTP wrappers in `api.py` (`_guard`, `_tool`, `_atool`, `_preference`) plus 45 direct `HTTPException` uses; 37 `except Exception` blocks in `src/`.
 - **Impact:** error codes and user-facing messages are decided case by case; no stable codes for a client or a test to rely on.
 - **Fix:** one hierarchy with stable codes and user-safe messages (Phase 2 plan).
+- **Partly resolved** 2026-10-05 (plan 004, D-013): one hierarchy in `src/errors.py`, one handler in `src/api.py`, a code on every error response, no internal text in responses on the paths that leaked; ARCH-ERROR guards it. Remaining: the 37 `except Exception` blocks, and Docling's diagnostics (TD-027).
 
 ## TD-009: Logging is unstructured, and `config.py` has import-time side effects
 
@@ -173,3 +174,9 @@ or docs and has not been verified by running anything.
 - **What:** read 2026-10-05 (Claude, plan 004): `tools._require` raises `ToolError("No questionnaire ...")`, which the API turns into 400, for a questionnaire that does not exist or belongs to a colleague; a missing or colleague's run, conversation, memory entry, skill or document answers 404. `tests/test_private_work.py` pins the 400.
 - **Impact:** a client cannot tell "not there" from "bad request" for questionnaires; the README's rule that another person's work "reads as absent" holds in wording but not in status.
 - **Fix (needs a decision):** raise `NotFound` from `_require` and update the test, if nothing in the pages depends on the 400.
+
+## TD-027: Docling's diagnostics reach the person who uploaded a file
+
+- **What:** read 2026-10-05 (Claude, plan 004): `DoclingError` messages carry the converter's URL, HTTP status and raw response. With `DOCLING_FALLBACK_LOCAL=false`, `documents.load_text` wraps one into `UnsupportedDocumentError(f"Could not convert '<file>': {exc}")`, and ingestion reports `str(exc)` as the upload's error, which the page shows. `DoclingError` itself stays outside the AppError hierarchy as an internal diagnostic (allow-listed in ARCH-ERROR).
+- **Impact:** with the fallback off, a person can see internal host names and the converter's raw output.
+- **Fix:** keep the diagnostics in the log, show "Could not convert '<file>'." to the person, and make `DoclingError` an `Unavailable` with a safe message and its details in a separate attribute.

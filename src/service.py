@@ -15,6 +15,7 @@ import re
 import uuid
 from pathlib import Path
 
+from src.errors import NotADocument as NotADocument
 from src import answer_memory, progress
 from src.config import settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
@@ -413,10 +414,6 @@ async def search_knowledge(
         # so rather than implying the corpus holds nothing.
         "degraded": bool(degraded),
     }
-
-
-class NotADocument(ValueError):
-    """A name that is not a policy document, asked to be removed as one. Safe to show."""
 
 
 def delete_source(source_name: str, team_id: str | None = None) -> None:

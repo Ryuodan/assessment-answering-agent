@@ -31,14 +31,11 @@ from bidi.algorithm import get_display
 from src import docling_client
 from src.config import settings
 from src.docling_client import DoclingError
+from src.errors import UnsupportedDocumentError as UnsupportedDocumentError
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_SUFFIXES = (".pdf", ".docx")
-
-
-class UnsupportedDocumentError(ValueError):
-    """Raised for a file type the app cannot read."""
 
 
 # ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ from reportlab.platypus import (
 
 from src.formatting import parse
 from src.models import AnsweredQuestion, AssessmentResult
+from src.errors import ExportError as ExportError
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +97,6 @@ FONT = "Assessment"
 FONT_BOLD = "Assessment-Bold"
 _FONTS_READY = False
 _COVERAGE: set[int] | None = None
-
-
-class ExportError(RuntimeError):
-    """The PDF could not be produced."""
 
 
 def _bold_variant(regular: Path) -> Path:

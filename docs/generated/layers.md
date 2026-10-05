@@ -10,7 +10,7 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.formatting`, `src.models`, `src.progress`, `src.prompts`, `src.verification`
+- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.models`, `src.progress`, `src.prompts`, `src.verification`
 
 ## 2. integrations
 

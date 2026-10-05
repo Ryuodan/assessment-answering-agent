@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 2127
+max_lines = 2101
 debt = "TD-006"
 
 [[size]]
@@ -14,7 +14,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/tools.py"
-max_lines = 1499
+max_lines = 1496
 debt = "TD-006"
 
 [[size]]
@@ -39,22 +39,22 @@ debt = "TD-006"
 
 [[size]]
 path = "src/export_pdf.py"
-max_lines = 751
+max_lines = 748
 debt = "TD-006"
 
 [[size]]
 path = "src/service.py"
-max_lines = 744
+max_lines = 741
 debt = "TD-006"
 
 [[size]]
 path = "src/forms/xlsx_package.py"
-max_lines = 697
+max_lines = 694
 debt = "TD-006"
 
 [[size]]
 path = "src/identity.py"
-max_lines = 632
+max_lines = 625
 debt = "TD-006"
 
 [[size]]
@@ -69,7 +69,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/preferences.py"
-max_lines = 498
+max_lines = 495
 debt = "TD-006"
 
 [[size]]
@@ -84,7 +84,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/documents.py"
-max_lines = 427
+max_lines = 424
 debt = "TD-006"
 
 [[size]]
@@ -122,3 +122,8 @@ debt = "TD-009"
 module = "src.service"
 library = "docx"
 debt = "TD-019"
+
+# Exceptions outside the AppError hierarchy (harness/error_rules.py), plan 004.
+[[error]]
+class = "src.docling_client.DoclingError"
+debt = "TD-027"

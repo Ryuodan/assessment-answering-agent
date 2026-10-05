@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.errors import UnsupportedForm as UnsupportedForm
 from src.forms import docx, xlsx, xlsx_package
 from src.forms.model import (
     DetectedForm,
@@ -33,10 +34,6 @@ from src.forms.model import (
 _FORMATS = {".xlsx": xlsx, ".xlsm": xlsx, ".docx": docx}
 
 SUPPORTED = tuple(sorted(_FORMATS))
-
-
-class UnsupportedForm(Exception):
-    """The file is not a questionnaire format this can read."""
 
 
 # Re-exported so a caller can catch one thing. Both are "this file cannot be

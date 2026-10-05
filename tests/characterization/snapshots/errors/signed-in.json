@@ -1,36 +1,42 @@
 {
   "administrator refused": {
     "body": {
+      "code": "not_allowed",
       "detail": "cybersecurity still has 2 member(s). Move or remove them first."
     },
     "status": 400
   },
   "administrator: the only administrator demoted": {
     "body": {
+      "code": "last_administrator",
       "detail": "This is the only administrator. Promote someone else first."
     },
     "status": 400
   },
   "administrator: unknown user": {
     "body": {
+      "code": "user_not_found",
       "detail": "No user nobody@example.com."
     },
     "status": 404
   },
   "member on an administrator route": {
     "body": {
+      "code": "admin_required",
       "detail": "Administrator access is required."
     },
     "status": 403
   },
   "not signed in": {
     "body": {
+      "code": "sign_in_required",
       "detail": "Sign in to continue."
     },
     "status": 401
   },
   "wrong access code": {
     "body": {
+      "code": "access_denied",
       "detail": "That email and access code do not match."
     },
     "status": 403

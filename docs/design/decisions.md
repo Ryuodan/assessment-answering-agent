@@ -161,3 +161,27 @@ reorganised (roadmap M4).
 - **Consequences:** cycles inside one layer are not caught (forms.xlsx and
   forms.llm_layout); a layer can grow large, which ARCH-SIZE watches per module.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 003; the user delegated the plan.
+
+## D-013: one error hierarchy, one handler, a code on every error response
+
+- **Context:** eleven unrelated exception classes, four wrappers in `api.py`
+  that each turned some of them into HTTP errors, 45 hand-built
+  `HTTPException`s, and three responses that included an internal exception's
+  text, one of them the server's file path (TD-008).
+- **Decision:** `src/errors.py` defines `AppError` and one subclass per status
+  in use (Invalid 400, SignInRequired 401, Forbidden 403, NotFound 404,
+  UnsupportedFile 415, Unprocessable 422, Unavailable 503), and the domain
+  errors, which keep their built-in bases (`PreferenceError` is still a
+  `ValueError`). Each class has a default code; a raise site may name a more
+  specific one. `src/api.py` has one handler: every error response is
+  `{"detail": <message>, "code": <code>}`, FastAPI's own errors and the 500
+  included. ARCH-ERROR keeps new exceptions in the hierarchy and
+  `HTTPException` out of `src/`; `docs/generated/errors.md` lists every code.
+- **Consequences:** the pages keep reading `detail`; clients and tests can
+  branch on `code`. Behaviour was pinned first and compared after: 29 error
+  responses gained a code, none changed status, two stopped showing a server
+  path. Errors that used to escape as an unhandled 500 now answer with their
+  class's status. The domain errors moved into `src/errors.py` (re-imported
+  by their modules), which also took 75 lines out of the oversized modules.
+- **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user approved
+  the plan; the design is Claude's.

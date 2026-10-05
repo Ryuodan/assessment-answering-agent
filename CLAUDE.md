@@ -38,7 +38,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | Known problems | [tech-debt.md](docs/plans/tech-debt.md) |
 | The rules and what enforces each | [golden-principles.md](docs/harness/golden-principles.md), [PRINCIPLES.md](docs/harness/PRINCIPLES.md) |
 | Plan template and rules | [docs/plans/README.md](docs/plans/README.md) |
-| API contract, settings catalogue (generated) | [openapi.json](docs/generated/openapi.json), [settings.md](docs/generated/settings.md) |
+| API contract, settings, error codes (generated) | [openapi.json](docs/generated/openapi.json), [settings.md](docs/generated/settings.md), [errors.md](docs/generated/errors.md) |
 
 ## Code map
 
@@ -72,6 +72,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 5. Never commit `.env`, `data/`, `chroma_db/` or customer files; never print a
    secret. See [SECURITY.md](SECURITY.md).
 6. Configuration only through `src/config.py`; every setting in `.env.example`.
+   Errors are `AppError`s from `src/errors.py`, never `HTTPException` (D-013).
    Imports go down the layers in `harness/layers.toml` (see ARCHITECTURE.md);
    a new module gets a layer there.
 7. Allow-lists and baselines only shrink. A new violation is fixed, not listed.

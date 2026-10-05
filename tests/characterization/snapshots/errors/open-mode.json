@@ -1,60 +1,70 @@
 {
   "assistant without a model": {
     "body": {
+      "code": "assistant_unconfigured",
       "detail": "No model is configured for the assistant."
     },
     "status": 503
   },
   "conversation not found": {
     "body": {
+      "code": "conversation_not_found",
       "detail": "That conversation no longer exists."
     },
     "status": 404
   },
   "document location invalid": {
     "body": {
+      "code": "document_path_invalid",
       "detail": "Invalid document location."
     },
     "status": 400
   },
   "document name invalid": {
     "body": {
+      "code": "document_path_invalid",
       "detail": "Invalid document name."
     },
     "status": 400
   },
   "document not found": {
     "body": {
+      "code": "document_not_found",
       "detail": "Document 'missing.pdf' was not found."
     },
     "status": 404
   },
   "export with nothing confident": {
     "body": {
+      "code": "nothing_to_export",
       "detail": "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts."
     },
     "status": 422
   },
   "memory entry not found": {
     "body": {
+      "code": "memory_entry_not_found",
       "detail": "No such entry in the answer memory."
     },
     "status": 404
   },
   "policy to remove not found": {
     "body": {
+      "code": "source_not_found",
       "detail": "'missing.pdf' is not in the knowledge base."
     },
     "status": 404
   },
   "policy upload of an unsupported type": {
     "body": {
+      "code": "document_type_unsupported",
       "detail": "'notes.txt' is not supported. Upload .pdf or .docx."
     },
     "status": 415
   },
   "policy upload without files": {
     "body": {
+      "code": "validation_failed",
       "detail": [
         {
           "input": null,
@@ -71,42 +81,49 @@
   },
   "preference refused": {
     "body": {
+      "code": "preference_invalid",
       "detail": "Write what to call us without quotation marks."
     },
     "status": 400
   },
   "preview of a corrupt Word file": {
     "body": {
-      "detail": "Could not preview 'corrupt.docx': Package not found at '<tmp>\\people\\local-localhost-3b0713b155\\uploads\\corrupt.docx'"
+      "code": "preview_failed",
+      "detail": "Could not preview 'corrupt.docx': it could not be read as a Word document."
     },
     "status": 422
   },
   "progress not found": {
     "body": {
+      "code": "run_not_in_progress",
       "detail": "No run in progress with id 'nope'."
     },
     "status": 404
   },
   "questionnaire not found": {
     "body": {
+      "code": "operation_refused",
       "detail": "No questionnaire 'nope'."
     },
     "status": 400
   },
   "questionnaire that cannot be read": {
     "body": {
+      "code": "questionnaire_unreadable",
       "detail": "broken.xlsx is not a readable .xlsx file."
     },
     "status": 422
   },
   "questionnaire with an unsupported suffix": {
     "body": {
+      "code": "questionnaire_type_unsupported",
       "detail": ".txt is not a questionnaire this can read. Supported: .docx, .xlsm, .xlsx."
     },
     "status": 400
   },
   "request body that fails validation": {
     "body": {
+      "code": "validation_failed",
       "detail": [
         {
           "ctx": {
@@ -126,36 +143,42 @@
   },
   "run not found": {
     "body": {
+      "code": "run_not_found",
       "detail": "No run 'nope'."
     },
     "status": 404
   },
   "search mode unknown": {
     "body": {
+      "code": "search_mode_unknown",
       "detail": "unknown search mode 'bogus'"
     },
     "status": 422
   },
   "skill not found": {
     "body": {
+      "code": "skill_not_found",
       "detail": "You have no skill like that."
     },
     "status": 404
   },
   "text of a corrupt Word file": {
     "body": {
-      "detail": "Could not extract text from 'corrupt.docx': Package not found at '<tmp>\\people\\local-localhost-3b0713b155\\uploads\\corrupt.docx'"
+      "code": "extraction_failed",
+      "detail": "Could not extract text from 'corrupt.docx'."
     },
     "status": 422
   },
   "unexpected failure": {
     "body": {
+      "code": "internal_error",
       "detail": "Something went wrong on the server. The details are in its log."
     },
     "status": 500
   },
   "unknown route": {
     "body": {
+      "code": "route_not_found",
       "detail": "Not Found"
     },
     "status": 404

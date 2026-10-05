@@ -15,6 +15,7 @@ Rules (each violation prints rule, file:line and a FIX line):
     ARCH-ALLOW   an allow-list entry is stale, or names no tech-debt item
     ARCH-LAYER   an import against the layers of src/ (harness/layers.py)
     ARCH-OWNER   an IO or framework library imported outside its owning layer
+    ARCH-ERROR   an exception outside src/errors.py's hierarchy (harness/error_rules.py)
     ARCH-SEALED  sealed eval data (eval/sealed/): a plaintext is tracked or not
                  gitignored, differs from its sealed copy, or a sealed file is missing
 
@@ -35,7 +36,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from harness import layers
+from harness import error_rules, layers
 from harness.report import ROOT, Violation, finish
 
 MAX_LINES = 400
@@ -72,6 +73,7 @@ class Allowlist:
     print_: dict[str, str] = field(default_factory=dict)  # path -> debt
     layer: dict[tuple[str, str], str] = field(default_factory=dict)  # (module, imported module) -> debt
     owner: dict[tuple[str, str], str] = field(default_factory=dict)  # (module, library) -> debt
+    error: dict[str, str] = field(default_factory=dict)  # qualified class name -> debt
 
     @classmethod
     def load(cls, path: Path) -> Allowlist:
@@ -84,6 +86,7 @@ class Allowlist:
             print_={e["path"]: e["debt"] for e in data.get("print", [])},
             layer={(e["module"], e["imports"]): e["debt"] for e in data.get("layer", [])},
             owner={(e["module"], e["library"]): e["debt"] for e in data.get("owner", [])},
+            error={e["class"]: e["debt"] for e in data.get("error", [])},
         )
 
 
@@ -337,6 +340,7 @@ def check_allowlist_debts(root: Path, allow: Allowlist) -> list[Violation]:
     named = [(p, d) for p, (_, d) in allow.size.items()] + list(allow.env.items()) + list(allow.print_.items())
     named += [(f"{m} -> {i}", d) for (m, i), d in allow.layer.items()]
     named += [(f"{m} -> {lib}", d) for (m, lib), d in allow.owner.items()]
+    named += list(allow.error.items())
     return [
         Violation(
             "ARCH-ALLOW",
@@ -468,6 +472,25 @@ def check_layers(root: Path, allow: Allowlist, layers_file: Path | None = None) 
     return violations
 
 
+def check_errors(root: Path, allow: Allowlist) -> list[Violation]:
+    """ARCH-ERROR, plus allow-list entries it no longer needs."""
+    if not (root / "src").is_dir():
+        return []
+    violations, used = error_rules.check(root, allow.error)
+    violations += [
+        Violation(
+            "ARCH-ALLOW",
+            "harness/arch-allowlist.toml",
+            1,
+            f"[[error]] {name} is now inside the AppError hierarchy, or gone",
+            f"delete that entry, and mark {debt} resolved if nothing else remains",
+        )
+        for name, debt in allow.error.items()
+        if name not in used
+    ]
+    return violations
+
+
 def rel_to(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
@@ -482,6 +505,7 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
         + check_allowlist_debts(root, allow)
         + check_sealed(root, indexed_files(root), git_ignores(root))
         + check_layers(root, allow)
+        + check_errors(root, allow)
     )
 
 

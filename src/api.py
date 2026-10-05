@@ -16,11 +16,14 @@ from urllib.parse import quote
 
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src import (
     answer_memory,
@@ -43,9 +46,19 @@ from src.agents import assistant
 from src.identity import User
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
+from src.errors import (
+    AppError,
+    Forbidden,
+    Invalid,
+    NotFound,
+    SignInRequired,
+    Unavailable,
+    UnsupportedFile,
+    Unprocessable,
+)
 from src.extraction import detect_question_language
 from src.export_docx import render_docx
-from src.export_pdf import ExportError, ExportOptions, render_pdf, selected_answers
+from src.export_pdf import ExportOptions, render_pdf, selected_answers
 from src.models import (
     AnsweredQuestion,
     AssessmentResult,
@@ -164,6 +177,41 @@ app = FastAPI(
 )
 
 
+# Every error response has the same shape: {"detail": <message>, "code": <code>}.
+# `detail` is what a person reads (the pages show it); `code` is stable, for a
+# client or a test to branch on. See src/errors.py and docs/generated/errors.md.
+
+# Codes for the errors FastAPI raises itself (an unknown route, a wrong method).
+_FRAMEWORK_CODES = {404: "route_not_found", 405: "method_not_allowed"}
+
+
+@app.exception_handler(AppError)
+async def _app_error(request: Request, error: AppError) -> JSONResponse:
+    """An error the application raised on purpose: its message is safe to show."""
+    if error.status >= 500:
+        logger.warning("%s on %s %s: %s", error.code, request.method, request.url.path, error.message)
+    return JSONResponse(status_code=error.status, content={"detail": error.message, "code": error.code})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _framework_error(request: Request, error: StarletteHTTPException) -> JSONResponse:
+    """FastAPI's own refusals, given a code like everything else."""
+    code = _FRAMEWORK_CODES.get(error.status_code, "http_error")
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": error.detail, "code": code},
+        headers=getattr(error, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def _invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
+    """A body or parameter that does not match its model: FastAPI's detail, plus a code."""
+    return JSONResponse(
+        status_code=422, content={"detail": jsonable_encoder(error.errors()), "code": "validation_failed"}
+    )
+
+
 @app.exception_handler(Exception)
 async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
     """Turn an unexpected failure into a clean 500 rather than a traceback.
@@ -177,7 +225,7 @@ async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Something went wrong on the server. The details are in its log."},
+        content={"detail": "Something went wrong on the server. The details are in its log.", "code": "internal_error"},
     )
 
 
@@ -199,7 +247,7 @@ def current_user(request: Request) -> User:
         return user
     if not identity.sign_in_required():
         return identity.local_user()
-    raise HTTPException(status_code=401, detail="Sign in to continue.")
+    raise SignInRequired("Sign in to continue.")
 
 
 class SignInRequest(BaseModel):
@@ -220,17 +268,14 @@ def _user_payload(user: User) -> dict:
 def current_admin(user: User = Depends(current_user)) -> User:
     """Refuse anyone who is not an administrator."""
     if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Administrator access is required.")
+        raise Forbidden("Administrator access is required.", code="admin_required")
     return user
 
 
 @app.post("/api/auth/session")
 def sign_in(body: SignInRequest, request: Request, response: Response) -> dict:
     """Open a session for a known address and its access code."""
-    try:
-        token, user = identity.sign_in(body.email, body.code)
-    except identity.AccessDenied as denied:
-        raise HTTPException(status_code=403, detail=str(denied)) from denied
+    token, user = identity.sign_in(body.email, body.code)
 
     response.set_cookie(
         identity.SESSION_COOKIE,
@@ -320,14 +365,6 @@ class TeamRequest(BaseModel):
     name: str = Field(default="", max_length=120)
 
 
-def _guard(action) -> object:
-    """Run an administrative action, turning a refusal into a 400."""
-    try:
-        return action()
-    except identity.NotAllowed as refused:
-        raise HTTPException(status_code=400, detail=str(refused)) from refused
-
-
 @app.get("/api/admin/overview")
 def admin_overview(admin: User = Depends(current_admin)) -> dict:
     return {
@@ -340,7 +377,7 @@ def admin_overview(admin: User = Depends(current_admin)) -> dict:
 
 @app.post("/api/admin/users")
 def admin_add_user(body: AddUserRequest, admin: User = Depends(current_admin)) -> dict:
-    user = _guard(lambda: identity.add_user(body.email, team_id=body.team, role=body.role, added_by=admin.email))
+    user = identity.add_user(body.email, team_id=body.team, role=body.role, added_by=admin.email)
     events.record(
         admin,
         events.USER_ADDED,
@@ -357,7 +394,7 @@ def admin_update_user(email: str, body: UpdateUserRequest, admin: User = Depends
     address = identity.normalise(email)
     if body.role == identity.MEMBER or body.disabled:
         _refuse_last_admin(address)
-    user = _guard(lambda: identity.update_user(address, team_id=body.team, role=body.role, disabled=body.disabled))
+    user = identity.update_user(address, team_id=body.team, role=body.role, disabled=body.disabled)
     events.record(
         admin,
         events.USER_UPDATED,
@@ -388,10 +425,7 @@ def _refuse_last_admin(email: str) -> None:
     """
     user = identity.find_user_any(email)
     if user and user.is_admin and identity.admin_count() <= 1:
-        raise HTTPException(
-            status_code=400,
-            detail="This is the only administrator. Promote someone else first.",
-        )
+        raise Invalid("This is the only administrator. Promote someone else first.", code="last_administrator")
 
 
 @app.post("/api/admin/users/{email}/password")
@@ -399,12 +433,12 @@ def admin_set_password(email: str, body: PasswordRequest, admin: User = Depends(
     """Give an admin their own password, or clear it back to the team code."""
     address = identity.normalise(email)
     if identity.find_user_any(address) is None:
-        raise HTTPException(status_code=404, detail=f"No user {address}.")
+        raise NotFound(f"No user {address}.", code="user_not_found")
     if address == identity.normalise(settings.admin_email):
-        raise HTTPException(
-            status_code=400,
-            detail="This account's password comes from the environment and would be "
+        raise Invalid(
+            "This account's password comes from the environment and would be "
             "restored on the next restart. Create a second administrator instead.",
+            code="password_from_environment",
         )
     identity.set_password(address, body.password or None)
     events.record(
@@ -426,7 +460,7 @@ def admin_add_team(body: TeamRequest, admin: User = Depends(current_admin)) -> d
 
 @app.delete("/api/admin/teams/{team_id}")
 def admin_remove_team(team_id: str, admin: User = Depends(current_admin)) -> dict:
-    _guard(lambda: identity.delete_team(team_id))
+    identity.delete_team(team_id)
     events.record(admin, events.TEAM_REMOVED, subject_type="team", subject_id=team_id)
     return {"removed": team_id}
 
@@ -439,7 +473,7 @@ def admin_rotate_code(team_id: str, admin: User = Depends(current_admin)) -> dic
     when somebody leaves, so the old code ceasing to work is the feature.
     """
     if not any(team["id"] == team_id for team in identity.list_teams()):
-        raise HTTPException(status_code=404, detail=f"No team {team_id!r}.")
+        raise NotFound(f"No team {team_id!r}.", code="team_not_found")
     code = identity.set_access_code(team_id)
     events.record(admin, events.CODE_ROTATED, subject_type="team", subject_id=team_id)
     return {"team": team_id, "access_code": code}
@@ -510,16 +544,6 @@ class SetAnswerRequest(BaseModel):
     """Which of the two lengths is being edited. See `tools.set_answer`."""
 
 
-def _tool(action):
-    """Run a tool call, turning its refusals into readable HTTP errors."""
-    try:
-        return action()
-    except tools.ToolError as refused:
-        raise HTTPException(status_code=400, detail=str(refused)) from refused
-    except forms.FormatError as unreadable:
-        raise HTTPException(status_code=422, detail=str(unreadable)) from unreadable
-
-
 @app.post("/api/forms")
 async def open_questionnaire(file: UploadFile = File(...), user: User = Depends(current_user)) -> dict:
     """Read an uploaded questionnaire and report what can be answered in it.
@@ -534,16 +558,15 @@ async def open_questionnaire(file: UploadFile = File(...), user: User = Depends(
     # would have refused before the parser ever saw them.
     name = file.filename or "questionnaire"
     if Path(name).suffix.lower() not in forms.SUPPORTED:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
-            f"Supported: {', '.join(forms.SUPPORTED)}.",
+        raise forms.UnsupportedForm(
+            f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
+            f"Supported: {', '.join(forms.SUPPORTED)}."
         )
     path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
     # In a thread: reading a workbook is a CPU-bound XML parse, and under the
     # assisted and agent strategies it is also a network call. Either way it is
     # not something to do on the event loop of a server answering other people.
-    batch = await run_in_threadpool(lambda: _tool(lambda: tools.open_form(user, path)))
+    batch = await run_in_threadpool(lambda: tools.open_form(user, path))
     return tools.inspect(user, batch.id)
 
 
@@ -554,7 +577,7 @@ def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> 
 
 @app.get("/api/forms/{batch_id}")
 def get_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict:
-    return _tool(lambda: tools.inspect(user, batch_id))
+    return tools.inspect(user, batch_id)
 
 
 @app.post("/api/forms/{batch_id}/answer")
@@ -565,33 +588,29 @@ async def answer_questionnaire(batch_id: str, request: AnswerBatchRequest, user:
     request is still open — the batch id is the run id, so it can be watched
     from the moment the call is made.
     """
-    outcome = await _atool(
-        tools.answer(
-            user,
-            batch_id,
-            request.scope.to_scope(),
-            replace_existing=request.replace_existing,
-        )
+    outcome = await tools.answer(
+        user,
+        batch_id,
+        request.scope.to_scope(),
+        replace_existing=request.replace_existing,
     )
     return {**vars(outcome), "batch": tools.inspect(user, batch_id)}
 
 
 @app.post("/api/forms/{batch_id}/revise")
 async def revise_questionnaire(batch_id: str, request: ReviseBatchRequest, user: User = Depends(current_user)) -> dict:
-    outcome = await _atool(tools.revise(user, batch_id, request.instruction, request.scope.to_scope()))
+    outcome = await tools.revise(user, batch_id, request.instruction, request.scope.to_scope())
     return {**vars(outcome), "batch": tools.inspect(user, batch_id)}
 
 
 @app.post("/api/forms/{batch_id}/answers")
 def write_answer_by_hand(batch_id: str, request: SetAnswerRequest, user: User = Depends(current_user)) -> dict:
-    _tool(
-        lambda: tools.set_answer(
-            user,
-            batch_id,
-            request.question_id,
-            request.text,
-            which=request.which,
-        )
+    tools.set_answer(
+        user,
+        batch_id,
+        request.question_id,
+        request.text,
+        which=request.which,
     )
     return tools.inspect(user, batch_id)
 
@@ -627,13 +646,11 @@ def leave_an_answer_blank(batch_id: str, request: BlankAnswerRequest, user: User
     file's own -- `Human Resources!4` -- and a sheet name may contain anything
     a spreadsheet allows, slashes included.
     """
-    _tool(
-        lambda: tools.blank_answer(
-            user,
-            batch_id,
-            request.question_id,
-            blank=request.blank,
-        )
+    tools.blank_answer(
+        user,
+        batch_id,
+        request.question_id,
+        blank=request.blank,
     )
     return tools.inspect(user, batch_id)
 
@@ -641,21 +658,19 @@ def leave_an_answer_blank(batch_id: str, request: BlankAnswerRequest, user: User
 @app.get("/api/forms/{batch_id}/columns")
 def get_column_roles(batch_id: str, user: User = Depends(current_user)) -> dict:
     """Which column each sheet's answers go into, and why detection thinks so."""
-    return {"sheets": _tool(lambda: tools.column_roles(user, batch_id))}
+    return {"sheets": tools.column_roles(user, batch_id)}
 
 
 @app.post("/api/forms/{batch_id}/columns")
 def set_column_role(batch_id: str, body: ColumnRoleRequest, user: User = Depends(current_user)) -> dict:
     """Move a sheet's answers to a different column, or stop writing one."""
-    return _tool(lambda: tools.set_column_role(user, batch_id, body.sheet, body.column, body.role))
+    return tools.set_column_role(user, batch_id, body.sheet, body.column, body.role)
 
 
 @app.patch("/api/forms/{batch_id}/questions")
 def correct_questions(batch_id: str, body: QuestionChanges, user: User = Depends(current_user)) -> dict:
     """Set questions aside, bring them back, or correct their wording."""
-    return _tool(
-        lambda: tools.set_questions(user, batch_id, [change.model_dump(exclude_none=True) for change in body.changes])
-    )
+    return tools.set_questions(user, batch_id, [change.model_dump(exclude_none=True) for change in body.changes])
 
 
 class DetailRequest(BaseModel):
@@ -673,9 +688,9 @@ async def choose_answer_length(batch_id: str, request: DetailRequest, user: User
     the full answer was never replaced: both are stored against the question and
     the choice only says which one `fill` writes.
     """
-    _tool(lambda: tools.set_detail(user, batch_id, request.detail))
+    tools.set_detail(user, batch_id, request.detail)
     if request.detail == "brief":
-        await _atool(tools.make_brief(user, batch_id))
+        await tools.make_brief(user, batch_id)
     return tools.inspect(user, batch_id)
 
 
@@ -691,16 +706,14 @@ async def choose_one_answer_length(
     batch_id: str, request: PreferLengthRequest, user: User = Depends(current_user)
 ) -> dict:
     """Write this one answer full or brief, whatever the rest of the file does."""
-    _tool(lambda: tools.prefer_length(user, batch_id, request.question_id, request.prefer))
+    tools.prefer_length(user, batch_id, request.question_id, request.prefer)
     # Deriving on demand, for the one answer, so choosing "brief" on a file that
     # is set to full does not silently show the long text instead.
     if request.prefer == "brief":
-        await _atool(
-            tools.make_brief(
-                user,
-                batch_id,
-                tools.Scope(ids=(request.question_id,)),
-            )
+        await tools.make_brief(
+            user,
+            batch_id,
+            tools.Scope(ids=(request.question_id,)),
         )
     return tools.inspect(user, batch_id)
 
@@ -728,13 +741,11 @@ def approve_an_answer(
     contradicts runs after the response: it is model calls, and a reviewer
     clicking through twenty answers should not wait for any of them.
     """
-    entry_id = _tool(
-        lambda: tools.approve_answer(
-            user,
-            batch_id,
-            request.question_id,
-            approved=request.approved,
-        )
+    entry_id = tools.approve_answer(
+        user,
+        batch_id,
+        request.question_id,
+        approved=request.approved,
     )
     if entry_id:
         tasks.add_task(_scan_memory)
@@ -763,7 +774,7 @@ def fill_questionnaire(
 ) -> dict:
     """Write the confirmed answers into a copy of the original, and report the rest."""
     include = bool(request and request.include_unreviewed)
-    filled = _tool(lambda: tools.fill(user, batch_id, include_unreviewed=include))
+    filled = tools.fill(user, batch_id, include_unreviewed=include)
     return {
         "file": filled.path.name,
         "written": filled.written,
@@ -787,10 +798,10 @@ OOXML_TYPES = {
 @app.get("/api/forms/{batch_id}/file")
 def download_filled_questionnaire(batch_id: str, user: User = Depends(current_user)) -> FileResponse:
     """The filled copy. Produced by `/fill`, which must have run first."""
-    batch = _tool(lambda: tools._require(user, batch_id))
+    batch = tools._require(user, batch_id)
     filled = tools._filled_path(batch)
     if not filled.exists():
-        raise HTTPException(status_code=404, detail="Fill the questionnaire first.")
+        raise NotFound("Fill the questionnaire first.", code="filled_file_missing")
     # The real type, so a browser hands it to Excel or Word rather than to
     # whatever it does with an unknown blob; `attachment_headers` still forces
     # the download and carries the Arabic file name.
@@ -800,16 +811,6 @@ def download_filled_questionnaire(batch_id: str, user: User = Depends(current_us
         headers=attachment_headers(filled.name),
         media_type=OOXML_TYPES.get(filled.suffix.lower(), "application/octet-stream"),
     )
-
-
-async def _atool(coroutine):
-    """`_tool`, for the operations that are asynchronous."""
-    try:
-        return await coroutine
-    except tools.ToolError as refused:
-        raise HTTPException(status_code=400, detail=str(refused)) from refused
-    except forms.FormatError as unreadable:
-        raise HTTPException(status_code=422, detail=str(unreadable)) from unreadable
 
 
 # ---------------------------------------------------------------------------
@@ -832,7 +833,7 @@ def get_run(run_id: str, user: User = Depends(current_user)) -> dict:
     """
     stored = runs.load(run_id, team_id=user.team_id, actor_email=user.email)
     if stored is None:
-        raise HTTPException(status_code=404, detail=f"No run '{run_id}'.")
+        raise NotFound(f"No run '{run_id}'.", code="run_not_found")
     return {
         **vars(stored.summary),
         "answers": [answer.model_dump() for answer in stored.answers],
@@ -848,9 +849,9 @@ def list_events(user: User = Depends(current_user), limit: int = 50, kind: str |
 
 def _check_suffix(filename: str) -> None:
     if Path(filename).suffix.lower() not in SUPPORTED_SUFFIXES:
-        raise HTTPException(
-            status_code=415,
-            detail=f"'{filename}' is not supported. Upload {' or '.join(SUPPORTED_SUFFIXES)}.",
+        raise UnsupportedFile(
+            f"'{filename}' is not supported. Upload {' or '.join(SUPPORTED_SUFFIXES)}.",
+            code="document_type_unsupported",
         )
 
 
@@ -862,7 +863,7 @@ async def _ingest_files(
 ) -> list[IngestResult]:
     """Save and index a batch of uploads. Shared by both ingestion endpoints."""
     if not files:
-        raise HTTPException(status_code=400, detail="No files were uploaded.")
+        raise Invalid("No files were uploaded.", code="no_files")
 
     # Every name checked before any file is saved. Checked one at a time, a
     # policy uploaded beside a stray .zip was indexed and the request still
@@ -910,7 +911,7 @@ async def upload_guidelines(
     the first claims a control we may not have.
     """
     if authority not in ("ours", "external"):
-        raise HTTPException(status_code=400, detail="authority must be 'ours' or 'external'.")
+        raise Invalid("authority must be 'ours' or 'external'.", code="authority_invalid")
     results = await _ingest_files(files, SourceType.GUIDELINE, authority, user.team_id)
     _record_indexing(user, results, authority=authority)
     return results
@@ -943,13 +944,8 @@ def remove_source(source_name: str, user: User = Depends(current_user)) -> dict:
     """Remove one indexed policy document."""
     try:
         service.delete_source(source_name, user.team_id)
-    except service.NotADocument as refused:
-        raise HTTPException(status_code=400, detail=str(refused)) from refused
     except KeyError as missing:
-        raise HTTPException(
-            status_code=404,
-            detail=f"{source_name!r} is not in the knowledge base.",
-        ) from missing
+        raise NotFound(f"{source_name!r} is not in the knowledge base.", code="source_not_found") from missing
     events.record(
         user,
         events.SOURCE_REMOVED,
@@ -1103,7 +1099,7 @@ def edit_memory_entry(
         team_id=user.team_id,
     )
     if entry is None:
-        raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+        raise NotFound("No such entry in the answer memory.", code="memory_entry_not_found")
     events.record(
         user,
         events.MEMORY_EDITED,
@@ -1118,7 +1114,7 @@ def edit_memory_entry(
 def remove_memory_entry(entry_id: str, user: User = Depends(current_user)) -> dict:
     """Forget an entry: the row, its vector, and the conflicts it raised."""
     if not answer_memory.remove(entry_id, user.team_id):
-        raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+        raise NotFound("No such entry in the answer memory.", code="memory_entry_not_found")
     events.record(
         user,
         events.MEMORY_REMOVED,
@@ -1132,7 +1128,7 @@ def remove_memory_entry(entry_id: str, user: User = Depends(current_user)) -> di
 def restore_memory_entry(entry_id: str, user: User = Depends(current_user)) -> dict:
     """Put a superseded entry back into use, when the later answer was wrong."""
     if answer_memory.get(entry_id, user.team_id) is None:
-        raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+        raise NotFound("No such entry in the answer memory.", code="memory_entry_not_found")
     answer_memory.restore(entry_id, user.team_id)
     events.record(
         user,
@@ -1155,7 +1151,7 @@ def resolve_memory_conflict(body: ResolveConflictRequest, user: User = Depends(c
     """Say which of two disagreeing answers is our position, or that neither loses."""
     for entry_id in (body.entry_id, body.other_id):
         if answer_memory.get(entry_id, user.team_id) is None:
-            raise HTTPException(status_code=404, detail="No such entry in the answer memory.")
+            raise NotFound("No such entry in the answer memory.", code="memory_entry_not_found")
     answer_memory.apply_resolution(
         body.entry_id,
         body.other_id,
@@ -1247,14 +1243,6 @@ async def _scan_memory() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _preference(action):
-    """`_tool`, for the preference store's own refusals."""
-    try:
-        return action()
-    except preferences.PreferenceError as refused:
-        raise HTTPException(status_code=400, detail=str(refused)) from refused
-
-
 def _skill_payload(skill: preferences.Skill) -> dict:
     return {
         "skill_id": skill.skill_id,
@@ -1304,7 +1292,7 @@ class PreferencesRequest(BaseModel):
 
 @app.put("/api/preferences")
 def save_preferences(body: PreferencesRequest, user: User = Depends(current_user)) -> dict:
-    saved = _preference(lambda: preferences.save(user.email, **body.model_dump()))
+    saved = preferences.save(user.email, **body.model_dump())
     events.record(
         user,
         events.PREFERENCES_CHANGED,
@@ -1332,7 +1320,7 @@ def compose_preferences(body: PreferencesRequest, user: User = Depends(current_u
             }
         )
     except TypeError as bad:
-        raise HTTPException(status_code=400, detail=str(bad)) from bad
+        raise preferences.PreferenceError("Those preferences could not be applied.") from bad
     return {"instruction": candidate.instruction()}
 
 
@@ -1383,13 +1371,11 @@ class SkillEditRequest(BaseModel):
 
 @app.post("/api/skills")
 def add_skill(body: SkillRequest, user: User = Depends(current_user)) -> dict:
-    skill = _preference(
-        lambda: preferences.add_skill(
-            user.email,
-            body.name,
-            body.instruction,
-            body.description,
-        )
+    skill = preferences.add_skill(
+        user.email,
+        body.name,
+        body.instruction,
+        body.description,
     )
     events.record(
         user,
@@ -1403,17 +1389,15 @@ def add_skill(body: SkillRequest, user: User = Depends(current_user)) -> dict:
 
 @app.patch("/api/skills/{skill_id}")
 def edit_skill(skill_id: str, body: SkillEditRequest, user: User = Depends(current_user)) -> dict:
-    skill = _preference(
-        lambda: preferences.update_skill(
-            user.email,
-            skill_id,
-            name=body.name,
-            description=body.description,
-            instruction=body.instruction,
-        )
+    skill = preferences.update_skill(
+        user.email,
+        skill_id,
+        name=body.name,
+        description=body.description,
+        instruction=body.instruction,
     )
     if skill is None:
-        raise HTTPException(status_code=404, detail="You have no skill like that.")
+        raise NotFound("You have no skill like that.", code="skill_not_found")
     events.record(
         user,
         events.SKILL_EDITED,
@@ -1426,8 +1410,8 @@ def edit_skill(skill_id: str, body: SkillEditRequest, user: User = Depends(curre
 
 @app.delete("/api/skills/{skill_id}")
 def remove_skill(skill_id: str, user: User = Depends(current_user)) -> dict:
-    if not _preference(lambda: preferences.remove_skill(user.email, skill_id)):
-        raise HTTPException(status_code=404, detail="You have no skill like that.")
+    if not preferences.remove_skill(user.email, skill_id):
+        raise NotFound("You have no skill like that.", code="skill_not_found")
     events.record(user, events.SKILL_REMOVED, subject_type="skill", subject_id=skill_id)
     return {"deleted": skill_id}
 
@@ -1435,9 +1419,9 @@ def remove_skill(skill_id: str, user: User = Depends(current_user)) -> dict:
 @app.post("/api/skills/{skill_id}/copy")
 def copy_skill(skill_id: str, user: User = Depends(current_user)) -> dict:
     """A skill of your own, starting from a built-in one or another of yours."""
-    skill = _preference(lambda: preferences.copy_skill(user.email, skill_id))
+    skill = preferences.copy_skill(user.email, skill_id)
     if skill is None:
-        raise HTTPException(status_code=404, detail="You have no skill like that.")
+        raise NotFound("You have no skill like that.", code="skill_not_found")
     events.record(
         user,
         events.SKILL_ADDED,
@@ -1459,14 +1443,12 @@ async def apply_a_skill(
     batch_id: str, skill_id: str, body: ApplySkillRequest, user: User = Depends(current_user)
 ) -> dict:
     """Reword a selection of a questionnaire's answers with one of your skills."""
-    skill, outcome = await _atool(
-        tools.apply_skill(
-            user,
-            batch_id,
-            skill_id,
-            body.scope.to_scope(),
-            include_written=body.include_written,
-        )
+    skill, outcome = await tools.apply_skill(
+        user,
+        batch_id,
+        skill_id,
+        body.scope.to_scope(),
+        include_written=body.include_written,
     )
     return {
         "skill": _skill_payload(skill),
@@ -1482,7 +1464,7 @@ class RestoreDraftRequest(BaseModel):
 @app.post("/api/forms/{batch_id}/answers/draft")
 def put_back_the_draft(batch_id: str, body: RestoreDraftRequest, user: User = Depends(current_user)) -> dict:
     """Undo a house style on one answer: the draft goes back as it was written."""
-    _tool(lambda: tools.restore_draft(user, batch_id, body.question_id))
+    tools.restore_draft(user, batch_id, body.question_id)
     return tools.inspect(user, batch_id)
 
 
@@ -1513,7 +1495,7 @@ async def search_knowledge(
     written from them.
     """
     if mode not in ("semantic", "keyword", "hybrid"):
-        raise HTTPException(status_code=422, detail=f"unknown search mode '{mode}'")
+        raise Unprocessable(f"unknown search mode '{mode}'", code="search_mode_unknown")
     return await service.search_knowledge(
         q,
         mode=mode,
@@ -1539,9 +1521,9 @@ def _resolve_document(origin: str, category: str, name: str, user: User) -> Path
     try:
         return service.resolve_document(origin, category, name, user.team_id, owner=user.email)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise Invalid(str(exc), code="document_path_invalid") from exc
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Document '{name}' was not found.") from exc
+        raise NotFound(f"Document '{name}' was not found.", code="document_not_found") from exc
 
 
 @app.get("/api/documents/{origin}/{category}/{name}/file")
@@ -1562,7 +1544,9 @@ def preview_document(origin: str, category: str, name: str, user: User = Depends
         preview = service.docx_preview_html(path)
     except Exception as exc:  # noqa: BLE001 - normalize malformed Word files for the web client
         logger.exception("Could not preview %s", path.name)
-        raise HTTPException(status_code=422, detail=f"Could not preview '{path.name}': {exc}") from exc
+        raise Unprocessable(
+            f"Could not preview '{path.name}': it could not be read as a Word document.", code="preview_failed"
+        ) from exc
 
     return HTMLResponse(
         preview,
@@ -1581,7 +1565,7 @@ async def view_extracted_text(origin: str, category: str, name: str, user: User 
         text = await service.extracted_document_text(path)
     except Exception as exc:  # noqa: BLE001 - normalize converter failures for the web client
         logger.exception("Could not extract text from %s", path.name)
-        raise HTTPException(status_code=422, detail=f"Could not extract text from '{path.name}': {exc}") from exc
+        raise Unprocessable(f"Could not extract text from '{path.name}'.", code="extraction_failed") from exc
     return {"name": path.name, "text": text, "characters": len(text)}
 
 
@@ -1645,10 +1629,7 @@ async def answer_assessment(
         team_id=user.team_id,
     )
     if not result.answers:
-        raise HTTPException(
-            status_code=422,
-            detail=f"No questions could be extracted from '{result.source_name}'.",
-        )
+        raise Unprocessable(f"No questions could be extracted from '{result.source_name}'.", code="no_questions_found")
     result.answers = await tools.in_house_style(
         user,
         result.answers,
@@ -1704,10 +1685,7 @@ async def extract_assessment(
 
     language, questions = await service.extract_assessment_questions(path)
     if not questions:
-        raise HTTPException(
-            status_code=422,
-            detail=f"No questions could be extracted from '{path.name}'.",
-        )
+        raise Unprocessable(f"No questions could be extracted from '{path.name}'.", code="no_questions_found")
     return {
         "source_name": path.name,
         "language": language,
@@ -1803,7 +1781,7 @@ def assessment_progress(run_id: str, user: User = Depends(current_user)) -> dict
     """How far a run has got: questions found, answered, and left to answer."""
     state = service.run_progress(run_id)
     if state is None:
-        raise HTTPException(status_code=404, detail=f"No run in progress with id '{run_id}'.")
+        raise NotFound(f"No run in progress with id '{run_id}'.", code="run_not_in_progress")
     return state
 
 
@@ -1846,15 +1824,12 @@ def export_pdf(
         include_reasoning=include_reasoning,
     )
     if not selected_answers(result, options):
-        raise HTTPException(
-            status_code=422,
-            detail="No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+        raise Unprocessable(
+            "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+            code="nothing_to_export",
         )
 
-    try:
-        content = render_pdf(result, options)
-    except ExportError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    content = render_pdf(result, options)
 
     filename = f"{Path(result.source_name).stem or 'assessment'}.answers.pdf"
     return Response(
@@ -1885,9 +1860,9 @@ def export_docx(
         include_reasoning=include_reasoning,
     )
     if not selected_answers(result, options):
-        raise HTTPException(
-            status_code=422,
-            detail="No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+        raise Unprocessable(
+            "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+            code="nothing_to_export",
         )
 
     content = render_docx(result, options)
@@ -1924,7 +1899,7 @@ def _conversation(conversation_id: str, user: User):
         actor_email=user.email,
     )
     if conversation is None:
-        raise HTTPException(status_code=404, detail="That conversation no longer exists.")
+        raise NotFound("That conversation no longer exists.", code="conversation_not_found")
     return conversation
 
 
@@ -1966,7 +1941,7 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
     request that times out at a proxy has still recorded what it did.
     """
     if not assistant.configured():
-        raise HTTPException(status_code=503, detail="No model is configured for the assistant.")
+        raise Unavailable("No model is configured for the assistant.", code="assistant_unconfigured")
     conversation = (
         _conversation(request.conversation_id, user)
         if request.conversation_id
@@ -1996,13 +1971,12 @@ async def say_with_a_file(
     there, and it decides to open it like any other operation.
     """
     if not assistant.configured():
-        raise HTTPException(status_code=503, detail="No model is configured for the assistant.")
+        raise Unavailable("No model is configured for the assistant.", code="assistant_unconfigured")
     name = file.filename or "questionnaire"
     if Path(name).suffix.lower() not in forms.SUPPORTED:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
-            f"Supported: {', '.join(forms.SUPPORTED)}.",
+        raise forms.UnsupportedForm(
+            f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
+            f"Supported: {', '.join(forms.SUPPORTED)}."
         )
     path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
     conversation = (

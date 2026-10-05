@@ -37,12 +37,9 @@ from src.forms import status as status_map
 from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role, Target
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
+from src.errors import ToolError as ToolError
 
 logger = logging.getLogger(__name__)
-
-
-class ToolError(Exception):
-    """An operation could not be performed. The message is safe to show."""
 
 
 # ---------------------------------------------------------------------------
