@@ -36,6 +36,7 @@ new errors from being invented outside the hierarchy.
 ## Progress log
 
 - 2026-10-05: Plan written after the user approved plan 004 ("Yes, go ahead"). Survey: 11 exception classes with no common base; four wrappers in `api.py` mapping `ToolError`, `FormatError`, `NotAllowed`, `PreferenceError` to 400 or 422; 45 `HTTPException` sites using 400, 401, 403, 404, 415, 422 and 503; three responses that include an internal exception's text (`api.py` document preview and extracted text, and a `TypeError` in preferences).
+- 2026-10-05: Step 2. `tests/characterization/test_error_responses.py` records 29 error scenarios on the current code (23 in open mode, 6 signed in), stable over two runs. Status codes in use: 400, 401, 403, 404, 415, 422, 500, 503. Two of them confirm the leak concretely: previewing or extracting a corrupt Word file answers with the server's own file path ("Package not found at '...\people\...\uploads\corrupt.docx'").
 
 ## Decision log
 

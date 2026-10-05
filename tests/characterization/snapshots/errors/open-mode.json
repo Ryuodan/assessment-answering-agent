@@ -1,0 +1,163 @@
+{
+  "assistant without a model": {
+    "body": {
+      "detail": "No model is configured for the assistant."
+    },
+    "status": 503
+  },
+  "conversation not found": {
+    "body": {
+      "detail": "That conversation no longer exists."
+    },
+    "status": 404
+  },
+  "document location invalid": {
+    "body": {
+      "detail": "Invalid document location."
+    },
+    "status": 400
+  },
+  "document name invalid": {
+    "body": {
+      "detail": "Invalid document name."
+    },
+    "status": 400
+  },
+  "document not found": {
+    "body": {
+      "detail": "Document 'missing.pdf' was not found."
+    },
+    "status": 404
+  },
+  "export with nothing confident": {
+    "body": {
+      "detail": "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts."
+    },
+    "status": 422
+  },
+  "memory entry not found": {
+    "body": {
+      "detail": "No such entry in the answer memory."
+    },
+    "status": 404
+  },
+  "policy to remove not found": {
+    "body": {
+      "detail": "'missing.pdf' is not in the knowledge base."
+    },
+    "status": 404
+  },
+  "policy upload of an unsupported type": {
+    "body": {
+      "detail": "'notes.txt' is not supported. Upload .pdf or .docx."
+    },
+    "status": 415
+  },
+  "policy upload without files": {
+    "body": {
+      "detail": [
+        {
+          "input": null,
+          "loc": [
+            "body",
+            "files"
+          ],
+          "msg": "Field required",
+          "type": "missing"
+        }
+      ]
+    },
+    "status": 422
+  },
+  "preference refused": {
+    "body": {
+      "detail": "Write what to call us without quotation marks."
+    },
+    "status": 400
+  },
+  "preview of a corrupt Word file": {
+    "body": {
+      "detail": "Could not preview 'corrupt.docx': Package not found at '<tmp>\\people\\local-localhost-3b0713b155\\uploads\\corrupt.docx'"
+    },
+    "status": 422
+  },
+  "progress not found": {
+    "body": {
+      "detail": "No run in progress with id 'nope'."
+    },
+    "status": 404
+  },
+  "questionnaire not found": {
+    "body": {
+      "detail": "No questionnaire 'nope'."
+    },
+    "status": 400
+  },
+  "questionnaire that cannot be read": {
+    "body": {
+      "detail": "broken.xlsx is not a readable .xlsx file."
+    },
+    "status": 422
+  },
+  "questionnaire with an unsupported suffix": {
+    "body": {
+      "detail": ".txt is not a questionnaire this can read. Supported: .docx, .xlsm, .xlsx."
+    },
+    "status": 400
+  },
+  "request body that fails validation": {
+    "body": {
+      "detail": [
+        {
+          "ctx": {
+            "pattern": "^(as_drafted|formal|plain)$"
+          },
+          "input": "shouty",
+          "loc": [
+            "body",
+            "tone"
+          ],
+          "msg": "String should match pattern '^(as_drafted|formal|plain)$'",
+          "type": "string_pattern_mismatch"
+        }
+      ]
+    },
+    "status": 422
+  },
+  "run not found": {
+    "body": {
+      "detail": "No run 'nope'."
+    },
+    "status": 404
+  },
+  "search mode unknown": {
+    "body": {
+      "detail": "unknown search mode 'bogus'"
+    },
+    "status": 422
+  },
+  "skill not found": {
+    "body": {
+      "detail": "You have no skill like that."
+    },
+    "status": 404
+  },
+  "text of a corrupt Word file": {
+    "body": {
+      "detail": "Could not extract text from 'corrupt.docx': Package not found at '<tmp>\\people\\local-localhost-3b0713b155\\uploads\\corrupt.docx'"
+    },
+    "status": 422
+  },
+  "unexpected failure": {
+    "body": {
+      "detail": "Something went wrong on the server. The details are in its log."
+    },
+    "status": 500
+  },
+  "unknown route": {
+    "body": {
+      "detail": "Not Found"
+    },
+    "status": 404
+  }
+}
