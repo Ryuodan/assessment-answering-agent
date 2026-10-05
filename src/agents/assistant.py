@@ -137,9 +137,15 @@ def uploaded_name(message: BaseMessage) -> str:
     return rest.split(". Call open_questionnaire", 1)[0].strip()
 
 
-CHANGES_ANSWERS = frozenset({
-    "answer_questions", "reword_answers", "apply_skill", "write_one_answer", "set_aside",
-})
+CHANGES_ANSWERS = frozenset(
+    {
+        "answer_questions",
+        "reword_answers",
+        "apply_skill",
+        "write_one_answer",
+        "set_aside",
+    }
+)
 """The tools whose use means the answer panel has something new to show."""
 
 
@@ -158,7 +164,6 @@ TURNS_IN_FULL = 3
 shown as what was asked and what was said: the ids in a three-hour-old question
 list are stale anyway and cost more than listing again, and the thread of the
 conversation -- which file, what was decided -- is all in the words."""
-
 
 
 @dataclass
@@ -413,9 +418,7 @@ language whatever you are writing in, and that is handled for you."""
 
 # The built-in skills are named from the list that defines them, so the prompt
 # cannot go on offering one that has been renamed or removed.
-SYSTEM = SYSTEM.replace(
-    "{builtin_skills}", ", ".join(f'"{skill.name}"' for skill in preferences.BUILTIN_SKILLS)
-)
+SYSTEM = SYSTEM.replace("{builtin_skills}", ", ".join(f'"{skill.name}"' for skill in preferences.BUILTIN_SKILLS))
 
 
 def _tools(user: User, state: dict) -> list:
@@ -437,19 +440,20 @@ def _tools(user: User, state: dict) -> list:
         return state.get("batch_id") or ""
 
     def _scope(
-        part: str, matching: str, unanswered_only: bool, ids: str, position: str = "",
+        part: str,
+        matching: str,
+        unanswered_only: bool,
+        ids: str,
+        position: str = "",
     ) -> tools.Scope:
-        chosen = tuple(
-            piece.strip() for piece in (ids or "").replace(";", ",").split(",") if piece.strip()
-        )
+        chosen = tuple(piece.strip() for piece in (ids or "").replace(";", ",").split(",") if piece.strip())
         if (position or "").strip():
             # "Question 3" is the third question in the file. The 3 inside an id
             # like `Human Resources!3` is a spreadsheet row, and taking one for
             # the other reworded the training question when asked for the one
             # after it. A place that is not in the file selects nothing rather
             # than everything: an empty id list means "no restriction".
-            batch = (batches.load(_batch_id(), team_id=user.team_id, actor_email=user.email)
-                     if _batch_id() else None)
+            batch = batches.load(_batch_id(), team_id=user.team_id, actor_email=user.email) if _batch_id() else None
             order = [q.id for q in batch.form.questions] if batch else []
             placed = tuple(order[place - 1] for place in _positions(position, len(order)))
             chosen = tuple(dict.fromkeys(chosen + placed)) or ("(no question at that place)",)
@@ -470,8 +474,10 @@ def _tools(user: User, state: dict) -> list:
         _log(f"open_questionnaire({file_name!r})")
         path = state.get("pending_upload")
         if not path:
-            return ("No file has been uploaded to this conversation. Ask the person to "
-                    "attach the questionnaire to their message.")
+            return (
+                "No file has been uploaded to this conversation. Ask the person to "
+                "attach the questionnaire to their message."
+            )
         try:
             batch = tools.open_form(user, Path(path))
         except Exception as failed:
@@ -534,16 +540,12 @@ def _tools(user: User, state: dict) -> list:
                 sections[name] = sections.get(name, 0) + 1
         if sections:
             lines.append("Sections: " + ", ".join(f"{k} ({v})" for k, v in sections.items()))
-        unsure = [
-            f["because"] for p in report["parts"] for f in p["findings"] if not f["confident"]
-        ]
+        unsure = [f["because"] for p in report["parts"] for f in p["findings"] if not f["confident"]]
         if unsure:
             lines.append(f"{len(unsure)} reading(s) marked worth checking.")
         return "\n".join(lines)
 
-    def list_questions(
-        part: str = "", matching: str = "", unanswered_only: bool = False, limit: int = 40
-    ) -> str:
+    def list_questions(part: str = "", matching: str = "", unanswered_only: bool = False, limit: int = 40) -> str:
         """List the questions a scope selects, with their ids. Free and instant.
 
         Use it before answering when you are unsure a scope selects what you
@@ -568,18 +570,24 @@ def _tools(user: User, state: dict) -> list:
         report = tools.inspect(user, _batch_id(), scope)
         chosen = [question for question in report["questions"] if question["selected"]]
         if not chosen:
-            return (f"Nothing matched {scope.describe()}. `matching` is a literal substring, "
-                    "not a query -- try one plain word, or call describe_form for the "
-                    "sheets and sections this file actually has.")
+            return (
+                f"Nothing matched {scope.describe()}. `matching` is a literal substring, "
+                "not a query -- try one plain word, or call describe_form for the "
+                "sheets and sections this file actually has."
+            )
         shown = chosen[: max(1, min(int(limit or 40), 100))]
         place = {question["id"]: index for index, question in enumerate(report["questions"], start=1)}
-        lines = [f"{len(chosen)} question(s) matched {scope.describe()} "
-                 "(#n is a question's place in the file: \"the second question\" is #2):"]
+        lines = [
+            f"{len(chosen)} question(s) matched {scope.describe()} "
+            '(#n is a question\'s place in the file: "the second question" is #2):'
+        ]
         for question in shown:
             # The id first, because it is what every other tool takes. The
             # place after it, because it is what a person says: "the second one".
-            lines.append(f"  {question['id']}  [{_LIST_MARKS.get(_mark(question), _mark(question))}]  "
-                         f"#{place[question['id']]}  {question['text'][:110]}")
+            lines.append(
+                f"  {question['id']}  [{_LIST_MARKS.get(_mark(question), _mark(question))}]  "
+                f"#{place[question['id']]}  {question['text'][:110]}"
+            )
         if len(chosen) > len(shown):
             lines.append(f"  ... and {len(chosen) - len(shown)} more")
         return "\n".join(lines)
@@ -619,8 +627,12 @@ def _tools(user: User, state: dict) -> list:
         return [place for place in dict.fromkeys(places) if 1 <= place <= total]
 
     def read_answers(
-        question_ids: str = "", matching: str = "", position: str = "",
-        only: str = "", limit: int = 5, with_sources: bool = False,
+        question_ids: str = "",
+        matching: str = "",
+        position: str = "",
+        only: str = "",
+        limit: int = 5,
+        with_sources: bool = False,
     ) -> str:
         """Read back the answers already written for questions. Free and instant.
 
@@ -648,8 +660,11 @@ def _tools(user: User, state: dict) -> list:
             with_sources: include the text of every cited source, what kind of
                 source it is, and the reasoning.
         """
-        _log(f"read_answers({question_ids or position or matching or only or 'answers'!r}"
-             + (", with sources" if with_sources else "") + ")")
+        _log(
+            f"read_answers({question_ids or position or matching or only or 'answers'!r}"
+            + (", with sources" if with_sources else "")
+            + ")"
+        )
         if not _batch_id():
             return "No questionnaire is open in this conversation."
 
@@ -658,16 +673,14 @@ def _tools(user: User, state: dict) -> list:
         if position.strip():
             wanted = _positions(position, len(questions))
             if not wanted:
-                return (f"This questionnaire has {len(questions)} questions; there is no "
-                        f"question at {position!r}.")
+                return f"This questionnaire has {len(questions)} questions; there is no question at {position!r}."
             chosen = [questions[place - 1] for place in wanted]
         else:
             chosen = [q for q in questions if q["selected"]] if (question_ids or matching) else list(questions)
         filtering = only.strip().casefold()
         written = [q for q in questions if q.get("answer")]
         if filtering == "flagged":
-            chosen = [q for q in chosen
-                      if q.get("answer") and not q.get("skip") and not q.get("will_be_written")]
+            chosen = [q for q in chosen if q.get("answer") and not q.get("skip") and not q.get("will_be_written")]
         elif filtering == "approved":
             chosen = [q for q in chosen if q.get("approved")]
         elif not (question_ids or matching or position):
@@ -678,14 +691,20 @@ def _tools(user: User, state: dict) -> list:
             # approved -- which nobody had done.
             approved = sum(1 for q in written if q.get("approved"))
             if filtering == "flagged":
-                return (f"None of the {len(written)} answers is flagged: all of them would go into "
-                        f"the file. {approved} of them have been approved by a person; approving "
-                        "is done on each answer card, not here.")
+                return (
+                    f"None of the {len(written)} answers is flagged: all of them would go into "
+                    f"the file. {approved} of them have been approved by a person; approving "
+                    "is done on each answer card, not here."
+                )
             if filtering == "approved":
-                return (f"None of the {len(written)} answers has been approved by a person yet. "
-                        "Approving is done on each answer card, not here.")
-            return (f"No answers match that. {len(written)} of {len(questions)} questions have an "
-                    "answer; `list_questions` shows each one's state.")
+                return (
+                    f"None of the {len(written)} answers has been approved by a person yet. "
+                    "Approving is done on each answer card, not here."
+                )
+            return (
+                f"No answers match that. {len(written)} of {len(questions)} questions have an "
+                "answer; `list_questions` shows each one's state."
+            )
 
         place = {question["id"]: index for index, question in enumerate(questions, start=1)}
         shown = chosen[: max(1, min(int(limit or 5), 5 if with_sources else 20))]
@@ -695,10 +714,11 @@ def _tools(user: User, state: dict) -> list:
             answered = question.get("answered") or {}
             if question.get("answer"):
                 length = question.get("length") or "full"
-                text = (question.get("brief") if length == "brief" and question.get("brief")
-                        else question["answer"])
-                lines.append(f"    state: {_mark(question)}, confidence {round(100 * (answered.get('confidence') or 0))}%"
-                             + (", written at brief length" if length == "brief" else ""))
+                text = question.get("brief") if length == "brief" and question.get("brief") else question["answer"]
+                lines.append(
+                    f"    state: {_mark(question)}, confidence {round(100 * (answered.get('confidence') or 0))}%"
+                    + (", written at brief length" if length == "brief" else "")
+                )
                 lines.append(f"    answer, to relay word for word: {text[:1800]}")
                 if not question.get("will_be_written") and question.get("held_back_because"):
                     lines.append(f"    held back from the file because: {question['held_back_because'][:400]}")
@@ -737,9 +757,13 @@ def _tools(user: User, state: dict) -> list:
             if item is None:
                 lines.append(f"    cited: {citation} -- named in the answer; the text of it was not kept")
                 continue
-            kind = ("a previous answer of ours" if item.get("source_type") == "prior_answer"
-                    else "a law or external requirement, not our own policy"
-                    if item.get("authority") == "external" else "our own policy")
+            kind = (
+                "a previous answer of ours"
+                if item.get("source_type") == "prior_answer"
+                else "a law or external requirement, not our own policy"
+                if item.get("authority") == "external"
+                else "our own policy"
+            )
             said = " ".join(str(item.get("snippet") or "").split())
             if len(said) > SOURCE_CHARS:
                 said = said[:SOURCE_CHARS].rsplit(" ", 1)[0] + " ..."
@@ -799,13 +823,12 @@ def _tools(user: User, state: dict) -> list:
 
         scope = _scope("", matching, False, question_ids)
         report = tools.inspect(user, _batch_id(), scope)
-        chosen = [
-            question for question in report["questions"]
-            if question["selected"] and question.get("existing")
-        ]
+        chosen = [question for question in report["questions"] if question["selected"] and question.get("existing")]
         if not chosen:
-            return ("None of those arrived with an answer in the file. "
-                    "`list_questions` shows which ones did, marked 'in file'.")
+            return (
+                "None of those arrived with an answer in the file. "
+                "`list_questions` shows which ones did, marked 'in file'."
+            )
         lines = []
         for question in chosen[: max(1, min(int(limit or 20), 50))]:
             lines.append(f"{question['id']} — {question['text'][:90]}")
@@ -813,8 +836,12 @@ def _tools(user: User, state: dict) -> list:
         return "\n".join(lines)
 
     async def answer_questions(
-        part: str = "", matching: str = "", unanswered_only: bool = False, ids: str = "",
-        replace_existing: bool = False, position: str = "",
+        part: str = "",
+        matching: str = "",
+        unanswered_only: bool = False,
+        ids: str = "",
+        replace_existing: bool = False,
+        position: str = "",
     ) -> str:
         """Answer questions from the organisation's policies. Slow and not free.
 
@@ -840,40 +867,55 @@ def _tools(user: User, state: dict) -> list:
             return "No questionnaire is open in this conversation."
         try:
             outcome = await tools.answer(
-                user, _batch_id(), scope, replace_existing=replace_existing,
+                user,
+                _batch_id(),
+                scope,
+                replace_existing=replace_existing,
                 run_id=state.get("run_id") or "",
             )
         except tools.ToolError as refused:
             return str(refused)
         state["refreshed"] = True
         if outcome.nothing_matched:
-            return (f"Nothing matched {scope.describe()}. Call describe_form to see what "
-                    "sheets and sections this file actually has.")
+            return (
+                f"Nothing matched {scope.describe()}. Call describe_form to see what "
+                "sheets and sections this file actually has."
+            )
         # Said before the counts, because it is the part that changes what to
         # report: "answered 0 of 0" reads as a failure and is not one.
         kept = ""
         if outcome.protected:
-            kept = (f"{outcome.protected} question(s) in that scope already had an answer "
-                    "and were left exactly as they were. ")
+            kept = (
+                f"{outcome.protected} question(s) in that scope already had an answer "
+                "and were left exactly as they were. "
+            )
             if not outcome.attempted:
                 return kept + "Nothing else there was blank, so nothing was answered."
-        styled = (f" {outcome.styled} were reworded to your preferences."
-                  if outcome.styled else "")
+        styled = f" {outcome.styled} were reworded to your preferences." if outcome.styled else ""
         # Said here, in the result, and not only in the prompt: this is the
         # moment the agent decides whether it is finished, and asked to "answer
         # everything and keep each to one sentence" it answered, then reported
         # every answer as one sentence without ever rewording one.
-        reminder = (" Answering applies no wording instruction: if the person asked for a "
-                    "length, tone or language, that is still to do with reword_answers, and "
-                    "it is not done until that has run.")
-        return (kept + f"Answered {outcome.answered} of {outcome.attempted} "
-                f"({scope.describe()}). {outcome.failed} failed, "
-                f"{outcome.needs_review} flagged for review.{styled}{reminder}")
+        reminder = (
+            " Answering applies no wording instruction: if the person asked for a "
+            "length, tone or language, that is still to do with reword_answers, and "
+            "it is not done until that has run."
+        )
+        return (
+            kept + f"Answered {outcome.answered} of {outcome.attempted} "
+            f"({scope.describe()}). {outcome.failed} failed, "
+            f"{outcome.needs_review} flagged for review.{styled}{reminder}"
+        )
 
     async def reword_answers(
-        instruction: str, part: str = "", matching: str = "",
-        unanswered_only: bool = False, ids: str = "", include_written: bool = False,
-        language: str = "", position: str = "",
+        instruction: str,
+        part: str = "",
+        matching: str = "",
+        unanswered_only: bool = False,
+        ids: str = "",
+        include_written: bool = False,
+        language: str = "",
+        position: str = "",
     ) -> str:
         """Change how existing answers are worded, keeping what they say.
 
@@ -898,13 +940,18 @@ def _tools(user: User, state: dict) -> list:
         scope = _scope(part, matching, False, ids, position)
         _log(f"reword_answers({instruction!r}, {scope.describe()})")
         if language and language not in ("ar", "en"):
-            return 'The language is "ar" or "en".' 
+            return 'The language is "ar" or "en".'
         if not _batch_id():
             return "No questionnaire is open in this conversation."
         try:
             outcome = await tools.revise(
-                user, _batch_id(), instruction, scope, run_id=state.get("run_id") or "",
-                include_written=include_written, language=language or None,
+                user,
+                _batch_id(),
+                instruction,
+                scope,
+                run_id=state.get("run_id") or "",
+                include_written=include_written,
+                language=language or None,
             )
         except tools.ToolError as refused:
             return str(refused)
@@ -912,18 +959,17 @@ def _tools(user: User, state: dict) -> list:
         return _reworded(outcome, scope)
 
     def _reworded(outcome: tools.Outcome, scope: tools.Scope, skill: str = "") -> str:
-        kept = (f" {outcome.protected} written by a person were left exactly as they are."
-                if outcome.protected else "")
+        kept = f" {outcome.protected} written by a person were left exactly as they are." if outcome.protected else ""
         if outcome.nothing_matched:
-            return (f"No answered questions matched {scope.describe()}, so there was "
-                    "nothing to reword. Rewording a blank question is answering it.")
+            return (
+                f"No answered questions matched {scope.describe()}, so there was "
+                "nothing to reword. Rewording a blank question is answering it."
+            )
         if not outcome.attempted:
             return f"Nothing was reworded ({scope.describe()}).{kept}"
         how = f" with the skill {skill!r}" if skill else ""
-        failed = (f" {outcome.failed} could not be reworded and were left as they were."
-                  if outcome.failed else "")
-        return (f"Reworded {outcome.answered} of {outcome.attempted}{how} "
-                f"({scope.describe()}).{failed}{kept}")
+        failed = f" {outcome.failed} could not be reworded and were left as they were." if outcome.failed else ""
+        return f"Reworded {outcome.answered} of {outcome.attempted}{how} ({scope.describe()}).{failed}{kept}"
 
     def list_skills() -> str:
         """The skills the person can use: built-in ones, and any they wrote.
@@ -939,8 +985,11 @@ def _tools(user: User, state: dict) -> list:
         builtin = [s for s in preferences.skills(user.email) if s.builtin]
         mine = preferences.own_skills(user.email)
         said = ["Built in:", *map(line, builtin)]
-        said += (["Their own:", *map(line, mine)] if mine else
-                 ["They have not written any of their own; that is done on the Preferences page."])
+        said += (
+            ["Their own:", *map(line, mine)]
+            if mine
+            else ["They have not written any of their own; that is done on the Preferences page."]
+        )
         return "\n".join(said)
 
     def _which_skill(name: str) -> tuple[preferences.Skill | None, str]:
@@ -948,17 +997,27 @@ def _tools(user: User, state: dict) -> list:
         if found is not None:
             return found, ""
         if candidates:
-            return None, ("More than one skill matches "
-                          f"{name!r}: " + ", ".join(repr(s.name) for s in candidates)
-                          + ". Ask which one they meant.")
+            return None, (
+                "More than one skill matches "
+                f"{name!r}: " + ", ".join(repr(s.name) for s in candidates) + ". Ask which one they meant."
+            )
         mine = preferences.skills(user.email)
-        return None, (f"There is no skill called {name!r}. "
-                      + ("Their skills are: " + ", ".join(repr(s.name) for s in mine) + "."
-                         if mine else "They have not saved any skills yet."))
+        return None, (
+            f"There is no skill called {name!r}. "
+            + (
+                "Their skills are: " + ", ".join(repr(s.name) for s in mine) + "."
+                if mine
+                else "They have not saved any skills yet."
+            )
+        )
 
     async def apply_skill(
-        skill: str, part: str = "", matching: str = "", ids: str = "",
-        include_written: bool = False, position: str = "",
+        skill: str,
+        part: str = "",
+        matching: str = "",
+        ids: str = "",
+        include_written: bool = False,
+        position: str = "",
     ) -> str:
         """Reword existing answers with one of the person's saved skills.
 
@@ -986,8 +1045,12 @@ def _tools(user: User, state: dict) -> list:
             return "No questionnaire is open in this conversation."
         try:
             found, outcome = await tools.apply_skill(
-                user, _batch_id(), found.skill_id, scope,
-                run_id=state.get("run_id") or "", include_written=include_written,
+                user,
+                _batch_id(),
+                found.skill_id,
+                scope,
+                run_id=state.get("run_id") or "",
+                include_written=include_written,
             )
         except tools.ToolError as refusal:
             return str(refusal)
@@ -1039,9 +1102,7 @@ def _tools(user: User, state: dict) -> list:
         if not chosen:
             return "Name the questions to set aside."
         try:
-            tools.set_questions(
-                user, _batch_id(), [{"id": qid, "skip": not include} for qid in chosen]
-            )
+            tools.set_questions(user, _batch_id(), [{"id": qid, "skip": not include} for qid in chosen])
         except tools.ToolError as refused:
             return str(refused)
         state["refreshed"] = True
@@ -1059,7 +1120,8 @@ def _tools(user: User, state: dict) -> list:
         report = tools.inspect(user, _batch_id())
         counts = report["counts"]
         writable = sum(
-            1 for question in report["questions"]
+            1
+            for question in report["questions"]
             for target in question.get("targets", [])
             if target.get("role") in ("answer", "status")
         )
@@ -1086,10 +1148,7 @@ def _tools(user: User, state: dict) -> list:
                 "unread. They are marked in the answer panel; editing or approving one "
                 "releases it."
             )
-        lines.append(
-            "I have not written anything -- the 'Fill the original file' button beside "
-            "the answers does that."
-        )
+        lines.append("I have not written anything -- the 'Fill the original file' button beside the answers does that.")
         return " ".join(lines)
 
     async def search_policies(query: str) -> str:
@@ -1114,8 +1173,7 @@ def _tools(user: User, state: dict) -> list:
         # answer card makes.
         state.setdefault("sources", []).extend(hits)
         return "\n\n".join(
-            f"[{hit.get('locator') or hit.get('source_name')}] {(hit.get('snippet') or '')[:400]}"
-            for hit in hits
+            f"[{hit.get('locator') or hit.get('source_name')}] {(hit.get('snippet') or '')[:400]}" for hit in hits
         )
 
     async def answer_directly(questions: str, skill: str = "") -> str:
@@ -1144,8 +1202,9 @@ def _tools(user: User, state: dict) -> list:
         # The step is drawn under the reply, so which wording was used is said
         # there too -- a short answer is otherwise indistinguishable from a
         # skill that was asked for and quietly not applied.
-        _log(f"answer_directly({len(asked)} question(s)"
-             + (f", skill {skill.strip()!r}" if skill.strip() else "") + ")")
+        _log(
+            f"answer_directly({len(asked)} question(s)" + (f", skill {skill.strip()!r}" if skill.strip() else "") + ")"
+        )
         chosen = None
         if skill.strip():
             chosen, refused = _which_skill(skill)
@@ -1154,31 +1213,44 @@ def _tools(user: User, state: dict) -> list:
         if not asked:
             return "Nothing to answer -- pass the question itself."
         if len(asked) > DIRECT_QUESTIONS:
-            return (f"That is {len(asked)} questions. Answer at most {DIRECT_QUESTIONS} at a "
-                    "time this way; a list this long belongs in a questionnaire file.")
-
-        drafted = await service.answer_questions([
-            Question(
-                id=f"asked-{index + 1}",
-                text=text,
-                language=detect_question_language(text),
+            return (
+                f"That is {len(asked)} questions. Answer at most {DIRECT_QUESTIONS} at a "
+                "time this way; a list this long belongs in a questionnaire file."
             )
-            for index, text in enumerate(asked)
-        ], team_id=user.team_id)
+
+        drafted = await service.answer_questions(
+            [
+                Question(
+                    id=f"asked-{index + 1}",
+                    text=text,
+                    language=detect_question_language(text),
+                )
+                for index, text in enumerate(asked)
+            ],
+            team_id=user.team_id,
+        )
 
         # Worded after drafting and never before, exactly as a questionnaire's
         # rows are: a named skill if one was asked for, their preferences if not.
         if chosen is not None:
             drafted = [
                 await rewrite.rewrite(
-                    result, chosen.instruction,
+                    result,
+                    chosen.instruction,
                     note=f"Reworded with the skill \u201c{chosen.name}\u201d.",
-                ) if not result.error and result.answer.strip() else result
+                )
+                if not result.error and result.answer.strip()
+                else result
                 for result in drafted
             ]
-            events.record(user, events.SKILL_APPLIED, subject_type="conversation",
-                          subject_id=state.get("batch_id") or "", skill=chosen.name,
-                          reworded=len(drafted))
+            events.record(
+                user,
+                events.SKILL_APPLIED,
+                subject_type="conversation",
+                subject_id=state.get("batch_id") or "",
+                skill=chosen.name,
+                reworded=len(drafted),
+            )
         else:
             drafted = await tools.in_house_style(user, drafted)
 
@@ -1201,16 +1273,25 @@ def _tools(user: User, state: dict) -> list:
             # from" a few messages later is answered from this and not from a
             # new search that finds something similar.
             lines.extend(_sources_of(result.model_dump(), detailed=True))
-            state.setdefault("sources", []).extend(
-                item.model_dump() for item in result.evidence[:SOURCES_SHOWN]
-            )
+            state.setdefault("sources", []).extend(item.model_dump() for item in result.evidence[:SOURCES_SHOWN])
         return "\n".join(lines)
 
     return [
-        open_questionnaire, describe_form, list_questions, read_existing,
-        answer_questions, reword_answers, write_one_answer, set_aside,
-        propose_fill, search_policies, answer_directly, list_skills, apply_skill,
-        read_answers, put_back_drafts,
+        open_questionnaire,
+        describe_form,
+        list_questions,
+        read_existing,
+        answer_questions,
+        reword_answers,
+        write_one_answer,
+        set_aside,
+        propose_fill,
+        search_policies,
+        answer_directly,
+        list_skills,
+        apply_skill,
+        read_answers,
+        put_back_drafts,
     ]
 
 
@@ -1230,8 +1311,7 @@ remaining". Said again, next to the turn it is about, it holds.
 
 
 def _language_of_the_turn(messages: list[BaseMessage]) -> str:
-    last = next((m for m in reversed(messages)
-                 if isinstance(m, HumanMessage) and not _is_correction(m)), None)
+    last = next((m for m in reversed(messages) if isinstance(m, HumanMessage) and not _is_correction(m)), None)
     return detect_question_language(spoken(str(last.content))) if last is not None else "en"
 
 
@@ -1283,7 +1363,7 @@ def without_repetition(text: str) -> str:
     """
     text = (text or "").strip()
     for match in _JOINED.finditer(text):
-        head, tail = text[: match.start()].strip(), text[match.start():].strip()
+        head, tail = text[: match.start()].strip(), text[match.start() :].strip()
         first, second = set(_WORD.findall(head.casefold())), set(_WORD.findall(tail.casefold()))
         if len(first) < 4 or len(second) < 4:
             continue
@@ -1322,9 +1402,7 @@ def _reply_from(state: dict) -> str:
         if isinstance(message, AIMessage) and not getattr(message, "tool_calls", None):
             content = message.content
             if isinstance(content, list):  # some providers return content blocks
-                content = "".join(
-                    block.get("text", "") for block in content if isinstance(block, dict)
-                )
+                content = "".join(block.get("text", "") for block in content if isinstance(block, dict))
             # Whatever a reasoning model thought on the way is not what it
             # said, and the reply is shown to a person verbatim.
             spoken_text = without_reasoning(str(content))
@@ -1399,18 +1477,19 @@ async def say(
     # this conversation: HR…".
     asked = message
     if upload:
-        message = (
-            f"{message}\n\n{UPLOAD_NOTE} {upload.name}. "
-            "Call open_questionnaire to read it.]"
-        ).strip()
+        message = (f"{message}\n\n{UPLOAD_NOTE} {upload.name}. Call open_questionnaire to read it.]").strip()
 
     # When it was said and what came with it, on the message itself: a
     # conversation kept open for a week reads as one undifferentiated scroll
     # without the first, and "read this" means nothing without the second.
     # Neither is sent to the model -- extra fields on a message stay local.
-    said = HumanMessage(message, additional_kwargs={
-        "at": store.utcnow(), **({"file": upload.name} if upload else {}),
-    })
+    said = HumanMessage(
+        message,
+        additional_kwargs={
+            "at": store.utcnow(),
+            **({"file": upload.name} if upload else {}),
+        },
+    )
     history = _window(list(conversation.messages)) + [said]
     final: dict = {}
     sending = history
@@ -1418,7 +1497,8 @@ async def say(
     for attempt in range(1 + CARRY_ON):
         try:
             async for chunk in _agent(tools_bound).astream(
-                {"messages": sending}, _trace_config(conversation, MAX_STEPS),
+                {"messages": sending},
+                _trace_config(conversation, MAX_STEPS),
                 stream_mode="values",
             ):
                 final = chunk
@@ -1445,7 +1525,8 @@ async def say(
     turn.refreshed = bool(state.get("refreshed"))
 
     conversation.messages = _remember(
-        _keep(conversation.messages, history, final, turn.reply), turn,
+        _keep(conversation.messages, history, final, turn.reply),
+        turn,
     )
     conversation.batch_id = turn.batch_id
     if not conversation.title:
@@ -1453,8 +1534,12 @@ async def say(
     conversations.save(conversation)
 
     events.record(
-        user, events.ASSISTANT_TURN, subject_type=conversations.SUBJECT,
-        subject_id=conversation.id, steps=len(turn.steps), batch_id=turn.batch_id,
+        user,
+        events.ASSISTANT_TURN,
+        subject_type=conversations.SUBJECT,
+        subject_id=conversation.id,
+        steps=len(turn.steps),
+        batch_id=turn.batch_id,
         tokens=turn.input_tokens + turn.output_tokens,
     )
     turn.seconds = time.monotonic() - started
@@ -1525,8 +1610,7 @@ def _complete(turn: list[BaseMessage]) -> list[BaseMessage]:
 
 
 def _said(message: BaseMessage) -> bool:
-    return (isinstance(message, AIMessage) and not message.tool_calls
-            and bool(str(message.content or "").strip()))
+    return isinstance(message, AIMessage) and not message.tool_calls and bool(str(message.content or "").strip())
 
 
 def _window(messages: list[BaseMessage]) -> list[BaseMessage]:
@@ -1593,7 +1677,7 @@ def _is_correction(message: BaseMessage) -> bool:
 def _this_turn(sent: list[BaseMessage], final: dict) -> list[BaseMessage]:
     """What this turn added after the person's message, corrections left out."""
     produced = list((final or {}).get("messages", []))
-    new = produced[len(sent):] if len(produced) >= len(sent) else []
+    new = produced[len(sent) :] if len(produced) >= len(sent) else []
     return [message for message in new if not _is_correction(message)]
 
 
@@ -1603,7 +1687,10 @@ def _resume_from(history: list[BaseMessage], final: dict) -> list[BaseMessage]:
 
 
 def _keep(
-    stored: list[BaseMessage], sent: list[BaseMessage], final: dict, reply: str,
+    stored: list[BaseMessage],
+    sent: list[BaseMessage],
+    final: dict,
+    reply: str,
 ) -> list[BaseMessage]:
     """The whole conversation after a turn: everything before, and this turn.
 
@@ -1627,7 +1714,9 @@ def start(user: User, message: str = "") -> Conversation:
     """A new conversation, titled from what was first asked of it."""
     conversation = conversations.create(user, message)
     events.record(
-        user, events.ASSISTANT_STARTED, subject_type=conversations.SUBJECT,
+        user,
+        events.ASSISTANT_STARTED,
+        subject_type=conversations.SUBJECT,
         subject_id=conversation.id,
     )
     return conversation

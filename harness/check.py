@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {'PASS' if passed else 'FAIL'}  {name:<6} {seconds:6.1f} s")
         if not passed:
             print(f"        FIX: {fix}")
-    not_run = [name for name, _ in GATE[len(results):]]
+    not_run = [name for name, _ in GATE[len(results) :]]
     if not_run:
         print(f"  not run (--fail-fast): {', '.join(not_run)}")
 

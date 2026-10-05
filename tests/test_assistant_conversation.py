@@ -212,17 +212,31 @@ def answers_citing(monkeypatch):
     chunk is read out because the answer cites it, not because it is attached."""
     from src.models import AnsweredQuestion, Evidence, SourceType
 
-    policy = Evidence(source_type=SourceType.GUIDELINE, source_name="T2 - Backup Policy.pdf",
-                      snippet=POLICY_TEXT, doc_id="T2-BKP", clause="4.2")
-    law = Evidence(source_type=SourceType.GUIDELINE, source_name="PDPL Implementing Regulation.pdf",
-                   snippet=LAW_TEXT, clause="23", authority="external")
+    policy = Evidence(
+        source_type=SourceType.GUIDELINE,
+        source_name="T2 - Backup Policy.pdf",
+        snippet=POLICY_TEXT,
+        doc_id="T2-BKP",
+        clause="4.2",
+    )
+    law = Evidence(
+        source_type=SourceType.GUIDELINE,
+        source_name="PDPL Implementing Regulation.pdf",
+        snippet=LAW_TEXT,
+        clause="23",
+        authority="external",
+    )
 
     async def fake(questions, language=None, run_id=None, **extra):
         return [
             AnsweredQuestion(
-                question=question, answer="Yes. Backups are encrypted with AES-256.",
-                confidence=0.9, needs_review=False, citations=[policy.locator],
-                evidence=[law, policy], rationale="The backup policy states the encryption standard.",
+                question=question,
+                answer="Yes. Backups are encrypted with AES-256.",
+                confidence=0.9,
+                needs_review=False,
+                citations=[policy.locator],
+                evidence=[law, policy],
+                rationale="The backup policy states the encryption standard.",
             )
             for question in questions
         ]
@@ -269,12 +283,17 @@ async def test_asked_for_its_sources_it_reads_back_what_the_card_shows(cited):
 async def test_a_cited_regulation_is_said_to_be_one(user, tmp_path, monkeypatch):
     from src.models import AnsweredQuestion, Evidence, SourceType
 
-    law = Evidence(source_type=SourceType.GUIDELINE, source_name="PDPL.pdf", snippet=LAW_TEXT,
-                   clause="23", authority="external")
+    law = Evidence(
+        source_type=SourceType.GUIDELINE, source_name="PDPL.pdf", snippet=LAW_TEXT, clause="23", authority="external"
+    )
 
     async def fake(questions, language=None, run_id=None, **extra):
-        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, needs_review=False,
-                                 citations=[law.locator], evidence=[law]) for q in questions]
+        return [
+            AnsweredQuestion(
+                question=q, answer="Yes.", confidence=0.9, needs_review=False, citations=[law.locator], evidence=[law]
+            )
+            for q in questions
+        ]
 
     monkeypatch.setattr(tools.service, "answer_questions", fake)
     path = shapes.status_and_comment(tmp_path / "HR Assessment.xlsx")
@@ -291,8 +310,12 @@ async def test_a_citation_whose_text_was_not_kept_is_still_named(user, tmp_path,
     from src.models import AnsweredQuestion
 
     async def fake(questions, language=None, run_id=None, **extra):
-        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, needs_review=False,
-                                 citations=["An older policy §2"]) for q in questions]
+        return [
+            AnsweredQuestion(
+                question=q, answer="Yes.", confidence=0.9, needs_review=False, citations=["An older policy §2"]
+            )
+            for q in questions
+        ]
 
     monkeypatch.setattr(tools.service, "answer_questions", fake)
     path = shapes.status_and_comment(tmp_path / "HR Assessment.xlsx")
@@ -447,36 +470,49 @@ async def test_dictating_and_setting_aside_by_place(answered):
 # --- a reply said twice ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("said", "kept"), [
-    ("The background-check question (question 4) has been restored to the questionnaire."
-     "The background-check question (question 4) is now back in the questionnaire.",
-     "The background-check question (question 4) is now back in the questionnaire."),
-    ("The background-check question has been set aside and will not be written to the file."
-     "The background-check question has been set aside and will be excluded from the final submission.",
-     "The background-check question has been set aside and will be excluded from the final submission."),
-    ("تم تنحية سؤال الفحص الأمني ولن يكتب في الملف.تم تنحية سؤال الفحص الأمني ولن يُكتب في الملف النهائي.",
-     "تم تنحية سؤال الفحص الأمني ولن يُكتب في الملف النهائي."),
-])
+@pytest.mark.parametrize(
+    ("said", "kept"),
+    [
+        (
+            "The background-check question (question 4) has been restored to the questionnaire."
+            "The background-check question (question 4) is now back in the questionnaire.",
+            "The background-check question (question 4) is now back in the questionnaire.",
+        ),
+        (
+            "The background-check question has been set aside and will not be written to the file."
+            "The background-check question has been set aside and will be excluded from the final submission.",
+            "The background-check question has been set aside and will be excluded from the final submission.",
+        ),
+        (
+            "تم تنحية سؤال الفحص الأمني ولن يكتب في الملف.تم تنحية سؤال الفحص الأمني ولن يُكتب في الملف النهائي.",
+            "تم تنحية سؤال الفحص الأمني ولن يُكتب في الملف النهائي.",
+        ),
+    ],
+)
 def test_a_reply_the_model_wrote_twice_is_kept_once(said, kept):
     assert assistant.without_repetition(said) == kept
 
 
-@pytest.mark.parametrize("said", [
-    "Answered 4 of 4.See the answers beside this.",
-    "Yes. T2 encrypts data.Our backups are also encrypted with AES-256 and keys rotate yearly.",
-    "Answered the first two questions.",
-    "The answer to question 2 is: data is stored in Saudi Arabia.The answer rests on the "
-    "Data Privacy Policy, section 4.",
-])
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Answered 4 of 4.See the answers beside this.",
+        "Yes. T2 encrypts data.Our backups are also encrypted with AES-256 and keys rotate yearly.",
+        "Answered the first two questions.",
+        "The answer to question 2 is: data is stored in Saudi Arabia.The answer rests on the "
+        "Data Privacy Policy, section 4.",
+    ],
+)
 def test_two_different_sentences_are_left_alone(said):
     assert assistant.without_repetition(said) == said
 
 
-
 def test_a_previous_reply_appended_to_this_one_is_taken_off():
     earlier = ["No answers are currently flagged. All answers will be included in the file."]
-    said = ("The background-check question has been set aside and will not be written to the file."
-            "No answers are currently flagged. All answers will be included in the file.")
+    said = (
+        "The background-check question has been set aside and will not be written to the file."
+        "No answers are currently flagged. All answers will be included in the file."
+    )
 
     assert assistant.tidy_reply(said, earlier) == (
         "The background-check question has been set aside and will not be written to the file."
@@ -523,10 +559,7 @@ async def test_what_is_stored_is_what_was_shown(user, monkeypatch, answers_yes):
     assert [m.content for m in saved.messages if assistant._said(m)][-1] == "Set aside question 4."
 
 
-
-async def test_a_call_to_a_tool_that_does_not_exist_is_carried_on_from_not_fatal(
-    user, monkeypatch, answers_yes
-):
+async def test_a_call_to_a_tool_that_does_not_exist_is_carried_on_from_not_fatal(user, monkeypatch, answers_yes):
     """Groq refuses the whole request when the model calls a tool it was never
     offered -- `repo_browser.open_file`, from its own training. That ended turns
     that had already done their work."""
@@ -540,10 +573,13 @@ async def test_a_call_to_a_tool_that_does_not_exist_is_carried_on_from_not_fatal
             messages = list(payload["messages"])
             sent.append(messages)
             if len(sent) == 1:
-                yield {"messages": messages + [
-                    AIMessage("", tool_calls=[{"name": "list_skills", "args": {}, "id": "a"}]),
-                    ToolMessage("Built in: ...", tool_call_id="a"),
-                ]}
+                yield {
+                    "messages": messages
+                    + [
+                        AIMessage("", tool_calls=[{"name": "list_skills", "args": {}, "id": "a"}]),
+                        ToolMessage("Built in: ...", tool_call_id="a"),
+                    ]
+                }
                 raise RuntimeError(INVENTED)
             if len(sent) == 2:
                 yield {"messages": messages}
@@ -565,14 +601,16 @@ async def test_a_call_to_a_tool_that_does_not_exist_is_carried_on_from_not_fatal
     )
     saved = conversations.load(conversation.id, team_id=user.team_id)
     assert sum(isinstance(m, ToolMessage) for m in saved.messages) == 1
-    assert [m.content for m in saved.messages if isinstance(m, HumanMessage)] == [
-        "What skills do I have?"
-    ], "the note is sent, never stored"
+    assert [m.content for m in saved.messages if isinstance(m, HumanMessage)] == ["What skills do I have?"], (
+        "the note is sent, never stored"
+    )
 
 
-INVENTED = ("Error code: 400 - {'error': {'message': \"Tool call validation failed: attempted to "
-            "call tool 'repo_browser.open_file' which was not in request.tools\", "
-            "'code': 'tool_use_failed'}}")
+INVENTED = (
+    "Error code: 400 - {'error': {'message': \"Tool call validation failed: attempted to "
+    "call tool 'repo_browser.open_file' which was not in request.tools\", "
+    "'code': 'tool_use_failed'}}"
+)
 
 
 async def test_a_model_that_keeps_inventing_tools_stops_after_two_tries(user, monkeypatch, answers_yes):

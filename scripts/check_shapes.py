@@ -1,6 +1,7 @@
 """Exercise the chunker against many document shapes, not just one corpus."""
 
 import sys
+
 sys.path.insert(0, "/home/claude/work/repo")
 
 from src.chunking import chunk_document
@@ -102,8 +103,7 @@ SHAPES["Arabic clauses, Arabic-Indic digits, RLM"] = f"""# MDS-CS-STD-004 معي
 """
 
 SHAPES["flat prose, no structure at all"] = (
-    "Our security programme covers access control, encryption and monitoring. "
-    * 60
+    "Our security programme covers access control, encryption and monitoring. " * 60
 )
 
 SHAPES["deep nesting, many levels"] = """# Standard

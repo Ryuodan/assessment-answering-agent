@@ -43,18 +43,46 @@ class Stance(str, Enum):
 # Order matters within each tuple only for reporting; order *between* the checks
 # in `stance_of` is what resolves overlaps.
 _NOT_APPLICABLE = (
-    "not applicable", "n/a", "not relevant", "does not apply", "out of scope",
-    "لا ينطبق", "غير منطبق",
+    "not applicable",
+    "n/a",
+    "not relevant",
+    "does not apply",
+    "out of scope",
+    "لا ينطبق",
+    "غير منطبق",
 )
 _PARTIAL = (
-    "partially", "in part", "partly", "in progress", "planned", "roadmap",
-    "will be", "is being", "currently implementing", "under implementation",
-    "جزئي", "قيد التنفيذ", "مخطط",
+    "partially",
+    "in part",
+    "partly",
+    "in progress",
+    "planned",
+    "roadmap",
+    "will be",
+    "is being",
+    "currently implementing",
+    "under implementation",
+    "جزئي",
+    "قيد التنفيذ",
+    "مخطط",
 )
 _NEGATIVE = (
-    "no,", "no.", "no ", "not implemented", "we do not", "we don't", "do not have",
-    "does not have", "is not", "are not", "none", "never",
-    "لا،", "لا ", "لا يوجد", "غير",
+    "no,",
+    "no.",
+    "no ",
+    "not implemented",
+    "we do not",
+    "we don't",
+    "do not have",
+    "does not have",
+    "is not",
+    "are not",
+    "none",
+    "never",
+    "لا،",
+    "لا ",
+    "لا يوجد",
+    "غير",
 )
 _AFFIRMATIVE = ("yes", "we have", "we do", "we maintain", "we enforce", "نعم", "لدينا", "يتم")
 
@@ -73,10 +101,15 @@ as "لا". The lookahead keeps "Nothing…" and "Notably…" from counting as a 
 """
 
 _OPENED = {
-    "yes": Stance.YES, "نعم": Stance.YES,
-    "no": Stance.NO, "لا": Stance.NO,
-    "partially": Stance.PARTIAL, "partly": Stance.PARTIAL, "partial": Stance.PARTIAL,
-    "not applicable": Stance.NOT_APPLICABLE, "n/a": Stance.NOT_APPLICABLE,
+    "yes": Stance.YES,
+    "نعم": Stance.YES,
+    "no": Stance.NO,
+    "لا": Stance.NO,
+    "partially": Stance.PARTIAL,
+    "partly": Stance.PARTIAL,
+    "partial": Stance.PARTIAL,
+    "not applicable": Stance.NOT_APPLICABLE,
+    "n/a": Stance.NOT_APPLICABLE,
     "لا ينطبق": Stance.NOT_APPLICABLE,
 }
 
@@ -131,10 +164,25 @@ def stance_of(answer: str) -> Stance:
 _WORDS: dict[Stance, tuple[str, ...]] = {
     Stance.NOT_APPLICABLE: ("not applicable", "n a", "na", "not relevant", "لا ينطبق"),
     Stance.NO: ("non compliant", "not implemented", "not compliant", "no", "nc", "non compliance"),
-    Stance.PARTIAL: ("partially compliant", "partially implemented", "partial compliance",
-                     "partially", "partial", "pc"),
-    Stance.YES: ("fully compliant", "fully implemented", "full compliance", "compliant",
-                 "implemented", "yes", "fc", "applicable", "نعم"),
+    Stance.PARTIAL: (
+        "partially compliant",
+        "partially implemented",
+        "partial compliance",
+        "partially",
+        "partial",
+        "pc",
+    ),
+    Stance.YES: (
+        "fully compliant",
+        "fully implemented",
+        "full compliance",
+        "compliant",
+        "implemented",
+        "yes",
+        "fc",
+        "applicable",
+        "نعم",
+    ),
 }
 
 

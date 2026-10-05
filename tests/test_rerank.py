@@ -82,6 +82,7 @@ def test_reranking_truncates_to_top_n(monkeypatch):
 
 def test_a_broken_reranker_keeps_the_retrieval_order(monkeypatch):
     """A missing model costs ranking quality, never the answer."""
+
     def explode():
         raise RuntimeError("model weights are missing")
 

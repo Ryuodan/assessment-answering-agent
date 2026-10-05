@@ -83,9 +83,7 @@ async def convert_file(path: Path, *, do_ocr: bool | None = None) -> str:
         "do_pdf_heading_hierarchy": str(settings.docling_heading_hierarchy).lower(),
         "md_page_break_placeholder": settings.docling_page_break_placeholder,
     }
-    submitted = await _post(
-        FILE_ASYNC_ENDPOINT, data=form, files={"files": (path.name, path.read_bytes())}
-    )
+    submitted = await _post(FILE_ASYNC_ENDPOINT, data=form, files={"files": (path.name, path.read_bytes())})
     payload = await _await_task(submitted, path.name)
     return _markdown(payload, path.name)
 
@@ -188,8 +186,5 @@ def number_pages(markdown: str) -> str:
 
     pages = markdown.split(marker)
     numbered = ["--- page 1 ---\n" + pages[0]]
-    numbered += [
-        f"\n--- page {number} ---\n" + body
-        for number, body in enumerate(pages[1:], start=2)
-    ]
+    numbered += [f"\n--- page {number} ---\n" + body for number, body in enumerate(pages[1:], start=2)]
     return "".join(numbered)

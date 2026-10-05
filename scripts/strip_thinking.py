@@ -80,9 +80,7 @@ def clean(connection: sqlite3.Connection, *, apply: bool) -> tuple[int, int]:
                     (json.dumps(payload, ensure_ascii=False), row["rowid"]),
                 )
 
-    remembered = connection.execute(
-        "SELECT team_id, entry_id, answer FROM memory_entries"
-    ).fetchall()
+    remembered = connection.execute("SELECT team_id, entry_id, answer FROM memory_entries").fetchall()
     for row in remembered:
         if not _marked(row["answer"]):
             continue

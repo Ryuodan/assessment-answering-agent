@@ -144,17 +144,11 @@ saying so should not require pretending to change it.
 """
 
 
-def confirmed_by_a_person(
-    answered: AnsweredQuestion | None, edited_by: str = ""
-) -> bool:
+def confirmed_by_a_person(answered: AnsweredQuestion | None, edited_by: str = "") -> bool:
     """Whether a person has put their name to this answer."""
     if answered is None:
         return False
-    return (
-        bool(edited_by)
-        or answered.by_hand
-        or answered.confidence_reason in (APPROVED, HAND)
-    )
+    return bool(edited_by) or answered.by_hand or answered.confidence_reason in (APPROVED, HAND)
 
 
 def written_by_a_person(answered: AnsweredQuestion | None) -> bool:
@@ -191,14 +185,11 @@ def ready_to_write(
     if answered.error:
         return False, "it could not be answered"
     if answered.needs_review:
-        reasons = "; ".join(answered.review_reasons) or (
-            answered.confidence_reason or "the reviewer flagged it"
-        )
+        reasons = "; ".join(answered.review_reasons) or (answered.confidence_reason or "the reviewer flagged it")
         return False, f"flagged for review -- {reasons}"
     if answered.confidence < floor:
         return False, (
-            f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed "
-            "to write without a person looking"
+            f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed to write without a person looking"
         )
     return True, ""
 
@@ -319,10 +310,16 @@ def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
         batches.set_detail(batch.id, wanted)
         batch = batches.load(batch.id, team_id=user.team_id, actor_email=user.email) or batch
     events.record(
-        user, events.FORM_OPENED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        source_name=form.source_name, questions=len(form.questions),
+        user,
+        events.FORM_OPENED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        source_name=form.source_name,
+        questions=len(form.questions),
         already_answered=form.answered_count,
-        strategy=chosen, seconds=round(result.seconds, 2), tokens=result.tokens,
+        strategy=chosen,
+        seconds=round(result.seconds, 2),
+        tokens=result.tokens,
         detail=batch.detail,
     )
     return batch
@@ -357,53 +354,58 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
     for question in batch.form.questions:
         result = answered.get(question.id)
         ready, held_because = ready_to_write(result, edits.get(question.id, ""))
-        questions.append({
-            "id": question.id,
-            "number": question.number,
-            "text": question.text,
-            "section": question.section,
-            "language": question.language,
-            "location": question.location,
-            "skip": question.skip,
-            "selected": question.id in selected,
-            "existing": question.existing_answer,
-            # Deliberately empty, as opposed to not answered yet. Opposite
-            # states that look identical from the outside.
-            "blanked": bool(result and result.confidence_reason == BLANKED),
-            # Whether `fill` would write this, and why not. The card shows the
-            # reason, because "held back" on its own is a wall.
-            "approved": bool(result and result.confidence_reason == APPROVED),
-            # Whether this answer's wording is in the answer memory, which is
-            # true only of answers somebody wrote and then approved.
-            "remembered": _memory_id(batch.id, question.id) in remembered,
-            "by_hand": bool(result and written_by_a_person(result)),
-            # Set aside is decided about the question rather than the answer:
-            # whatever state the answer is in, nothing is written for it. This
-            # said "will be written" of a set-aside answer, and the cards beside
-            # the assistant drew it exactly like the others.
-            "will_be_written": ready and not question.skip,
-            "held_back_because": "" if question.skip else held_because,
-            "answer": result.answer if result else "",
-            "brief": result.brief if result else "",
-            "prefer": result.prefer if result else "",
-            "length": length_of(result, batch.detail) if result else batch.detail,
-            "confidence": result.confidence if result else 0.0,
-            "needs_review": result.needs_review if result else False,
-            "error": result.error if result else "",
-            "citations": result.citations if result else [],
-            "edited_by": edits.get(question.id, ""),
-            # The whole answer, so the interface can show the sources it came
-            # from and why the reviewer flagged it. A confidence number with no
-            # evidence behind it is not something anyone can check.
-            "answered": result.model_dump() if result else None,
-            "targets": [
-                {
-                    "id": target.id, "role": target.role.value, "label": target.label,
-                    "vocabulary": target.vocabulary, "existing": target.existing,
-                }
-                for target in question.writable
-            ],
-        })
+        questions.append(
+            {
+                "id": question.id,
+                "number": question.number,
+                "text": question.text,
+                "section": question.section,
+                "language": question.language,
+                "location": question.location,
+                "skip": question.skip,
+                "selected": question.id in selected,
+                "existing": question.existing_answer,
+                # Deliberately empty, as opposed to not answered yet. Opposite
+                # states that look identical from the outside.
+                "blanked": bool(result and result.confidence_reason == BLANKED),
+                # Whether `fill` would write this, and why not. The card shows the
+                # reason, because "held back" on its own is a wall.
+                "approved": bool(result and result.confidence_reason == APPROVED),
+                # Whether this answer's wording is in the answer memory, which is
+                # true only of answers somebody wrote and then approved.
+                "remembered": _memory_id(batch.id, question.id) in remembered,
+                "by_hand": bool(result and written_by_a_person(result)),
+                # Set aside is decided about the question rather than the answer:
+                # whatever state the answer is in, nothing is written for it. This
+                # said "will be written" of a set-aside answer, and the cards beside
+                # the assistant drew it exactly like the others.
+                "will_be_written": ready and not question.skip,
+                "held_back_because": "" if question.skip else held_because,
+                "answer": result.answer if result else "",
+                "brief": result.brief if result else "",
+                "prefer": result.prefer if result else "",
+                "length": length_of(result, batch.detail) if result else batch.detail,
+                "confidence": result.confidence if result else 0.0,
+                "needs_review": result.needs_review if result else False,
+                "error": result.error if result else "",
+                "citations": result.citations if result else [],
+                "edited_by": edits.get(question.id, ""),
+                # The whole answer, so the interface can show the sources it came
+                # from and why the reviewer flagged it. A confidence number with no
+                # evidence behind it is not something anyone can check.
+                "answered": result.model_dump() if result else None,
+                "targets": [
+                    {
+                        "id": target.id,
+                        "role": target.role.value,
+                        "label": target.label,
+                        "vocabulary": target.vocabulary,
+                        "existing": target.existing,
+                    }
+                    for target in question.writable
+                ],
+            }
+        )
 
     return {
         "id": batch.id,
@@ -421,12 +423,13 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             # to tell, because this count only ever looked at what we wrote.
             "already_in_file": batch.form.answered_count,
             "needs_review": sum(
-                1 for q in batch.form.questions
-                if (answered.get(q.id) and answered[q.id].needs_review)
+                1 for q in batch.form.questions if (answered.get(q.id) and answered[q.id].needs_review)
             ),
             "held_back": sum(
-                1 for q in batch.form.questions
-                if _has_answer(answered.get(q.id)) and not q.skip
+                1
+                for q in batch.form.questions
+                if _has_answer(answered.get(q.id))
+                and not q.skip
                 and not ready_to_write(answered.get(q.id), edits.get(q.id, ""))[0]
             ),
             "set_aside": sum(1 for q in batch.form.questions if q.skip),
@@ -434,23 +437,20 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
             # here, not answered in the file, not left blank on purpose, and not
             # set aside. The question count minus our own answers called the
             # file's answers and every set-aside row "still blank".
-            "still_blank": sum(
-                1 for q in batch.form.questions
-                if not q.skip and not _settled(answered.get(q.id), q)
-            ),
-            "failed": sum(
-                1 for q in batch.form.questions
-                if (answered.get(q.id) and answered[q.id].error)
-            ),
+            "still_blank": sum(1 for q in batch.form.questions if not q.skip and not _settled(answered.get(q.id), q)),
+            "failed": sum(1 for q in batch.form.questions if (answered.get(q.id) and answered[q.id].error)),
         },
         "parts": [
-            {"name": part.name, "kind": part.kind, "questions": part.questions,
-             "used": part.used,
-             "findings": [
-                 {"subject": f.subject, "verdict": f.verdict,
-                  "because": f.because, "confident": f.confident}
-                 for f in part.findings
-             ]}
+            {
+                "name": part.name,
+                "kind": part.kind,
+                "questions": part.questions,
+                "used": part.used,
+                "findings": [
+                    {"subject": f.subject, "verdict": f.verdict, "because": f.because, "confident": f.confident}
+                    for f in part.findings
+                ],
+            }
             for part in batch.form.parts
         ],
         "warnings": batch.form.warnings,
@@ -496,7 +496,10 @@ async def answer(
         chosen = keeping
 
     outcome = Outcome(
-        batch_id=batch.id, attempted=len(chosen), scope=scope.describe(), protected=protected,
+        batch_id=batch.id,
+        attempted=len(chosen),
+        scope=scope.describe(),
+        protected=protected,
     )
     if not chosen:
         return outcome
@@ -526,9 +529,14 @@ async def answer(
     outcome.failed = sum(1 for r in results if r.error)
     outcome.needs_review = sum(1 for r in results if r.needs_review and not r.error)
     events.record(
-        user, events.BATCH_ANSWERED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        scope=outcome.scope, attempted=outcome.attempted,
-        answered=outcome.answered, failed=outcome.failed,
+        user,
+        events.BATCH_ANSWERED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        scope=outcome.scope,
+        attempted=outcome.attempted,
+        answered=outcome.answered,
+        failed=outcome.failed,
     )
     return outcome
 
@@ -562,10 +570,14 @@ async def in_house_style(
     progress.start(run_id, stage="styling")
     progress.set_total(run_id, len(worth))
     try:
+
         async def one(result: AnsweredQuestion) -> AnsweredQuestion:
             try:
                 styled = await rewrite.rewrite(
-                    result, instruction, language, note="Reworded to your preferences.",
+                    result,
+                    instruction,
+                    language,
+                    note="Reworded to your preferences.",
                 )
             except Exception:  # noqa: BLE001 - one failure is one unstyled answer
                 logger.exception("Could not apply preferences to %s", result.question.id)
@@ -598,8 +610,12 @@ def restore_draft(user: User, batch_id: str, question_id: str) -> None:
         restored.confidence_reason = ""
     batches.save_answers(batch.id, [restored])
     events.record(
-        user, events.BATCH_REVISED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        question_id=question_id, restored_draft=True,
+        user,
+        events.BATCH_REVISED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        question_id=question_id,
+        restored_draft=True,
     )
 
 
@@ -643,16 +659,17 @@ async def revise(
     batch = _require(user, batch_id)
     existing = batches.answers(batch.id)
     scope = scope or Scope()
-    candidates = [
-        question for question in scope.select(batch.form, existing)
-        if _has_answer(existing.get(question.id))
-    ]
-    chosen = candidates if include_written else [
-        question for question in candidates if not written_by_a_person(existing[question.id])
-    ]
+    candidates = [question for question in scope.select(batch.form, existing) if _has_answer(existing.get(question.id))]
+    chosen = (
+        candidates
+        if include_written
+        else [question for question in candidates if not written_by_a_person(existing[question.id])]
+    )
 
     outcome = Outcome(
-        batch_id=batch.id, attempted=len(chosen), scope=scope.describe(),
+        batch_id=batch.id,
+        attempted=len(chosen),
+        scope=scope.describe(),
         protected=len(candidates) - len(chosen),
     )
     if not chosen:
@@ -666,11 +683,13 @@ async def revise(
     progress.start(run_id or batch.id, stage="rewriting")
     progress.set_total(run_id or batch.id, len(chosen))
     try:
+
         async def one(question: FormQuestion) -> AnsweredQuestion:
             original = existing[question.id]
             try:
                 revised = await rewrite.rewrite(
-                    original, instruction,
+                    original,
+                    instruction,
                     **({"language": language} if language else {}),
                     **({"note": note} if note else {}),
                 )
@@ -698,9 +717,7 @@ async def revise(
     changed = [r for r in results if r is not existing[r.question.id]]
     batches.save_answers(batch.id, changed)
     # Derived again only where somebody is going to read the brief form.
-    shown_brief = tuple(
-        r.question.id for r in changed if length_of(r, batch.detail) == "brief"
-    )
+    shown_brief = tuple(r.question.id for r in changed if length_of(r, batch.detail) == "brief")
     if shown_brief:
         await make_brief(user, batch.id, Scope(ids=shown_brief))
 
@@ -708,8 +725,13 @@ async def revise(
     outcome.failed = len(results) - len(changed)
     outcome.needs_review = sum(1 for r in changed if r.needs_review and not r.error)
     events.record(
-        user, events.BATCH_REVISED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        scope=outcome.scope, instruction=instruction[:400], attempted=outcome.attempted,
+        user,
+        events.BATCH_REVISED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        scope=outcome.scope,
+        instruction=instruction[:400],
+        attempted=outcome.attempted,
         protected=outcome.protected,
     )
     return outcome
@@ -735,20 +757,27 @@ async def apply_skill(
     if skill is None:
         raise ToolError("You have no skill like that. Your skills are on the preferences page.")
     outcome = await revise(
-        user, batch_id, skill.instruction, scope, run_id=run_id,
+        user,
+        batch_id,
+        skill.instruction,
+        scope,
+        run_id=run_id,
         note=f"Reworded with the skill \u201c{skill.name}\u201d.",
         include_written=include_written,
     )
     events.record(
-        user, events.SKILL_APPLIED, subject_type=batches.SUBJECT, subject_id=batch_id,
-        skill=skill.name, reworded=outcome.answered, protected=outcome.protected,
+        user,
+        events.SKILL_APPLIED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch_id,
+        skill=skill.name,
+        reworded=outcome.answered,
+        protected=outcome.protected,
     )
     return skill, outcome
 
 
-def set_answer(
-    user: User, batch_id: str, question_id: str, text: str, *, which: str = "answer"
-) -> None:
+def set_answer(user: User, batch_id: str, question_id: str, text: str, *, which: str = "answer") -> None:
     """Replace one answer with words a person wrote.
 
     Recorded as an edit with their name on it. This is one of only three ways
@@ -782,13 +811,24 @@ def set_answer(
         if existing is not None:
             batches.forget_answer(batch.id, question_id)
             events.record(
-                user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
-                question_id=question_id, was=previous[:400], cleared=True,
+                user,
+                events.ANSWER_EDITED,
+                subject_type=batches.SUBJECT,
+                subject_id=batch.id,
+                question_id=question_id,
+                was=previous[:400],
+                cleared=True,
             )
         return
 
-    answered = existing.model_copy(deep=True) if existing else AnsweredQuestion(
-        question=_as_question(question), answer="", confidence=0.0,
+    answered = (
+        existing.model_copy(deep=True)
+        if existing
+        else AnsweredQuestion(
+            question=_as_question(question),
+            answer="",
+            confidence=0.0,
+        )
     )
     if which == "brief":
         answered.brief = text
@@ -807,8 +847,13 @@ def set_answer(
 
     batches.save_answers(batch.id, [answered], edited_by=user.email)
     events.record(
-        user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        question_id=question_id, was=previous[:400], now=text[:400],
+        user,
+        events.ANSWER_EDITED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        question_id=question_id,
+        was=previous[:400],
+        now=text[:400],
     )
 
 
@@ -832,14 +877,24 @@ def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = T
     if not blank:
         batches.forget_answer(batch.id, question_id)
         events.record(
-            user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
-            question_id=question_id, blanked=False,
+            user,
+            events.ANSWER_EDITED,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            question_id=question_id,
+            blanked=False,
         )
         return
 
     existing = batches.answers(batch.id).get(question_id)
-    answered = existing.model_copy(deep=True) if existing else AnsweredQuestion(
-        question=_as_question(question), answer="", confidence=0.0,
+    answered = (
+        existing.model_copy(deep=True)
+        if existing
+        else AnsweredQuestion(
+            question=_as_question(question),
+            answer="",
+            confidence=0.0,
+        )
     )
     answered.answer = ""
     answered.needs_review = False
@@ -848,8 +903,12 @@ def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = T
     answered.confidence_reason = BLANKED
     batches.save_answers(batch.id, [answered], edited_by=user.email)
     events.record(
-        user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        question_id=question_id, blanked=True,
+        user,
+        events.ANSWER_EDITED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        question_id=question_id,
+        blanked=True,
     )
 
 
@@ -903,7 +962,8 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> O
     existing = batches.answers(batch.id)
     scope = scope or Scope()
     chosen = [
-        question for question in scope.select(batch.form, existing)
+        question
+        for question in scope.select(batch.form, existing)
         if _has_answer(existing.get(question.id)) and not existing[question.id].brief.strip()
     ]
 
@@ -914,6 +974,7 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> O
     progress.start(batch.id, stage="shortening")
     progress.set_total(batch.id, len(chosen))
     try:
+
         async def one(question: FormQuestion) -> AnsweredQuestion:
             answered = existing[question.id].model_copy(deep=True)
             try:
@@ -934,7 +995,9 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> O
     edits = batches.edited_by(batch.id)
     for who in {edits.get(r.question.id, "") for r in results}:
         batches.save_answers(
-            batch.id, [r for r in results if edits.get(r.question.id, "") == who], edited_by=who,
+            batch.id,
+            [r for r in results if edits.get(r.question.id, "") == who],
+            edited_by=who,
         )
     outcome.answered = sum(1 for r in results if r.brief.strip())
     outcome.failed = outcome.attempted - outcome.answered
@@ -948,14 +1011,15 @@ def set_detail(user: User, batch_id: str, detail: str) -> None:
         raise ToolError(f"Answer length must be one of {', '.join(batches.DETAIL_LEVELS)}.")
     batches.set_detail(batch.id, detail)
     events.record(
-        user, events.BATCH_ANSWERED, subject_type=batches.SUBJECT, subject_id=batch.id,
+        user,
+        events.BATCH_ANSWERED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
         detail=detail,
     )
 
 
-def approve_answer(
-    user: User, batch_id: str, question_id: str, *, approved: bool = True
-) -> str:
+def approve_answer(user: User, batch_id: str, question_id: str, *, approved: bool = True) -> str:
     """Accept an answer as it stands, so `fill` will write it.
 
     The reviewer's name is recorded exactly as an edit records it, because from
@@ -1003,8 +1067,12 @@ def approve_answer(
     answered.needs_review = False if approved else existing.needs_review
     batches.save_answers(batch.id, [answered], edited_by=user.email if approved else "")
     events.record(
-        user, events.ANSWER_EDITED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        question_id=question_id, approved=approved,
+        user,
+        events.ANSWER_EDITED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        question_id=question_id,
+        approved=approved,
     )
 
     entry_id = _memory_id(batch.id, question_id)
@@ -1032,8 +1100,12 @@ def approve_answer(
         team_id=user.team_id,
     )
     events.record(
-        user, events.MEMORY_ADDED, subject_type=SUBJECT_MEMORY, subject_id=entry_id,
-        question=question.text[:200], batch_id=batch.id,
+        user,
+        events.MEMORY_ADDED,
+        subject_type=SUBJECT_MEMORY,
+        subject_id=entry_id,
+        question=question.text[:200],
+        batch_id=batch.id,
     )
     return entry_id
 
@@ -1071,8 +1143,7 @@ def fill(
     batch = _require(user, batch_id)
     if not batch.exists:
         raise ToolError(
-            f"The uploaded file for {batch.source_name!r} is no longer on the server. "
-            "Upload it again to fill it in."
+            f"The uploaded file for {batch.source_name!r} is no longer on the server. Upload it again to fill it in."
         )
 
     answered = batches.answers(batch.id)
@@ -1124,9 +1195,15 @@ def fill(
     destination.parent.mkdir(parents=True, exist_ok=True)
     report = forms.write(batch.source_path, destination, values)
     events.record(
-        user, events.FILE_FILLED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        written=report.written, created=len(report.created),
-        replaced=len(report.replaced), left_blank=len(blank), held_back=len(held),
+        user,
+        events.FILE_FILLED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        written=report.written,
+        created=len(report.created),
+        replaced=len(report.replaced),
+        left_blank=len(blank),
+        held_back=len(held),
     )
     return Filled(
         path=destination,
@@ -1155,17 +1232,20 @@ def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion]) -> str
             blank = sum(1 for q in batch.form.questions if not _settled(answered.get(q.id), q))
             return (
                 f"Nothing needed writing: the {already} answer(s) this questionnaire has "
-                "came with the file and are already in it." + (
+                "came with the file and are already in it."
+                + (
                     f" {blank} question(s) are still blank — answer those and fill again."
-                    if blank else " Every question is answered."
+                    if blank
+                    else " Every question is answered."
                 )
             )
-        return ("Nothing has been answered yet, so there was nothing to write. "
-                "Answer some questions first.")
+        return "Nothing has been answered yet, so there was nothing to write. Answer some questions first."
     if all(q.skip for q in batch.form.questions if _has_answer(answered.get(q.id))):
         return "Every answered question is set aside, so nothing was written for any of them."
-    return ("The answers exist but none of them has a cell to go into -- check the "
-            "answer column for each sheet in the reading report.")
+    return (
+        "The answers exist but none of them has a cell to go into -- check the "
+        "answer column for each sheet in the reading report."
+    )
 
 
 def _filled_path(batch: Batch) -> Path:
@@ -1187,7 +1267,11 @@ def _filled_path(batch: Batch) -> Path:
 
 
 async def search(
-    query: str, mode: str = "hybrid", limit: int = 8, *, team_id: str | None = None,
+    query: str,
+    mode: str = "hybrid",
+    limit: int = 8,
+    *,
+    team_id: str | None = None,
 ) -> dict:
     """Look something up in a team's indexed policies, without touching a batch."""
     return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id)
@@ -1239,21 +1323,23 @@ def column_roles(user: User, batch_id: str) -> list[dict]:
         columns = seen[part.name]
         labels = {
             "".join(c for c in t.id.rsplit("!", 1)[1] if c.isalpha()): t.label
-            for q in batch.form.questions for t in q.targets.values()
+            for q in batch.form.questions
+            for t in q.targets.values()
             if t.id.startswith(f"{part.name}!")
         }
-        out.append({
-            "sheet": part.name,
-            "columns": [
-                {"column": column, "role": role, "label": labels.get(column, "")}
-                for column, role in sorted(columns.items())
-            ],
-            "findings": [
-                {"subject": f.subject, "verdict": f.verdict,
-                 "because": f.because, "confident": f.confident}
-                for f in part.findings
-            ],
-        })
+        out.append(
+            {
+                "sheet": part.name,
+                "columns": [
+                    {"column": column, "role": role, "label": labels.get(column, "")}
+                    for column, role in sorted(columns.items())
+                ],
+                "findings": [
+                    {"subject": f.subject, "verdict": f.verdict, "because": f.because, "confident": f.confident}
+                    for f in part.findings
+                ],
+            }
+        )
     return out
 
 
@@ -1281,8 +1367,7 @@ def set_column_role(user: User, batch_id: str, sheet: str, column: str, role: st
         raise ToolError(f"Answers cannot be written to a {wanted.value} column.")
 
     form = batch.form.model_copy(deep=True)
-    on_sheet = [q for q in form.questions if any(
-        t.id.startswith(f"{sheet}!") for t in q.targets.values())]
+    on_sheet = [q for q in form.questions if any(t.id.startswith(f"{sheet}!") for t in q.targets.values())]
     if not on_sheet:
         raise ToolError(f"No questions were found on {sheet!r}.")
 
@@ -1290,10 +1375,14 @@ def set_column_role(user: User, batch_id: str, sheet: str, column: str, role: st
     # sit there. Dropping it left the picker offering a bare "column D", which
     # is the one thing a person correcting a column needs to recognise it by.
     label = next(
-        (t.label for q in on_sheet for t in q.targets.values()
-         if t.id.startswith(f"{sheet}!")
-         and "".join(c for c in t.id.rsplit("!", 1)[1] if c.isalpha()) == column
-         and t.label),
+        (
+            t.label
+            for q in on_sheet
+            for t in q.targets.values()
+            if t.id.startswith(f"{sheet}!")
+            and "".join(c for c in t.id.rsplit("!", 1)[1] if c.isalpha()) == column
+            and t.label
+        ),
         "",
     )
     vocabulary: list[str] = []
@@ -1306,19 +1395,21 @@ def set_column_role(user: User, batch_id: str, sheet: str, column: str, role: st
     for question in on_sheet:
         row = next(
             "".join(c for c in t.id.rsplit("!", 1)[1] if c.isdigit())
-            for t in question.targets.values() if t.id.startswith(f"{sheet}!")
+            for t in question.targets.values()
+            if t.id.startswith(f"{sheet}!")
         )
         # Drop whatever used to hold this role, and whatever used to live in
         # this column -- otherwise a swap leaves the old assignment behind.
         question.targets = {
             existing_role: target
             for existing_role, target in question.targets.items()
-            if existing_role is not wanted
-            and "".join(c for c in target.id.rsplit("!", 1)[1] if c.isalpha()) != column
+            if existing_role is not wanted and "".join(c for c in target.id.rsplit("!", 1)[1] if c.isalpha()) != column
         }
         if wanted is not Role.IGNORE:
             question.targets[wanted] = Target(
-                id=f"{sheet}!{column}{row}", role=wanted, label=label,
+                id=f"{sheet}!{column}{row}",
+                role=wanted,
+                label=label,
                 vocabulary=vocabulary,
             )
 
@@ -1334,24 +1425,26 @@ def set_column_role(user: User, batch_id: str, sheet: str, column: str, role: st
         # Only detection's own reading is worth quoting back. A second
         # correction that said "read from the file as evidence" would be
         # crediting the file with the last person's choice.
-        detected = (
-            previous.verdict
-            if previous is not None and not previous.because.startswith(SET_BY)
-            else ""
-        )
+        detected = previous.verdict if previous is not None and not previous.because.startswith(SET_BY) else ""
         part.findings = [f for f in part.findings if f.subject != subject]
-        part.findings.append(Finding(
-            subject=subject,
-            verdict=wanted.value,
-            because=f"{SET_BY}{user.email}"
-                    + (f", read from the file as {detected}" if detected else ""),
-            confident=True,
-        ))
+        part.findings.append(
+            Finding(
+                subject=subject,
+                verdict=wanted.value,
+                because=f"{SET_BY}{user.email}" + (f", read from the file as {detected}" if detected else ""),
+                confident=True,
+            )
+        )
 
     _save_form(batch, form)
     events.record(
-        user, events.ROLES_CORRECTED, subject_type=batches.SUBJECT, subject_id=batch.id,
-        sheet=sheet, column=column, role=wanted.value,
+        user,
+        events.ROLES_CORRECTED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        sheet=sheet,
+        column=column,
+        role=wanted.value,
     )
     return inspect(user, batch_id)
 
@@ -1384,8 +1477,11 @@ def set_questions(user: User, batch_id: str, changes: list[dict]) -> dict:
 
     _save_form(batch, form)
     events.record(
-        user, events.QUESTIONS_CORRECTED, subject_type=batches.SUBJECT,
-        subject_id=batch.id, changed=touched,
+        user,
+        events.QUESTIONS_CORRECTED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        changed=touched,
         set_aside=sum(1 for q in form.questions if q.skip),
     )
     return inspect(user, batch_id)

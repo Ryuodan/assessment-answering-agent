@@ -67,17 +67,14 @@ async def _ask(messages):
             except TRANSIENT:
                 if attempt == ATTEMPTS:
                     raise
-                await _pause(min(2 ** attempt, 20) * (0.5 + random.random()))
+                await _pause(min(2**attempt, 20) * (0.5 + random.random()))
 
 
 def _sources_block(answered: AnsweredQuestion) -> str:
     evidence = order_evidence(answered.evidence)[:MAX_SOURCES]
     if not evidence:
         return "(none recorded)"
-    return "\n\n".join(
-        f"[{index}] {item.locator}\n{item.snippet}"
-        for index, item in enumerate(evidence, start=1)
-    )
+    return "\n\n".join(f"[{index}] {item.locator}\n{item.snippet}" for index, item in enumerate(evidence, start=1))
 
 
 async def rewrite(
@@ -107,12 +104,15 @@ async def rewrite(
     target = language or answered.question.language
     messages = [
         ("system", REWRITE_SYSTEM.format(language_name=LANGUAGE_NAMES[target])),
-        ("user", REWRITE_USER.format(
-            question=answered.question.text,
-            answer=answered.answer,
-            sources_block=_sources_block(answered),
-            instruction=instruction,
-        )),
+        (
+            "user",
+            REWRITE_USER.format(
+                question=answered.question.text,
+                answer=answered.answer,
+                sources_block=_sources_block(answered),
+                instruction=instruction,
+            ),
+        ),
     ]
 
     try:
@@ -135,9 +135,7 @@ async def rewrite(
     revised.brief = ""
     # Evidence and citations are carried over deliberately: the sources did not
     # change, so the clause a reader would go and check has not moved either.
-    revised.rationale = (
-        f"{answered.rationale} {note or 'Reworded on request: ' + instruction}".strip()
-    )
+    revised.rationale = f"{answered.rationale} {note or 'Reworded on request: ' + instruction}".strip()
     return revised
 
 

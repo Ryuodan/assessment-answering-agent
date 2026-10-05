@@ -157,12 +157,15 @@ def test_the_document_is_a_valid_pdf():
     assert len(content) > 1000
 
 
-@pytest.mark.parametrize("options", [
-    ExportOptions(),
-    ExportOptions(include_flagged=True),
-    ExportOptions(include_citations=False, include_reasoning=True),
-    ExportOptions(include_flagged=True, include_citations=True, include_reasoning=True),
-])
+@pytest.mark.parametrize(
+    "options",
+    [
+        ExportOptions(),
+        ExportOptions(include_flagged=True),
+        ExportOptions(include_citations=False, include_reasoning=True),
+        ExportOptions(include_flagged=True, include_citations=True, include_reasoning=True),
+    ],
+)
 def test_every_option_combination_renders(options):
     assert render_pdf(_result(), options).startswith(b"%PDF-")
 
@@ -172,11 +175,18 @@ def test_every_option_combination_renders(options):
 
 def _with_answer(answer: str) -> AssessmentResult:
     return AssessmentResult(
-        run_id="t", source_name="markup.pdf", language="en", questions_found=1,
-        answers=[AnsweredQuestion(
-            question=Question(id="1", text="What are the requirements?"),
-            answer=answer, confidence=0.9, needs_review=False,
-        )],
+        run_id="t",
+        source_name="markup.pdf",
+        language="en",
+        questions_found=1,
+        answers=[
+            AnsweredQuestion(
+                question=Question(id="1", text="What are the requirements?"),
+                answer=answer,
+                confidence=0.9,
+                needs_review=False,
+            )
+        ],
     )
 
 
@@ -228,11 +238,18 @@ LONG_ARABIC_QUESTION = (
 
 def _arabic_result(question: str = LONG_ARABIC_QUESTION, answer: str = ARABIC_ANSWER):
     return AssessmentResult(
-        run_id="t", source_name="تقييم.pdf", language="ar", questions_found=1,
-        answers=[AnsweredQuestion(
-            question=Question(id="26", text=question, language="ar"),
-            answer=answer, confidence=0.8, needs_review=False,
-        )],
+        run_id="t",
+        source_name="تقييم.pdf",
+        language="ar",
+        questions_found=1,
+        answers=[
+            AnsweredQuestion(
+                question=Question(id="26", text=question, language="ar"),
+                answer=answer,
+                confidence=0.8,
+                needs_review=False,
+            )
+        ],
     )
 
 
@@ -259,7 +276,7 @@ def test_a_long_arabic_question_is_not_reordered_across_its_lines():
 
 
 def test_the_question_number_leads_the_question():
-    """"26." belongs against the first words, not stranded after the last."""
+    """ "26." belongs against the first words, not stranded after the last."""
     recovered = _recovered(render_pdf(_arabic_result()))
     first = next(line for line in recovered.splitlines() if "يشترط" in line)
 

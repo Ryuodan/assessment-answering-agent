@@ -101,10 +101,7 @@ def _lost(form: DetectedForm) -> set[str]:
     Hidden and near-empty sheets are excluded: they are skipped on purpose, and
     handing them to an agent would be paying to be told what we already decided.
     """
-    return {
-        part.name for part in form.parts
-        if not part.used and part.kind not in ("hidden", "empty")
-    }
+    return {part.name for part in form.parts if not part.used and part.kind not in ("hidden", "empty")}
 
 
 def read(path: str | Path, strategy: str = "rules") -> Reading:
@@ -115,8 +112,7 @@ def read(path: str | Path, strategy: str = "rules") -> Reading:
 
     started = time.monotonic()
     if strategy == "rules":
-        return Reading(forms.detect(path, assist=False), strategy,
-                       seconds=time.monotonic() - started)
+        return Reading(forms.detect(path, assist=False), strategy, seconds=time.monotonic() - started)
 
     if strategy == "assisted":
         before = forms.detect(path, assist=False)
@@ -128,9 +124,7 @@ def read(path: str | Path, strategy: str = "rules") -> Reading:
         # so it is worth stating rather than inferring from a token count.
         reading.model_calls = len(_lost(before))
         if reading.questions > len(before.questions):
-            reading.notes.append(
-                f"the model added {reading.questions - len(before.questions)} question(s)"
-            )
+            reading.notes.append(f"the model added {reading.questions - len(before.questions)} question(s)")
         return reading
 
     if path.suffix.lower() not in (".xlsx", ".xlsm"):
@@ -154,8 +148,7 @@ def read(path: str | Path, strategy: str = "rules") -> Reading:
         reading.seconds = time.monotonic() - started
         if rescued:
             reading.notes.append(
-                "the rules kept " + ", ".join(f"{name!r}" for name in sorted(rescued))
-                + " that the agent read for less"
+                "the rules kept " + ", ".join(f"{name!r}" for name in sorted(rescued)) + " that the agent read for less"
             )
         return reading
 
@@ -201,9 +194,7 @@ def _merge(rules: DetectedForm, agent: DetectedForm, lost: set[str]) -> Detected
     for question in agent.questions:
         found.setdefault(_sheet_of(question), []).append(question)
 
-    merged = DetectedForm(
-        source_name=rules.source_name, format=rules.format, warnings=list(rules.warnings)
-    )
+    merged = DetectedForm(source_name=rules.source_name, format=rules.format, warnings=list(rules.warnings))
     for part in rules.parts:
         replacement = by_name.get(part.name)
         if part.name in lost and replacement is not None and replacement.used:
@@ -211,10 +202,7 @@ def _merge(rules: DetectedForm, agent: DetectedForm, lost: set[str]) -> Detected
             merged.questions.extend(found.get(part.name, []))
         else:
             merged.parts.append(part)
-            merged.questions.extend(
-                question for question in rules.questions
-                if _sheet_of(question) == part.name
-            )
+            merged.questions.extend(question for question in rules.questions if _sheet_of(question) == part.name)
     if merged.questions:
         merged.warnings = [w for w in merged.warnings if not w.startswith("No questions")]
     return merged
@@ -236,9 +224,7 @@ def _floor(agent: DetectedForm, rules: DetectedForm) -> tuple[DetectedForm, set[
     for question in rules.questions:
         rules_questions.setdefault(_sheet_of(question), []).append(question)
 
-    floored = DetectedForm(
-        source_name=agent.source_name, format=agent.format, warnings=list(agent.warnings)
-    )
+    floored = DetectedForm(source_name=agent.source_name, format=agent.format, warnings=list(agent.warnings))
     rescued: set[str] = set()
     for part in agent.parts:
         theirs = by_name.get(part.name)
@@ -248,10 +234,7 @@ def _floor(agent: DetectedForm, rules: DetectedForm) -> tuple[DetectedForm, set[
             rescued.add(part.name)
             continue
         floored.parts.append(part)
-        floored.questions.extend(
-            question for question in agent.questions
-            if _sheet_of(question) == part.name
-        )
+        floored.questions.extend(question for question in agent.questions if _sheet_of(question) == part.name)
 
     # A sheet the agent never mentioned at all, which is the same omission by a
     # different route: it recorded no reading, so no part came back for it.
@@ -287,9 +270,7 @@ def disagreements(readings: dict[str, Reading]) -> list[str]:
     for name in names:
         row = counts[name]
         if len(set(row.get(s, 0) for s in readings)) > 1:
-            lines.append(
-                f"{name}: " + ", ".join(f"{s} {row.get(s, 0)}" for s in readings)
-            )
+            lines.append(f"{name}: " + ", ".join(f"{s} {row.get(s, 0)}" for s in readings))
     return lines
 
 

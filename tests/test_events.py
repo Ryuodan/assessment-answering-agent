@@ -130,9 +130,7 @@ def test_for_subject_reads_oldest_first():
     events.record(ALICE, events.RUN_STARTED, subject_type="run", subject_id="r2")
 
     story = events.for_subject("run", "r1")
-    assert [event.kind for event in story] == [
-        events.RUN_STARTED, events.RUN_FINISHED, events.ANSWER_EDITED
-    ]
+    assert [event.kind for event in story] == [events.RUN_STARTED, events.RUN_FINISHED, events.ANSWER_EDITED]
 
 
 def test_for_subject_of_an_unknown_thing_is_empty():

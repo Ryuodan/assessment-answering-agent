@@ -85,8 +85,15 @@ def _shade(paragraph, colour: str) -> None:
     shading.set(qn("w:fill"), colour)
 
 
-def _run(paragraph, text: str, *, bold: bool = False, size: float = 10.5,
-         colour: RGBColor | None = None, italic: bool = False):
+def _run(
+    paragraph,
+    text: str,
+    *,
+    bold: bool = False,
+    size: float = 10.5,
+    colour: RGBColor | None = None,
+    italic: bool = False,
+):
     # A model's text can carry a character XML may not hold, and python-docx
     # refuses the whole document over one. Every word in the file passes here.
     text = xml_safe(text)
@@ -196,8 +203,7 @@ def _answer(document, answered: AnsweredQuestion, options: ExportOptions) -> Non
     colour, word = confidence_words(answered.confidence)
     paragraph = document.add_paragraph()
     _spacing(paragraph, before=8, after=14)
-    _run(paragraph, f"{word} — {round(answered.confidence * 100)}%",
-         bold=True, size=9.5, colour=colour)
+    _run(paragraph, f"{word} — {round(answered.confidence * 100)}%", bold=True, size=9.5, colour=colour)
 
 
 def render_docx(result: AssessmentResult, options: ExportOptions | None = None) -> bytes:
@@ -222,9 +228,9 @@ def render_docx(result: AssessmentResult, options: ExportOptions | None = None) 
     if not answers:
         _body_line(
             document,
-            "No answer met the confidence threshold. Tick “answers flagged for review” "
-            "to export the drafts anyway.",
-            size=10, colour=INK,
+            "No answer met the confidence threshold. Tick “answers flagged for review” to export the drafts anyway.",
+            size=10,
+            colour=INK,
         )
 
     for answered in answers:

@@ -79,11 +79,7 @@ def _splitter_removed():
     from src import knowledge
 
     source = inspect.getsource(knowledge)
-    leftovers = [
-        name
-        for name in ("RecursiveCharacterTextSplitter", "_SEPARATORS", "def _splitter")
-        if name in source
-    ]
+    leftovers = [name for name in ("RecursiveCharacterTextSplitter", "_SEPARATORS", "def _splitter") if name in source]
     return True if not leftovers else f"still present in knowledge.py: {leftovers}"
 
 
@@ -110,9 +106,8 @@ def _chunk_size():
 def _chunking_behaviour():
     from src.chunking import chunk_document
 
-    doc = (
-        "## 7.2 Alerts\n\nThe SOC shall alert on:\n\n"
-        + "\n".join(f"7.2.{n} Condition number {n}." for n in range(1, 13))
+    doc = "## 7.2 Alerts\n\nThe SOC shall alert on:\n\n" + "\n".join(
+        f"7.2.{n} Condition number {n}." for n in range(1, 13)
     )
     chunks = chunk_document(doc, source_name="t.pdf", chunk_size=1800)
     joined = "\n".join(chunk.text for chunk in chunks)
@@ -132,8 +127,15 @@ def _evidence_fields():
     from src.models import Evidence
 
     required = {
-        "doc_id", "clause", "heading", "page", "chunk",
-        "kind", "unit_id", "part", "parts",
+        "doc_id",
+        "clause",
+        "heading",
+        "page",
+        "chunk",
+        "kind",
+        "unit_id",
+        "part",
+        "parts",
     }
     missing = required - set(Evidence.model_fields)
     return True if not missing else f"missing fields: {sorted(missing)}"
@@ -177,9 +179,7 @@ def _expansion_exists():
 def _expansion_budget():
     from src.config import settings
 
-    missing = [
-        name for name in ("max_expanded_chars", "max_evidence_chunks") if not hasattr(settings, name)
-    ]
+    missing = [name for name in ("max_expanded_chars", "max_evidence_chunks") if not hasattr(settings, name)]
     return True if not missing else f"missing settings: {missing}"
 
 
@@ -381,9 +381,7 @@ def _chunk_sizes():
     try:
         sources = {
             row[0]: row[1]
-            for row in connection.execute(
-                "select id, string_value from embedding_metadata where key='source_name'"
-            )
+            for row in connection.execute("select id, string_value from embedding_metadata where key='source_name'")
         }
         oversized = {}
         for identifier, document in connection.execute(
@@ -428,9 +426,7 @@ def _chunk_substance():
     try:
         sources = {
             row[0]: row[1]
-            for row in connection.execute(
-                "select id, string_value from embedding_metadata where key='source_name'"
-            )
+            for row in connection.execute("select id, string_value from embedding_metadata where key='source_name'")
         }
         empty: dict[str, int] = {}
         placeholders: dict[str, int] = {}

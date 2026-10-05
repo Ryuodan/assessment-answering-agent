@@ -145,8 +145,6 @@ def format_comparison(baseline: dict, candidate: dict) -> str:
         regressions += delta < 0
         wins += delta > 0
         marker = "" if delta == 0 else ("  <-- regression" if delta < 0 else "  <-- win")
-        lines.append(
-            f"{entry['test_id']:<10}{before:>6}{entry['score']:>6}{delta:>+7}  {entry['category']}{marker}"
-        )
+        lines.append(f"{entry['test_id']:<10}{before:>6}{entry['score']:>6}{delta:>+7}  {entry['category']}{marker}")
     lines.append(f"\n{wins} wins, {regressions} regressions")
     return "\n".join(lines)

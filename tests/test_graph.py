@@ -60,7 +60,9 @@ async def test_plan_falls_back_to_the_question_when_planning_fails(monkeypatch):
 async def test_plan_deduplicates_and_caps(monkeypatch):
     monkeypatch.setattr(settings, "query_expansion", True)
     monkeypatch.setattr(settings, "max_search_queries", 3)
-    _stub_plan(monkeypatch, ["Are you certified?", "iso 27001 scope", "certification body", "audit date", "surveillance"])
+    _stub_plan(
+        monkeypatch, ["Are you certified?", "iso 27001 scope", "certification body", "audit date", "surveillance"]
+    )
 
     queries = (await nodes.plan(_state()))["search_queries"]
 
@@ -69,6 +71,7 @@ async def test_plan_deduplicates_and_caps(monkeypatch):
 
 def _stub_plan(monkeypatch, queries):
     """The plan node reads plain text, one query per line."""
+
     class _Response:
         content = chr(10).join(queries)
 
@@ -155,12 +158,14 @@ async def test_a_memory_conflict_is_flagged_and_never_written_into_the_answer():
     `ready_to_write` -- and reaches `answer`, the string that goes into the
     customer's spreadsheet, through nothing at all.
     """
-    state = _state(draft=DraftedAnswer(
-        answer="Yes. Access is reviewed quarterly.",
-        confidence=0.95,
-        used_source_ids=[],
-        contradicts_memory="A 2023 answer said reviews are annual; the policy says quarterly.",
-    ))
+    state = _state(
+        draft=DraftedAnswer(
+            answer="Yes. Access is reviewed quarterly.",
+            confidence=0.95,
+            used_source_ids=[],
+            contradicts_memory="A 2023 answer said reviews are annual; the policy says quarterly.",
+        )
+    )
 
     answered = (await nodes.finalize(state))["answered"]
 
@@ -242,9 +247,7 @@ def test_query_parsing_survives_the_shapes_models_actually_emit():
 
 
 def test_query_parsing_drops_commentary_and_blank_lines():
-    parsed = nodes._parse_queries(
-        "short one\n\n" + ("a very long sentence of commentary " * 8) + "\n"
-    )
+    parsed = nodes._parse_queries("short one\n\n" + ("a very long sentence of commentary " * 8) + "\n")
     assert parsed == ["short one"]
 
 
@@ -263,9 +266,7 @@ async def test_a_failing_question_does_not_discard_the_whole_batch(monkeypatch):
 
     monkeypatch.setattr(service, "answer_one_question", flaky)
 
-    answers = await service.answer_questions(
-        [Question(id=str(n), text=f"q{n}", language="en") for n in (1, 2, 3)]
-    )
+    answers = await service.answer_questions([Question(id=str(n), text=f"q{n}", language="en") for n in (1, 2, 3)])
 
     assert [a.question.id for a in answers] == ["1", "2", "3"]
     assert answers[0].answer == "fine" and answers[2].answer == "fine"
@@ -290,9 +291,7 @@ async def test_the_document_flow_and_the_batch_flow_run_the_same_pipeline(monkey
     async def spy(state):
         seen.append((state["question"].id, tuple(state.get("search_queries") or ())))
         return {
-            "answered": AnsweredQuestion(
-                question=state["question"], answer="ok", confidence=0.9, needs_review=False
-            )
+            "answered": AnsweredQuestion(question=state["question"], answer="ok", confidence=0.9, needs_review=False)
         }
 
     class _Graph:
@@ -316,8 +315,7 @@ async def test_the_document_flow_and_the_batch_flow_run_the_same_pipeline(monkey
     monkeypatch.setattr(nodes, "extract", fake_extract)
     workflow.assessment_graph.cache_clear()
     state = await workflow.assessment_graph().ainvoke(
-        {"source_name": "a.pdf", "document_text": "irrelevant", "language": None,
-         "questions": [], "answers": []}
+        {"source_name": "a.pdf", "document_text": "irrelevant", "language": None, "questions": [], "answers": []}
     )
     via_document = list(seen)
     workflow.assessment_graph.cache_clear()

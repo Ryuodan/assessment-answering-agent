@@ -29,10 +29,12 @@ def test_a_strategy_that_does_not_exist_is_refused(tmp_path):
 def test_the_hybrid_does_not_run_the_agent_when_the_rules_read_everything(tmp_path, monkeypatch):
     """The whole economy of it. A file the rules handle costs nothing extra,
     which is most files."""
+
     def fail(*args, **kwargs):
         raise AssertionError("the agent should not have been run")
 
     from src.agents import excel_agent
+
     monkeypatch.setattr(excel_agent, "read_workbook", fail)
 
     result = read(shapes.status_and_comment(tmp_path / "hr.xlsx"), "hybrid")
@@ -75,10 +77,13 @@ def _form(*parts):
     for name, kind, count in parts:
         form.parts.append(Part(name=name, kind=kind, questions=count))
         for row in range(2, 2 + count):
-            form.questions.append(FormQuestion(
-                id=f"{name}!{row}", text=f"Question on {name} row {row}",
-                targets={Role.ANSWER: Target(id=f"{name}!C{row}", role=Role.ANSWER)},
-            ))
+            form.questions.append(
+                FormQuestion(
+                    id=f"{name}!{row}",
+                    text=f"Question on {name} row {row}",
+                    targets={Role.ANSWER: Target(id=f"{name}!C{row}", role=Role.ANSWER)},
+                )
+            )
     return form
 
 
@@ -93,7 +98,7 @@ def test_the_agents_reading_replaces_only_the_sheets_it_was_shown(tmp_path):
 
 
 def test_a_sheet_the_agent_made_nothing_of_keeps_the_rules_verdict(tmp_path):
-    """"No column holds a run of questions" says more than "the agent recorded
+    """ "No column holds a run of questions" says more than "the agent recorded
     no reading", and the person confirming the layout reads both."""
     rules = _form(("Lost", "no questions", 0))
     agent = _form(("Lost", "not read", 0))

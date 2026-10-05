@@ -31,7 +31,8 @@ def answers_yes(monkeypatch):
             AnsweredQuestion(
                 question=question,
                 answer="Yes. Access reviews are carried out every quarter.",
-                confidence=0.9, needs_review=False,
+                confidence=0.9,
+                needs_review=False,
             )
             for question in questions
         ]
@@ -110,15 +111,19 @@ def test_forgetting_an_imported_answer_takes_its_vector_too(memory_index):
     entry id in the metadata, so a delete by id alone missed all six hundred
     and ninety-eight of them: forgotten from the record, still retrieved, and
     re-adopted the next time the process read the index."""
-    memory_index.records.append({
-        "id": "Answer memory — the security team's own answers::17",
-        "text": "Q: Do you run drills?\nA: Yes, annually.",
-        "metadata": {
-            "source_type": "prior_answer", "entry_id": "MEM-0018",
-            "question": "Do you run drills?", "answer": "Yes, annually.",
-            "source_name": "Answer memory — the security team's own answers",
-        },
-    })
+    memory_index.records.append(
+        {
+            "id": "Answer memory — the security team's own answers::17",
+            "text": "Q: Do you run drills?\nA: Yes, annually.",
+            "metadata": {
+                "source_type": "prior_answer",
+                "entry_id": "MEM-0018",
+                "question": "Do you run drills?",
+                "answer": "Yes, annually.",
+                "source_name": "Answer memory — the security team's own answers",
+            },
+        }
+    )
     answer_memory.forget_sync()
     assert [e.entry_id for e in answer_memory.entries()] == ["MEM-0018"], "adopted"
 
@@ -154,18 +159,24 @@ def test_a_superseded_entry_is_kept_as_history(memory_index):
 
 
 def test_a_questionnaire_becomes_rows_and_a_corrected_upload_replaces_them(memory_index):
-    answer_memory.adopt_file("vendor.xlsx", [
-        Pair("Do you encrypt backups?", "Yes."),
-        Pair("Is MFA enforced?", "Yes."),
-        Pair("Are logs retained?", "For twelve months."),
-    ])
+    answer_memory.adopt_file(
+        "vendor.xlsx",
+        [
+            Pair("Do you encrypt backups?", "Yes."),
+            Pair("Is MFA enforced?", "Yes."),
+            Pair("Are logs retained?", "For twelve months."),
+        ],
+    )
     assert answer_memory.count() == 3
     assert len(answer_memory.pending()) == 3, "unscanned, which is what puts them in the sweep"
 
-    answer_memory.adopt_file("vendor.xlsx", [
-        Pair("Do you encrypt backups?", "Yes, with AES-256."),
-        Pair("Is MFA enforced?", "Yes."),
-    ])
+    answer_memory.adopt_file(
+        "vendor.xlsx",
+        [
+            Pair("Do you encrypt backups?", "Yes, with AES-256."),
+            Pair("Is MFA enforced?", "Yes."),
+        ],
+    )
 
     remaining = {e.question: e.answer for e in answer_memory.entries()}
     assert remaining == {
@@ -179,8 +190,11 @@ def test_a_questionnaire_becomes_rows_and_a_corrected_upload_replaces_them(memor
 
 def _prior(entry_id: str, text: str, score: float = 0.9) -> Evidence:
     return Evidence(
-        source_type=SourceType.PRIOR_ANSWER, source_name="vendor.xlsx",
-        snippet=text, score=score, entry_id=entry_id,
+        source_type=SourceType.PRIOR_ANSWER,
+        source_name="vendor.xlsx",
+        snippet=text,
+        score=score,
+        entry_id=entry_id,
     )
 
 
@@ -212,14 +226,23 @@ def test_an_indexed_answer_from_before_the_memory_existed_still_has_an_id():
 
 
 def test_answers_indexed_before_the_record_existed_are_adopted(monkeypatch, memory_index):
-    index = bare_store(FakeVectorStore([{
-        "text": "Q: Do you encrypt backups?\nA: Yes.",
-        "metadata": {
-            "source_type": SourceType.PRIOR_ANSWER.value, "source_name": "old.xlsx",
-            "chunk": 0, "question": "Do you encrypt backups?", "answer": "Yes.",
-        },
-        "id": "old.xlsx::0",
-    }]))
+    index = bare_store(
+        FakeVectorStore(
+            [
+                {
+                    "text": "Q: Do you encrypt backups?\nA: Yes.",
+                    "metadata": {
+                        "source_type": SourceType.PRIOR_ANSWER.value,
+                        "source_name": "old.xlsx",
+                        "chunk": 0,
+                        "question": "Do you encrypt backups?",
+                        "answer": "Yes.",
+                    },
+                    "id": "old.xlsx::0",
+                }
+            ]
+        )
+    )
     monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: index)
 
     entries = answer_memory.entries()
@@ -228,9 +251,7 @@ def test_answers_indexed_before_the_record_existed_are_adopted(monkeypatch, memo
     assert entries[0].origin == "import" and entries[0].from_file == "old.xlsx"
 
 
-def test_an_approved_answer_is_still_an_approved_answer_after_a_rebuild(
-    monkeypatch, memory_index
-):
+def test_an_approved_answer_is_still_an_approved_answer_after_a_rebuild(monkeypatch, memory_index):
     """The record can be rebuilt from the index, and must come back the same.
 
     Filed as an import, an approved answer loses its date and its reviewer —
@@ -238,13 +259,15 @@ def test_an_approved_answer_is_still_an_approved_answer_after_a_rebuild(
     approving one is for.
     """
     answer_memory.record(
-        "Do you encrypt backups?", "Yes, with AES-256.",
-        origin="approved", approved_by="alice@t2.sa", from_file="Vendor.xlsx",
+        "Do you encrypt backups?",
+        "Yes, with AES-256.",
+        origin="approved",
+        approved_by="alice@t2.sa",
+        from_file="Vendor.xlsx",
     )
-    rebuilt = bare_store(FakeVectorStore([
-        {"text": r["text"], "metadata": r["metadata"], "id": r["id"]}
-        for r in memory_index.records
-    ]))
+    rebuilt = bare_store(
+        FakeVectorStore([{"text": r["text"], "metadata": r["metadata"], "id": r["id"]} for r in memory_index.records])
+    )
     monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: rebuilt)
     store.connect().execute("DELETE FROM memory_entries")
     store.connect().commit()
@@ -258,37 +281,45 @@ def test_an_approved_answer_is_still_an_approved_answer_after_a_rebuild(
     assert entry.from_file == "Vendor.xlsx"
 
 
-def test_adoption_keeps_the_questionnaire_an_answer_was_actually_given_in(
-    monkeypatch, memory_index
-):
+def test_adoption_keeps_the_questionnaire_an_answer_was_actually_given_in(monkeypatch, memory_index):
     """A bulk import files many questionnaires under one synthetic source name.
 
     Taking that name as the provenance made every imported answer look like a
     row of one enormous form -- and the sweep skips pairs from the same form, so
     it silently compared nothing at all. The real name is in the metadata.
     """
-    index = bare_store(FakeVectorStore([
-        {
-            "text": "Q: Do you run drills?\nA: Yes.",
-            "metadata": {
-                "source_type": SourceType.PRIOR_ANSWER.value,
-                "source_name": "Answer memory", "entry_id": "MEM-0001", "chunk": 0,
-                "from_file": "Vendor Security Questionnaire.xlsx",
-                "question": "Do you run drills?", "answer": "Yes.",
-            },
-            "id": "MEM-0001",
-        },
-        {
-            "text": "Q: Do you run drills?\nA: No.",
-            "metadata": {
-                "source_type": SourceType.PRIOR_ANSWER.value,
-                "source_name": "Answer memory", "entry_id": "MEM-0002", "chunk": 0,
-                "from_file": "Bank Third Party Assessment.xlsx",
-                "question": "Do you run drills?", "answer": "No.",
-            },
-            "id": "MEM-0002",
-        },
-    ]))
+    index = bare_store(
+        FakeVectorStore(
+            [
+                {
+                    "text": "Q: Do you run drills?\nA: Yes.",
+                    "metadata": {
+                        "source_type": SourceType.PRIOR_ANSWER.value,
+                        "source_name": "Answer memory",
+                        "entry_id": "MEM-0001",
+                        "chunk": 0,
+                        "from_file": "Vendor Security Questionnaire.xlsx",
+                        "question": "Do you run drills?",
+                        "answer": "Yes.",
+                    },
+                    "id": "MEM-0001",
+                },
+                {
+                    "text": "Q: Do you run drills?\nA: No.",
+                    "metadata": {
+                        "source_type": SourceType.PRIOR_ANSWER.value,
+                        "source_name": "Answer memory",
+                        "entry_id": "MEM-0002",
+                        "chunk": 0,
+                        "from_file": "Bank Third Party Assessment.xlsx",
+                        "question": "Do you run drills?",
+                        "answer": "No.",
+                    },
+                    "id": "MEM-0002",
+                },
+            ]
+        )
+    )
     monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: index)
 
     files = {entry.entry_id: entry.from_file for entry in answer_memory.entries()}
@@ -322,11 +353,9 @@ def near_neighbour(monkeypatch):
     The question-against-question re-scoring is stubbed through as well: it is
     the one step that talks to the embedding host, and it has its own test.
     """
+
     async def search(self, query, source_type, k, expand=True):
-        return [
-            _prior(entry.entry_id, entry.answer, score=0.93)
-            for entry in answer_memory.entries(limit=50)
-        ]
+        return [_prior(entry.entry_id, entry.answer, score=0.93) for entry in answer_memory.entries(limit=50)]
 
     async def close(question, candidates):
         return candidates
@@ -343,8 +372,8 @@ async def test_only_questions_that_embed_close_enough_are_asked_about(monkeypatc
     far = answer_memory.record("Is MFA enforced?", "Yes.")
     vectors = {
         "Do you encrypt backups?": [1.0, 0.0],
-        "Are backups encrypted?": [0.96, 0.28],   # ~0.96 against the first
-        "Is MFA enforced?": [0.2, 0.98],          # ~0.2
+        "Are backups encrypted?": [0.96, 0.28],  # ~0.96 against the first
+        "Is MFA enforced?": [0.2, 0.98],  # ~0.2
     }
 
     class Fake:
@@ -358,16 +387,18 @@ async def test_only_questions_that_embed_close_enough_are_asked_about(monkeypatc
     assert [entry.entry_id for entry in close] == [near.entry_id]
 
 
-async def test_a_later_answer_supersedes_the_one_it_disagrees_with(
-    memory_index, confirms, near_neighbour
-):
+async def test_a_later_answer_supersedes_the_one_it_disagrees_with(memory_index, confirms, near_neighbour):
     old = answer_memory.record(
-        "Are you ISO 27001 certified?", "No, we are not certified.",
-        approved_on="2023-01-01T00:00:00+00:00", origin="approved",
+        "Are you ISO 27001 certified?",
+        "No, we are not certified.",
+        approved_on="2023-01-01T00:00:00+00:00",
+        origin="approved",
     )
     new = answer_memory.record(
-        "Are you certified to ISO 27001?", "Yes, certified since 2024.",
-        approved_on="2025-01-01T00:00:00+00:00", origin="approved",
+        "Are you certified to ISO 27001?",
+        "Yes, certified since 2024.",
+        approved_on="2025-01-01T00:00:00+00:00",
+        origin="approved",
     )
 
     findings = await answer_memory.scan(new)
@@ -378,9 +409,7 @@ async def test_a_later_answer_supersedes_the_one_it_disagrees_with(
     assert not answer_memory.conflicts(), "an ordinary revision is nobody's decision to make"
 
 
-async def test_two_answers_that_disagree_with_no_ordering_wait_for_a_person(
-    memory_index, confirms, near_neighbour
-):
+async def test_two_answers_that_disagree_with_no_ordering_wait_for_a_person(memory_index, confirms, near_neighbour):
     first = answer_memory.adopt_file("a.xlsx", [Pair("Do you run drills?", "Yes, annually.")])[0]
     second = answer_memory.adopt_file("b.xlsx", [Pair("Do you run drills?", "No, not yet.")])[0]
 
@@ -404,9 +433,7 @@ async def test_the_same_disagreement_is_raised_once(memory_index, confirms, near
     assert len(answer_memory.conflicts()) == 1
 
 
-async def test_a_model_that_writes_its_answer_instead_of_calling_the_tool_means_none(
-    memory_index, monkeypatch
-):
+async def test_a_model_that_writes_its_answer_instead_of_calling_the_tool_means_none(memory_index, monkeypatch):
     """Groq refuses the turn when the model replies with prose. What it replied
     with here was `[]`, which is the answer -- in the one form the API will not
     take. Anything else from that call is still an error."""
@@ -433,11 +460,10 @@ async def test_a_model_that_writes_its_answer_instead_of_calling_the_tool_means_
         await answer_memory._same_question("Do you run drills?", [entry])
 
 
-async def test_a_neighbouring_control_is_left_alone_when_the_model_says_so(
-    memory_index, near_neighbour, monkeypatch
-):
+async def test_a_neighbouring_control_is_left_alone_when_the_model_says_so(memory_index, near_neighbour, monkeypatch):
     """Similarity proposes; the model disposes. 0.79 and 0.81 do not separate
     an incident-response drill from a business-continuity one."""
+
     async def different(question, candidates):
         return []
 
@@ -449,37 +475,42 @@ async def test_a_neighbouring_control_is_left_alone_when_the_model_says_so(
     assert not answer_memory.conflicts()
 
 
-async def test_two_rows_of_one_questionnaire_are_not_a_contradiction(
-    memory_index, confirms, near_neighbour
-):
+async def test_two_rows_of_one_questionnaire_are_not_a_contradiction(memory_index, confirms, near_neighbour):
     """One file, filled in by one person on one day. Two rows that look alike
     are two related controls, or the extractor reading one row twice."""
-    pairs = answer_memory.adopt_file("vendor.xlsx", [
-        Pair("Do you run drills?", "Yes, annually."),
-        Pair("Do you run drills?", "No."),
-    ])
+    pairs = answer_memory.adopt_file(
+        "vendor.xlsx",
+        [
+            Pair("Do you run drills?", "Yes, annually."),
+            Pair("Do you run drills?", "No."),
+        ],
+    )
 
     assert await answer_memory.scan(pairs[1]) == []
     assert not answer_memory.conflicts()
 
 
-async def test_an_answer_that_arrives_out_of_date_replaces_nothing(
-    memory_index, confirms, near_neighbour
-):
+async def test_an_answer_that_arrives_out_of_date_replaces_nothing(memory_index, confirms, near_neighbour):
     """Importing an old questionnaire after a newer one. The old answer is
     marked as replaced, and stops there: an entry that no longer stands has no
     standing to replace or contradict a third."""
     current = answer_memory.record(
-        "Are you ISO 27001 certified?", "Yes, certified since 2024.",
-        origin="approved", approved_on="2025-01-01T00:00:00+00:00",
+        "Are you ISO 27001 certified?",
+        "Yes, certified since 2024.",
+        origin="approved",
+        approved_on="2025-01-01T00:00:00+00:00",
     )
     third = answer_memory.record(
-        "Are you certified to ISO 27001?", "Yes, and the certificate is current.",
-        origin="approved", approved_on="2025-06-01T00:00:00+00:00",
+        "Are you certified to ISO 27001?",
+        "Yes, and the certificate is current.",
+        origin="approved",
+        approved_on="2025-06-01T00:00:00+00:00",
     )
     arriving = answer_memory.record(
-        "Is the company ISO 27001 certified?", "No, not certified.",
-        origin="approved", approved_on="2023-01-01T00:00:00+00:00",
+        "Is the company ISO 27001 certified?",
+        "No, not certified.",
+        origin="approved",
+        approved_on="2023-01-01T00:00:00+00:00",
     )
 
     findings = await answer_memory.scan(arriving)
@@ -491,9 +522,13 @@ async def test_an_answer_that_arrives_out_of_date_replaces_nothing(
 
 
 async def test_the_sweep_marks_what_it_has_looked_at(memory_index, confirms, near_neighbour):
-    answer_memory.adopt_file("a.xlsx", [
-        Pair("Do you encrypt backups?", "Yes."), Pair("Is MFA enforced?", "Yes."),
-    ])
+    answer_memory.adopt_file(
+        "a.xlsx",
+        [
+            Pair("Do you encrypt backups?", "Yes."),
+            Pair("Is MFA enforced?", "Yes."),
+        ],
+    )
     assert len(answer_memory.pending()) == 2
 
     await answer_memory.scan_pending()
@@ -503,9 +538,13 @@ async def test_the_sweep_marks_what_it_has_looked_at(memory_index, confirms, nea
 
 
 async def test_one_bad_entry_does_not_stop_the_sweep(memory_index, monkeypatch, near_neighbour):
-    answer_memory.adopt_file("a.xlsx", [
-        Pair("Do you encrypt backups?", "Yes."), Pair("Is MFA enforced?", "Yes."),
-    ])
+    answer_memory.adopt_file(
+        "a.xlsx",
+        [
+            Pair("Do you encrypt backups?", "Yes."),
+            Pair("Is MFA enforced?", "Yes."),
+        ],
+    )
     calls = []
 
     async def explode(question, candidates):
@@ -531,7 +570,10 @@ def test_resolving_a_conflict_keeps_one_and_supersedes_the_other(memory_index):
     answer_memory.raise_conflict(first.entry_id, second.entry_id, "they disagree")
 
     answer_memory.apply_resolution(
-        first.entry_id, second.entry_id, resolution="keep_this", by="alice@t2.sa",
+        first.entry_id,
+        second.entry_id,
+        resolution="keep_this",
+        by="alice@t2.sa",
     )
 
     assert answer_memory.get(first.entry_id).stands
@@ -546,7 +588,10 @@ def test_keeping_both_moves_neither(memory_index):
     answer_memory.raise_conflict(first.entry_id, second.entry_id, "they disagree")
 
     answer_memory.apply_resolution(
-        first.entry_id, second.entry_id, resolution="keep_both", by="alice@t2.sa",
+        first.entry_id,
+        second.entry_id,
+        resolution="keep_both",
+        by="alice@t2.sa",
     )
 
     assert answer_memory.get(first.entry_id).stands
@@ -560,8 +605,13 @@ def test_keeping_both_moves_neither(memory_index):
 def _approve_one(client, tmp_path, answers_yes):
     batch = client.post(
         "/api/forms",
-        files={"file": ("vendor.xlsx", shapes.simple(tmp_path / "vendor.xlsx").read_bytes(),
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "vendor.xlsx",
+                shapes.simple(tmp_path / "vendor.xlsx").read_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     ).json()
     batch_id = batch["id"]
     client.post(f"/api/forms/{batch_id}/answer", json={"scope": {}})
@@ -572,19 +622,18 @@ def _approve_one(client, tmp_path, answers_yes):
 def _write_one(client, batch_id, question_id, text):
     """What a reviewer does when the draft is not quite what we say."""
     return client.post(
-        f"/api/forms/{batch_id}/answers", json={"question_id": question_id, "text": text},
+        f"/api/forms/{batch_id}/answers",
+        json={"question_id": question_id, "text": text},
     )
 
 
-def test_approving_an_answer_somebody_wrote_teaches_the_memory(
-    client, tmp_path, answers_yes, memory_index
-):
+def test_approving_an_answer_somebody_wrote_teaches_the_memory(client, tmp_path, answers_yes, memory_index):
     batch_id, question_id = _approve_one(client, tmp_path, answers_yes)
-    _write_one(client, batch_id, question_id,
-               "Yes. Access reviews run every quarter, owned by the CISO.")
+    _write_one(client, batch_id, question_id, "Yes. Access reviews run every quarter, owned by the CISO.")
 
     body = client.post(
-        f"/api/forms/{batch_id}/approve", json={"question_id": question_id},
+        f"/api/forms/{batch_id}/approve",
+        json={"question_id": question_id},
     ).json()
 
     assert body["remembered"]
@@ -594,9 +643,7 @@ def test_approving_an_answer_somebody_wrote_teaches_the_memory(
     assert entry.from_file == "vendor.xlsx"
 
 
-def test_approving_the_models_own_draft_teaches_it_nothing(
-    client, tmp_path, answers_yes, memory_index
-):
+def test_approving_the_models_own_draft_teaches_it_nothing(client, tmp_path, answers_yes, memory_index):
     """The loop this closes: a drafted answer waved through, remembered, and
     then retrieved as a previous answer to draft the next one from -- at a
     confidence the loop manufactured rather than earned. Nobody wrote anything
@@ -604,7 +651,8 @@ def test_approving_the_models_own_draft_teaches_it_nothing(
     batch_id, question_id = _approve_one(client, tmp_path, answers_yes)
 
     body = client.post(
-        f"/api/forms/{batch_id}/approve", json={"question_id": question_id},
+        f"/api/forms/{batch_id}/approve",
+        json={"question_id": question_id},
     ).json()
 
     assert body["remembered"] == ""
@@ -613,9 +661,7 @@ def test_approving_the_models_own_draft_teaches_it_nothing(
     assert body["questions"][0]["will_be_written"] is True
 
 
-def test_the_memory_keeps_the_words_that_went_into_the_file(
-    client, tmp_path, answers_yes, memory_index
-):
+def test_the_memory_keeps_the_words_that_went_into_the_file(client, tmp_path, answers_yes, memory_index):
     """A questionnaire set to brief is answered with the brief text, and a
     person who shortens one has written *that*.
 
@@ -624,33 +670,43 @@ def test_the_memory_keeps_the_words_that_went_into_the_file(
     an approval, which is the one thing the gate exists to prevent."""
     batch_id, question_id = _approve_one(client, tmp_path, answers_yes)
     client.post(f"/api/forms/{batch_id}/detail", json={"detail": "brief"})
-    client.post(f"/api/forms/{batch_id}/answers", json={
-        "question_id": question_id, "text": "Yes, quarterly.", "which": "brief",
-    })
+    client.post(
+        f"/api/forms/{batch_id}/answers",
+        json={
+            "question_id": question_id,
+            "text": "Yes, quarterly.",
+            "which": "brief",
+        },
+    )
 
     body = client.post(
-        f"/api/forms/{batch_id}/approve", json={"question_id": question_id},
+        f"/api/forms/{batch_id}/approve",
+        json={"question_id": question_id},
     ).json()
 
     assert answer_memory.get(body["remembered"]).answer == "Yes, quarterly."
 
 
-def test_the_card_says_whether_the_memory_learned_anything(
-    client, tmp_path, answers_yes, memory_index
-):
+def test_the_card_says_whether_the_memory_learned_anything(client, tmp_path, answers_yes, memory_index):
     """Both halves of the click, on the card, after the message has gone."""
     batch_id, question_id = _approve_one(client, tmp_path, answers_yes)
 
     agreed = client.post(
-        f"/api/forms/{batch_id}/approve", json={"question_id": question_id},
+        f"/api/forms/{batch_id}/approve",
+        json={"question_id": question_id},
     ).json()["questions"][0]
     assert agreed["approved"] is True and agreed["remembered"] is False
 
-    client.post(f"/api/forms/{batch_id}/answers", json={
-        "question_id": question_id, "text": "Yes, every quarter, owned by the CISO.",
-    })
+    client.post(
+        f"/api/forms/{batch_id}/answers",
+        json={
+            "question_id": question_id,
+            "text": "Yes, every quarter, owned by the CISO.",
+        },
+    )
     written = client.post(
-        f"/api/forms/{batch_id}/approve", json={"question_id": question_id},
+        f"/api/forms/{batch_id}/approve",
+        json={"question_id": question_id},
     ).json()["questions"][0]
 
     assert written["approved"] is True, "approving still marks it approved"
@@ -677,7 +733,8 @@ def test_a_second_approval_still_knows_who_wrote_it(client, tmp_path, answers_ye
     answer_memory.remove(answer_memory.entries()[0].entry_id)
 
     body = client.post(
-        f"/api/forms/{batch_id}/approve", json={"question_id": question_id},
+        f"/api/forms/{batch_id}/approve",
+        json={"question_id": question_id},
     ).json()
 
     assert body["remembered"], "the words are still hers"
@@ -710,9 +767,11 @@ def test_an_entry_whose_id_has_a_slash_can_still_be_managed(client, memory_index
     from urllib.parse import quote
 
     entry = answer_memory.record(
-        "Is there a cybersecurity governance framework?", "Yes.",
+        "Is there a cybersecurity governance framework?",
+        "Yes.",
         entry_id="approved::b6c2fe198fc7::Cybersecurity Governance/Q1",
-        origin="approved", approved_by="a@t2.sa",
+        origin="approved",
+        approved_by="a@t2.sa",
     )
     at = "/api/memory/" + quote(entry.entry_id, safe="!*'()")
 
@@ -731,9 +790,14 @@ def test_the_routes_that_take_an_id_do_not_swallow_the_ones_that_do_not(client, 
     """`{entry_id:path}` matches slashes, so the neighbouring routes have to
     stay reachable."""
     assert client.get("/api/memory/conflicts").status_code == 200
-    assert client.post("/api/memory/conflicts/resolve", json={
-        "entry_id": "a", "other_id": "b", "resolution": "keep_this",
-    }).status_code in (200, 404)
+    assert client.post(
+        "/api/memory/conflicts/resolve",
+        json={
+            "entry_id": "a",
+            "other_id": "b",
+            "resolution": "keep_this",
+        },
+    ).status_code in (200, 404)
     assert client.post("/api/memory/scan").status_code == 200
 
 
@@ -747,9 +811,13 @@ def test_the_memory_has_a_page_of_its_own(client):
 
 
 def test_the_page_lists_adds_edits_and_forgets(client, memory_index):
-    added = client.post("/api/memory", json={
-        "question": "Do you encrypt backups?", "answer": "Yes, with AES-256.",
-    }).json()
+    added = client.post(
+        "/api/memory",
+        json={
+            "question": "Do you encrypt backups?",
+            "answer": "Yes, with AES-256.",
+        },
+    ).json()
     assert added["origin"] == "manual"
 
     listed = client.get("/api/memory").json()
@@ -757,7 +825,8 @@ def test_the_page_lists_adds_edits_and_forgets(client, memory_index):
     assert listed["stats"]["standing"] == 1
 
     edited = client.patch(
-        f"/api/memory/{added['entry_id']}", json={"answer": "Yes, AES-256 at rest and in transit."},
+        f"/api/memory/{added['entry_id']}",
+        json={"answer": "Yes, AES-256 at rest and in transit."},
     ).json()
     assert "in transit" in edited["answer"]
 
@@ -784,9 +853,17 @@ def test_the_page_shows_both_sides_of_a_conflict_and_takes_the_decision(client, 
     pair = client.get("/api/memory/conflicts").json()["conflicts"][0]
     assert {pair["entry"]["answer"], pair["other"]["answer"]} == {"Yes, annually.", "No."}
 
-    assert client.post("/api/memory/conflicts/resolve", json={
-        "entry_id": first.entry_id, "other_id": second.entry_id, "resolution": "keep_this",
-    }).status_code == 200
+    assert (
+        client.post(
+            "/api/memory/conflicts/resolve",
+            json={
+                "entry_id": first.entry_id,
+                "other_id": second.entry_id,
+                "resolution": "keep_this",
+            },
+        ).status_code
+        == 200
+    )
 
     assert client.get("/api/memory/conflicts").json()["conflicts"] == []
     assert not answer_memory.get(second.entry_id).stands
@@ -833,7 +910,10 @@ def test_the_memory_is_the_teams_rather_than_one_persons(client, memory_index):
 
     alice = identity.local_user()
     entry = answer_memory.record(
-        "Do you encrypt backups?", "Yes.", approved_by=alice.email, team_id=alice.team_id,
+        "Do you encrypt backups?",
+        "Yes.",
+        approved_by=alice.email,
+        team_id=alice.team_id,
     )
 
     assert entry.approved_by == alice.email
@@ -887,12 +967,14 @@ async def test_an_entry_withdrawn_mid_sweep_replaces_nothing(memory_index, near_
     replaced answer is never retrieved again."""
     older = answer_memory.adopt_file("old.xlsx", [Pair("Do you have a CISO?", "Yes.")])[0]
     newer = answer_memory.record(
-        "Do you have a chief information security officer?", "Yes, since 2024.",
-        origin="approved", entry_id="approved::b::q1",
+        "Do you have a chief information security officer?",
+        "Yes, since 2024.",
+        origin="approved",
+        entry_id="approved::b::q1",
     )
 
     async def slow_and_then_withdrawn(question, candidates):
-        answer_memory.remove(newer.entry_id)        # the reviewer withdraws meanwhile
+        answer_memory.remove(newer.entry_id)  # the reviewer withdraws meanwhile
         return candidates
 
     monkeypatch.setattr(answer_memory, "_same_question", slow_and_then_withdrawn)
@@ -915,7 +997,7 @@ def test_a_replacement_that_no_longer_exists_does_not_hide_an_answer(memory_inde
     assert entry.entry_id not in answer_memory.superseded_ids(), "still retrieved"
 
     answer_memory.forget_sync()
-    answer_memory.stats()                            # the first read of the memory repairs it
+    answer_memory.stats()  # the first read of the memory repairs it
     assert answer_memory.get(entry.entry_id).stands
 
 

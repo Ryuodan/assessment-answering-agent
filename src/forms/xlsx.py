@@ -51,16 +51,43 @@ Matched exactly because these are too short to be safe as substrings: `id`
 appears inside `Identity and Access Management`, and `no` inside `Notes`.
 """
 _QUESTION = (
-    "question", "inquiry", "requirement", "control", "due diligence", "criteria",
-    "checklist", "assessment area", "سؤال", "استبيان", "المتطلب",
+    "question",
+    "inquiry",
+    "requirement",
+    "control",
+    "due diligence",
+    "criteria",
+    "checklist",
+    "assessment area",
+    "سؤال",
+    "استبيان",
+    "المتطلب",
 )
 _ANSWER = (
-    "response", "answer", "comment", "remark", "detail", "reply", "explanation",
-    "narrative", "notes", "إجابة", "الرد", "ملاحظات",
+    "response",
+    "answer",
+    "comment",
+    "remark",
+    "detail",
+    "reply",
+    "explanation",
+    "narrative",
+    "notes",
+    "إجابة",
+    "الرد",
+    "ملاحظات",
 )
 _STATUS = (
-    "status", "compliance", "complaince", "implementation", "implemented",
-    "yes or no", "yes/no", "conformity", "الامتثال", "الحالة",
+    "status",
+    "compliance",
+    "complaince",
+    "implementation",
+    "implemented",
+    "yes or no",
+    "yes/no",
+    "conformity",
+    "الامتثال",
+    "الحالة",
 )
 _EVIDENCE = ("evidence", "attachment", "attach", "proof", "supporting", "artefact", "artifact", "دليل")
 _CONTEXT = ("domain", "section", "category", "type", "area", "cid", "reference", "clause", "standard")
@@ -144,10 +171,7 @@ def _instructional(sheet: Sheet, column: str, rows: list[int]) -> float:
     is complete on every row while the real answer column is empty -- and any
     rule that prefers the fuller column prefers the wrong one.
     """
-    values = [
-        text.strip() for row in rows
-        if (text := sheet.value(row, column).strip())
-    ]
+    values = [text.strip() for row in rows if (text := sheet.value(row, column).strip())]
     if len(values) < 3:
         return 0.0
     return sum(1 for value in values if _IMPERATIVE.match(value)) / len(values)
@@ -276,9 +300,9 @@ def _find_headless_layout(sheet: Sheet) -> Layout | None:
     # after answering, or re-opening a half-finished file moves every target.
     numbering = next(
         (
-            column for column in sheet.columns
-            if sum(1 for row in sheet.rows if _ITEM_NUMBER.match(sheet.value(row, column).strip()))
-            >= MIN_QUESTION_ROWS
+            column
+            for column in sheet.columns
+            if sum(1 for row in sheet.rows if _ITEM_NUMBER.match(sheet.value(row, column).strip())) >= MIN_QUESTION_ROWS
         ),
         None,
     )
@@ -409,7 +433,7 @@ def _looks_like_a_question(text: str, number: str) -> bool:
     stripped = text.strip()
     if not stripped:
         return False
-    if stripped.endswith(("?", "؟")):          # ? and Arabic ؟
+    if stripped.endswith(("?", "؟")):  # ? and Arabic ؟
         return True
     if _ITEM_NUMBER.match(number.strip()):
         # A printed item number settles it. Questions are often not sentences --
@@ -423,9 +447,7 @@ BANNER_ROWS = 4
 """How far above the header to look for a 'to be filled by ...' banner."""
 
 
-def _ownership_banners(
-    workbook: Workbook, sheet: Sheet, header_row: int
-) -> dict[str, tuple[Role, str]]:
+def _ownership_banners(workbook: Workbook, sheet: Sheet, header_row: int) -> dict[str, tuple[Role, str]]:
     """Columns claimed by a banner spanning them above the header.
 
     One workbook says who owns what a row *above* its column headings:
@@ -468,10 +490,7 @@ def _span_columns(sheet: Sheet, row: int, column: str) -> list[str]:
             continue
         if (first_row, first_column) != (row, column):
             continue
-        return [
-            column_letters(number)
-            for number in range(column_number(first_column), column_number(last_column) + 1)
-        ]
+        return [column_letters(number) for number in range(column_number(first_column), column_number(last_column) + 1)]
     return [column]
 
 
@@ -525,13 +544,17 @@ def unreadable(sheet: Sheet) -> Part | None:
     cells is not a questionnaire.
     """
     if not sheet.visible:
-        return Part(name=sheet.name, kind="hidden", findings=[
-            Finding(subject=sheet.name, verdict="skipped", because="the sheet is hidden")
-        ])
+        return Part(
+            name=sheet.name,
+            kind="hidden",
+            findings=[Finding(subject=sheet.name, verdict="skipped", because="the sheet is hidden")],
+        )
     if len(sheet.cells) < 6:
-        return Part(name=sheet.name, kind="empty", findings=[
-            Finding(subject=sheet.name, verdict="skipped", because="almost nothing in it")
-        ])
+        return Part(
+            name=sheet.name,
+            kind="empty",
+            findings=[Finding(subject=sheet.name, verdict="skipped", because="almost nothing in it")],
+        )
     return None
 
 
@@ -583,7 +606,8 @@ def _resolve_roles(
         # answer is sometimes under a heading like "Document Reference", which
         # every heading rule reads as context.
         candidates = [
-            column for column, (role, _) in resolved.items()
+            column
+            for column, (role, _) in resolved.items()
             if role in (Role.EVIDENCE, Role.CONTEXT, Role.IGNORE)
             and column != question_column
             and _prose_share(sheet, column, body) > 0.2
@@ -612,22 +636,28 @@ def _resolve_roles(
                     f" -- though {instructive:.0%} of it reads as instructions to the "
                     "person filling the form, so this is worth checking"
                 )
-            findings.append(Finding(
-                subject=f"column {column}", verdict="answer",
-                because=because, confident=False,
-            ))
+            findings.append(
+                Finding(
+                    subject=f"column {column}",
+                    verdict="answer",
+                    because=because,
+                    confident=False,
+                )
+            )
 
     for column, (role, why) in sorted(resolved.items(), key=lambda item: column_number(item[0])):
         if role is Role.IGNORE:
             continue
         already = any(f.subject == f"column {column}" for f in findings)
         if not already:
-            findings.append(Finding(
-                subject=f"column {column}",
-                verdict=role.value,
-                because=f"{headings.get(column, '')!r}: {why}" if headings.get(column) else why,
-                confident=layout.headed,
-            ))
+            findings.append(
+                Finding(
+                    subject=f"column {column}",
+                    verdict=role.value,
+                    because=f"{headings.get(column, '')!r}: {why}" if headings.get(column) else why,
+                    confident=layout.headed,
+                )
+            )
 
     return resolved, findings
 
@@ -695,37 +725,57 @@ def read_sheet(
         if not targets:
             continue
 
-        questions.append(FormQuestion(
-            id=f"{sheet.name}!{row}",
-            number=" ".join(number.split()),
-            text=" ".join(text.split()),
-            section=section,
-            language=_language(text),
-            targets=targets,
-            location=f"{sheet.name}, row {row}",
-        ))
+        questions.append(
+            FormQuestion(
+                id=f"{sheet.name}!{row}",
+                number=" ".join(number.split()),
+                text=" ".join(text.split()),
+                section=section,
+                language=_language(text),
+                targets=targets,
+                location=f"{sheet.name}, row {row}",
+            )
+        )
 
     if questions and len(questions) < MIN_NUMBERED_ROWS and number_column is None:
         # A legend explaining what each compliance rating means reads exactly
         # like a short questionnaire: prose in a column, under a heading. What
         # it lacks is question numbers.
-        return Part(name=sheet.name, kind="reference table", findings=[
-            Finding(subject=sheet.name, verdict="skipped",
+        return Part(
+            name=sheet.name,
+            kind="reference table",
+            findings=[
+                Finding(
+                    subject=sheet.name,
+                    verdict="skipped",
                     because=f"only {len(questions)} rows of prose and no numbering column, "
-                            "so this reads as a reference table")
-        ]), []
+                    "so this reads as a reference table",
+                )
+            ],
+        ), []
 
     if not questions:
-        return Part(name=sheet.name, kind="no questions", findings=findings + [
-            Finding(subject=sheet.name, verdict="skipped",
-                    because=f"column {question_column} was read as questions but no row held one")
-        ]), []
+        return Part(
+            name=sheet.name,
+            kind="no questions",
+            findings=findings
+            + [
+                Finding(
+                    subject=sheet.name,
+                    verdict="skipped",
+                    because=f"column {question_column} was read as questions but no row held one",
+                )
+            ],
+        ), []
 
-    findings.insert(0, Finding(
-        subject=sheet.name,
-        verdict=f"{len(questions)} questions",
-        because=f"headings on row {header_row}; questions in column {question_column}",
-    ))
+    findings.insert(
+        0,
+        Finding(
+            subject=sheet.name,
+            verdict=f"{len(questions)} questions",
+            because=f"headings on row {header_row}; questions in column {question_column}",
+        ),
+    )
     return Part(name=sheet.name, kind="questions", questions=len(questions), findings=findings), questions
 
 
@@ -737,10 +787,11 @@ def _detect_sheet(workbook: Workbook, sheet: Sheet) -> tuple[Part, list[FormQues
 
     layout = _find_layout(sheet)
     if layout is None:
-        return Part(name=sheet.name, kind="no questions", findings=[
-            Finding(subject=sheet.name, verdict="skipped",
-                    because="no column holds a run of questions")
-        ]), []
+        return Part(
+            name=sheet.name,
+            kind="no questions",
+            findings=[Finding(subject=sheet.name, verdict="skipped", because="no column holds a run of questions")],
+        ), []
 
     resolved, findings = _resolve_roles(workbook, sheet, layout)
     return read_sheet(workbook, sheet, layout, resolved, findings)
@@ -788,7 +839,9 @@ def _assist(workbook: Workbook, sheet: Sheet, part: Part, found: int) -> tuple[P
     if len(questions) <= found:
         logger.info(
             "The model found %d question(s) on %r against the rules' %d; keeping the rules'",
-            len(questions), sheet.name, found,
+            len(questions),
+            sheet.name,
+            found,
         )
         return None
     return assisted, questions

@@ -36,8 +36,7 @@ def test_the_markers_are_the_ones_the_chunker_already_reads():
     from src.chunking import _PAGE
 
     lines = number_pages(f"a{MARK}b").splitlines()
-    assert [line for line in lines if _PAGE.match(line.strip())] == [
-        "--- page 1 ---", "--- page 2 ---"]
+    assert [line for line in lines if _PAGE.match(line.strip())] == ["--- page 1 ---", "--- page 2 ---"]
 
 
 def test_text_without_placeholders_is_left_alone():
@@ -64,8 +63,7 @@ def test_a_chunk_records_the_page_it_came_from():
     both — correct behaviour, and not what this is testing."""
     first = "## 1 Scope\n\n" + "Scope detail for the reader. " * 90
     second = "## 2 Controls\n\n" + "Control detail for the reader. " * 90
-    chunks = chunk_document(
-        number_pages(first + MARK + second), source_name="p.pdf", chunk_size=1800)
+    chunks = chunk_document(number_pages(first + MARK + second), source_name="p.pdf", chunk_size=1800)
 
     assert {c.metadata["page"] for c in chunks} == {1, 2}
     assert all(c.metadata["page"] <= c.metadata["page_end"] for c in chunks)
@@ -74,10 +72,8 @@ def test_a_chunk_records_the_page_it_came_from():
 def test_a_chunk_spanning_a_break_records_both_ends():
     """Tables and clauses run over page boundaries. `page` alone would send a
     reader to where the text starts rather than where it is."""
-    document = number_pages(
-        "## 1 Scope\n\n" + "Detail. " * 30 + MARK + "More of the same clause. " * 30)
-    chunk = next(c for c in chunk_document(document, source_name="p.pdf", chunk_size=4000)
-                 if c.metadata["page"] >= 0)
+    document = number_pages("## 1 Scope\n\n" + "Detail. " * 30 + MARK + "More of the same clause. " * 30)
+    chunk = next(c for c in chunk_document(document, source_name="p.pdf", chunk_size=4000) if c.metadata["page"] >= 0)
 
     assert chunk.metadata["page"] == 1
     assert chunk.metadata["page_end"] == 2
@@ -101,8 +97,7 @@ def test_the_citation_carries_clause_and_page_together():
 
 
 def test_the_citation_shows_a_range_when_the_chunk_spans_pages():
-    assert evidence(clause_start="3.1.1", page=3, page_end=5).locator == (
-        "Policy.pdf §3.1.1 (Pages: 3–5)")
+    assert evidence(clause_start="3.1.1", page=3, page_end=5).locator == ("Policy.pdf §3.1.1 (Pages: 3–5)")
 
 
 def test_a_page_alone_is_still_better_than_a_bare_filename():

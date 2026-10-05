@@ -202,19 +202,25 @@ def compare(new: Entry, existing: Entry, *, same_question: bool) -> Finding | No
         # later, because then there is no answer to "which is true now".
         if new.is_later_than(existing):
             return Finding(
-                kind="supersedes", other_id=existing.entry_id,
-                other_question=existing.question, other_answer=existing.answer,
+                kind="supersedes",
+                other_id=existing.entry_id,
+                other_question=existing.question,
+                other_answer=existing.answer,
                 because="our position on this changed",
             )
         if existing.is_later_than(new):
             return Finding(
-                kind="superseded_by", other_id=existing.entry_id,
-                other_question=existing.question, other_answer=existing.answer,
+                kind="superseded_by",
+                other_id=existing.entry_id,
+                other_question=existing.question,
+                other_answer=existing.answer,
                 because="a later answer already says the opposite",
             )
         return Finding(
-            kind="conflict", other_id=existing.entry_id,
-            other_question=existing.question, other_answer=existing.answer,
+            kind="conflict",
+            other_id=existing.entry_id,
+            other_question=existing.question,
+            other_answer=existing.answer,
             because="the two answers disagree and nothing says which is current",
         )
 
@@ -222,14 +228,18 @@ def compare(new: Entry, existing: Entry, *, same_question: bool) -> Finding | No
     # position -- it is the one that says more, or says it as things now stand.
     if new.is_later_than(existing):
         return Finding(
-            kind="supersedes", other_id=existing.entry_id,
-            other_question=existing.question, other_answer=existing.answer,
+            kind="supersedes",
+            other_id=existing.entry_id,
+            other_question=existing.question,
+            other_answer=existing.answer,
             because="a newer answer to the same question",
         )
     if existing.is_later_than(new):
         return Finding(
-            kind="superseded_by", other_id=existing.entry_id,
-            other_question=existing.question, other_answer=existing.answer,
+            kind="superseded_by",
+            other_id=existing.entry_id,
+            other_question=existing.question,
+            other_answer=existing.answer,
             because="a later answer to the same question already stands",
         )
     return None

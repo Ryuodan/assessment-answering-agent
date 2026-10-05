@@ -68,10 +68,10 @@ print = functools.partial(print, flush=True)  # noqa: A001
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src import batches, conversations, identity, llm, tools      # noqa: E402
-from src.agents import assistant                                  # noqa: E402
-from src.conversations import Conversation                        # noqa: E402
-from tests import forms_fixtures as shapes                        # noqa: E402
+from src import batches, conversations, identity, llm, tools  # noqa: E402
+from src.agents import assistant  # noqa: E402
+from src.conversations import Conversation  # noqa: E402
+from tests import forms_fixtures as shapes  # noqa: E402
 
 _ARABIC = re.compile(r"[؀-ۿ]")
 
@@ -345,8 +345,7 @@ CASES: list[Case] = [
     # suite rather than left to hold by luck.
     Case(
         name="show-me-the-clause-overrides-drafting",
-        says=["Do we encrypt customer data at rest? Just show me what the policy "
-              "says — do not write me an answer."],
+        says=["Do we encrypt customer data at rest? Just show me what the policy says — do not write me an answer."],
         wants=("search_policies",),
         forbids=("answer_directly", "answer_questions"),
         answered=0,
@@ -354,8 +353,10 @@ CASES: list[Case] = [
     ),
     Case(
         name="answer-it-properly-overrides-looking-up",
-        says=["What does our policy say about password length? Answer it properly, "
-              "the way we would put it to an assessor."],
+        says=[
+            "What does our policy say about password length? Answer it properly, "
+            "the way we would put it to an assessor."
+        ],
         wants=("answer_directly",),
         forbids=("answer_questions",),
         answered=0,
@@ -407,8 +408,7 @@ CASES: list[Case] = [
         says=["Read this and answer all of it.", "What sources did you use for the answer to question 2?"],
         answered=4,
         last_wants=("read_answers",),
-        last_forbids=("search_policies", "answer_questions", "reword_answers", "propose_fill",
-                      "answer_directly"),
+        last_forbids=("search_policies", "answer_questions", "reword_answers", "propose_fill", "answer_directly"),
         names_sources_of=2,
     ),
     Case(
@@ -416,8 +416,7 @@ CASES: list[Case] = [
         says=["Read this and answer all of it.", "ما هي المصادر التي اعتمدت عليها في إجابة السؤال الأول؟"],
         answered=4,
         last_wants=("read_answers",),
-        last_forbids=("search_policies", "answer_questions", "reword_answers", "propose_fill",
-                      "answer_directly"),
+        last_forbids=("search_policies", "answer_questions", "reword_answers", "propose_fill", "answer_directly"),
         names_sources_of=1,
     ),
     Case(
@@ -493,8 +492,14 @@ CASES: list[Case] = [
         name="asks-rather-than-guesses-a-vague-request",
         says=["Read this and answer all of it.", "fix it"],
         answered=4,
-        last_forbids=("answer_questions", "reword_answers", "propose_fill", "write_one_answer",
-                      "set_aside", "put_back_drafts"),
+        last_forbids=(
+            "answer_questions",
+            "reword_answers",
+            "propose_fill",
+            "write_one_answer",
+            "set_aside",
+            "put_back_drafts",
+        ),
     ),
     # --- conversation that is not work -------------------------------------------------
     Case(
@@ -546,15 +551,12 @@ async def run_case(case: Case, user) -> Result:
     """One case, start to finish, against the real model."""
     result = Result(case=case.name)
     workspace = Path(tempfile.mkdtemp(prefix="eval_assistant_"))
-    path = (getattr(shapes, case.shape)(workspace / "HR Assessment.xlsx")
-            if case.upload_on >= 0 else None)
+    path = getattr(shapes, case.shape)(workspace / "HR Assessment.xlsx") if case.upload_on >= 0 else None
 
     conversation: Conversation = assistant.start(user, "")
     last_steps: list[str] = []
     for index, says in enumerate(case.says):
-        turn = await assistant.say(
-            user, conversation, says, upload=path if index == case.upload_on else None
-        )
+        turn = await assistant.say(user, conversation, says, upload=path if index == case.upload_on else None)
         last_steps = list(turn.steps)
         result.steps.extend(turn.steps)
         result.reply = turn.reply
@@ -565,26 +567,22 @@ async def run_case(case: Case, user) -> Result:
     for wanted in case.wants:
         (result.passed if wanted in called else result.failed).append(f"called {wanted}")
     for forbidden in case.forbids:
-        (result.failed if forbidden in called else result.passed).append(
-            f"did not call {forbidden}"
-        )
+        (result.failed if forbidden in called else result.passed).append(f"did not call {forbidden}")
 
     last_called = {step.split("(", 1)[0] for step in last_steps}
     for wanted in case.last_wants:
         (result.passed if wanted in last_called else result.failed).append(f"last turn called {wanted}")
     for forbidden in case.last_forbids:
-        (result.failed if forbidden in last_called else result.passed).append(
-            f"last turn did not call {forbidden}"
-        )
+        (result.failed if forbidden in last_called else result.passed).append(f"last turn did not call {forbidden}")
     if case.last_calls_nothing:
         (result.passed if not last_steps else result.failed).append(
-            "last turn called nothing" if not last_steps
-            else f"last turn called {', '.join(last_steps)}"
+            "last turn called nothing" if not last_steps else f"last turn called {', '.join(last_steps)}"
         )
 
     stored = []
-    if conversation.batch_id and (case.quotes_answer or case.answers_in or case.answer_contains
-                                  or case.names_sources_of):
+    if conversation.batch_id and (
+        case.quotes_answer or case.answers_in or case.answer_contains or case.names_sources_of
+    ):
         stored = tools.inspect(user, conversation.batch_id)["questions"]
 
     def at_place(place: int) -> str:
@@ -598,7 +596,8 @@ async def run_case(case: Case, user) -> Result:
         probe = re.sub(r"[*_`]", "", answer)[:60].casefold()
         quoted = bool(probe) and probe in re.sub(r"[*_`]", "", spoken).casefold()
         (result.passed if quoted else result.failed).append(
-            f"quoted answer #{case.quotes_answer}" if quoted
+            f"quoted answer #{case.quotes_answer}"
+            if quoted
             else f"did not quote answer #{case.quotes_answer} ({answer[:60]!r})"
         )
 
@@ -620,12 +619,13 @@ async def run_case(case: Case, user) -> Result:
                 if "\u00a7" in locator:
                     ways.add(flat(locator.split("\u00a7", 1)[1].split("(", 1)[0]))
         spoken = flat(result.reply)
-        missing = sorted(name for name, ways in documents.items()
-                         if not any(way and way in spoken for way in ways))
+        missing = sorted(name for name, ways in documents.items() if not any(way and way in spoken for way in ways))
         named = bool(documents) and not missing
         (result.passed if named else result.failed).append(
-            f"named the sources answer #{place} cites" if named
-            else f"answer #{place} cites nothing to name" if not documents
+            f"named the sources answer #{place} cites"
+            if named
+            else f"answer #{place} cites nothing to name"
+            if not documents
             else f"did not name {missing} that answer #{place} cites"
         )
 
@@ -633,21 +633,20 @@ async def run_case(case: Case, user) -> Result:
         written = [q.get("answer") or "" for q in stored if q.get("answer")]
         right = bool(written) and all(_language(text) == case.answers_in for text in written)
         (result.passed if right else result.failed).append(
-            f"answers written in {case.answers_in}" if right
-            else f"answers not all in {case.answers_in}"
+            f"answers written in {case.answers_in}" if right else f"answers not all in {case.answers_in}"
         )
 
     for place, text in (case.answer_contains or {}).items():
         found = text.casefold() in at_place(place).casefold()
         (result.passed if found else result.failed).append(
-            f"answer #{place} says what was dictated" if found
-            else f"answer #{place} is {at_place(place)[:60]!r}"
+            f"answer #{place} says what was dictated" if found else f"answer #{place} is {at_place(place)[:60]!r}"
         )
 
     for name, ceiling in (case.at_most or {}).items():
         used = sum(1 for step in result.steps if step.split("(", 1)[0] == name)
         (result.passed if used <= ceiling else result.failed).append(
-            f"called {name} at most {ceiling}x" if used <= ceiling
+            f"called {name} at most {ceiling}x"
+            if used <= ceiling
             else f"called {name} {used}x, at most {ceiling} wanted"
         )
 
@@ -667,15 +666,13 @@ async def run_case(case: Case, user) -> Result:
         spoken = result.reply.casefold()
         said = any(wanted.casefold() in spoken for wanted in case.reply_has)
         (result.passed if said else result.failed).append(
-            "gave the right count" if said
-            else "did not say any of " + ", ".join(repr(w) for w in case.reply_has)
+            "gave the right count" if said else "did not say any of " + ", ".join(repr(w) for w in case.reply_has)
         )
 
     if case.reply_in:
         spoken = _language(result.reply)
         (result.passed if spoken == case.reply_in else result.failed).append(
-            f"replied in {case.reply_in}" if spoken == case.reply_in
-            else f"replied in {case.reply_in}, got {spoken}"
+            f"replied in {case.reply_in}" if spoken == case.reply_in else f"replied in {case.reply_in}, got {spoken}"
         )
 
     # Last, after everything that reads them. A suite that leaves a batch and a
@@ -717,8 +714,7 @@ async def main_async(args) -> int:
             result = await run_case(case, user)
             results.append(result)
             mark = "ok  " if not result.failed else "FAIL"
-            print(f"  {mark} {case.name:34s} {result.score:5.0%}  "
-                  f"{result.seconds:6.1f}s  {result.tokens:7d} tok")
+            print(f"  {mark} {case.name:34s} {result.score:5.0%}  {result.seconds:6.1f}s  {result.tokens:7d} tok")
             if result.failed:
                 print(f"       missed: {', '.join(result.failed)}")
                 # Always, not only under --verbose. "It did not call X" is not
@@ -746,8 +742,7 @@ async def main_async(args) -> int:
     for name, scores in by_case.items():
         mean = sum(scores) / len(scores)
         spread = "" if len(set(scores)) == 1 else "  varies"
-        print(f"  {name:34s} {mean:7.0%}  "
-              f"{' '.join(f'{s:.0%}' for s in scores):>16s}{spread}")
+        print(f"  {name:34s} {mean:7.0%}  {' '.join(f'{s:.0%}' for s in scores):>16s}{spread}")
 
     everything = [score for scores in by_case.values() for score in scores]
     overall = sum(everything) / len(everything)
@@ -759,10 +754,14 @@ async def main_async(args) -> int:
         print("  but it is what a person will hit, so it is worth reading.")
 
     if args.json:
-        args.json.write_text(json.dumps(
-            [[vars(r) | {"score": r.score} for r in results] for results in runs],
-            indent=2, ensure_ascii=False,
-        ), encoding="utf8")
+        args.json.write_text(
+            json.dumps(
+                [[vars(r) | {"score": r.score} for r in results] for results in runs],
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf8",
+        )
         print(f"\n  wrote {args.json}")
     return 0 if overall >= args.floor else 1
 
@@ -795,8 +794,7 @@ def main() -> int:
     parser.add_argument("--only", default="", help="Only cases whose name contains this")
     parser.add_argument("--json", type=Path, help="Write the results here")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show steps and replies")
-    parser.add_argument("--floor", type=float, default=0.9,
-                        help="Exit non-zero below this overall score (default 0.9)")
+    parser.add_argument("--floor", type=float, default=0.9, help="Exit non-zero below this overall score (default 0.9)")
     return llm.run(main_async(parser.parse_args()))
 
 

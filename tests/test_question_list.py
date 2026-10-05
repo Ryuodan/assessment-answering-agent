@@ -38,14 +38,16 @@ def answered(monkeypatch):
 # --- language of a typed question ------------------------------------------
 
 
-@pytest.mark.parametrize(("text", "expected"), [
-    ("Do you encrypt data at rest?", "en"),
-    ("ما هي مدة الاحتفاظ بالبيانات؟", "ar"),
-    ("هل تستخدمون AES-256؟", "ar"),
-    ("Do you enforce multi-factor authentication on privileged accounts "
-     "(المصادقة متعددة العوامل)?", "en"),
-    ("", "en"),
-])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Do you encrypt data at rest?", "en"),
+        ("ما هي مدة الاحتفاظ بالبيانات؟", "ar"),
+        ("هل تستخدمون AES-256؟", "ar"),
+        ("Do you enforce multi-factor authentication on privileged accounts (المصادقة متعددة العوامل)?", "en"),
+        ("", "en"),
+    ],
+)
 def test_language_is_detected_from_the_text(text, expected):
     """A typed question has no surrounding window to infer from.
 
@@ -95,10 +97,12 @@ def test_an_arabic_question_is_answered_in_arabic_by_default(answered):
 
 
 def test_a_forced_language_overrides_detection(answered):
-    body = _post({
-        "questions": [{"text": "ما هي مدة الاحتفاظ؟"}],
-        "language": "en",
-    }).json()
+    body = _post(
+        {
+            "questions": [{"text": "ما هي مدة الاحتفاظ؟"}],
+            "language": "en",
+        }
+    ).json()
     assert body["language"] == "en"
 
 
@@ -108,11 +112,17 @@ def test_an_explicit_question_language_is_respected(answered):
 
 
 def test_choice_questions_carry_their_options(answered):
-    _post({"questions": [{
-        "text": "Is this control implemented?",
-        "question_type": "single_choice",
-        "options": ["Yes", "No", "Partially"],
-    }]})
+    _post(
+        {
+            "questions": [
+                {
+                    "text": "Is this control implemented?",
+                    "question_type": "single_choice",
+                    "options": ["Yes", "No", "Partially"],
+                }
+            ]
+        }
+    )
     assert answered[0].options == ["Yes", "No", "Partially"]
     assert answered[0].question_type.value == "single_choice"
 
@@ -160,10 +170,13 @@ def test_one_failure_does_not_discard_the_others(monkeypatch):
 
 def test_a_batch_reports_progress_under_its_run_id(answered):
     with TestClient(app) as client:
-        client.post("/api/assessments/answer-questions", json={
-            "questions": [{"text": "one?"}, {"text": "two?"}],
-            "run_id": "batch-1",
-        })
+        client.post(
+            "/api/assessments/answer-questions",
+            json={
+                "questions": [{"text": "one?"}, {"text": "two?"}],
+                "run_id": "batch-1",
+            },
+        )
         state = client.get("/api/assessments/progress/batch-1").json()
 
     assert state["total"] == 2
@@ -204,8 +217,7 @@ def test_extraction_returns_questions_without_answering(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     body = response.json()
-    assert [q["text"] for q in body["questions"]] == [
-        "Do you encrypt data?", "How long are logs kept?"]
+    assert [q["text"] for q in body["questions"]] == ["Do you encrypt data?", "How long are logs kept?"]
     assert body["language"] == "en"
     assert "answers" not in body
 
@@ -248,8 +260,8 @@ def test_extraction_rejects_an_unsupported_file():
 
 POLICY = "## 3.4 Access Control\n\n" + ("Access rights are granted on least privilege. " * 60)
 QUESTIONNAIRE = "| Question | Response |\n" + (
-    "| Do you encrypt data at rest? | Yes, AES-256. |\n"
-    "| How long are logs retained? | Twelve months. |\n" * 30)
+    "| Do you encrypt data at rest? | Yes, AES-256. |\n| How long are logs retained? | Twelve months. |\n" * 30
+)
 
 
 async def test_a_policy_filed_as_previous_answers_is_reported_not_silently_dropped(monkeypatch, tmp_path):
@@ -304,11 +316,14 @@ async def test_a_real_policy_raises_no_warning(monkeypatch, tmp_path):
     assert result.warning is None
 
 
-@pytest.mark.parametrize(("text", "warned"), [
-    ("short", False),                                   # too small to judge
-    ("policy text without questions. " * 200, False),
-    ("Is this a question? " * 200, True),
-])
+@pytest.mark.parametrize(
+    ("text", "warned"),
+    [
+        ("short", False),  # too small to judge
+        ("policy text without questions. " * 200, False),
+        ("Is this a question? " * 200, True),
+    ],
+)
 def test_the_questionnaire_signal_is_measured_not_guessed(text, warned):
     assert (service._looks_like_a_questionnaire(text, "f.pdf") is not None) is warned
 
@@ -316,6 +331,7 @@ def test_the_questionnaire_signal_is_measured_not_guessed(text, warned):
 def _async(value):
     async def run():
         return value
+
     return run()
 
 

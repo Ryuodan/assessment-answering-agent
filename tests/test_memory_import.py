@@ -36,13 +36,26 @@ def corpus(memory_index, monkeypatch):
 
 
 def _index_a_policy_and_some_answers(memory_index):
-    memory_index.records.extend([
-        {"id": "policy::0", "text": "3.1 Access is reviewed quarterly.",
-         "metadata": {"source_type": "guideline", "source_name": "T2 - Access Policy.pdf"}},
-        {"id": "Answer memory::0", "text": "Q: Do you review access?\nA: Yes.",
-         "metadata": {"source_type": "prior_answer", "source_name": "Answer memory",
-                      "entry_id": "MEM-1", "question": "Do you review access?", "answer": "Yes."}},
-    ])
+    memory_index.records.extend(
+        [
+            {
+                "id": "policy::0",
+                "text": "3.1 Access is reviewed quarterly.",
+                "metadata": {"source_type": "guideline", "source_name": "T2 - Access Policy.pdf"},
+            },
+            {
+                "id": "Answer memory::0",
+                "text": "Q: Do you review access?\nA: Yes.",
+                "metadata": {
+                    "source_type": "prior_answer",
+                    "source_name": "Answer memory",
+                    "entry_id": "MEM-1",
+                    "question": "Do you review access?",
+                    "answer": "Yes.",
+                },
+            },
+        ]
+    )
 
 
 # --- the knowledge base is documents ---------------------------------------------
@@ -125,7 +138,7 @@ async def test_the_configured_reading_is_used_and_the_rules_only_when_they_find_
         asked.append(strategy)
         found = real(path, "rules")
         if strategy == "guarded":
-            for question in found.form.questions:     # the PSAT failure, staged
+            for question in found.form.questions:  # the PSAT failure, staged
                 question.targets = {}
         return found
 
@@ -158,17 +171,28 @@ async def test_on_a_tie_the_configured_reading_is_kept(tmp_path, monkeypatch):
 # --- answers are added one at a time -----------------------------------------------------
 
 
-@pytest.mark.parametrize("route", [
-    "/api/memory/import/read", "/api/memory/import", "/api/knowledge/prior-assessments",
-])
+@pytest.mark.parametrize(
+    "route",
+    [
+        "/api/memory/import/read",
+        "/api/memory/import",
+        "/api/knowledge/prior-assessments",
+    ],
+)
 def test_nothing_takes_a_whole_questionnaire_into_the_answer_memory(client, route, memory_index):
     """Adding to the memory is deliberate: one answer written on the memory page,
     or an edited answer approved on its card. A file read in wholesale is
     hundreds of answers nobody read one by one, each retrieved afterwards as
     something we said."""
-    response = client.post(route, json={"source_name": "Vendor.xlsx", "pairs": [
-        {"question": "Do you review access?", "answer": "Yes."},
-    ]})
+    response = client.post(
+        route,
+        json={
+            "source_name": "Vendor.xlsx",
+            "pairs": [
+                {"question": "Do you review access?", "answer": "Yes."},
+            ],
+        },
+    )
 
     assert response.status_code in (404, 405)
     assert answer_memory.count() == 0 and memory_index.records == []
@@ -184,15 +208,17 @@ def test_no_page_offers_an_import(client):
 
 def test_add_an_answer_comes_before_the_list_it_lands_in(client):
     body = client.get("/memory").text
-    assert body.index("Two answers that disagree") < body.index("Add an answer") < body.index(
-        "Everything we have said"
-    )
+    assert body.index("Two answers that disagree") < body.index("Add an answer") < body.index("Everything we have said")
 
 
 def test_an_answer_added_by_hand_is_remembered(client, memory_index):
-    body = client.post("/api/memory", json={
-        "question": "Do you review access?", "answer": "Yes, quarterly.",
-    }).json()
+    body = client.post(
+        "/api/memory",
+        json={
+            "question": "Do you review access?",
+            "answer": "Yes, quarterly.",
+        },
+    ).json()
 
     [entry] = answer_memory.entries()
     assert body["entry_id"] == entry.entry_id and entry.origin == "manual"

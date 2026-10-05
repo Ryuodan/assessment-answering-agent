@@ -90,7 +90,11 @@ def trace_config(question: Question, language: Language, run_id: str = "") -> di
 
 
 async def answer_one_question(
-    question: Question, language: Language, *, run_id: str = "", team_id: str | None = None,
+    question: Question,
+    language: Language,
+    *,
+    run_id: str = "",
+    team_id: str | None = None,
 ) -> AnsweredQuestion:
     """Answer a single question through the inner graph.
 

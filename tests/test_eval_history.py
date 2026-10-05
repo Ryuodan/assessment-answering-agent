@@ -190,8 +190,7 @@ def test_the_example_env_agrees_with_the_code_defaults():
     disagree = {
         name: (getattr(from_defaults, name), getattr(from_example, name))
         for name in Settings.model_fields
-        if name not in secrets
-        and getattr(from_defaults, name) != getattr(from_example, name)
+        if name not in secrets and getattr(from_defaults, name) != getattr(from_example, name)
     }
 
     assert not disagree, f"the template and the code defaults disagree: {disagree}"

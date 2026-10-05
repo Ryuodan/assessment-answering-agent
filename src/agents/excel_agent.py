@@ -148,10 +148,7 @@ def _make_tools(workbook: Workbook, run: Run, only: set[str] | None = None) -> l
     strategy pays for: the rules read the sixteen sheets they understand, and
     the agent is shown only the two they could not.
     """
-    visible = {
-        sheet.name: sheet for sheet in workbook.sheets
-        if sheet.visible and (only is None or sheet.name in only)
-    }
+    visible = {sheet.name: sheet for sheet in workbook.sheets if sheet.visible and (only is None or sheet.name in only)}
 
     def _sheet(name: str) -> Sheet | None:
         if name in visible:
@@ -170,9 +167,9 @@ def _make_tools(workbook: Workbook, run: Run, only: set[str] | None = None) -> l
         """List every sheet you are being asked about, with its size. Call this first."""
         _log("list_sheets")
         lines = [
-            f"{sheet.name!r}: {len(sheet.rows)} row(s), "
-            f"{len(sheet.columns)} column(s) holding values"
-            for sheet in workbook.sheets if sheet.name in visible
+            f"{sheet.name!r}: {len(sheet.rows)} row(s), {len(sheet.columns)} column(s) holding values"
+            for sheet in workbook.sheets
+            if sheet.name in visible
         ]
         return "\n".join(lines) or "(no sheets)"
 
@@ -211,7 +208,7 @@ def _make_tools(workbook: Workbook, run: Run, only: set[str] | None = None) -> l
         for row in rows:
             cells = [
                 f"{column}: {sheet_view.cell(sheet.value(row, column))}"
-                for column in sheet.columns[:sheet_view.GRID_COLUMNS]
+                for column in sheet.columns[: sheet_view.GRID_COLUMNS]
                 if sheet.value(row, column)
             ]
             lines.append(f"row {row} | " + (" | ".join(cells) if cells else "(blank)"))
@@ -332,14 +329,15 @@ def _agent(tools: list, model: str | None = None):
         chat_llm(temperature=0.0, model=model),
         tools=tools,
         system_prompt=SYSTEM,
-        middleware=[ContextEditingMiddleware(
-            edits=[ClearToolUsesEdit(trigger=CONTEXT_TRIGGER, keep=CONTEXT_KEEP)],
-        )],
+        middleware=[
+            ContextEditingMiddleware(
+                edits=[ClearToolUsesEdit(trigger=CONTEXT_TRIGGER, keep=CONTEXT_KEEP)],
+            )
+        ],
     )
 
 
-def _round(workbook: Workbook, run: Run, path: Path, sheets: set[str],
-           tools: list, steps: int) -> None:
+def _round(workbook: Workbook, run: Run, path: Path, sheets: set[str], tools: list, steps: int) -> None:
     """One conversation with the agent, over the sheets named."""
     named = ", ".join(sorted(repr(name) for name in sheets))
     try:
@@ -348,9 +346,16 @@ def _round(workbook: Workbook, run: Run, path: Path, sheets: set[str],
         # conversation with it, and a comparison that cannot say what the
         # failures cost is not much of a comparison.
         for chunk in _agent(tools).stream(
-            {"messages": [("user", f"Read the layout of {path.name!r}. "
-                                   f"Record a reading for each of these sheets, then stop: "
-                                   f"{named}.")]},
+            {
+                "messages": [
+                    (
+                        "user",
+                        f"Read the layout of {path.name!r}. "
+                        f"Record a reading for each of these sheets, then stop: "
+                        f"{named}.",
+                    )
+                ]
+            },
             {"recursion_limit": steps},
             stream_mode="values",
         ):
@@ -433,13 +438,9 @@ def read_workbook(
 
     with Workbook(path) as workbook:
         tools = _make_tools(workbook, run, only)
-        asked = sum(
-            1 for sheet in workbook.sheets
-            if sheet.visible and (only is None or sheet.name in only)
-        )
+        asked = sum(1 for sheet in workbook.sheets if sheet.visible and (only is None or sheet.name in only))
         steps = max_steps or budget(asked)
-        wanted = {sheet.name for sheet in workbook.sheets if sheet.visible
-                  and (only is None or sheet.name in only)}
+        wanted = {sheet.name for sheet in workbook.sheets if sheet.visible and (only is None or sheet.name in only)}
         _round(workbook, run, path, wanted, tools, steps)
 
         # A second round, for sheets it simply forgot. On the Zain form the
@@ -452,15 +453,16 @@ def read_workbook(
         # the sheets it missed is shorter, cheaper and far likelier to work.
         missed = wanted - set(run.readings)
         if missed and not run.stopped_early:
-            logger.info("Asking the Excel agent again about %s on %s",
-                        ", ".join(sorted(repr(name) for name in missed)), path.name)
-            _round(workbook, run, path, missed,
-                   _make_tools(workbook, run, missed), budget(len(missed)))
+            logger.info(
+                "Asking the Excel agent again about %s on %s",
+                ", ".join(sorted(repr(name) for name in missed)),
+                path.name,
+            )
+            _round(workbook, run, path, missed, _make_tools(workbook, run, missed), budget(len(missed)))
 
         still = sorted(wanted - set(run.readings))
         if still:
-            logger.warning("The Excel agent never read %s on %s",
-                           ", ".join(repr(name) for name in still), path.name)
+            logger.warning("The Excel agent never read %s on %s", ", ".join(repr(name) for name in still), path.name)
 
         for sheet in workbook.sheets:
             part, questions = _read(workbook, sheet, run)
@@ -484,12 +486,20 @@ def _read(workbook: Workbook, sheet: Sheet, run: Run) -> tuple[Part, list[FormQu
 
     reading = run.readings.get(sheet.name)
     if reading is None:
-        return Part(name=sheet.name, kind="not read", findings=[
-            Finding(subject=sheet.name, verdict="skipped",
-                    because="the agent stopped before reading this sheet" if run.stopped_early
-                            else "the agent recorded no reading for this sheet",
-                    confident=False)
-        ]), []
+        return Part(
+            name=sheet.name,
+            kind="not read",
+            findings=[
+                Finding(
+                    subject=sheet.name,
+                    verdict="skipped",
+                    because="the agent stopped before reading this sheet"
+                    if run.stopped_early
+                    else "the agent recorded no reading for this sheet",
+                    confident=False,
+                )
+            ],
+        ), []
 
     applied = llm_layout.apply(workbook, sheet, reading, source=SOURCE)
     if applied is None:
@@ -498,9 +508,11 @@ def _read(workbook: Workbook, sheet: Sheet, run: Run) -> tuple[Part, list[FormQu
             if not reading.is_questionnaire
             else "the agent's reading did not describe this sheet, so it was refused"
         )
-        return Part(name=sheet.name, kind="no questions", findings=[
-            Finding(subject=sheet.name, verdict="skipped", because=because, confident=False)
-        ]), []
+        return Part(
+            name=sheet.name,
+            kind="no questions",
+            findings=[Finding(subject=sheet.name, verdict="skipped", because=because, confident=False)],
+        ), []
     return applied
 
 

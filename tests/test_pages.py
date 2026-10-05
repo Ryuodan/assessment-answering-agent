@@ -75,14 +75,15 @@ def test_every_link_and_asset_stays_inside_the_prefix(client, path):
             continue
         resolved = urlsplit(urljoin(page_url, reference)).path
         assert resolved.startswith(f"{PREFIX}/"), f"{path}: {reference!r} leaves the app ({resolved})"
-        inside = resolved[len(PREFIX):] or "/"
+        inside = resolved[len(PREFIX) :] or "/"
         assert client.get(inside).status_code != 404, f"{path}: {reference!r} points at nothing"
 
 
 def test_the_shared_script_names_no_root_path_but_the_api():
     script = (api.STATIC_DIR / "cards.js").read_text(encoding="utf-8")
     rooted = [
-        literal for literal in re.findall(r"""["'`](/[^"'`\s]*)""", script)
+        literal
+        for literal in re.findall(r"""["'`](/[^"'`\s]*)""", script)
         if not literal.startswith("/api/") and literal not in ("/",)
     ]
     assert not rooted, f"cards.js addresses {rooted} from the domain root"

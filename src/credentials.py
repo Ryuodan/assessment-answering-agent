@@ -28,7 +28,7 @@ import secrets
 # stock build. `maxmem` is passed anyway, with headroom, so these can be raised
 # later without hitting that wall — the parameters travel with each hash, so
 # old credentials keep verifying.
-SCRYPT_N = 2 ** 14
+SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
 SCRYPT_MAXMEM = 128 * 1024 * 1024
@@ -60,8 +60,13 @@ def hash_secret(secret: str) -> str:
         raise ValueError("Refusing to hash an empty secret.")
     salt = secrets.token_bytes(16)
     derived = hashlib.scrypt(
-        secret.encode("utf-8"), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P,
-        dklen=32, maxmem=SCRYPT_MAXMEM,
+        secret.encode("utf-8"),
+        salt=salt,
+        n=SCRYPT_N,
+        r=SCRYPT_R,
+        p=SCRYPT_P,
+        dklen=32,
+        maxmem=SCRYPT_MAXMEM,
     )
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(derived)}"
 
@@ -101,13 +106,8 @@ def generate_code() -> str:
     is far past anything guessable — the grouping is there to make it
     transcribable, not to weaken it.
     """
-    raw = "".join(
-        secrets.choice(CODE_ALPHABET) for _ in range(CODE_GROUPS * CODE_GROUP_SIZE)
-    )
-    return "-".join(
-        raw[index : index + CODE_GROUP_SIZE]
-        for index in range(0, len(raw), CODE_GROUP_SIZE)
-    )
+    raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_GROUPS * CODE_GROUP_SIZE))
+    return "-".join(raw[index : index + CODE_GROUP_SIZE] for index in range(0, len(raw), CODE_GROUP_SIZE))
 
 
 def normalise_code(code: str) -> str:

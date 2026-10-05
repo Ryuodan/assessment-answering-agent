@@ -113,7 +113,10 @@ def _row_to_conversation(row) -> Conversation:
 
 
 def load(
-    conversation_id: str, *, team_id: str | None = None, actor_email: str | None = None,
+    conversation_id: str,
+    *,
+    team_id: str | None = None,
+    actor_email: str | None = None,
 ) -> Conversation | None:
     """One conversation, or None.
 

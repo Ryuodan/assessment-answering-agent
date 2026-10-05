@@ -92,19 +92,20 @@ def load_targets(path: Path | str = DEFAULT_TARGETS, golden: list | None = None)
         case = cases.get(entry["test_id"])
         if case is None:
             continue
-        targets.append(Target(
-            test_id=entry["test_id"],
-            category=entry.get("category", case.category),
-            kind=entry.get("kind", "sourced"),
-            question=case.question,
-            # `clauses_indexed` rather than `clauses`: a clause the corpus does
-            # not contain cannot be retrieved, and asking for it would score a
-            # perfect retriever as a failure.
-            documents={
-                doc["document"]: list(doc.get("clauses_indexed") or [])
-                for doc in entry.get("documents", [])
-            },
-        ))
+        targets.append(
+            Target(
+                test_id=entry["test_id"],
+                category=entry.get("category", case.category),
+                kind=entry.get("kind", "sourced"),
+                question=case.question,
+                # `clauses_indexed` rather than `clauses`: a clause the corpus does
+                # not contain cannot be retrieved, and asking for it would score a
+                # perfect retriever as a failure.
+                documents={
+                    doc["document"]: list(doc.get("clauses_indexed") or []) for doc in entry.get("documents", [])
+                },
+            )
+        )
     return targets
 
 
@@ -127,10 +128,7 @@ def finds_clause(evidence: list[Evidence], document: str, clause: str) -> bool:
     Uses the same span arithmetic the citation checker does, so "retrieved the
     clause" means here exactly what it means everywhere else in the system.
     """
-    return any(
-        item.source_name == document and item.covers_clause(clause)
-        for item in evidence
-    )
+    return any(item.source_name == document and item.covers_clause(clause) for item in evidence)
 
 
 def is_on_target(item: Evidence, documents: dict[str, list[str]]) -> bool:
@@ -147,9 +145,7 @@ def is_on_target(item: Evidence, documents: dict[str, list[str]]) -> bool:
     return True if not clauses else any(item.covers_clause(c) for c in clauses)
 
 
-def on_target_counts(
-    evidence: list[Evidence], documents: dict[str, list[str]]
-) -> tuple[int, int, int, int]:
+def on_target_counts(evidence: list[Evidence], documents: dict[str, list[str]]) -> tuple[int, int, int, int]:
     """(document-level hits, clause-level hits, on-target chars, total chars)."""
     doc_hits = clause_hits = on_chars = total_chars = 0
     for item in evidence:
@@ -245,8 +241,11 @@ async def measure_case(target: Target, plans: dict[str, list[str]] | None = None
     of an unchanged system — enough to swamp the effect of whatever setting was
     being tested. Reusing one set of plans makes a comparison a comparison.
     """
-    question = Question(id=target.test_id, text=target.question,
-                        language="ar" if any("؀" <= c <= "ۿ" for c in target.question) else "en")
+    question = Question(
+        id=target.test_id,
+        text=target.question,
+        language="ar" if any("؀" <= c <= "ۿ" for c in target.question) else "en",
+    )
 
     state: dict = {"question": question, "language": question.language}
     cached = (plans or {}).get(target.test_id)
@@ -306,9 +305,7 @@ async def measure_case(target: Target, plans: dict[str, list[str]] | None = None
     for budget in BUDGETS:
         at_k = select_evidence(state["ranked"], budget, settings.max_prior_answer_chunks)
         documents = sum(1 for d in target.documents if finds_document(at_k, d) is not None)
-        clauses = sum(
-            1 for d, cs in target.documents.items() for c in cs if finds_clause(at_k, d, c)
-        )
+        clauses = sum(1 for d, cs in target.documents.items() for c in cs if finds_clause(at_k, d, c))
         result.curve[budget] = (documents, clauses, on_target_counts(at_k, target.documents)[1])
 
     return result
@@ -337,7 +334,8 @@ async def build_plans(targets: list[Target], concurrency: int = 4) -> dict[str, 
 
     async def one(target: Target) -> tuple[str, list[str]]:
         question = Question(
-            id=target.test_id, text=target.question,
+            id=target.test_id,
+            text=target.question,
             language="ar" if any("؀" <= c <= "ۿ" for c in target.question) else "en",
         )
         async with semaphore:
@@ -391,12 +389,9 @@ def summarise(results: list[CaseResult]) -> dict:
         "mean_retrieved": round(sum(r.retrieved for r in scored) / len(scored), 1) if scored else 0,
         "mean_in_prompt": round(sum(r.prompt for r in scored) / len(scored), 1) if scored else 0,
         # Precision: of what the drafter was given, how much was asked for.
-        "document_precision_pct": ratio(
-            sum(r.prompt_on_document for r in scored), sum(r.prompt for r in scored)),
-        "clause_precision_pct": ratio(
-            sum(r.prompt_on_clause for r in scored), sum(r.prompt for r in scored)),
-        "signal_density_pct": ratio(
-            sum(r.prompt_on_target_chars for r in scored), sum(r.prompt_chars for r in scored)),
+        "document_precision_pct": ratio(sum(r.prompt_on_document for r in scored), sum(r.prompt for r in scored)),
+        "clause_precision_pct": ratio(sum(r.prompt_on_clause for r in scored), sum(r.prompt for r in scored)),
+        "signal_density_pct": ratio(sum(r.prompt_on_target_chars for r in scored), sum(r.prompt_chars for r in scored)),
         "mean_prompt_chars": round(sum(r.prompt_chars for r in scored) / len(scored)) if scored else 0,
         "budget_curve": budget_curve(scored),
     }
@@ -473,18 +468,19 @@ def format_report(summary: dict, categories: dict, results: list[CaseResult]) ->
         # printing 0.0% for 0-of-0 read as total failure: all seven Regulatory
         # Reference targets are document-level, and the report said they
         # retrieved no clauses at all.
-        clause = (f"{stats['clause_recall_pct']:5.1f}%" if stats["clauses_expected"]
-                  else "  n/a ")
+        clause = f"{stats['clause_recall_pct']:5.1f}%" if stats["clauses_expected"] else "  n/a "
         lines.append(
-            f"    {name:26s} doc {stats['document_recall_pct']:5.1f}%   "
-            f"clause {clause}   ({stats['scored']} cases)"
+            f"    {name:26s} doc {stats['document_recall_pct']:5.1f}%   clause {clause}   ({stats['scored']} cases)"
         )
 
     curve = summary.get("budget_curve") or {}
     if curve:
-        lines += ["", "  evidence budget: what each extra chunk buys and costs",
-                  "  " + "-" * 60,
-                  f"  {'budget':>8s}{'doc recall':>13s}{'clause recall':>15s}{'precision':>12s}"]
+        lines += [
+            "",
+            "  evidence budget: what each extra chunk buys and costs",
+            "  " + "-" * 60,
+            f"  {'budget':>8s}{'doc recall':>13s}{'clause recall':>15s}{'precision':>12s}",
+        ]
         best = max(row["document_recall_pct"] for row in curve.values())
         for budget, row in curve.items():
             mark = "  <- recall plateaus" if row["document_recall_pct"] >= best else ""

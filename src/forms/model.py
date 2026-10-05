@@ -198,11 +198,7 @@ class FormQuestion(BaseModel):
         Only the ANSWER and STATUS targets count: an evidence column left blank
         is the normal state of an answered question, not an unanswered one.
         """
-        return any(
-            not target.is_empty
-            for role, target in self.targets.items()
-            if role in (Role.ANSWER, Role.STATUS)
-        )
+        return any(not target.is_empty for role, target in self.targets.items() if role in (Role.ANSWER, Role.STATUS))
 
 
 class Part(BaseModel):
@@ -245,9 +241,7 @@ class WriteReport(BaseModel):
     path: str
     created: list[str] = Field(default_factory=list, description="Targets that did not exist")
     replaced: list[str] = Field(default_factory=list, description="Targets that held something")
-    skipped: dict[str, str] = Field(
-        default_factory=dict, description="Target id -> why nothing was written"
-    )
+    skipped: dict[str, str] = Field(default_factory=dict, description="Target id -> why nothing was written")
     parts_before: int = 0
     parts_after: int = 0
 

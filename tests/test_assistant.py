@@ -75,9 +75,11 @@ def test_it_has_no_way_to_change_the_knowledge_base(kit):
     """Indexing and removing policy documents is the corpus every answer is
     grounded in. It belongs behind a panel with a list and a delete button."""
     tool, _state = kit
-    assert not [name for name in tool if any(
-        word in name for word in ("index", "upload_document", "remove", "delete", "guideline")
-    )]
+    assert not [
+        name
+        for name in tool
+        if any(word in name for word in ("index", "upload_document", "remove", "delete", "guideline"))
+    ]
 
 
 def test_it_has_no_way_to_record_feedback(kit):
@@ -318,9 +320,7 @@ def _graph(script):
                 result = self.tools[name](**kwargs)
                 if hasattr(result, "__await__"):
                     result = await result
-                messages.append(AIMessage("", tool_calls=[
-                    {"name": name, "args": kwargs, "id": name}
-                ]))
+                messages.append(AIMessage("", tool_calls=[{"name": name, "args": kwargs, "id": name}]))
                 messages.append(ToolMessage(str(result), tool_call_id=name))
             messages.append(AIMessage("Done."))
             yield {"messages": messages}
@@ -358,9 +358,7 @@ async def test_a_turn_saves_a_conversation_it_can_resume_from(user, tmp_path, sc
 
 
 @pytest.mark.asyncio
-async def test_the_note_about_the_upload_is_not_something_anybody_said(
-    user, tmp_path, scripted, answers_yes
-):
+async def test_the_note_about_the_upload_is_not_something_anybody_said(user, tmp_path, scripted, answers_yes):
     """The agent is told a file arrived, in the message it re-reads. That note
     is plumbing, and it was going into the conversation's name -- so a history
     read as a list of "[A file has been uploaded to this conversation: HR…"
@@ -404,7 +402,8 @@ async def test_a_turn_says_what_it_is_doing_while_it_does_it(user, tmp_path, scr
         progress.note = original
 
     assert [stage for run, stage in seen if run == "watched"] == [
-        "Reading the file…", "Searching the policies…",
+        "Reading the file…",
+        "Searching the policies…",
     ]
 
 
@@ -443,6 +442,7 @@ async def test_a_turn_that_fails_still_records_what_it_did(user, tmp_path, monke
     """The tools it did call have already changed the batch. A history that
     does not mention them leaves the assistant contradicting the answers on
     screen beside it."""
+
     class Exploding:
         async def astream(self, payload, config=None, stream_mode=None):
             raise RuntimeError("the provider is down")
@@ -478,9 +478,7 @@ async def test_the_answer_panel_is_only_re_read_when_something_changed(user, scr
     assert turn.refreshed is False
 
 
-def test_the_answers_beside_a_chat_are_the_same_payload_the_other_page_draws(
-    user, tmp_path, answers_yes
-):
+def test_the_answers_beside_a_chat_are_the_same_payload_the_other_page_draws(user, tmp_path, answers_yes):
     """Two renderings of an answer card would drift, and the sources and the
     reviewer's reasoning are the part worth looking at."""
     conversation = assistant.start(user, "")
@@ -600,14 +598,13 @@ def test_still_blank_does_not_count_what_the_file_answered_or_what_was_set_aside
     tool, state = filled
     assert "0 answered here, 2 still blank" in tool["describe_form"]()
 
-    blank = [q["id"] for q in tools.inspect(identity.local_user(), state["batch_id"])["questions"]
-             if not q["existing"]]
+    blank = [q["id"] for q in tools.inspect(identity.local_user(), state["batch_id"])["questions"] if not q["existing"]]
     tool["set_aside"](blank[0])
     assert "0 answered here, 1 still blank" in tool["describe_form"]()
 
 
 def test_a_question_answered_only_by_a_status_still_counts(filled, user, state=None):
-    """"Partially Compliant" with no comment beside it is an answer."""
+    """ "Partially Compliant" with no comment beside it is an answer."""
     tool, batch_state = filled
     report = tools.inspect(user, batch_state["batch_id"])
     assert report["counts"]["already_in_file"] == 2
@@ -661,10 +658,8 @@ async def test_answering_the_whole_file_leaves_its_own_answers_alone(filled, ans
 
 
 @pytest.mark.asyncio
-async def test_a_scope_of_only_answered_questions_is_not_reported_as_a_dead_end(
-    filled, answers_yes
-):
-    """"Nothing matched, call describe_form" would send it round the houses
+async def test_a_scope_of_only_answered_questions_is_not_reported_as_a_dead_end(filled, answers_yes):
+    """ "Nothing matched, call describe_form" would send it round the houses
     looking for a sheet name that was never the problem."""
     tool, batch_state = filled
     report = tools.inspect(identity.local_user(), batch_state["batch_id"])
@@ -691,6 +686,7 @@ def test_replacing_is_said_out_loud_in_the_steps(filled):
     """The steps are what the interface shows the person. Overwriting an answer
     the security team wrote is not something to do without leaving a mark."""
     import asyncio
+
     tool, batch_state = filled
     report = tools.inspect(identity.local_user(), batch_state["batch_id"])
     asyncio.run(tool["answer_questions"](ids=report["questions"][0]["id"], replace_existing=True))
@@ -710,13 +706,17 @@ def answers_with_evidence(monkeypatch):
             AnsweredQuestion(
                 question=question,
                 answer=f"Yes, backups are encrypted. [{question.text[:12]}]",
-                confidence=0.9, needs_review=False,
-                evidence=[Evidence(
-                    source_type=SourceType.GUIDELINE,
-                    source_name="T2 - Information Security Policy.pdf",
-                    snippet="Backups shall be encrypted at rest using AES-256.",
-                    doc_id="T2-ISP", clause="9.4.1",
-                )],
+                confidence=0.9,
+                needs_review=False,
+                evidence=[
+                    Evidence(
+                        source_type=SourceType.GUIDELINE,
+                        source_name="T2 - Information Security Policy.pdf",
+                        snippet="Backups shall be encrypted at rest using AES-256.",
+                        doc_id="T2-ISP",
+                        clause="9.4.1",
+                    )
+                ],
             )
             for question in questions
         ]
@@ -725,9 +725,7 @@ def answers_with_evidence(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_question_can_be_answered_with_no_questionnaire_open(
-    kit, answers_with_evidence
-):
+async def test_a_question_can_be_answered_with_no_questionnaire_open(kit, answers_with_evidence):
     """Somebody asks in passing. Making them upload a spreadsheet to find out
     what the policies commit the organisation to would be absurd."""
     tool, state = kit
@@ -739,9 +737,7 @@ async def test_a_question_can_be_answered_with_no_questionnaire_open(
 
 
 @pytest.mark.asyncio
-async def test_answering_directly_puts_its_clauses_under_the_reply(
-    kit, answers_with_evidence
-):
+async def test_answering_directly_puts_its_clauses_under_the_reply(kit, answers_with_evidence):
     tool, state = kit
     await tool["answer_directly"]("Do we encrypt our backups?")
     [source] = state["sources"]
@@ -766,9 +762,7 @@ async def test_a_list_too_long_to_ask_this_way_is_refused(kit, answers_with_evid
 
 
 @pytest.mark.asyncio
-async def test_answering_directly_leaves_the_open_questionnaire_alone(
-    kit, answers_with_evidence
-):
+async def test_answering_directly_leaves_the_open_questionnaire_alone(kit, answers_with_evidence):
     tool, state = kit
     tool["open_questionnaire"]("")
     await tool["answer_directly"]("Do we encrypt our backups?")
@@ -786,11 +780,11 @@ def test_what_a_turn_did_is_stored_with_its_reply(user, scripted, tmp_path):
     conversation = assistant.start(user, "")
 
     import asyncio
+
     asyncio.run(assistant.say(user, conversation, "What is in the file?"))
 
     saved = conversations.load(conversation.id, team_id=user.team_id)
-    reply = [m for m in saved.messages
-             if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None)][-1]
+    reply = [m for m in saved.messages if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None)][-1]
     assert reply.additional_kwargs[assistant.UI_KEY]["steps"] == ["describe_form"]
 
 
@@ -870,5 +864,3 @@ def test_blanking_a_question_that_does_not_exist_is_refused(kit, user):
     tool["open_questionnaire"]("")
     with pytest.raises(tools.ToolError):
         tools.blank_answer(user, state["batch_id"], "Nowhere!99")
-
-

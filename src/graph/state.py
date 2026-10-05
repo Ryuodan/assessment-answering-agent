@@ -10,16 +10,7 @@ import operator
 from typing import Annotated, TypedDict
 
 from src.config import settings
-from src.models import (
-    AnsweredQuestion,
-    AnswerReview,
-    DraftedAnswer,
-    Language,
-    Question,
-    Evidence, 
-    SourceType
-)
-
+from src.models import AnsweredQuestion, AnswerReview, DraftedAnswer, Language, Question, Evidence, SourceType
 
 
 def merge_evidence(left: list[Evidence], right: list[Evidence]) -> list[Evidence]:
@@ -100,9 +91,7 @@ def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
     return sorted(evidence, key=sort_key)
 
 
-def prune_weak_units(
-    evidence: list[Evidence], floor: float, minimum: int
-) -> list[Evidence]:
+def prune_weak_units(evidence: list[Evidence], floor: float, minimum: int) -> list[Evidence]:
     """Drop material scoring far below the best hit for this question.
 
     A fixed evidence budget spends the same forty chunks on "what is your
@@ -155,13 +144,11 @@ def prune_weak_units(
     # what the signal is actually evidence of.
     rescue = max(hits_in_group.values())
     keep = {
-        group for group, score in best_in_group.items()
+        group
+        for group, score in best_in_group.items()
         if score >= floor * best or (rescue > 1 and hits_in_group[group] >= rescue)
     }
-    kept = [
-        item for item in evidence
-        if item.source_type is SourceType.PRIOR_ANSWER or group_of(item) in keep
-    ]
+    kept = [item for item in evidence if item.source_type is SourceType.PRIOR_ANSWER or group_of(item) in keep]
 
     # A weak best hit would otherwise leave almost nothing. Restore the highest
     # scoring units, whole, until the floor on count is met.
@@ -170,10 +157,7 @@ def prune_weak_units(
             if group in keep:
                 continue
             keep.add(group)
-            kept = [
-                item for item in evidence
-                if item.source_type is SourceType.PRIOR_ANSWER or group_of(item) in keep
-            ]
+            kept = [item for item in evidence if item.source_type is SourceType.PRIOR_ANSWER or group_of(item) in keep]
             if sum(1 for i in kept if i.source_type is not SourceType.PRIOR_ANSWER) >= minimum:
                 break
 
@@ -206,9 +190,7 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> lis
     if limit <= 0:
         return []
 
-    evidence = prune_weak_units(
-        evidence, settings.evidence_score_floor, settings.min_evidence_chunks
-    )
+    evidence = prune_weak_units(evidence, settings.evidence_score_floor, settings.min_evidence_chunks)
 
     def is_prior(item: Evidence) -> bool:
         return item.source_type is SourceType.PRIOR_ANSWER
@@ -216,12 +198,9 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> lis
     prior_positions = [index for index, item in enumerate(evidence) if is_prior(item)]
     ranked_positions = sorted(prior_positions, key=lambda index: -evidence[index].score)
     keep = set(ranked_positions[: max(prior_cap, 0)])
-    spare = ranked_positions[max(prior_cap, 0):]
+    spare = ranked_positions[max(prior_cap, 0) :]
 
-    selected = [
-        index for index, item in enumerate(evidence)
-        if not is_prior(item) or index in keep
-    ][:limit]
+    selected = [index for index, item in enumerate(evidence) if not is_prior(item) or index in keep][:limit]
 
     # Guidelines ran out before the budget did — give the room back.
     if len(selected) < limit and spare:
@@ -283,7 +262,6 @@ class AssessmentState(TypedDict, total=False):
 
     team_id: str
     """Whose knowledge base every question in the document is answered from."""
-
 
     language: Language | None
     """Caller's forced output language. None means each answer follows its own question.

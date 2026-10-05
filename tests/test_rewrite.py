@@ -106,7 +106,9 @@ async def test_a_note_replaces_the_instruction_in_the_rationale(model):
     """A two-paragraph house style pasted under every answer is noise; the
     note says what happened in a sentence."""
     revised = await rewrite.rewrite(
-        _answered(), "Open with Yes or No.\nNo clause numbers.", note="Reworded to your house style.",
+        _answered(),
+        "Open with Yes or No.\nNo clause numbers.",
+        note="Reworded to your house style.",
     )
     assert revised.rationale.endswith("Reworded to your house style.")
     assert "No clause numbers" not in revised.rationale

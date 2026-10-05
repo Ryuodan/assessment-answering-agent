@@ -19,8 +19,13 @@ from src.models import Evidence, SourceType
 
 def hit(name: str, chunk: int, score: float = 0.7, lexical: bool = False) -> Evidence:
     return Evidence(
-        source_type=SourceType.GUIDELINE, source_name=name, snippet=f"text {chunk}",
-        chunk=chunk, score=score, is_lexical=lexical, clause_start="3.1",
+        source_type=SourceType.GUIDELINE,
+        source_name=name,
+        snippet=f"text {chunk}",
+        chunk=chunk,
+        score=score,
+        is_lexical=lexical,
+        clause_start="3.1",
     )
 
 

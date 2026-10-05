@@ -118,18 +118,21 @@ class _Batch:
 
 def _batches(team_id: str) -> list[_Batch]:
     """Every questionnaire in a team, oldest first -- the order decides ownership."""
-    rows = store.connect().execute(
-        """
+    rows = (
+        store.connect()
+        .execute(
+            """
         SELECT batch_id, actor_email, source_path, updated_at
           FROM form_batches
          WHERE team_id = ?
          ORDER BY created_at, rowid
         """,
-        (team_id,),
-    ).fetchall()
+            (team_id,),
+        )
+        .fetchall()
+    )
     return [
-        _Batch(row["batch_id"], row["actor_email"], Path(row["source_path"]), _parse(row["updated_at"]))
-        for row in rows
+        _Batch(row["batch_id"], row["actor_email"], Path(row["source_path"]), _parse(row["updated_at"])) for row in rows
     ]
 
 
@@ -201,8 +204,10 @@ def enforce(person: Person, *, now: datetime | None = None) -> Checked:
     from src.service import _extracted_text_cache_path
 
     checked = Checked(
-        person.email, person.team_id,
-        used_bytes(person), settings.storage_limit_per_user_mb * MB,
+        person.email,
+        person.team_id,
+        used_bytes(person),
+        settings.storage_limit_per_user_mb * MB,
     )
     if not checked.over:
         return checked
@@ -228,21 +233,29 @@ def enforce(person: Person, *, now: datetime | None = None) -> Checked:
     if checked.removed:
         logger.info(
             "Storage: %s was over the %d MB limit; removed %d old file(s), %.1f MB.",
-            person.email, settings.storage_limit_per_user_mb, len(checked.removed),
+            person.email,
+            settings.storage_limit_per_user_mb,
+            len(checked.removed),
             checked.freed_bytes / MB,
         )
         events.record(
-            User(email=person.email, team_id=person.team_id), events.FILES_REMOVED,
-            subject_type="storage", subject_id=person.email,
-            files=checked.removed[:500], freed_bytes=checked.freed_bytes,
-            limit_mb=settings.storage_limit_per_user_mb, keep_days=settings.storage_keep_days,
+            User(email=person.email, team_id=person.team_id),
+            events.FILES_REMOVED,
+            subject_type="storage",
+            subject_id=person.email,
+            files=checked.removed[:500],
+            freed_bytes=checked.freed_bytes,
+            limit_mb=settings.storage_limit_per_user_mb,
+            keep_days=settings.storage_keep_days,
         )
     if checked.over:
         logger.warning(
             "Storage: %s is using %.0f MB, over the %d MB limit. Everything left is either in "
             "the knowledge base or was used in the last %d days, so nothing more was removed. "
             "Raise STORAGE_LIMIT_PER_USER_MB if they need the room.",
-            person.email, checked.used_bytes / MB, settings.storage_limit_per_user_mb,
+            person.email,
+            checked.used_bytes / MB,
+            settings.storage_limit_per_user_mb,
             settings.storage_keep_days,
         )
     return checked
@@ -256,15 +269,10 @@ def everybody() -> list[Person]:
     their files behind, and those still age out."""
     from src import identity
 
-    people = {
-        Person(person["email"], person["team"] or settings.default_team)
-        for person in identity.list_users()
-    }
+    people = {Person(person["email"], person["team"] or settings.default_team) for person in identity.list_users()}
     people |= {
         Person(row["actor_email"], row["team_id"])
-        for row in store.connect().execute(
-            "SELECT DISTINCT actor_email, team_id FROM form_batches"
-        ).fetchall()
+        for row in store.connect().execute("SELECT DISTINCT actor_email, team_id FROM form_batches").fetchall()
         if row["actor_email"]
     }
     return sorted(people, key=lambda person: (person.team_id, person.email))

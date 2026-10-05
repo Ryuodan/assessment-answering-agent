@@ -366,7 +366,7 @@ def test_a_marker_stranded_at_the_end_of_an_arabic_line_is_moved_back():
 
 
 def test_a_value_at_the_end_of_an_arabic_sentence_is_left_alone():
-    """"خلال 72 ساعة" must not become "72. خلال ساعة"."""
+    """ "خلال 72 ساعة" must not become "72. خلال ساعة"."""
     text = "يجب الإبلاغ عن الحادثة خلال 72"
     assert documents.repair_rtl_numbering(text) == text
 
@@ -377,11 +377,13 @@ def test_english_lines_are_untouched():
 
 
 def test_every_marker_in_a_document_is_repaired():
-    text = "\n".join([
-        "ما هي المدة الزمنية المحددة؟ .25",
-        "Some English question 26.",
-        "هل يشترط استضافة البيانات داخل المملكة؟ .26",
-    ])
+    text = "\n".join(
+        [
+            "ما هي المدة الزمنية المحددة؟ .25",
+            "Some English question 26.",
+            "هل يشترط استضافة البيانات داخل المملكة؟ .26",
+        ]
+    )
     repaired = documents.repair_rtl_numbering(text).splitlines()
     assert repaired[0].startswith("25. ")
     assert repaired[1] == "Some English question 26."

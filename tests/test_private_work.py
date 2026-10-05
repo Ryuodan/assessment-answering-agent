@@ -52,10 +52,16 @@ def _open(client, tmp_path, name="vendor.xlsx"):
     if not path.exists():
         shapes.simple(path)
     with open(path, "rb") as handle:
-        return client.post("/api/forms", files={"file": (
-            name, handle.read(),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )}).json()
+        return client.post(
+            "/api/forms",
+            files={
+                "file": (
+                    name,
+                    handle.read(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        ).json()
 
 
 # --- conversations ---------------------------------------------------------------------
@@ -77,9 +83,13 @@ def test_a_colleague_cannot_open_or_forget_your_conversation(team):
 
     assert bob.get(f"/api/chat/{mine.id}").status_code == 404
     assert bob.delete(f"/api/chat/{mine.id}").status_code == 404
-    assert bob.post("/api/chat", json={
-        "conversation_id": mine.id, "message": "carry on",
-    }).status_code in (404, 503), "nor continue it"
+    assert bob.post(
+        "/api/chat",
+        json={
+            "conversation_id": mine.id,
+            "message": "carry on",
+        },
+    ).status_code in (404, 503), "nor continue it"
 
     assert conversations.load(mine.id) is not None, "and none of that removed it"
     assert as_person(ALICE).get(f"/api/chat/{mine.id}").status_code == 200
@@ -144,6 +154,7 @@ def test_a_questionnaire_from_before_the_split_is_still_only_its_owners(team, tm
 
     from src import batches
     from src.forms.model import DetectedForm
+
     batches.create(a_person(ALICE), legacy, DetectedForm(source_name=name, format="docx"))
 
     assert [d["name"] for d in alice.get("/api/documents").json()["documents"]] == [name]
@@ -164,16 +175,23 @@ def test_an_upload_lands_in_the_uploaders_own_folder(team, tmp_path):
 
 
 def _a_run(email: str, run_id: str) -> None:
-    runs.save(a_person(email), AssessmentResult(
-        run_id=run_id,
-        source_name="Vendor Review.xlsx",
-        language="en",
-        questions_found=1,
-        answers=[AnsweredQuestion(
-            question=Question(id="1", text="Do you encrypt backups?"),
-            answer="Yes.", confidence=0.9, needs_review=False,
-        )],
-    ))
+    runs.save(
+        a_person(email),
+        AssessmentResult(
+            run_id=run_id,
+            source_name="Vendor Review.xlsx",
+            language="en",
+            questions_found=1,
+            answers=[
+                AnsweredQuestion(
+                    question=Question(id="1", text="Do you encrypt backups?"),
+                    answer="Yes.",
+                    confidence=0.9,
+                    needs_review=False,
+                )
+            ],
+        ),
+    )
 
 
 def test_a_run_is_listed_and_opened_only_by_the_person_who_ran_it(team):
@@ -194,9 +212,13 @@ def test_the_knowledge_base_and_the_answer_memory_are_still_the_teams(team, memo
     """The point of the split is the files and the conversations. What this
     organisation says, and the policies it says it from, are the team's."""
     alice, bob = as_person(ALICE), as_person(BOB)
-    added = alice.post("/api/memory", json={
-        "question": "Do you encrypt backups?", "answer": "Yes, with AES-256.",
-    }).json()
+    added = alice.post(
+        "/api/memory",
+        json={
+            "question": "Do you encrypt backups?",
+            "answer": "Yes, with AES-256.",
+        },
+    ).json()
 
     listed = bob.get("/api/memory").json()["entries"]
 

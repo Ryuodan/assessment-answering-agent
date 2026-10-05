@@ -59,7 +59,8 @@ def answers_yes(monkeypatch):
             AnsweredQuestion(
                 question=question,
                 answer="Yes. Access rights are reviewed every quarter.",
-                confidence=0.9, needs_review=False,
+                confidence=0.9,
+                needs_review=False,
             )
             for question in questions
         ]
@@ -76,10 +77,16 @@ def _open(client, tmp_path, name="vendor.xlsx"):
     if not path.exists():
         shapes.simple(path)
     with open(path, "rb") as handle:
-        return client.post("/api/forms", files={"file": (
-            name, handle.read(),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )}).json()
+        return client.post(
+            "/api/forms",
+            files={
+                "file": (
+                    name,
+                    handle.read(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        ).json()
 
 
 # --- the questionnaire is the uploader's -------------------------------------
@@ -112,9 +119,7 @@ def test_another_team_cannot_see_it_at_all(team, tmp_path, answers_yes):
     assert carol.post(f"/api/forms/{batch_id}/fill").status_code == 400
 
 
-def test_what_one_person_approves_reaches_the_whole_team(
-    team, tmp_path, answers_yes, memory_index
-):
+def test_what_one_person_approves_reaches_the_whole_team(team, tmp_path, answers_yes, memory_index):
     """The questionnaire is Alice's. What she settles about how this
     organisation answers is the team's, and it carries her name."""
     alice, bob = as_person(ALICE), as_person(BOB)
@@ -122,10 +127,13 @@ def test_what_one_person_approves_reaches_the_whole_team(
     alice.post(f"/api/forms/{batch_id}/answer", json={"scope": {}})
 
     question_id = alice.get(f"/api/forms/{batch_id}").json()["questions"][0]["id"]
-    alice.post(f"/api/forms/{batch_id}/answers", json={
-        "question_id": question_id,
-        "text": "Yes. Access rights are reviewed quarterly by the system owner.",
-    })
+    alice.post(
+        f"/api/forms/{batch_id}/answers",
+        json={
+            "question_id": question_id,
+            "text": "Yes. Access rights are reviewed quarterly by the system owner.",
+        },
+    )
     approved = alice.post(f"/api/forms/{batch_id}/approve", json={"question_id": question_id}).json()
 
     hers = alice.get(f"/api/forms/{batch_id}").json()["questions"][0]
@@ -144,9 +152,13 @@ def test_what_one_person_approves_reaches_the_whole_team(
 
 def test_the_answer_memory_is_the_teams_not_one_persons(team, tmp_path, answers_yes, memory_index):
     alice, bob = as_person(ALICE), as_person(BOB)
-    added = alice.post("/api/memory", json={
-        "question": "Do you encrypt backups?", "answer": "Yes, with AES-256.",
-    }).json()
+    added = alice.post(
+        "/api/memory",
+        json={
+            "question": "Do you encrypt backups?",
+            "answer": "Yes, with AES-256.",
+        },
+    ).json()
 
     listed = bob.get("/api/memory").json()["entries"]
 
@@ -155,15 +167,19 @@ def test_the_answer_memory_is_the_teams_not_one_persons(team, tmp_path, answers_
 
     # And either of them may correct or retire it: this is a team's record of
     # what the team says, not a pile of personal notes.
-    assert bob.patch(f"/api/memory/{added['entry_id']}", json={
-        "answer": "Yes, with AES-256 at rest and in transit.",
-    }).status_code == 200
+    assert (
+        bob.patch(
+            f"/api/memory/{added['entry_id']}",
+            json={
+                "answer": "Yes, with AES-256 at rest and in transit.",
+            },
+        ).status_code
+        == 200
+    )
     assert "in transit" in alice.get("/api/memory").json()["entries"][0]["answer"]
 
 
-def test_a_disagreement_is_raised_once_and_settled_by_whoever_gets_there_first(
-    team, memory_index
-):
+def test_a_disagreement_is_raised_once_and_settled_by_whoever_gets_there_first(team, memory_index):
     alice, bob = as_person(ALICE), as_person(BOB)
     first = answer_memory.record("Do you run drills?", "Yes, annually.")
     second = answer_memory.record("Do you run drills?", "No, not yet.")
@@ -172,9 +188,14 @@ def test_a_disagreement_is_raised_once_and_settled_by_whoever_gets_there_first(
     assert len(alice.get("/api/memory/conflicts").json()["conflicts"]) == 1
     assert len(bob.get("/api/memory/conflicts").json()["conflicts"]) == 1
 
-    bob.post("/api/memory/conflicts/resolve", json={
-        "entry_id": first.entry_id, "other_id": second.entry_id, "resolution": "keep_this",
-    })
+    bob.post(
+        "/api/memory/conflicts/resolve",
+        json={
+            "entry_id": first.entry_id,
+            "other_id": second.entry_id,
+            "resolution": "keep_this",
+        },
+    )
 
     assert alice.get("/api/memory/conflicts").json()["conflicts"] == [], "settled for both"
     assert answer_memory.conflicts(open_only=False)[0].resolved_by == BOB
@@ -220,7 +241,9 @@ def test_who_changed_the_corpus_is_recorded(team, tmp_path, monkeypatch):
 
     async def indexed(path, source_type, authority="ours", team_id=None):
         return IngestResult(
-            source_name=path.name, source_type=source_type, chunks_indexed=12,
+            source_name=path.name,
+            source_type=source_type,
+            chunks_indexed=12,
         )
 
     monkeypatch.setattr("src.api.service.ingest", indexed)
@@ -257,10 +280,16 @@ def test_two_different_files_with_one_name_do_not_overwrite_each_other(team, tmp
     mine = _open(alice, tmp_path / "a", "Vendor Questionnaire.xlsx")
     other = shapes.legend_sheet(tmp_path / "b" / "Vendor Questionnaire.xlsx")
     with open(other, "rb") as handle:
-        alice.post("/api/forms", files={"file": (
-            "Vendor Questionnaire.xlsx", handle.read(),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )})
+        alice.post(
+            "/api/forms",
+            files={
+                "file": (
+                    "Vendor Questionnaire.xlsx",
+                    handle.read(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
 
     still = alice.get(f"/api/forms/{mine['id']}").json()
     assert [q["text"] for q in still["questions"]] == [q["text"] for q in mine["questions"]]
@@ -292,9 +321,7 @@ def test_the_same_file_twice_is_the_same_file(team, tmp_path):
     assert len(list(kept)) == 1, "one file"
 
 
-def test_two_batches_over_one_questionnaire_fill_their_own_copies(
-    team, tmp_path, answers_yes
-):
+def test_two_batches_over_one_questionnaire_fill_their_own_copies(team, tmp_path, answers_yes):
     """One file opened twice: both get their own answers back, not whichever
     was written last."""
     alice = as_person(ALICE)
@@ -331,9 +358,13 @@ def test_every_step_is_attributable(team, tmp_path, answers_yes, memory_index):
     batch_id = _open(alice, tmp_path)["id"]
     alice.post(f"/api/forms/{batch_id}/answer", json={"scope": {}})
     question_id = alice.get(f"/api/forms/{batch_id}").json()["questions"][0]["id"]
-    alice.post(f"/api/forms/{batch_id}/answers", json={
-        "question_id": question_id, "text": "Yes, every quarter, owned by the CISO.",
-    })
+    alice.post(
+        f"/api/forms/{batch_id}/answers",
+        json={
+            "question_id": question_id,
+            "text": "Yes, every quarter, owned by the CISO.",
+        },
+    )
     alice.post(f"/api/forms/{batch_id}/approve", json={"question_id": question_id})
 
     log = events.recent(settings.default_team, limit=50)

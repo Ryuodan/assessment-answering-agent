@@ -50,8 +50,7 @@ from dataclasses import dataclass, field
 # RLM is not whitespace, so a leading one defeats every `^\s*` anchor here and
 # silently disables clause detection for Arabic while English keeps working.
 _BIDI_CONTROLS = dict.fromkeys(
-    [0x200E, 0x200F, 0x061C, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
-     0x2066, 0x2067, 0x2068, 0x2069],
+    [0x200E, 0x200F, 0x061C, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069],
     None,
 )
 
@@ -96,9 +95,7 @@ _NUMBER = r"\d+(?:[.\u066b]\d+){0,7}"
 # Three ways a line can open with a clause identifier.
 _CLAUSE_PATTERNS = (
     # Multi-level: "7.2.1", "**7.2.1**", "7.2.1)" — unambiguous on its own.
-    re.compile(
-        rf"^\s*(?:[-*\u2022]\s+)?{_EMPHASIS}?(\d+(?:[.\u066b]\d+){{1,7}}){_EMPHASIS}?[.)\-\u2013]?\s+(?=\S)"
-    ),
+    re.compile(rf"^\s*(?:[-*\u2022]\s+)?{_EMPHASIS}?(\d+(?:[.\u066b]\d+){{1,7}}){_EMPHASIS}?[.)\-\u2013]?\s+(?=\S)"),
     # Keyword- or section-sign-prefixed: "Article 7", "§7.2", "البند ٧".
     re.compile(
         rf"^\s*(?:[-*\u2022]\s+)?{_EMPHASIS}?(?:{_CLAUSE_WORD}\s+|\u00a7\s*){_EMPHASIS}?({_NUMBER})"
@@ -354,10 +351,7 @@ def parse_blocks(text: str) -> list[Block]:
     # Dropped before parsing rather than after: the placeholder is always
     # alone on its line and always followed by a blank one, so removing the
     # line outright cannot merge or split a paragraph.
-    lines = [
-        line for line in strip_bidi(text).splitlines()
-        if not _IMAGE_PLACEHOLDER.match(line)
-    ]
+    lines = [line for line in strip_bidi(text).splitlines() if not _IMAGE_PLACEHOLDER.match(line)]
     total = len(lines)
     trailing = _uses_trailing_clauses(lines)
     blocks: list[Block] = []
@@ -408,9 +402,7 @@ def parse_blocks(text: str) -> list[Block]:
         if heading_match:
             flush()
             title = heading_match.group(2).strip()
-            blocks.append(
-                Block("heading", [line], len(heading_match.group(1)), match_heading_clause(title), page)
-            )
+            blocks.append(Block("heading", [line], len(heading_match.group(1)), match_heading_clause(title), page))
             index += 1
             continue
 
@@ -818,12 +810,9 @@ def _split_table(block: Block, budget: int) -> list[list[Block]]:
     # whole section, and it produced 9,000-character chunks. There is no
     # structure to preserve, so wrap the text and keep no header.
     if header_length > budget:
-        return [
-            [Block("table", [piece], 0, block.clause, block.page)]
-            for piece in _hard_wrap(block.text, budget)
-        ]
+        return [[Block("table", [piece], 0, block.clause, block.page)] for piece in _hard_wrap(block.text, budget)]
 
-    rows = [line for line in block.lines if line.strip()][len(header):]
+    rows = [line for line in block.lines if line.strip()][len(header) :]
     # A single row can also exceed the budget on its own — one cell holding a
     # paragraph. Break those down first, so the packing below is working with
     # rows that can actually fit beneath the repeated header.
@@ -836,18 +825,32 @@ def _split_table(block: Block, budget: int) -> list[list[Block]]:
     used = 0
     for row in rows:
         if current and used + len(row) + 1 > room:
-            pieces.append([Block(
-                "table", header + current, 0,
-                _table_clause_range(current)[0] or block.clause, block.page,
-            )])
+            pieces.append(
+                [
+                    Block(
+                        "table",
+                        header + current,
+                        0,
+                        _table_clause_range(current)[0] or block.clause,
+                        block.page,
+                    )
+                ]
+            )
             current, used = [], 0
         current.append(row)
         used += len(row) + 1
     if current:
-        pieces.append([Block(
-            "table", header + current, 0,
-            _table_clause_range(current)[0] or block.clause, block.page,
-        )])
+        pieces.append(
+            [
+                Block(
+                    "table",
+                    header + current,
+                    0,
+                    _table_clause_range(current)[0] or block.clause,
+                    block.page,
+                )
+            ]
+        )
     return pieces or [[block]]
 
 
@@ -1059,8 +1062,10 @@ def chunk_document(text: str, *, source_name: str = "", chunk_size: int = 1800) 
             # alone would cite the first of nine and look precise doing it.
             row_controls = [
                 control
-                for block in group if block.kind == "table"
-                for control in map(row_control_id, block.lines) if control
+                for block in group
+                if block.kind == "table"
+                for control in map(row_control_id, block.lines)
+                if control
             ]
             # When the rows label themselves those labels are the whole answer.
             # A section heading sharing the group would otherwise widen the

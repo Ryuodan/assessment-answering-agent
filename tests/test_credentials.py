@@ -35,7 +35,7 @@ def test_the_shipped_parameters_are_the_interactive_ones():
     }
     assert shipped["SCRYPT_N"] == 2**14
     assert shipped["SCRYPT_R"] == 8
-    assert 128 * (2 ** 14) * 8 < credentials.SCRYPT_MAXMEM, (
+    assert 128 * (2**14) * 8 < credentials.SCRYPT_MAXMEM, (
         "maxmem must leave room for the parameters, or OpenSSL refuses outright"
     )
 
@@ -80,9 +80,9 @@ def test_the_hash_carries_its_parameters():
 
 def test_a_hash_made_at_another_cost_still_verifies(monkeypatch):
     """What makes raising the cost later safe."""
-    monkeypatch.setattr(credentials, "SCRYPT_N", 2 ** 9)
+    monkeypatch.setattr(credentials, "SCRYPT_N", 2**9)
     stored = credentials.hash_secret("a-shared-access-code")
-    monkeypatch.setattr(credentials, "SCRYPT_N", 2 ** 10)
+    monkeypatch.setattr(credentials, "SCRYPT_N", 2**10)
     assert credentials.verify_secret("a-shared-access-code", stored)
 
 

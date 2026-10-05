@@ -88,7 +88,7 @@ def cheap_scrypt(monkeypatch):
     The one thing this must not do is hide a change to the real defaults, so
     `test_credentials.py` asserts those separately.
     """
-    monkeypatch.setattr(credentials, "SCRYPT_N", 2 ** 8)
+    monkeypatch.setattr(credentials, "SCRYPT_N", 2**8)
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -102,8 +102,7 @@ def _no_tracing_in_tests():
     are the ones that would actually send, and they are exactly the ones whose
     traces would be least useful.
     """
-    saved = {name: os.environ.pop(name, None)
-             for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2")}
+    saved = {name: os.environ.pop(name, None) for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2")}
     # Phoenix is handled at the top of this file, before `src.config` is
     # imported: by the time a fixture runs, its instrumentation would already
     # have been installed.
@@ -154,6 +153,7 @@ def bare_store(fake) -> KnowledgeStore:
     store._reset_caches()
     return store
 
+
 RLM = "\u200f"
 
 
@@ -181,9 +181,7 @@ class FakeVectorStore:
 
     def stage(self, *, chunk_indexes: list[int], score: float = 0.7) -> None:
         by_chunk = {record["metadata"]["chunk"]: record for record in self.records}
-        self._staged = [
-            (FakeDocument(by_chunk[i]["text"], by_chunk[i]["metadata"]), score) for i in chunk_indexes
-        ]
+        self._staged = [(FakeDocument(by_chunk[i]["text"], by_chunk[i]["metadata"]), score) for i in chunk_indexes]
 
     async def asimilarity_search_with_relevance_scores(self, query, k, filter=None):
         return self._staged[:k]
@@ -205,11 +203,13 @@ class FakeVectorStore:
     def add_documents(self, documents, ids=None):
         """Chroma's write path, so the ingestion routes can be exercised."""
         for index, document in enumerate(documents):
-            self.records.append({
-                "text": document.page_content,
-                "metadata": dict(document.metadata),
-                "id": (ids or [])[index] if ids and index < len(ids) else "",
-            })
+            self.records.append(
+                {
+                    "text": document.page_content,
+                    "metadata": dict(document.metadata),
+                    "id": (ids or [])[index] if ids and index < len(ids) else "",
+                }
+            )
         return ids or []
 
     def reset_collection(self):
@@ -228,11 +228,7 @@ class FakeVectorStore:
         self.records = [
             record
             for record in self.records
-            if not all(
-                record["metadata"].get(key) == value
-                for clause in clauses
-                for key, value in clause.items()
-            )
+            if not all(record["metadata"].get(key) == value for clause in clauses for key, value in clause.items())
         ]
 
     def get(self, where=None, include=None):
@@ -242,11 +238,7 @@ class FakeVectorStore:
         matched = [
             record
             for record in self.records
-            if all(
-                record["metadata"].get(key) == value
-                for clause in clauses
-                for key, value in clause.items()
-            )
+            if all(record["metadata"].get(key) == value for clause in clauses for key, value in clause.items())
         ]
         return {
             "ids": [record.get("id", "") for record in matched],
@@ -333,6 +325,7 @@ def series_doc() -> str:
 def arabic_doc() -> str:
     return ARABIC_DOC
 
+
 @pytest.fixture
 def expansion_uncapped(monkeypatch):
     """Lift the parts cap for tests that exercise expansion itself.
@@ -342,6 +335,7 @@ def expansion_uncapped(monkeypatch):
     exists to stop. Capping is covered by its own tests.
     """
     from src.config import settings
+
     monkeypatch.setattr(settings, "max_expanded_parts", 99)
 
 

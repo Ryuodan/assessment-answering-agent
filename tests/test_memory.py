@@ -27,7 +27,7 @@ def test_a_verdict_is_read_from_the_opening_word_only():
 
 
 def test_an_answer_with_no_verdict_has_none():
-    """"The retention period is twelve months" is an answer and not a yes."""
+    """ "The retention period is twelve months" is an answer and not a yes."""
     assert verdict_of("The retention period is twelve months.") == ""
     assert verdict_of("") == ""
 
@@ -83,7 +83,9 @@ def test_two_undated_answers_that_disagree_need_a_person():
     Privacy and Data Officer" and "we do not have a DPO, but it falls under the
     Cybersecurity team" for the same question.
     """
-    finding = compare(entry("a", "Yes — under Data Privacy"), entry("b", "No, it falls under Cybersecurity"), same_question=True)
+    finding = compare(
+        entry("a", "Yes — under Data Privacy"), entry("b", "No, it falls under Cybersecurity"), same_question=True
+    )
     assert finding.kind == "conflict"
     assert finding.needs_a_person
 

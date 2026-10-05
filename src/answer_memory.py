@@ -108,9 +108,13 @@ class Conflict:
 
 def _conflict(row) -> Conflict:
     return Conflict(
-        entry_id=row["entry_id"], other_id=row["other_id"], because=row["because"],
-        raised_at=row["raised_at"], resolved_at=row["resolved_at"],
-        resolved_by=row["resolved_by"], resolution=row["resolution"],
+        entry_id=row["entry_id"],
+        other_id=row["other_id"],
+        because=row["because"],
+        raised_at=row["raised_at"],
+        resolved_at=row["resolved_at"],
+        resolved_by=row["resolved_by"],
+        resolution=row["resolution"],
     )
 
 
@@ -140,10 +144,14 @@ def entry_id_of(metadata: dict) -> str:
 
 
 def get(entry_id: str, team_id: str | None = None) -> Entry | None:
-    row = store.connect().execute(
-        "SELECT * FROM memory_entries WHERE team_id = ? AND entry_id = ?",
-        (_team(team_id), entry_id),
-    ).fetchone()
+    row = (
+        store.connect()
+        .execute(
+            "SELECT * FROM memory_entries WHERE team_id = ? AND entry_id = ?",
+            (_team(team_id), entry_id),
+        )
+        .fetchone()
+    )
     return _entry(row) if row else None
 
 
@@ -181,24 +189,29 @@ def entries(
     team = _team(team_id)
     ensure_synced(team)
     clause, params = _matching(query, standing, origin, team)
-    rows = store.connect().execute(
-        f"SELECT * FROM memory_entries WHERE {clause} "
-        "ORDER BY updated_at DESC, rowid DESC LIMIT ? OFFSET ?",
-        (*params, limit, offset),
-    ).fetchall()
+    rows = (
+        store.connect()
+        .execute(
+            f"SELECT * FROM memory_entries WHERE {clause} ORDER BY updated_at DESC, rowid DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        )
+        .fetchall()
+    )
     return [_entry(row) for row in rows]
 
 
 def count(
-    *, query: str = "", standing: bool | None = None, origin: str = "", team_id: str | None = None,
+    *,
+    query: str = "",
+    standing: bool | None = None,
+    origin: str = "",
+    team_id: str | None = None,
 ) -> int:
     """How many entries match, for a page that has to say "showing 100 of 812"."""
     team = _team(team_id)
     ensure_synced(team)
     clause, params = _matching(query, standing, origin, team)
-    return store.connect().execute(
-        f"SELECT COUNT(*) FROM memory_entries WHERE {clause}", params
-    ).fetchone()[0]
+    return store.connect().execute(f"SELECT COUNT(*) FROM memory_entries WHERE {clause}", params).fetchone()[0]
 
 
 def ids_from_batch(batch_id: str, team_id: str | None = None) -> set[str]:
@@ -210,14 +223,18 @@ def ids_from_batch(batch_id: str, team_id: str | None = None) -> set[str]:
     not a page load.
     """
     prefix = f"approved::{batch_id}::"
-    rows = store.connect().execute(
-        # Every approved entry, filtered here rather than by a LIKE pattern: an
-        # id is built from a question id, which is the questionnaire's own text
-        # and can hold anything, including the two characters LIKE treats as
-        # wildcards.
-        "SELECT entry_id FROM memory_entries WHERE team_id = ? AND origin = 'approved'",
-        (_team(team_id),),
-    ).fetchall()
+    rows = (
+        store.connect()
+        .execute(
+            # Every approved entry, filtered here rather than by a LIKE pattern: an
+            # id is built from a question id, which is the questionnaire's own text
+            # and can hold anything, including the two characters LIKE treats as
+            # wildcards.
+            "SELECT entry_id FROM memory_entries WHERE team_id = ? AND origin = 'approved'",
+            (_team(team_id),),
+        )
+        .fetchall()
+    )
     return {row["entry_id"] for row in rows if row["entry_id"].startswith(prefix)}
 
 
@@ -228,20 +245,28 @@ def superseded_ids(team_id: str | None = None) -> set[str]:
     an answer that stopped being retrieved for no reason anybody could see.
     """
     team = _team(team_id)
-    rows = store.connect().execute(
-        "SELECT entry_id FROM memory_entries WHERE team_id = ? AND superseded_by != '' "
-        "AND superseded_by IN (SELECT entry_id FROM memory_entries WHERE team_id = ?)",
-        (team, team),
-    ).fetchall()
+    rows = (
+        store.connect()
+        .execute(
+            "SELECT entry_id FROM memory_entries WHERE team_id = ? AND superseded_by != '' "
+            "AND superseded_by IN (SELECT entry_id FROM memory_entries WHERE team_id = ?)",
+            (team, team),
+        )
+        .fetchall()
+    )
     return {row["entry_id"] for row in rows}
 
 
 def conflicts(*, open_only: bool = True, team_id: str | None = None) -> list[Conflict]:
     clause = " AND resolved_at = ''" if open_only else ""
-    rows = store.connect().execute(
-        f"SELECT * FROM memory_conflicts WHERE team_id = ?{clause} ORDER BY raised_at DESC",
-        (_team(team_id),),
-    ).fetchall()
+    rows = (
+        store.connect()
+        .execute(
+            f"SELECT * FROM memory_conflicts WHERE team_id = ?{clause} ORDER BY raised_at DESC",
+            (_team(team_id),),
+        )
+        .fetchall()
+    )
     return [_conflict(row) for row in rows]
 
 
@@ -249,9 +274,7 @@ def stats(team_id: str | None = None) -> dict:
     team = _team(team_id)
     ensure_synced(team)
     conn = store.connect()
-    total = conn.execute(
-        "SELECT COUNT(*) FROM memory_entries WHERE team_id = ?", (team,)
-    ).fetchone()[0]
+    total = conn.execute("SELECT COUNT(*) FROM memory_entries WHERE team_id = ?", (team,)).fetchone()[0]
     superseded = conn.execute(
         "SELECT COUNT(*) FROM memory_entries WHERE team_id = ? AND superseded_by != ''", (team,)
     ).fetchone()[0]
@@ -285,17 +308,23 @@ def pending(*, limit: int = 25, team_id: str | None = None) -> list[Entry]:
     those -- the findings name the other entry's question.
     """
     if team_id:
-        rows = store.connect().execute(
-            "SELECT * FROM memory_entries WHERE team_id = ? AND scanned_at = '' "
-            "ORDER BY created_at LIMIT ?",
-            (team_id, limit),
-        ).fetchall()
+        rows = (
+            store.connect()
+            .execute(
+                "SELECT * FROM memory_entries WHERE team_id = ? AND scanned_at = '' ORDER BY created_at LIMIT ?",
+                (team_id, limit),
+            )
+            .fetchall()
+        )
     else:
-        rows = store.connect().execute(
-            "SELECT * FROM memory_entries WHERE scanned_at = '' "
-            "ORDER BY created_at LIMIT ?",
-            (limit,),
-        ).fetchall()
+        rows = (
+            store.connect()
+            .execute(
+                "SELECT * FROM memory_entries WHERE scanned_at = '' ORDER BY created_at LIMIT ?",
+                (limit,),
+            )
+            .fetchall()
+        )
     return [_entry(row) for row in rows]
 
 
@@ -342,8 +371,20 @@ def record(
         "(entry_id, team_id, question, answer, section, from_file, origin, "
         " approved_by, approved_on, created_at, updated_at, scanned_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (entry_id, team, question, answer, section, from_file, origin,
-         approved_by, approved_on, now, now, now if scanned else ""),
+        (
+            entry_id,
+            team,
+            question,
+            answer,
+            section,
+            from_file,
+            origin,
+            approved_by,
+            approved_on,
+            now,
+            now,
+            now if scanned else "",
+        ),
     )
     store.connect().commit()
 
@@ -379,8 +420,7 @@ def adopt_file(source_name: str, pairs, *, team_id: str = "") -> list[Entry]:
             "(entry_id, team_id, question, answer, section, from_file, origin, "
             " created_at, updated_at, scanned_at) "
             "VALUES (?,?,?,?,?,?,'import',?,?,'')",
-            (entry_id, team, question, answer, getattr(pair, "section", "") or "",
-             source_name, now, now),
+            (entry_id, team, question, answer, getattr(pair, "section", "") or "", source_name, now, now),
         )
     placeholders = ",".join("?" for _ in keep) or "''"
     conn.execute(
@@ -393,7 +433,10 @@ def adopt_file(source_name: str, pairs, *, team_id: str = "") -> list[Entry]:
 
 
 def update(
-    entry_id: str, *, question: str | None = None, answer: str | None = None,
+    entry_id: str,
+    *,
+    question: str | None = None,
+    answer: str | None = None,
     team_id: str | None = None,
 ) -> Entry | None:
     """Correct a remembered answer in place, and re-index it.
@@ -432,9 +475,7 @@ def remove(entry_id: str, team_id: str | None = None) -> bool:
     """
     team = _team(team_id)
     conn = store.connect()
-    deleted = conn.execute(
-        "DELETE FROM memory_entries WHERE team_id = ? AND entry_id = ?", (team, entry_id)
-    ).rowcount
+    deleted = conn.execute("DELETE FROM memory_entries WHERE team_id = ? AND entry_id = ?", (team, entry_id)).rowcount
     conn.execute(
         "DELETE FROM memory_conflicts WHERE team_id = ? AND (entry_id = ? OR other_id = ?)",
         (team, entry_id, entry_id),
@@ -530,7 +571,12 @@ RESOLUTIONS = ("keep_this", "keep_other", "keep_both")
 
 
 def apply_resolution(
-    entry_id: str, other_id: str, *, resolution: str, by: str, team_id: str | None = None,
+    entry_id: str,
+    other_id: str,
+    *,
+    resolution: str,
+    by: str,
+    team_id: str | None = None,
 ) -> None:
     """Do what the reviewer decided, and close the disagreement.
 
@@ -551,7 +597,12 @@ def apply_resolution(
 
 
 def resolve_conflict(
-    entry_id: str, other_id: str, *, by: str, resolution: str, team_id: str | None = None,
+    entry_id: str,
+    other_id: str,
+    *,
+    by: str,
+    resolution: str,
+    team_id: str | None = None,
 ) -> None:
     """Close a disagreement.
 
@@ -644,12 +695,16 @@ def ensure_synced(team_id: str | None = None) -> None:
     # Put back anything marked replaced by an entry that no longer exists --
     # left by a sweep that finished after its entry was withdrawn, before
     # `supersede` checked. Once per process, like the adoption below.
-    repaired = store.connect().execute(
-        "UPDATE memory_entries SET superseded_by = '', superseded_on = '', because = '' "
-        "WHERE team_id = ? AND superseded_by != '' "
-        "AND superseded_by NOT IN (SELECT entry_id FROM memory_entries WHERE team_id = ?)",
-        (team, team),
-    ).rowcount
+    repaired = (
+        store.connect()
+        .execute(
+            "UPDATE memory_entries SET superseded_by = '', superseded_on = '', because = '' "
+            "WHERE team_id = ? AND superseded_by != '' "
+            "AND superseded_by NOT IN (SELECT entry_id FROM memory_entries WHERE team_id = ?)",
+            (team, team),
+        )
+        .rowcount
+    )
     store.connect().commit()
     if repaired:
         logger.warning("Answer memory: %d answer(s) were replaced by nothing; restored", repaired)
@@ -663,9 +718,7 @@ def ensure_synced(team_id: str | None = None) -> None:
         return
 
     conn = store.connect()
-    known = {row["entry_id"] for row in conn.execute(
-        "SELECT entry_id FROM memory_entries WHERE team_id = ?", (team,)
-    )}
+    known = {row["entry_id"] for row in conn.execute("SELECT entry_id FROM memory_entries WHERE team_id = ?", (team,))}
     now = store.utcnow()
     added = 0
     for metadata in found:
@@ -681,17 +734,25 @@ def ensure_synced(team_id: str | None = None) -> None:
             "(entry_id, team_id, question, answer, section, from_file, origin, approved_by, "
             " approved_on, created_at, updated_at, scanned_at) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (entry_id, team, question, answer, str(metadata.get("section") or ""),
-             # The questionnaire this answer was actually given in, which is not
-             # always the name it was indexed under: the bulk import filed 698
-             # answers from eleven different questionnaires under one synthetic
-             # source, and it is the real one that says whether two answers are
-             # two customers being told different things or one form's own rows.
-             str(metadata.get("from_file") or metadata.get("source_name") or ""),
-             origin if origin in ORIGINS else "import",
-             str(metadata.get("approved_by") or ""),
-             str(metadata.get("answered_date") or metadata.get("answered_on") or ""),
-             now, now, now),
+            (
+                entry_id,
+                team,
+                question,
+                answer,
+                str(metadata.get("section") or ""),
+                # The questionnaire this answer was actually given in, which is not
+                # always the name it was indexed under: the bulk import filed 698
+                # answers from eleven different questionnaires under one synthetic
+                # source, and it is the real one that says whether two answers are
+                # two customers being told different things or one form's own rows.
+                str(metadata.get("from_file") or metadata.get("source_name") or ""),
+                origin if origin in ORIGINS else "import",
+                str(metadata.get("approved_by") or ""),
+                str(metadata.get("answered_date") or metadata.get("answered_on") or ""),
+                now,
+                now,
+                now,
+            ),
         )
         added += 1
     conn.commit()
@@ -723,14 +784,14 @@ async def _same_question(question: str, candidates: list[Entry]) -> list[Entry]:
     from src.models import SameQuestions
     from src.prompts import SAME_QUESTION_SYSTEM, SAME_QUESTION_USER
 
-    listed = "\n".join(
-        f"{n}. {candidate.question}" for n, candidate in enumerate(candidates, start=1)
-    )
+    listed = "\n".join(f"{n}. {candidate.question}" for n, candidate in enumerate(candidates, start=1))
     try:
-        verdict = await structured_llm(SameQuestions, temperature=0.0).ainvoke([
-            ("system", SAME_QUESTION_SYSTEM),
-            ("user", SAME_QUESTION_USER.format(question=question, candidates=listed)),
-        ])
+        verdict = await structured_llm(SameQuestions, temperature=0.0).ainvoke(
+            [
+                ("system", SAME_QUESTION_SYSTEM),
+                ("user", SAME_QUESTION_USER.format(question=question, candidates=listed)),
+            ]
+        )
     except Exception as error:  # noqa: BLE001 - re-raised unless it is the empty answer
         if not tool_use_failed(error):
             raise
@@ -740,9 +801,7 @@ async def _same_question(question: str, candidates: list[Entry]) -> list[Entry]:
         # chosen for looking alike rather than for being alike.
         logger.warning("Same-question check returned prose rather than a call; reading it as none")
         return []
-    return [
-        candidates[n - 1] for n in dict.fromkeys(verdict.same) if 1 <= n <= len(candidates)
-    ]
+    return [candidates[n - 1] for n in dict.fromkeys(verdict.same) if 1 <= n <= len(candidates)]
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -770,11 +829,7 @@ async def _close_questions(question: str, candidates: list[Entry]) -> list[Entry
         [question[:900]] + [candidate.question[:900] for candidate in candidates]
     )
     mine, theirs = vectors[0], vectors[1:]
-    return [
-        candidate
-        for candidate, vector in zip(candidates, theirs)
-        if _cosine(mine, vector) >= memory.PROPOSE
-    ]
+    return [candidate for candidate, vector in zip(candidates, theirs) if _cosine(mine, vector) >= memory.PROPOSE]
 
 
 async def scan(entry: Entry, *, k: int = 8) -> list[Finding]:
@@ -800,11 +855,7 @@ async def scan(entry: Entry, *, k: int = 8) -> list[Finding]:
             continue
         if not other.stands:
             continue  # already replaced; it is history, not a second opinion
-        if (
-            entry.origin == "import" == other.origin
-            and entry.from_file
-            and entry.from_file == other.from_file
-        ):
+        if entry.origin == "import" == other.origin and entry.from_file and entry.from_file == other.from_file:
             # One questionnaire, filled in by one person on one day. Two rows in
             # it that look alike are two related controls, or the extractor
             # reading one row twice -- not the organisation contradicting
@@ -834,7 +885,10 @@ async def scan(entry: Entry, *, k: int = 8) -> list[Finding]:
 
 
 async def scan_pending(
-    *, limit: int = 25, concurrency: int = 4, team_id: str | None = None,
+    *,
+    limit: int = 25,
+    concurrency: int = 4,
+    team_id: str | None = None,
 ) -> list[Finding]:
     """Compare everything that has arrived since the last scan.
 

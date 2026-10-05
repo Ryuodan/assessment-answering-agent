@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 def _batches(evidence: list[Evidence], size: int) -> list[list[tuple[int, Evidence]]]:
     numbered = list(enumerate(evidence))
-    return [numbered[start: start + size] for start in range(0, len(numbered), size)]
+    return [numbered[start : start + size] for start in range(0, len(numbered), size)]
 
 
 def _excerpt(index: int, item: Evidence, limit: int) -> str:
@@ -51,15 +51,15 @@ def _excerpt(index: int, item: Evidence, limit: int) -> str:
 
 async def _grade_batch(question: str, batch: list[tuple[int, Evidence]]) -> dict[int, bool]:
     """Verdicts for one batch, keyed by the caller's index."""
-    excerpts = "\n\n".join(
-        _excerpt(index, item, settings.relevance_filter_snippet) for index, item in batch
-    )
+    excerpts = "\n\n".join(_excerpt(index, item, settings.relevance_filter_snippet) for index, item in batch)
     model = settings.relevance_filter_model or None
     chain = structured_llm(RelevanceVerdicts, temperature=0.0, model=model)
-    result = await chain.ainvoke([
-        ("system", RELEVANCE_SYSTEM),
-        ("human", RELEVANCE_USER.format(question=question, excerpts=excerpts)),
-    ])
+    result = await chain.ainvoke(
+        [
+            ("system", RELEVANCE_SYSTEM),
+            ("human", RELEVANCE_USER.format(question=question, excerpts=excerpts)),
+        ]
+    )
     return {v.id: v.relevant for v in result.verdicts}
 
 
@@ -75,9 +75,7 @@ async def filter_evidence(question: str, evidence: list[Evidence]) -> list[Evide
 
     batches = _batches(evidence, settings.relevance_filter_batch)
     try:
-        results = await asyncio.gather(
-            *(_grade_batch(question, batch) for batch in batches)
-        )
+        results = await asyncio.gather(*(_grade_batch(question, batch) for batch in batches))
     except Exception:  # noqa: BLE001 - ordering is an improvement, not a dependency
         logger.warning("Relevance grading failed; keeping retrieval order", exc_info=True)
         return evidence
@@ -93,13 +91,12 @@ async def filter_evidence(question: str, evidence: list[Evidence]) -> list[Evide
     def unit_of(item: Evidence) -> tuple:
         return (item.source_name, item.unit_id or f"chunk-{item.chunk}")
 
-    relevant_units = {
-        unit_of(item) for index, item in enumerate(evidence) if verdicts.get(index, True)
-    }
+    relevant_units = {unit_of(item) for index, item in enumerate(evidence) if verdicts.get(index, True)}
 
     # Ungraded chunks keep their place rather than being demoted: a verdict the
     # model omitted is missing information, not a negative one.
     keep = settings.relevance_filter_keep
+
     def survives(index: int, item: Evidence) -> bool:
         return index < keep or unit_of(item) in relevant_units
 
@@ -121,6 +118,8 @@ async def filter_evidence(question: str, evidence: list[Evidence]) -> list[Evide
 
     logger.debug(
         "Relevance filter: dropped %d of %d chunks in %d call(s)",
-        len(dropped), len(evidence), len(batches),
+        len(dropped),
+        len(evidence),
+        len(batches),
     )
     return kept

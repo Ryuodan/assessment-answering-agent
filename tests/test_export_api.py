@@ -20,19 +20,26 @@ def _payload(source_name: str = "vendor review.pdf", needs_review: bool = False)
         "source_name": source_name,
         "language": "en",
         "questions_found": 1,
-        "answers": [{
-            "question": {"id": "1", "text": "Do you encrypt data at rest?",
-                         "question_type": "free_text", "options": [], "language": "en"},
-            "answer": "Yes, AES-256 is applied.",
-            "rationale": "From the cryptography policy.",
-            "confidence": 0.9,
-            "needs_review": needs_review,
-            "review_reasons": [],
-            "confidence_reason": "",
-            "evidence": [],
-            "attempts": 1,
-            "citations": ["T2 - Cryptography Policy.pdf §3.5.1"],
-        }],
+        "answers": [
+            {
+                "question": {
+                    "id": "1",
+                    "text": "Do you encrypt data at rest?",
+                    "question_type": "free_text",
+                    "options": [],
+                    "language": "en",
+                },
+                "answer": "Yes, AES-256 is applied.",
+                "rationale": "From the cryptography policy.",
+                "confidence": 0.9,
+                "needs_review": needs_review,
+                "review_reasons": [],
+                "confidence_reason": "",
+                "evidence": [],
+                "attempts": 1,
+                "citations": ["T2 - Cryptography Policy.pdf §3.5.1"],
+            }
+        ],
     }
 
 
@@ -75,10 +82,13 @@ def test_an_export_of_an_arabic_assessment_succeeds(fmt):
     assert "filename*=UTF-8''" in response.headers["content-disposition"]
 
 
-@pytest.mark.parametrize(("fmt", "media_type"), [
-    ("pdf", "application/pdf"),
-    ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-])
+@pytest.mark.parametrize(
+    ("fmt", "media_type"),
+    [
+        ("pdf", "application/pdf"),
+        ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    ],
+)
 def test_each_format_is_served_with_its_own_media_type(fmt, media_type):
     with TestClient(app) as client:
         response = client.post(f"/api/assessments/export/{fmt}", json=_payload())
@@ -90,8 +100,7 @@ def test_each_format_is_served_with_its_own_media_type(fmt, media_type):
 @pytest.mark.parametrize("fmt", ["pdf", "docx"])
 def test_exporting_nothing_is_refused_with_an_explanation(fmt):
     with TestClient(app) as client:
-        response = client.post(
-            f"/api/assessments/export/{fmt}", json=_payload(needs_review=True))
+        response = client.post(f"/api/assessments/export/{fmt}", json=_payload(needs_review=True))
 
     assert response.status_code == 422
     assert "flagged for review" in response.json()["detail"]
@@ -100,8 +109,6 @@ def test_exporting_nothing_is_refused_with_an_explanation(fmt):
 @pytest.mark.parametrize("fmt", ["pdf", "docx"])
 def test_the_flagged_option_is_honoured_by_both_formats(fmt):
     with TestClient(app) as client:
-        response = client.post(
-            f"/api/assessments/export/{fmt}?include_flagged=true",
-            json=_payload(needs_review=True))
+        response = client.post(f"/api/assessments/export/{fmt}?include_flagged=true", json=_payload(needs_review=True))
 
     assert response.status_code == 200

@@ -191,6 +191,7 @@ def test_reasons_accumulate():
     _, _, reasons = assess("Per \u00a75.9.", cited, 0.9, **clean(grounded=False))
     assert len(reasons) == 3
 
+
 # --- completeness, judged on cited x retrieved -----------------------------
 
 
@@ -387,8 +388,13 @@ def test_the_explanation_avoids_internal_vocabulary():
 
 def _unit(part: int, parts: int, chunk: int = 0) -> Evidence:
     return Evidence(
-        source_type=SourceType.GUIDELINE, source_name="std.pdf", snippet="body",
-        unit_id="u1", part=part, parts=parts, chunk=chunk,
+        source_type=SourceType.GUIDELINE,
+        source_name="std.pdf",
+        snippet="body",
+        unit_id="u1",
+        part=part,
+        parts=parts,
+        chunk=chunk,
     )
 
 
@@ -412,8 +418,14 @@ def test_without_the_limit_the_old_behaviour_is_unchanged():
 def test_assess_passes_the_limit_through():
     cited = [_unit(part=7, parts=113)]
     confidence, review, reasons = assess(
-        "text", cited, 0.9, retrieved=cited, grounded=True,
-        review_threshold=0.6, incomplete_cap=0.5, completable_parts=6,
+        "text",
+        cited,
+        0.9,
+        retrieved=cited,
+        grounded=True,
+        review_threshold=0.6,
+        incomplete_cap=0.5,
+        completable_parts=6,
     )
     assert reasons == [] and review is False and confidence == 0.9
 
@@ -434,8 +446,13 @@ def prior(**overrides):
 def test_an_answer_citing_only_previous_answers_is_flagged():
     cited = [prior(), prior(snippet="another")]
     confidence, review, reasons = assess(
-        "All personal data is stored within the Kingdom.", cited, 0.9,
-        retrieved=cited, grounded=True, review_threshold=0.6, incomplete_cap=0.5,
+        "All personal data is stored within the Kingdom.",
+        cited,
+        0.9,
+        retrieved=cited,
+        grounded=True,
+        review_threshold=0.6,
+        incomplete_cap=0.5,
     )
 
     assert review is True
@@ -448,8 +465,13 @@ def test_one_policy_among_them_is_enough():
     questions, eighteen cited at least one policy."""
     cited = [prior(), ev()]
     _, review, reasons = assess(
-        "text", cited, 0.9, retrieved=cited, grounded=True,
-        review_threshold=0.6, incomplete_cap=0.5,
+        "text",
+        cited,
+        0.9,
+        retrieved=cited,
+        grounded=True,
+        review_threshold=0.6,
+        incomplete_cap=0.5,
     )
     assert reasons == [] and review is False
 

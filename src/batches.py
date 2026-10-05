@@ -63,14 +63,28 @@ def create(user: User, source: Path, form: DetectedForm) -> Batch:
              detected, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (batch_id, user.team_id, user.email, form.source_name, str(source),
-         form.format, form.model_dump_json(), now, now),
+        (
+            batch_id,
+            user.team_id,
+            user.email,
+            form.source_name,
+            str(source),
+            form.format,
+            form.model_dump_json(),
+            now,
+            now,
+        ),
     )
     conn.commit()
     return Batch(
-        id=batch_id, team_id=user.team_id, actor_email=user.email,
-        source_name=form.source_name, source_path=source, form=form,
-        created_at=now, updated_at=now,
+        id=batch_id,
+        team_id=user.team_id,
+        actor_email=user.email,
+        source_name=form.source_name,
+        source_path=source,
+        form=form,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -89,7 +103,10 @@ def _row_to_batch(row) -> Batch:
 
 
 def load(
-    batch_id: str, *, team_id: str | None = None, actor_email: str | None = None,
+    batch_id: str,
+    *,
+    team_id: str | None = None,
+    actor_email: str | None = None,
 ) -> Batch | None:
     """One batch, or None.
 
@@ -119,13 +136,17 @@ def claimed_sources(team_id: str) -> dict[str, str]:
     name, so two people can end up reading one file, and it belongs to whoever
     got there first rather than to both.
     """
-    rows = store.connect().execute(
-        """
+    rows = (
+        store.connect()
+        .execute(
+            """
         SELECT source_path, actor_email FROM form_batches
          WHERE team_id = ? ORDER BY created_at, rowid
         """,
-        (team_id,),
-    ).fetchall()
+            (team_id,),
+        )
+        .fetchall()
+    )
     claimed: dict[str, str] = {}
     for row in rows:
         claimed.setdefault(Path(row["source_path"]).name, row["actor_email"])
@@ -168,9 +189,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
     ]
 
 
-def save_answers(
-    batch_id: str, answers: list[AnsweredQuestion], *, edited_by: str = ""
-) -> None:
+def save_answers(batch_id: str, answers: list[AnsweredQuestion], *, edited_by: str = "") -> None:
     """Store answers, merging with whatever is already there.
 
     Upsert rather than replace: a person answers the unanswered ones, then
@@ -191,26 +210,16 @@ def save_answers(
                 edited_by   = excluded.edited_by,
                 payload     = excluded.payload
             """,
-            [
-                (batch_id, answer.question.id, now, edited_by, answer.model_dump_json())
-                for answer in answers
-            ],
+            [(batch_id, answer.question.id, now, edited_by, answer.model_dump_json()) for answer in answers],
         )
-        conn.execute(
-            "UPDATE form_batches SET updated_at = ? WHERE batch_id = ?", (now, batch_id)
-        )
+        conn.execute("UPDATE form_batches SET updated_at = ? WHERE batch_id = ?", (now, batch_id))
 
 
 def answers(batch_id: str) -> dict[str, AnsweredQuestion]:
     """Everything answered so far, by question id."""
     conn = store.connect()
-    rows = conn.execute(
-        "SELECT question_id, payload FROM batch_answers WHERE batch_id = ?", (batch_id,)
-    ).fetchall()
-    return {
-        row["question_id"]: AnsweredQuestion.model_validate_json(row["payload"])
-        for row in rows
-    }
+    rows = conn.execute("SELECT question_id, payload FROM batch_answers WHERE batch_id = ?", (batch_id,)).fetchall()
+    return {row["question_id"]: AnsweredQuestion.model_validate_json(row["payload"]) for row in rows}
 
 
 def edited_by(batch_id: str) -> dict[str, str]:
@@ -235,9 +244,7 @@ word, and the same person wants both in different weeks.
 
 def detail_of(batch_id: str) -> str:
     conn = store.connect()
-    row = conn.execute(
-        "SELECT detail FROM form_batches WHERE batch_id = ?", (batch_id,)
-    ).fetchone()
+    row = conn.execute("SELECT detail FROM form_batches WHERE batch_id = ?", (batch_id,)).fetchone()
     return (row["detail"] if row else "full") or "full"
 
 

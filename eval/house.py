@@ -114,9 +114,13 @@ def _load(path: Path | str) -> list[HouseCase]:
     rows = json.loads(Path(path).read_text(encoding="utf-8"))
     return [
         HouseCase(
-            test_id=row["test_id"], question=row["question"], answer=row["answer"],
-            file=row.get("file", ""), section=row.get("section", ""),
-            location=row.get("location", ""), language=row.get("language", "en"),
+            test_id=row["test_id"],
+            question=row["question"],
+            answer=row["answer"],
+            file=row.get("file", ""),
+            section=row.get("section", ""),
+            location=row.get("location", ""),
+            language=row.get("language", "en"),
             id=row.get("id", ""),
         )
         for row in rows
@@ -289,15 +293,11 @@ register_score = form_score
 class Fidelity(BaseModel):
     """The brief answer, compared against the full one it was condensed from."""
 
-    keeps_the_position: bool = Field(
-        description="The brief answer asserts the same yes/no/partly as the full one"
-    )
+    keeps_the_position: bool = Field(description="The brief answer asserts the same yes/no/partly as the full one")
     drops_something_material: bool = Field(
         description="A fact the full answer relied on to answer the question is gone"
     )
-    adds_a_claim: bool = Field(
-        description="The brief answer asserts something the full one does not"
-    )
+    adds_a_claim: bool = Field(description="The brief answer asserts something the full one does not")
     note: str = Field(default="", description="One sentence, English")
 
 
@@ -330,15 +330,19 @@ async def judge_fidelity(question: str, full: str, brief: str) -> Fidelity:
 
     model = structured_llm(Fidelity, model=settings.eval_judge_model, temperature=0.0)
     try:
-        return await model.ainvoke([
-            ("system", FIDELITY_SYSTEM),
-            ("user", FIDELITY_USER.format(question=question, full=full, brief=brief)),
-        ])
+        return await model.ainvoke(
+            [
+                ("system", FIDELITY_SYSTEM),
+                ("user", FIDELITY_USER.format(question=question, full=full, brief=brief)),
+            ]
+        )
     except Exception as failed:  # noqa: BLE001 - one ungraded pair is not a failed run
         logger.warning("Fidelity judge failed: %s", failed)
         return Fidelity(
-            keeps_the_position=True, drops_something_material=False,
-            adds_a_claim=False, note=f"not graded: {failed}"[:200],
+            keeps_the_position=True,
+            drops_something_material=False,
+            adds_a_claim=False,
+            note=f"not graded: {failed}"[:200],
         )
 
 
@@ -435,13 +439,19 @@ async def judge_agreement(case: HouseCase, answer: str) -> Agreement:
 
     model = structured_llm(Agreement, model=settings.eval_judge_model, temperature=0.0)
     try:
-        return await model.ainvoke([
-            ("system", AGREEMENT_SYSTEM),
-            ("user", AGREEMENT_USER.format(
-                question=case.question, reference=case.answer,
-                candidate=answer or "(no answer)",
-            )),
-        ])
+        return await model.ainvoke(
+            [
+                ("system", AGREEMENT_SYSTEM),
+                (
+                    "user",
+                    AGREEMENT_USER.format(
+                        question=case.question,
+                        reference=case.answer,
+                        candidate=answer or "(no answer)",
+                    ),
+                ),
+            ]
+        )
     except Exception as failed:  # noqa: BLE001 - one ungraded case is not a failed run
         logger.warning("Judge failed on %s: %s", case.test_id, failed)
         return Agreement(verdict="unanswerable", score=3, note=f"not graded: {failed}"[:200])
@@ -488,18 +498,18 @@ def summarise(results: list[HouseResult]) -> dict:
         "graded": len(graded),
         "excluded": len(results) - len(graded),
         "form": round(100 * statistics.mean([r.register for r in graded]), 1) if graded else 0.0,
-        "agreement": round(
-            100 * statistics.mean([r.agreement.score for r in graded if r.agreement]) / 5, 1
-        ) if any(r.agreement for r in graded) else 0.0,
+        "agreement": round(100 * statistics.mean([r.agreement.score for r in graded if r.agreement]) / 5, 1)
+        if any(r.agreement for r in graded)
+        else 0.0,
         "verdicts": verdicts,
         "median_words_ours": statistics.median(lengths) if lengths else 0,
         "median_words_theirs": statistics.median(theirs) if theirs else 0,
-        "opens_with_verdict": round(
-            100 * sum(1 for r in graded if r.shape.opens_with_verdict) / len(graded), 1
-        ) if graded else 0.0,
-        "cites_a_clause": round(
-            100 * sum(1 for r in graded if r.shape.cites_a_clause) / len(graded), 1
-        ) if graded else 0.0,
+        "opens_with_verdict": round(100 * sum(1 for r in graded if r.shape.opens_with_verdict) / len(graded), 1)
+        if graded
+        else 0.0,
+        "cites_a_clause": round(100 * sum(1 for r in graded if r.shape.cites_a_clause) / len(graded), 1)
+        if graded
+        else 0.0,
         "hedges": round(100 * sum(1 for r in graded if r.shape.hedges) / len(graded), 1) if graded else 0.0,
         # Held back, not written: `ready_to_write` refuses an answer nobody has
         # confirmed when it is flagged or below the floor, so this is the count
@@ -507,12 +517,10 @@ def summarise(results: list[HouseResult]) -> dict:
         # under the opposite name -- "would be written into the file
         # unreviewed" -- which inverts the one number in here that says how
         # much human work a run leaves behind.
-        "held_back": sum(
-            1 for r in graded if r.answer.strip() and (r.needs_review or r.confidence < 0.6)
-        ),
-        "found_own_answer": round(
-            100 * sum(1 for r in graded if r.found_own_answer) / len(graded), 1
-        ) if graded else 0.0,
+        "held_back": sum(1 for r in graded if r.answer.strip() and (r.needs_review or r.confidence < 0.6)),
+        "found_own_answer": round(100 * sum(1 for r in graded if r.found_own_answer) / len(graded), 1)
+        if graded
+        else 0.0,
         "with_a_twin": _split(graded, lambda r: r.twin >= NEAR_TWIN),
         "without_a_twin": _split(graded, lambda r: r.twin < NEAR_TWIN),
     }
@@ -531,9 +539,9 @@ def _split(results: list[HouseResult], keep) -> dict:
         return {"cases": 0, "agreement": 0.0, "form": 0.0}
     return {
         "cases": len(part),
-        "agreement": round(
-            100 * statistics.mean([r.agreement.score for r in part if r.agreement]) / 5, 1
-        ) if any(r.agreement for r in part) else 0.0,
+        "agreement": round(100 * statistics.mean([r.agreement.score for r in part if r.agreement]) / 5, 1)
+        if any(r.agreement for r in part)
+        else 0.0,
         "form": round(100 * statistics.mean([r.register for r in part]), 1),
     }
 

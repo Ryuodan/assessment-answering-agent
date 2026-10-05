@@ -47,8 +47,14 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
 from src import llm  # noqa: E402
 from eval.house import (  # noqa: E402
-    HouseResult, format_summary, judge_agreement, load_house_set,
-    load_memory_set, nearest_in_memory, register_score, summarise,
+    HouseResult,
+    format_summary,
+    judge_agreement,
+    load_house_set,
+    load_memory_set,
+    nearest_in_memory,
+    register_score,
+    summarise,
 )
 
 RESULTS = PROJECT_ROOT / "eval" / "results"
@@ -85,20 +91,33 @@ def stratified(cases, n: int, seed: int):
 def _write_raw(out: Path, label: str, results) -> None:
     """Just the answers, for when the grading half has not run or has failed."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps({
-        "label": label,
-        "graded": False,
-        "cases": [
+    out.write_text(
+        json.dumps(
             {
-                "test_id": r.case.test_id, "file": r.case.file, "question": r.case.question,
-                "reference": r.case.answer, "answer": r.answer,
-                "form": round(r.register, 3), "words": r.shape.words,
-                "confidence": r.confidence, "needs_review": r.needs_review,
-                "twin": r.twin, "found_own_answer": r.found_own_answer,
-            }
-            for r in results
-        ],
-    }, ensure_ascii=False, indent=1), encoding="utf-8")
+                "label": label,
+                "graded": False,
+                "cases": [
+                    {
+                        "test_id": r.case.test_id,
+                        "file": r.case.file,
+                        "question": r.case.question,
+                        "reference": r.case.answer,
+                        "answer": r.answer,
+                        "form": round(r.register, 3),
+                        "words": r.shape.words,
+                        "confidence": r.confidence,
+                        "needs_review": r.needs_review,
+                        "twin": r.twin,
+                        "found_own_answer": r.found_own_answer,
+                    }
+                    for r in results
+                ],
+            },
+            ensure_ascii=False,
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _own_entry_cited(case, produced, by_question: dict[str, str]) -> bool:
@@ -113,10 +132,7 @@ def _own_entry_cited(case, produced, by_question: dict[str, str]) -> bool:
     wanted = by_question.get(case.question.strip())
     if not wanted:
         return False
-    return any(
-        item.source_type is SourceType.PRIOR_ANSWER and item.entry_id == wanted
-        for item in produced.evidence
-    )
+    return any(item.source_type is SourceType.PRIOR_ANSWER and item.entry_id == wanted for item in produced.evidence)
 
 
 async def answer_and_score(cases, label: str, out: Path | None, memory_cases=None) -> None:
@@ -127,10 +143,7 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
     print("Measuring how close the memory already is to each question…")
     twins = await nearest_in_memory(cases, memory_cases or [])
 
-    by_question = {
-        entry.question.strip(): entry.entry_id
-        for entry in answer_memory.entries(limit=100_000)
-    }
+    by_question = {entry.question.strip(): entry.entry_id for entry in answer_memory.entries(limit=100_000)}
 
     print(f"Answering {len(cases)} question(s) the team has already answered…")
     answers = await service.answer_questions([c.as_question(i) for i, c in enumerate(cases)])
@@ -138,11 +151,18 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
     results = []
     for case, produced, twin in zip(cases, answers, twins):
         score, shape = register_score(case, produced.answer)
-        results.append(HouseResult(
-            case=case, answer=produced.answer, register=score, shape=shape,
-            confidence=produced.confidence, needs_review=produced.needs_review,
-            twin=twin, found_own_answer=_own_entry_cited(case, produced, by_question),
-        ))
+        results.append(
+            HouseResult(
+                case=case,
+                answer=produced.answer,
+                register=score,
+                shape=shape,
+                confidence=produced.confidence,
+                needs_review=produced.needs_review,
+                twin=twin,
+                found_own_answer=_own_entry_cited(case, produced, by_question),
+            )
+        )
 
     # Written before the judging, not after. Answering is the minutes and the
     # money; judging is neither. The first run of this harness lost thirty
@@ -167,10 +187,11 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
     )[:5]
     print("\n  The five furthest from what the team wrote:\n")
     for r in worst:
-        print(f"    [{r.case.test_id}] {r.agreement.verdict}  "
-              f"form {r.register:.0%}  {r.shape.words}w vs {len(r.case.answer.split())}w  "
-              f"nearest remembered question {r.twin:.2f}"
-              + ("  (cited its own entry)" if r.found_own_answer else ""))
+        print(
+            f"    [{r.case.test_id}] {r.agreement.verdict}  "
+            f"form {r.register:.0%}  {r.shape.words}w vs {len(r.case.answer.split())}w  "
+            f"nearest remembered question {r.twin:.2f}" + ("  (cited its own entry)" if r.found_own_answer else "")
+        )
         print(f"      Q      {r.case.question[:96]}")
         print(f"      team   {r.case.answer[:120]}")
         print(f"      ours   {' '.join(r.answer.split())[:170]}")
@@ -178,32 +199,51 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
 
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps({
-            "label": label,
-            "summary": summary,
-            "cases": [
+        out.write_text(
+            json.dumps(
                 {
-                    "test_id": r.case.test_id, "file": r.case.file,
-                    "question": r.case.question, "reference": r.case.answer, "answer": r.answer,
-                    "form": round(r.register, 3), "words": r.shape.words,
-                    "opens_with_verdict": r.shape.opens_with_verdict,
-                    "cites_a_clause": r.shape.cites_a_clause, "hedges": r.shape.hedges,
-                    "verdict": r.agreement.verdict if r.agreement else "",
-                    "agreement_score": r.agreement.score if r.agreement else 0,
-                    "note": r.agreement.note if r.agreement else "",
-                    "confidence": r.confidence, "needs_review": r.needs_review,
-                    "twin": r.twin, "found_own_answer": r.found_own_answer,
-                }
-                for r in results
-            ],
-        }, ensure_ascii=False, indent=1), encoding="utf-8")
+                    "label": label,
+                    "summary": summary,
+                    "cases": [
+                        {
+                            "test_id": r.case.test_id,
+                            "file": r.case.file,
+                            "question": r.case.question,
+                            "reference": r.case.answer,
+                            "answer": r.answer,
+                            "form": round(r.register, 3),
+                            "words": r.shape.words,
+                            "opens_with_verdict": r.shape.opens_with_verdict,
+                            "cites_a_clause": r.shape.cites_a_clause,
+                            "hedges": r.shape.hedges,
+                            "verdict": r.agreement.verdict if r.agreement else "",
+                            "agreement_score": r.agreement.score if r.agreement else 0,
+                            "note": r.agreement.note if r.agreement else "",
+                            "confidence": r.confidence,
+                            "needs_review": r.needs_review,
+                            "twin": r.twin,
+                            "found_own_answer": r.found_own_answer,
+                        }
+                        for r in results
+                    ],
+                },
+                ensure_ascii=False,
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
         print(f"\n  written to {out}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--set", dest="which", choices=sorted(SETS), default="held-out",
-                        help="held-out (real-world) or in-memory (reproduction ceiling)")
+    parser.add_argument(
+        "--set",
+        dest="which",
+        choices=sorted(SETS),
+        default="held-out",
+        help="held-out (real-world) or in-memory (reproduction ceiling)",
+    )
     parser.add_argument("--sample", type=int, default=30, help="how many cases (default 30)")
     parser.add_argument("--all", action="store_true", help="every case in the set")
     parser.add_argument("--seed", type=int, default=7)
@@ -220,8 +260,10 @@ def main() -> int:
     # question, and for the memory run the nearest is the question itself.
     memory_cases = load_memory_set()
     print(f"{args.which}: {description}")
-    print(f"  {len(cases)} cases from {len({c.file for c in cases})} questionnaires; "
-          f"running {len(chosen)}. Answer memory holds {len(memory_cases)}.")
+    print(
+        f"  {len(cases)} cases from {len({c.file for c in cases})} questionnaires; "
+        f"running {len(chosen)}. Answer memory holds {len(memory_cases)}."
+    )
     if args.which == "in-memory":
         print("  Reproduction, not generalisation: every answer is already in the corpus.")
     llm.run(answer_and_score(chosen, args.label, args.out, memory_cases))

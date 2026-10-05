@@ -42,15 +42,21 @@ def prose_form(path, *, answered: bool = False):
     """Sections, `Q<n>` questions, `Evidence Required` lines, optional answers."""
     document = Document()
     for section, questions in (
-        ("Cybersecurity Governance :", [
-            "Q1: Has your organization established and approved a Cybersecurity strategy?",
-            "Q2: Has your organization defined Cybersecurity roles and responsibilities?",
-            "Q3: Are Cybersecurity policies reviewed periodically?",
-        ]),
-        ("Cybersecurity Compliance:", [
-            "Q1: Has your organization defined Cybersecurity audit requirements?",
-            "Q2: Has your organization undergone independent external audits?",
-        ]),
+        (
+            "Cybersecurity Governance :",
+            [
+                "Q1: Has your organization established and approved a Cybersecurity strategy?",
+                "Q2: Has your organization defined Cybersecurity roles and responsibilities?",
+                "Q3: Are Cybersecurity policies reviewed periodically?",
+            ],
+        ),
+        (
+            "Cybersecurity Compliance:",
+            [
+                "Q1: Has your organization defined Cybersecurity audit requirements?",
+                "Q2: Has your organization undergone independent external audits?",
+            ],
+        ),
     ):
         heading = document.add_paragraph()
         run = heading.add_run(section)
@@ -151,9 +157,7 @@ def test_an_inserted_answer_imitates_the_house_format(prose, tmp_path):
     from the question, because a blank form has no answer to copy."""
     form = forms.detect(prose)
     out = tmp_path / "out.docx"
-    forms.write(prose, out, {
-        form.questions[0].targets[Role.ANSWER].id: "Yes, the strategy is approved."
-    })
+    forms.write(prose, out, {form.questions[0].targets[Role.ANSWER].id: "Yes, the strategy is approved."})
 
     answer = next(p for p in Document(str(out)).paragraphs if p.text.startswith("Answer :"))
     assert answer.runs[0].bold is True
@@ -166,10 +170,14 @@ def test_answering_every_question_puts_each_one_in_its_own_place(prose, tmp_path
     applied from the end backwards."""
     form = forms.detect(prose)
     out = tmp_path / "out.docx"
-    forms.write(prose, out, {
-        question.targets[Role.ANSWER].id: f"Answer to {question.section} {question.number}."
-        for question in form.questions
-    })
+    forms.write(
+        prose,
+        out,
+        {
+            question.targets[Role.ANSWER].id: f"Answer to {question.section} {question.number}."
+            for question in form.questions
+        },
+    )
 
     texts = [p.text.strip() for p in Document(str(out)).paragraphs if p.text.strip()]
     for index, text in enumerate(texts):
@@ -184,9 +192,7 @@ def test_an_existing_answer_is_rewritten_rather_than_duplicated(tmp_path):
     path = prose_form(tmp_path / "answered.docx", answered=True)
     form = forms.detect(path)
     out = tmp_path / "out.docx"
-    report = forms.write(path, out, {
-        form.questions[0].targets[Role.ANSWER].id: "A corrected answer."
-    })
+    report = forms.write(path, out, {form.questions[0].targets[Role.ANSWER].id: "A corrected answer."})
 
     assert report.replaced and not report.created
     texts = [p.text.strip() for p in Document(str(out)).paragraphs if p.text.startswith("Answer :")]
@@ -227,9 +233,7 @@ def test_question_ids_survive_being_answered(prose, tmp_path):
     was answered, because inserting shifts the paragraphs after it."""
     form = forms.detect(prose)
     out = tmp_path / "out.docx"
-    forms.write(prose, out, {
-        question.targets[Role.ANSWER].id: "Yes." for question in form.questions
-    })
+    forms.write(prose, out, {question.targets[Role.ANSWER].id: "Yes." for question in form.questions})
     assert [q.id for q in forms.detect(out).questions] == [q.id for q in form.questions]
 
 
@@ -281,18 +285,16 @@ def test_a_table_cell_is_a_rewrite_not_an_insertion(tmp_path):
     """The third shape 'blank' takes: the cell exists and holds an empty string."""
     path = table_form(tmp_path / "t.docx")
     form = forms.detect(path)
-    report = forms.write(path, tmp_path / "out.docx", {
-        form.questions[0].targets[Role.ANSWER].id: "Yes."
-    })
+    report = forms.write(path, tmp_path / "out.docx", {form.questions[0].targets[Role.ANSWER].id: "Yes."})
     assert report.created and not report.replaced
 
 
 def test_an_answered_table_cell_reports_a_replacement(tmp_path):
     path = table_form(tmp_path / "t.docx", answered=True)
     form = forms.detect(path)
-    report = forms.write(path, tmp_path / "out.docx", {
-        form.questions[0].targets[Role.ANSWER].id: "A corrected answer."
-    })
+    report = forms.write(
+        path, tmp_path / "out.docx", {form.questions[0].targets[Role.ANSWER].id: "A corrected answer."}
+    )
     assert report.replaced and not report.created
 
 
@@ -321,24 +323,28 @@ def test_a_document_with_neither_shape_says_so(tmp_path):
 def test_every_package_part_survives(prose, tmp_path):
     form = forms.detect(prose)
     out = tmp_path / "out.docx"
-    report = forms.write(prose, out, {
-        question.targets[Role.ANSWER].id: "Yes." for question in form.questions
-    })
+    report = forms.write(prose, out, {question.targets[Role.ANSWER].id: "Yes." for question in form.questions})
     assert report.intact
     with zipfile.ZipFile(prose) as before, zipfile.ZipFile(out) as after:
         assert set(before.namelist()) == set(after.namelist())
 
 
 def test_an_unknown_target_is_reported_rather_than_guessed(prose, tmp_path):
-    report = forms.write(prose, tmp_path / "out.docx", {
-        "para:9999": "x", "table:0/r0/c9": "y", "nonsense": "z",
-    })
+    report = forms.write(
+        prose,
+        tmp_path / "out.docx",
+        {
+            "para:9999": "x",
+            "table:0/r0/c9": "y",
+            "nonsense": "z",
+        },
+    )
     assert set(report.skipped) == {"para:9999", "table:0/r0/c9", "nonsense"}
     assert report.written == 0
 
 
 def test_a_table_row_is_named_by_the_heading_above_its_table(tmp_path):
-    """"table 2, row 5" is a coordinate nothing in Word will show you. Table
+    """ "table 2, row 5" is a coordinate nothing in Word will show you. Table
     questionnaires mostly have no numbering column and no banner row, so the
     line above the table is the only thing that names the section."""
     path = tmp_path / "sections.docx"
@@ -353,7 +359,8 @@ def test_a_table_row_is_named_by_the_heading_above_its_table(tmp_path):
 
     form = forms.detect(path)
     assert [q.location for q in form.questions] == [
-        "3. Technical Measures, row 2", "3. Technical Measures, row 3",
+        "3. Technical Measures, row 2",
+        "3. Technical Measures, row 3",
     ]
 
 

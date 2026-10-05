@@ -67,9 +67,7 @@ def test_before_anyone_is_added_history_is_reachable(client):
 def test_whoami_reports_that_sign_in_is_needed(client):
     response = client.get("/api/auth/session")
     assert response.status_code == 200, "the sign-in screen asks this; it must not 401"
-    assert response.json() == {
-        "email": None, "team": None, "role": None, "is_admin": False, "sign_in_required": True
-    }
+    assert response.json() == {"email": None, "team": None, "role": None, "is_admin": False, "sign_in_required": True}
 
 
 @pytest.mark.usefixtures("gated")
@@ -225,9 +223,7 @@ def test_an_admin_can_step_down_once_someone_else_is_promoted(client):
 
 @pytest.mark.usefixtures("gated")
 def test_rotating_a_code_returns_it_once_and_breaks_the_old_one(client):
-    body = _as_admin(client).post(
-        f"/api/admin/teams/{settings.default_team}/access-code"
-    ).json()
+    body = _as_admin(client).post(f"/api/admin/teams/{settings.default_team}/access-code").json()
     assert body["access_code"] and body["access_code"] != CODE
 
     with TestClient(app) as member:
@@ -254,9 +250,7 @@ def test_a_new_team_needs_its_own_code_before_anyone_can_use_it(client):
 
 @pytest.mark.usefixtures("gated")
 def test_a_team_id_must_be_a_slug(client):
-    assert _as_admin(client).post(
-        "/api/admin/teams", json={"id": "Not A Slug!", "name": "x"}
-    ).status_code == 422
+    assert _as_admin(client).post("/api/admin/teams", json={"id": "Not A Slug!", "name": "x"}).status_code == 422
 
 
 @pytest.mark.usefixtures("gated")
@@ -270,9 +264,7 @@ def test_a_team_with_members_cannot_be_removed(client):
 def test_the_break_glass_admins_password_cannot_be_changed_here(client, monkeypatch):
     """It would be restored on the next restart, so refusing says so plainly."""
     monkeypatch.setattr(settings, "admin_email", BOB)
-    response = _as_admin(client).post(
-        f"/api/admin/users/{BOB}/password", json={"password": "something-else"}
-    )
+    response = _as_admin(client).post(f"/api/admin/users/{BOB}/password", json={"password": "something-else"})
     assert response.status_code == 400
     assert "restart" in response.json()["detail"]
 
@@ -287,9 +279,7 @@ def test_setting_a_password_switches_someone_off_the_team_code(client):
 
 @pytest.mark.usefixtures("gated")
 def test_setting_a_password_for_an_unknown_user_is_a_404(client):
-    assert _as_admin(client).post(
-        "/api/admin/users/nobody@t2.sa/password", json={"password": "x"}
-    ).status_code == 404
+    assert _as_admin(client).post("/api/admin/users/nobody@t2.sa/password", json={"password": "x"}).status_code == 404
 
 
 @pytest.mark.usefixtures("gated")
@@ -323,6 +313,7 @@ def test_an_unknown_run_is_a_404(client):
 
 def test_answering_leaves_a_run_behind(client, monkeypatch):
     """The Phase 0 gate: every answer traces to a person and a run."""
+
     async def fake_answer_questions(questions, language=None, run_id=None, **_):
         return [
             AnsweredQuestion(
@@ -357,6 +348,7 @@ def test_answering_leaves_a_run_behind(client, monkeypatch):
 
 def test_a_failure_to_save_does_not_lose_the_answers(client, monkeypatch, caplog):
     """A run costs minutes. Losing the history is bad; losing the answers is worse."""
+
     async def fake_answer_questions(questions, language=None, run_id=None, **_):
         return [AnsweredQuestion(question=questions[0], answer="Yes.", confidence=0.9)]
 
@@ -445,7 +437,7 @@ def test_the_access_panel_classes_do_not_collide_with_the_app():
     """The panel shares a document with the app, which already owns .row,
     .panel and .status — so every rule it adds is prefixed."""
     html = _page("index.html")
-    panel = html[html.index("--- access panel"):html.index("--- sign-in gate")]
+    panel = html[html.index("--- access panel") : html.index("--- sign-in gate")]
     for line in panel.splitlines():
         stripped = line.strip()
         if stripped.startswith(".") and "{" in stripped:
@@ -457,8 +449,9 @@ def test_the_question_endpoint_still_works_before_anyone_is_added(client, monkey
         return "en", [Question(id="1", text="Do you encrypt data at rest?")]
 
     monkeypatch.setattr("src.api.service.extract_assessment_questions", fake_extract)
-    monkeypatch.setattr("src.api.service.save_upload",
-                        lambda name, content, team_id=None, owner="": settings.upload_dir / name)
+    monkeypatch.setattr(
+        "src.api.service.save_upload", lambda name, content, team_id=None, owner="": settings.upload_dir / name
+    )
 
     response = client.post(
         "/api/assessments/extract",

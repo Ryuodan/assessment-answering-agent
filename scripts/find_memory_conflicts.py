@@ -89,9 +89,12 @@ def main() -> int:
         print(f"  … and {len(conflicts) - 20} more")
 
     if args.json:
-        args.json.write_text(json.dumps([
-            {"similarity": round(s, 3), "a": a, "b": b} for s, a, b in conflicts
-        ], ensure_ascii=False, indent=1), encoding="utf-8")
+        args.json.write_text(
+            json.dumps(
+                [{"similarity": round(s, 3), "a": a, "b": b} for s, a, b in conflicts], ensure_ascii=False, indent=1
+            ),
+            encoding="utf-8",
+        )
         print(f"\nwritten to {args.json}")
 
     # How the count moves with the threshold, because the threshold is a
@@ -101,9 +104,10 @@ def main() -> int:
         n = sum(1 for s, _, _ in conflicts if s >= cut)
         if cut < args.threshold:
             n = sum(
-                1 for i in range(len(answered)) for j in range(i + 1, len(answered))
-                if disagree(answered[i]["answer"], answered[j]["answer"])
-                and cosine(vectors[i], vectors[j]) >= cut
+                1
+                for i in range(len(answered))
+                for j in range(i + 1, len(answered))
+                if disagree(answered[i]["answer"], answered[j]["answer"]) and cosine(vectors[i], vectors[j]) >= cut
             )
         print(f"    >= {cut:.2f}   {n:4d} pair(s)")
     return 0

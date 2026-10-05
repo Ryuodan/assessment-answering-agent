@@ -236,8 +236,8 @@ class Settings(BaseSettings):
     # than the retriever was tuned for, and measured accuracy fell 4.4 points.
     # 1200 restores the granularity and still holds more content than 1800 did.
     chunk_size: int = 1200
-    chunk_overlap: int = 150          # retained for the prose fallback only
-    max_expanded_chars: int = 12000    # cap on parent-unit expansion, per question
+    chunk_overlap: int = 150  # retained for the prose fallback only
+    max_expanded_chars: int = 12000  # cap on parent-unit expansion, per question
     # Expansion completes a split unit so the drafter never sees three items of
     # a nine-item series and calls it the list. That is right for a clause
     # series; it is wrong for a chapter. 79% of units in this corpus are a
@@ -364,9 +364,7 @@ class Settings(BaseSettings):
         table is the allow-list, and this only ever plants the first entries in
         it.
         """
-        return frozenset(
-            part.strip().casefold() for part in self.allowed_emails.split(",") if part.strip()
-        )
+        return frozenset(part.strip().casefold() for part in self.allowed_emails.split(",") if part.strip())
 
     @field_validator("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path")
     @classmethod
@@ -495,7 +493,8 @@ def start_phoenix_tracing() -> bool:
     except ImportError as error:
         logger.warning(
             "PHOENIX_TRACING is on but the tracing packages are not installed "
-            "(%s). Install them with: uv pip install -e \".[phoenix]\"", error,
+            '(%s). Install them with: uv pip install -e ".[phoenix]"',
+            error,
         )
         return False
 
@@ -533,12 +532,14 @@ def configure_logging() -> None:
             "LangSmith tracing is ON — project %r at %s. Prompts, and so the "
             "policy text retrieved to answer each question, are sent there. "
             "LangSmith has no Saudi region, so this leaves the country.",
-            settings.langsmith_project, settings.langsmith_endpoint,
+            settings.langsmith_project,
+            settings.langsmith_endpoint,
         )
     if _PHOENIX_ON:
         logging.getLogger(__name__).info(
             "Phoenix tracing is ON — project %r to %s. Traces stay on this "
             "machine, and they carry the policy text and the questionnaire, so "
             "Phoenix's own store is as sensitive as the corpus.",
-            settings.phoenix_project, settings.phoenix_endpoint,
+            settings.phoenix_project,
+            settings.phoenix_endpoint,
         )

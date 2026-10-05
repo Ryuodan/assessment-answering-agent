@@ -20,8 +20,7 @@ from src.models import Question, QuestionType
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    for name in ("LANGSMITH_TRACING", "LANGSMITH_ENDPOINT",
-                 "LANGSMITH_API_KEY", "LANGSMITH_PROJECT"):
+    for name in ("LANGSMITH_TRACING", "LANGSMITH_ENDPOINT", "LANGSMITH_API_KEY", "LANGSMITH_PROJECT"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -77,8 +76,7 @@ def test_the_real_environment_wins_over_the_file(clean_env, monkeypatch):
     overwritten by whatever happens to be in `.env`."""
     monkeypatch.setenv("LANGSMITH_PROJECT", "set-by-the-operator")
 
-    configure(monkeypatch, langsmith_tracing=True, langsmith_api_key="k",
-              langsmith_project="from-the-file")
+    configure(monkeypatch, langsmith_tracing=True, langsmith_api_key="k", langsmith_project="from-the-file")
 
     assert os.environ["LANGSMITH_PROJECT"] == "set-by-the-operator"
 
@@ -152,7 +150,8 @@ def test_phoenix_registers_the_project_and_the_local_collector(monkeypatch):
     phoenix = FakePhoenix(monkeypatch)
 
     on = start(
-        monkeypatch, phoenix_tracing=True,
+        monkeypatch,
+        phoenix_tracing=True,
         phoenix_endpoint="http://localhost:6006/v1/traces",
         phoenix_project="assessment-answer",
     )
@@ -226,8 +225,14 @@ def test_the_metadata_carries_no_answer_or_document_text():
     assert config["metadata"]["question_id"] == "7"
     assert "4. Cryptography" in values
     assert set(config["metadata"]) == {
-        "question_id", "question", "language", "question_type", "run_id",
-        "section", "session_id"}
+        "question_id",
+        "question",
+        "language",
+        "question_type",
+        "run_id",
+        "section",
+        "session_id",
+    }
 
 
 def test_the_questions_of_one_run_are_one_session():
@@ -260,7 +265,11 @@ def test_an_assistant_turn_is_named_and_belongs_to_its_conversation():
     from src.conversations import Conversation
 
     conversation = Conversation(
-        id="c17", team_id="t", actor_email="a@b.c", title="", batch_id="b42",
+        id="c17",
+        team_id="t",
+        actor_email="a@b.c",
+        title="",
+        batch_id="b42",
     )
 
     config = _trace_config(conversation, recursion_limit=40)

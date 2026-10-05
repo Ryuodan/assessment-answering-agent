@@ -203,13 +203,17 @@ def _prefers_local_extraction(path: Path) -> bool:
     if arabic >= _MIN_ARABIC_CHARS and ratio >= _MIN_PRESENTATION_RATIO:
         logger.info(
             "Routing %s to the local RTL loader: %d Arabic characters, %.0f%% presentation forms",
-            path.name, arabic, ratio * 100,
+            path.name,
+            arabic,
+            ratio * 100,
         )
         return True
 
     logger.debug(
         "Routing %s to Docling: %d Arabic characters, %.0f%% presentation forms",
-        path.name, arabic, ratio * 100,
+        path.name,
+        arabic,
+        ratio * 100,
     )
     return False
 
@@ -218,9 +222,7 @@ async def load_text(path: str | Path) -> str:
     """Extract the full text of a PDF or DOCX file, tables included."""
     path = Path(path)
     if path.suffix.lower() not in SUPPORTED_SUFFIXES:
-        raise UnsupportedDocumentError(
-            f"Cannot read '{path.name}'. Supported types: {', '.join(SUPPORTED_SUFFIXES)}"
-        )
+        raise UnsupportedDocumentError(f"Cannot read '{path.name}'. Supported types: {', '.join(SUPPORTED_SUFFIXES)}")
     if not path.is_file():
         raise FileNotFoundError(f"No such document: {path}")
 
@@ -280,9 +282,7 @@ def load_text_local(path: str | Path) -> str:
     path = Path(path)
     loader = _LOADERS.get(path.suffix.lower())
     if loader is None:
-        raise UnsupportedDocumentError(
-            f"Cannot read '{path.name}'. Supported types: {', '.join(SUPPORTED_SUFFIXES)}"
-        )
+        raise UnsupportedDocumentError(f"Cannot read '{path.name}'. Supported types: {', '.join(SUPPORTED_SUFFIXES)}")
     return loader(path)
 
 

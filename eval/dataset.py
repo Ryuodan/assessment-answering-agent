@@ -75,7 +75,9 @@ def load_answers(path: Path | str) -> list[ScoredAnswer]:
 
     return [
         ScoredAnswer(
-            question=entry["question"]["text"] if isinstance(entry.get("question"), dict) else entry.get("question", ""),
+            question=entry["question"]["text"]
+            if isinstance(entry.get("question"), dict)
+            else entry.get("question", ""),
             answer=entry.get("answer", ""),
             confidence=float(entry.get("confidence", 0.0)),
             needs_review=bool(entry.get("needs_review", False)),

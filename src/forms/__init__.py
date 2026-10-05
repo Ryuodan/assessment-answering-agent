@@ -49,8 +49,7 @@ def _module(path: Path):
     module = _FORMATS.get(path.suffix.lower())
     if module is None:
         raise UnsupportedForm(
-            f"{path.suffix or 'That file'} is not a form this can read. "
-            f"Supported: {', '.join(SUPPORTED)}."
+            f"{path.suffix or 'That file'} is not a form this can read. Supported: {', '.join(SUPPORTED)}."
         )
     return module
 
@@ -87,7 +86,18 @@ def write(path: str | Path, destination: str | Path, values: dict[str, str]) -> 
 
 
 __all__ = [
-    "detect", "write", "DetectedForm", "FormQuestion", "Target", "Role",
-    "Finding", "Part", "WriteReport", "WRITABLE", "SUPPORTED", "ASSISTED",
-    "UnsupportedForm", "FormatError",
+    "detect",
+    "write",
+    "DetectedForm",
+    "FormQuestion",
+    "Target",
+    "Role",
+    "Finding",
+    "Part",
+    "WriteReport",
+    "WRITABLE",
+    "SUPPORTED",
+    "ASSISTED",
+    "UnsupportedForm",
+    "FormatError",
 ]

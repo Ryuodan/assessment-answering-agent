@@ -166,8 +166,7 @@ class Workbook:
             missing = re.search(r"named '([^']+)'", str(error.args[0] if error.args else ""))
             named = f" ({missing.group(1)})" if missing else ""
             raise FormatError(
-                f"{self.path.name} is missing a part it needs{named}, so it is not a "
-                "complete workbook."
+                f"{self.path.name} is missing a part it needs{named}, so it is not a complete workbook."
             ) from error
         except ET.ParseError as error:
             self._zip.close()
@@ -222,10 +221,7 @@ class Workbook:
         if "xl/sharedStrings.xml" not in self._zip.namelist():
             return []
         root = ET.fromstring(self._zip.read("xl/sharedStrings.xml"))
-        return [
-            "".join(node.text or "" for node in item.iter(f"{NS}t"))
-            for item in root.findall(f"{NS}si")
-        ]
+        return ["".join(node.text or "" for node in item.iter(f"{NS}t")) for item in root.findall(f"{NS}si")]
 
     def _sheet_entries(self) -> Iterator[tuple[str, str, str]]:
         """Sheet name, package part, and visibility -- in workbook tab order."""
@@ -489,6 +485,7 @@ def xml_safe(text: str) -> str:
     """
     return _NOT_XML.sub("", text or "")
 
+
 _ATTRIBUTE = re.compile(r"""([^\s=/>]+)\s*=\s*("[^"]*"|'[^']*')""")
 
 
@@ -539,12 +536,12 @@ def _splice_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
     if opening.group(3):
         head = text[: opening.start()] + f"<{prefix}sheetData{opening.group(2)}>"
         inner = ""
-        tail = f"</{prefix}sheetData>" + text[opening.end():]
+        tail = f"</{prefix}sheetData>" + text[opening.end() :]
     else:
         closing = text.find(f"</{prefix}sheetData>", opening.end())
         if closing < 0:
             raise _Unspliceable
-        head, inner, tail = text[: opening.end()], text[opening.end(): closing], text[closing:]
+        head, inner, tail = text[: opening.end()], text[opening.end() : closing], text[closing:]
 
     tag = re.escape(prefix)
     # [(row number or None for whitespace between rows, raw text)]
@@ -570,17 +567,13 @@ def _splice_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
             continue
         created = f'<{prefix}row r="{row_number}">{_set_cells("", cells, prefix)}</{prefix}row>'
         later = next(
-            (index for index, segment in enumerate(segments)
-             if segment[0] is not None and segment[0] > row_number),
+            (index for index, segment in enumerate(segments) if segment[0] is not None and segment[0] > row_number),
             len(segments),
         )
         segments.insert(later, [row_number, created])
         rows[row_number] = segments[later]
 
-    rebuilt = "".join(
-        segment[1] if isinstance(segment[1], str) else segment[1].group(0)
-        for segment in segments
-    )
+    rebuilt = "".join(segment[1] if isinstance(segment[1], str) else segment[1].group(0) for segment in segments)
     return (head + rebuilt + tail).encode("utf-8")
 
 
@@ -593,7 +586,7 @@ def _elements(text: str, pattern: str):
     """
     position = 0
     for match in re.finditer(pattern, text, re.S):
-        if text[position: match.start()].strip():
+        if text[position : match.start()].strip():
             raise _Unspliceable
         if match.start() > position:
             yield -1, position, match.start()
@@ -639,15 +632,13 @@ def _set_cells(body: str, cells: dict[str, str], prefix: str) -> str:
         number = column_number(split_ref(ref)[0])
         if number in by_column:
             kept = "".join(
-                f" {name}={quoted}" for name, quoted in _attributes(by_column[number][2])
-                if name not in ("r", "t")
+                f" {name}={quoted}" for name, quoted in _attributes(by_column[number][2]) if name not in ("r", "t")
             )
             by_column[number][1] = _inline_cell(ref, kept, value, prefix)
             continue
         created = [number, _inline_cell(ref, "", value, prefix), ""]
         later = next(
-            (index for index, segment in enumerate(segments)
-             if segment[0] is not None and segment[0] > number),
+            (index for index, segment in enumerate(segments) if segment[0] is not None and segment[0] > number),
             len(segments),
         )
         segments.insert(later, created)
@@ -687,7 +678,8 @@ def _rewrite_cell_edits(sheet_xml: bytes, edits: dict[str, str]) -> bytes:
             cell = ET.Element(f"{NS}c", {"r": ref})
             wanted = column_number(column)
             after = [
-                node for node in row.findall(f"{NS}c")
+                node
+                for node in row.findall(f"{NS}c")
                 if node.get("r") and column_number(split_ref(node.get("r"))[0]) > wanted
             ]
             children = list(row)

@@ -166,9 +166,7 @@ def delete_team(team_id: str) -> None:
     'delete team' says that should happen.
     """
     conn = store.connect()
-    members = conn.execute(
-        "SELECT COUNT(*) FROM users WHERE team_id = ?", (team_id,)
-    ).fetchone()[0]
+    members = conn.execute("SELECT COUNT(*) FROM users WHERE team_id = ?", (team_id,)).fetchone()[0]
     if members:
         raise NotAllowed(f"{team_id} still has {members} member(s). Move or remove them first.")
     conn.execute("DELETE FROM teams WHERE id = ?", (team_id,))
@@ -297,9 +295,7 @@ def remove_user(email: str) -> None:
 def find_user_any(email: str) -> User | None:
     """Like `find_user`, but finds disabled accounts too. For administration."""
     conn = store.connect()
-    row = conn.execute(
-        "SELECT email, team_id, role FROM users WHERE email = ?", (normalise(email),)
-    ).fetchone()
+    row = conn.execute("SELECT email, team_id, role FROM users WHERE email = ?", (normalise(email),)).fetchone()
     return _row_to_user(row) if row else None
 
 
@@ -370,9 +366,9 @@ def _locked_out(email: str) -> bool:
     guesses across a proxy pool. Rate-limiting what is actually scarce — the
     number of tries against one account — is what makes a typeable code safe.
     """
-    cutoff = (
-        datetime.now(timezone.utc) - timedelta(minutes=settings.sign_in_lockout_minutes)
-    ).isoformat(timespec="seconds")
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=settings.sign_in_lockout_minutes)).isoformat(
+        timespec="seconds"
+    )
     conn = store.connect()
     failures = conn.execute(
         "SELECT COUNT(*) FROM sign_in_attempts WHERE email = ? AND succeeded = 0 AND created_at > ?",
@@ -383,9 +379,9 @@ def _locked_out(email: str) -> bool:
 
 def purge_old_attempts() -> int:
     """Drop attempt rows older than the lockout window. Housekeeping."""
-    cutoff = (
-        datetime.now(timezone.utc) - timedelta(minutes=settings.sign_in_lockout_minutes)
-    ).isoformat(timespec="seconds")
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=settings.sign_in_lockout_minutes)).isoformat(
+        timespec="seconds"
+    )
     conn = store.connect()
     cursor = conn.execute("DELETE FROM sign_in_attempts WHERE created_at <= ?", (cutoff,))
     conn.commit()
@@ -412,9 +408,7 @@ def sign_in(email: str, secret: str) -> tuple[str, User]:
         raise AccessDenied("Enter your access code.")
 
     if _locked_out(address):
-        raise AccessDenied(
-            f"Too many attempts. Wait {settings.sign_in_lockout_minutes} minutes and try again."
-        )
+        raise AccessDenied(f"Too many attempts. Wait {settings.sign_in_lockout_minutes} minutes and try again.")
 
     conn = store.connect()
     row = conn.execute(
@@ -446,12 +440,8 @@ def sign_in(email: str, secret: str) -> tuple[str, User]:
     if row["password_hash"]:
         ok = credentials.verify_secret(secret, row["password_hash"])
     else:
-        team = conn.execute(
-            "SELECT access_code_hash FROM teams WHERE id = ?", (row["team_id"],)
-        ).fetchone()
-        ok = bool(team) and credentials.verify_secret(
-            credentials.normalise_code(secret), team["access_code_hash"]
-        )
+        team = conn.execute("SELECT access_code_hash FROM teams WHERE id = ?", (row["team_id"],)).fetchone()
+        ok = bool(team) and credentials.verify_secret(credentials.normalise_code(secret), team["access_code_hash"])
 
     if not ok:
         _record_attempt(address, False)
@@ -514,9 +504,7 @@ def purge_expired_sessions() -> int:
 def team_members(team_id: str) -> list[str]:
     """Addresses on one team, oldest first."""
     conn = store.connect()
-    rows = conn.execute(
-        "SELECT email FROM users WHERE team_id = ? ORDER BY created_at", (team_id,)
-    ).fetchall()
+    rows = conn.execute("SELECT email FROM users WHERE team_id = ? ORDER BY created_at", (team_id,)).fetchall()
     return [row["email"] for row in rows]
 
 
@@ -565,9 +553,7 @@ def local_user() -> User:
     # Read the row back rather than assuming the default: an administrator can
     # move this account to another team, and reporting the team it was created
     # in would show it another team's work.
-    row = conn.execute(
-        "SELECT team_id, role FROM users WHERE email = ?", (LOCAL_EMAIL,)
-    ).fetchone()
+    row = conn.execute("SELECT team_id, role FROM users WHERE email = ?", (LOCAL_EMAIL,)).fetchone()
     return User(email=LOCAL_EMAIL, team_id=row["team_id"], role=row["role"])
 
 
@@ -613,7 +599,8 @@ def bootstrap() -> None:
         logger.warning(
             "No access code was set for team %r, so one was generated: %s\n"
             "        Give it to the team, or replace it on the admin page.",
-            settings.default_team, code,
+            settings.default_team,
+            code,
         )
 
 
@@ -639,6 +626,7 @@ def _seeded_before() -> bool:
     behind in `.env` should not quietly restore them on the next restart.
     """
     conn = store.connect()
-    return conn.execute(
-        "SELECT COUNT(*) FROM users WHERE added_by = 'environment' AND role = ?", (MEMBER,)
-    ).fetchone()[0] > 0
+    return (
+        conn.execute("SELECT COUNT(*) FROM users WHERE added_by = 'environment' AND role = ?", (MEMBER,)).fetchone()[0]
+        > 0
+    )

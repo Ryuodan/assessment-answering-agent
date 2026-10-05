@@ -99,7 +99,11 @@ def test_everything_starts_as_drafted_and_costs_nothing():
 
 def test_each_choice_has_one_wording_in_a_fixed_order():
     instruction = choose(
-        ALICE, verdict_first=True, refer_to="T2", policy_references="citations_only", tone="formal",
+        ALICE,
+        verdict_first=True,
+        refer_to="T2",
+        policy_references="citations_only",
+        tone="formal",
         also="Write Not applicable, never N/A.",
     )
     assert instruction.splitlines() == [
@@ -109,8 +113,17 @@ def test_each_choice_has_one_wording_in_a_fixed_order():
         preferences.FORMAL,
         "Also: Write Not applicable, never N/A.",
     ]
-    assert choose(ALICE, verdict_first=True, refer_to="T2", policy_references="citations_only",
-                  tone="formal", also="Write Not applicable, never N/A.") == instruction, "the same every time"
+    assert (
+        choose(
+            ALICE,
+            verdict_first=True,
+            refer_to="T2",
+            policy_references="citations_only",
+            tone="formal",
+            also="Write Not applicable, never N/A.",
+        )
+        == instruction
+    ), "the same every time"
 
 
 def test_the_verdict_wording_says_what_not_to_add():
@@ -121,7 +134,7 @@ def test_the_verdict_wording_says_what_not_to_add():
 
 
 def test_removing_references_keeps_what_the_question_asks_about():
-    """"Are you ISO 27001 certified?" cannot be answered without naming it."""
+    """ "Are you ISO 27001 certified?" cannot be answered without naming it."""
     assert "the question itself asks about stays named" in preferences.CITATIONS_ONLY
 
 
@@ -138,15 +151,18 @@ def test_preferences_are_one_persons_and_addresses_are_not_case_sensitive():
     assert preferences.load(BOB).refer_to == ""
 
 
-@pytest.mark.parametrize("bad", [
-    {"default_length": "medium"},
-    {"tone": "sarcastic"},
-    {"policy_references": "sometimes"},
-    {"refer_to": "x" * (preferences.MAX_REFER_TO + 1)},
-    {"refer_to": 'the "company"'},
-    {"also": "x" * (preferences.MAX_ALSO + 1)},
-    {"colour": "blue"},
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"default_length": "medium"},
+        {"tone": "sarcastic"},
+        {"policy_references": "sometimes"},
+        {"refer_to": "x" * (preferences.MAX_REFER_TO + 1)},
+        {"refer_to": 'the "company"'},
+        {"also": "x" * (preferences.MAX_ALSO + 1)},
+        {"colour": "blue"},
+    ],
+)
 def test_a_choice_that_does_not_exist_is_refused(bad):
     with pytest.raises(preferences.PreferenceError):
         preferences.save(ALICE, **bad)
@@ -346,10 +362,13 @@ async def test_a_forced_language_reaches_the_rewrite(user, drafted, reworded):
     choose(user.email, refer_to="T2")
     from src.models import Question
 
-    answers = [AnsweredQuestion(
-        question=Question(id="1", text="هل يتم تشفير البيانات؟", language="ar"),
-        answer="Yes.", confidence=0.9,
-    )]
+    answers = [
+        AnsweredQuestion(
+            question=Question(id="1", text="هل يتم تشفير البيانات؟", language="ar"),
+            answer="Yes.",
+            confidence=0.9,
+        )
+    ]
     await tools.in_house_style(user, answers, language="en")
 
     assert reworded["languages"] == ["en"]
@@ -360,9 +379,12 @@ def test_the_typed_questions_path_applies_preferences_too(drafted, reworded):
     choose(identity.local_user().email, refer_to="T2")
     client = TestClient(app)
 
-    body = client.post("/api/assessments/answer-questions", json={
-        "questions": [{"text": "Do you review access rights?"}],
-    }).json()
+    body = client.post(
+        "/api/assessments/answer-questions",
+        json={
+            "questions": [{"text": "Do you review access rights?"}],
+        },
+    ).json()
 
     assert body["answers"][0]["answer"].startswith("STYLED: ")
     assert body["answers"][0]["drafted"].startswith("Yes. The organisation")
@@ -434,7 +456,7 @@ async def test_writing_an_answer_by_hand_replaces_the_draft_too(user, batch, dra
 
 
 async def test_rewording_leaves_what_a_person_wrote_alone(user, batch, drafted, reworded):
-    """"Make them all more formal" is about the drafts. Rewording a reviewer's
+    """ "Make them all more formal" is about the drafts. Rewording a reviewer's
     own sentence under it would put the model's words where theirs were."""
     await tools.answer(user, batch.id)
     mine = batch.form.questions[0].id
@@ -614,9 +636,14 @@ def test_skills_through_the_api():
     listed = client.get("/api/preferences").json()["skills"]
     assert {s["name"] for s in listed if s["builtin"]} == BUILTIN_NAMES
 
-    added = client.post("/api/skills", json={
-        "name": "Zain format", "description": "Zain's forms", "instruction": "One sentence.",
-    }).json()
+    added = client.post(
+        "/api/skills",
+        json={
+            "name": "Zain format",
+            "description": "Zain's forms",
+            "instruction": "One sentence.",
+        },
+    ).json()
     assert added["builtin"] is False
     assert client.post("/api/skills", json={"name": "zain format", "instruction": "Again."}).status_code == 400
 
@@ -660,16 +687,29 @@ def test_preferences_need_a_session(team):
     assert stranger.put("/api/preferences", json={"tone": "formal"}).status_code == 401
     assert stranger.post("/api/preferences/compose", json={}).status_code == 401
     assert stranger.post("/api/skills", json={"name": "x", "instruction": "y"}).status_code == 401
-    assert stranger.post("/api/preferences/try", json={
-        "instruction": "x", "question": "q", "answer": "a",
-    }).status_code == 401
+    assert (
+        stranger.post(
+            "/api/preferences/try",
+            json={
+                "instruction": "x",
+                "question": "q",
+                "answer": "a",
+            },
+        ).status_code
+        == 401
+    )
 
 
 def test_trying_an_instruction_stores_nothing(reworded):
     client = TestClient(app)
-    body = client.post("/api/preferences/try", json={
-        "instruction": preferences.PLAIN, "question": "Is data encrypted?", "answer": "Yes, with AES-256.",
-    }).json()
+    body = client.post(
+        "/api/preferences/try",
+        json={
+            "instruction": preferences.PLAIN,
+            "question": "Is data encrypted?",
+            "answer": "Yes, with AES-256.",
+        },
+    ).json()
 
     assert body["before"] == "Yes, with AES-256."
     assert body["after"] == "STYLED: Yes, with AES-256."
@@ -680,10 +720,16 @@ def test_trying_an_instruction_stores_nothing(reworded):
 
 def test_applying_a_skill_and_putting_a_draft_back_through_the_api(tmp_path, drafted, reworded):
     client = TestClient(app)
-    opened = client.post("/api/forms", files={"file": (
-        "vendor.xlsx", shapes.simple(tmp_path / "vendor.xlsx").read_bytes(),
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )}).json()
+    opened = client.post(
+        "/api/forms",
+        files={
+            "file": (
+                "vendor.xlsx",
+                shapes.simple(tmp_path / "vendor.xlsx").read_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    ).json()
     client.put("/api/preferences", json={"refer_to": "T2"})
     client.post(f"/api/forms/{opened['id']}/answer", json={})
     skill = preferences.BUILTIN_SKILLS[0]
@@ -695,9 +741,12 @@ def test_applying_a_skill_and_putting_a_draft_back_through_the_api(tmp_path, dra
     first = applied["batch"]["questions"][0]
     assert first["answered"]["drafted"], "the draft survives a skill applied on top"
 
-    restored = client.post(f"/api/forms/{opened['id']}/answers/draft", json={
-        "question_id": first["id"],
-    }).json()
+    restored = client.post(
+        f"/api/forms/{opened['id']}/answers/draft",
+        json={
+            "question_id": first["id"],
+        },
+    ).json()
     assert restored["questions"][0]["answer"].startswith("Yes. The organisation")
 
 

@@ -189,10 +189,8 @@ async def test_naming_a_question_does_not_lift_the_guard(filled, user, answers_y
 
 
 @pytest.mark.asyncio
-async def test_a_scope_of_nothing_but_answered_questions_is_not_nothing_matched(
-    filled, user, answers_yes
-):
-    """"Nothing matched" sends the caller off to check the sheet names. The
+async def test_a_scope_of_nothing_but_answered_questions_is_not_nothing_matched(filled, user, answers_yes):
+    """ "Nothing matched" sends the caller off to check the sheet names. The
     scope matched perfectly well; every question in it was already done."""
     already = filled.form.questions[0].id
     outcome = await tools.answer(user, filled.id, tools.Scope(ids=(already,)))
@@ -203,7 +201,10 @@ async def test_a_scope_of_nothing_but_answered_questions_is_not_nothing_matched(
 async def test_replacing_happens_when_it_is_asked_for(filled, user, answers_yes):
     already = filled.form.questions[0].id
     outcome = await tools.answer(
-        user, filled.id, tools.Scope(ids=(already,)), replace_existing=True,
+        user,
+        filled.id,
+        tools.Scope(ids=(already,)),
+        replace_existing=True,
     )
 
     assert outcome.attempted == 1
@@ -287,8 +288,7 @@ async def test_each_question_is_answered_in_its_own_language(user, tmp_path, ans
 @pytest.mark.asyncio
 async def test_answering_is_recorded_with_its_scope(batch, user, answers_yes):
     await tools.answer(user, batch.id, tools.Scope(matching="multi-factor"))
-    [recorded] = [e for e in events.for_subject(batches.SUBJECT, batch.id)
-                  if e.kind == events.BATCH_ANSWERED]
+    [recorded] = [e for e in events.for_subject(batches.SUBJECT, batch.id) if e.kind == events.BATCH_ANSWERED]
     assert recorded.payload["scope"] == "mentioning 'multi-factor'"
     assert recorded.payload["attempted"] == 1
 
@@ -391,8 +391,7 @@ def test_a_hand_written_answer_records_what_it_replaced(batch, user):
     tools.set_answer(user, batch.id, question.id, "First.")
     tools.set_answer(user, batch.id, question.id, "Second.")
 
-    edits = [e for e in events.for_subject(batches.SUBJECT, batch.id)
-             if e.kind == events.ANSWER_EDITED]
+    edits = [e for e in events.for_subject(batches.SUBJECT, batch.id) if e.kind == events.ANSWER_EDITED]
     assert edits[-1].payload["was"] == "First." and edits[-1].payload["now"] == "Second."
 
 
@@ -414,18 +413,18 @@ async def test_filling_writes_the_answers_into_a_copy(batch, user, answers_yes):
     assert batch.source_path.exists(), "the original is never consumed"
 
     from src import forms
+
     again = forms.detect(filled.path)
     assert again.answered_count == 4
 
 
 @pytest.mark.asyncio
-async def test_a_status_column_is_answered_in_the_files_own_words(
-    dropdown_batch, user, answers_yes
-):
+async def test_a_status_column_is_answered_in_the_files_own_words(dropdown_batch, user, answers_yes):
     await tools.answer(user, dropdown_batch.id)
     filled = tools.fill(user, dropdown_batch.id)
 
     from src.forms.xlsx_package import Workbook
+
     with Workbook(filled.path) as workbook:
         sheet = workbook["Human Resources"]
         assert sheet.value(2, "C") == "Fully Compliant"
@@ -434,12 +433,26 @@ async def test_a_status_column_is_answered_in_the_files_own_words(
 
 @pytest.mark.asyncio
 async def test_an_evidence_column_is_left_blank_and_says_why(user, tmp_path, answers_yes):
-    path = shapes.build(tmp_path / "ev.xlsx", [shapes.SheetSpec("Q", {
-        "A1": "S.No", "B1": "Question", "C1": "Response", "D1": "Evidence",
-        "A2": "1.0", "B2": "Does the vendor have documented security policies?",
-        "A3": "2.0", "B3": "Does the vendor review those policies annually?",
-        "A4": "3.0", "B4": "Are staff bound by non-disclosure agreements?",
-    })])
+    path = shapes.build(
+        tmp_path / "ev.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q",
+                {
+                    "A1": "S.No",
+                    "B1": "Question",
+                    "C1": "Response",
+                    "D1": "Evidence",
+                    "A2": "1.0",
+                    "B2": "Does the vendor have documented security policies?",
+                    "A3": "2.0",
+                    "B3": "Does the vendor review those policies annually?",
+                    "A4": "3.0",
+                    "B4": "Are staff bound by non-disclosure agreements?",
+                },
+            )
+        ],
+    )
     opened = tools.open_form(user, path)
     await tools.answer(user, opened.id)
     filled = tools.fill(user, opened.id)
@@ -465,7 +478,7 @@ async def test_filling_twice_reports_replacements(batch, user, answers_yes):
 
 
 def test_a_fill_that_writes_nothing_says_why(batch, user):
-    """"Wrote 0 value(s) -- every other part of the file is untouched" is true
+    """ "Wrote 0 value(s) -- every other part of the file is untouched" is true
     and reads like success, which is the worst way to learn that nothing
     reached your file."""
     filled = tools.fill(user, batch.id)
@@ -494,9 +507,7 @@ async def test_a_normal_fill_gives_no_reason(batch, user, answers_yes):
 @pytest.mark.asyncio
 async def test_a_fill_with_every_answer_set_aside_says_so(batch, user, answers_yes):
     await tools.answer(user, batch.id)
-    tools.set_questions(
-        user, batch.id, [{"id": q.id, "skip": True} for q in batch.form.questions]
-    )
+    tools.set_questions(user, batch.id, [{"id": q.id, "skip": True} for q in batch.form.questions])
     report = tools.fill(user, batch.id)
     assert report.written == 0 and "set aside" in report.because
 
@@ -559,6 +570,7 @@ async def test_fill_writes_whichever_length_was_chosen(batch, user, answers_yes,
     assert full.written == 4
 
     from src.forms.reading import read
+
     short_text = {q.id: q.existing_answer for q in read(brief.path, "rules").form.questions}
     long_text = {q.id: q.existing_answer for q in read(full.path, "rules").form.questions}
     assert any("briefly" in v for v in short_text.values())
@@ -566,12 +578,11 @@ async def test_fill_writes_whichever_length_was_chosen(batch, user, answers_yes,
 
 
 @pytest.mark.asyncio
-async def test_rewording_a_brief_questionnaire_rewords_what_is_written(
-    batch, user, answers_yes, monkeypatch
-):
+async def test_rewording_a_brief_questionnaire_rewords_what_is_written(batch, user, answers_yes, monkeypatch):
     """The brief form is condensed from the full answer. Rewording the full one
     kept the old brief, so on a questionnaire filled in briefly "make them more
     formal" changed nothing on the card and nothing in the file."""
+
     async def shorten(answered):
         return "Brief of: " + answered.answer
 
@@ -645,12 +656,11 @@ async def test_brief_falls_back_to_the_full_answer(batch, user, answers_yes):
 
 
 @pytest.mark.asyncio
-async def test_the_status_column_is_read_off_the_full_answer(
-    dropdown_batch, user, answers_yes, monkeypatch
-):
+async def test_the_status_column_is_read_off_the_full_answer(dropdown_batch, user, answers_yes, monkeypatch):
     """A condensed answer can lose the sentence the verdict was picked from, and
     the compliance dropdown must not change because somebody chose shorter
     prose."""
+
     async def drops_the_verdict(answered):
         return "Encryption is applied."
 
@@ -683,11 +693,14 @@ def test_a_questionnaire_starts_full(batch, user):
 @pytest.fixture
 def answers_doubtfully(monkeypatch):
     """The pipeline, unsure of itself: low confidence and flagged."""
+
     async def fake(questions, language=None, run_id=None, **extra):
         return [
             AnsweredQuestion(
-                question=question, answer="Probably, though the documentation is thin.",
-                confidence=0.3, needs_review=True,
+                question=question,
+                answer="Probably, though the documentation is thin.",
+                confidence=0.3,
+                needs_review=True,
                 review_reasons=["the sources do not cover this directly"],
             )
             for question in questions
@@ -710,11 +723,9 @@ async def test_an_unconfirmed_answer_is_not_written(batch, user, answers_doubtfu
 async def test_a_low_confidence_answer_is_held_back_even_unflagged(batch, user, monkeypatch):
     """The two signals are separate and either is enough. An answer can score
     badly without the mechanical checks having anything to say about it."""
+
     async def fake(questions, language=None, run_id=None, **extra):
-        return [
-            AnsweredQuestion(question=q, answer="Yes.", confidence=0.4, needs_review=False)
-            for q in questions
-        ]
+        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.4, needs_review=False) for q in questions]
 
     monkeypatch.setattr(tools.service, "answer_questions", fake)
     await tools.answer(user, batch.id)
@@ -831,9 +842,10 @@ async def test_open_answer_correct_fill(user, tmp_path, answers_yes):
     tools.set_answer(user, opened.id, question.id, "No, this is not in place.")
 
     filled = tools.fill(user, opened.id)
-    assert filled.intact and filled.written == 8   # four questions, status + comment each
+    assert filled.intact and filled.written == 8  # four questions, status + comment each
 
     from src.forms.xlsx_package import Workbook
+
     with Workbook(filled.path) as workbook:
         sheet = workbook["Human Resources"]
         assert sheet.value(3, "C") == "Non Compliant", "the correction reaches the dropdown too"
@@ -862,10 +874,11 @@ def test_the_columns_offered_are_the_ones_that_will_be_written(dropdown_batch, u
 
 
 def test_a_column_is_named_by_its_heading(dropdown_batch, user):
-    """"column D" alone is not something a person can find in their spreadsheet."""
+    """ "column D" alone is not something a person can find in their spreadsheet."""
     [sheet] = tools.column_roles(user, dropdown_batch.id)
     assert {c["column"]: c["label"] for c in sheet["columns"]} == {
-        "C": "Compliance Status", "D": "Additional Comments",
+        "C": "Compliance Status",
+        "D": "Additional Comments",
     }
 
 
@@ -903,11 +916,12 @@ def test_a_status_column_picks_up_its_own_files_words(dropdown_batch, user):
     """The vocabulary is whatever *this* file's dropdown offers, so a status
     moved onto a different column reads that column's list, not the old one."""
     updated = tools.set_column_role(user, dropdown_batch.id, "Human Resources", "C", "status")
-    [target] = [
-        t for t in updated["questions"][0]["targets"] if t["role"] == "status"
-    ]
+    [target] = [t for t in updated["questions"][0]["targets"] if t["role"] == "status"]
     assert target["vocabulary"] == [
-        "Fully Compliant", "Partially Compliant", "Non Compliant", "Not Applicable",
+        "Fully Compliant",
+        "Partially Compliant",
+        "Non Compliant",
+        "Not Applicable",
     ]
 
 
@@ -932,6 +946,7 @@ def test_a_correction_survives_answering(dropdown_batch, user, answers_yes):
     filled = tools.fill(user, dropdown_batch.id)
 
     from src.forms.xlsx_package import Workbook
+
     with Workbook(filled.path) as workbook:
         sheet = workbook["Human Resources"]
         assert sheet.value(2, "E").startswith("Yes,")
@@ -974,7 +989,9 @@ def test_the_file_gets_the_answer_without_its_markdown(batch, user):
     from src.forms.xlsx_package import Workbook
 
     question = batch.form.questions[0]
-    tools.set_answer(user, batch.id, question.id, "**Yes.** It is documented.\n\n- approved yearly\n- owned by the CISO")
+    tools.set_answer(
+        user, batch.id, question.id, "**Yes.** It is documented.\n\n- approved yearly\n- owned by the CISO"
+    )
 
     filled = tools.fill(user, batch.id)
 

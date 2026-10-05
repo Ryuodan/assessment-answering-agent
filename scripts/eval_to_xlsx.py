@@ -105,10 +105,7 @@ def build(payload: dict, out: Path, title: str) -> Path:
     # A column that is empty on every row invites the reader to wonder what
     # broke. "Cited its own memory entry" is one of those on the held-out set,
     # where no such entry exists to cite.
-    columns = [
-        column for column in COLUMNS
-        if any(str(_value(case, column[1])).strip() for case in cases) or not cases
-    ]
+    columns = [column for column in COLUMNS if any(str(_value(case, column[1])).strip() for case in cases) or not cases]
 
     for index, (label, _key, width) in enumerate(columns, start=1):
         cell = sheet.cell(row=1, column=index, value=label)
@@ -144,33 +141,42 @@ def build(payload: dict, out: Path, title: str) -> Path:
     if summary:
         line("Agreement with the team", f"{summary.get('agreement', 0)}%", bold=True)
         line("Form (verdict first, no hedging)", f"{summary.get('form', 0)}%")
-        line("Held back for a person to read",
-             f"{summary.get('held_back', 0)} of {summary.get('graded', 0)}")
-        line("Median words — ours / theirs",
-             f"{summary.get('median_words_ours', 0)} / {summary.get('median_words_theirs', 0)}"
-             "   (reported, never scored)")
+        line("Held back for a person to read", f"{summary.get('held_back', 0)} of {summary.get('graded', 0)}")
+        line(
+            "Median words — ours / theirs",
+            f"{summary.get('median_words_ours', 0)} / {summary.get('median_words_theirs', 0)}"
+            "   (reported, never scored)",
+        )
         twinned = summary.get("with_a_twin") or {}
         alone = summary.get("without_a_twin") or {}
-        line("Where the memory had a near-twin",
-             f"{twinned.get('cases', 0)} cases, agreement {twinned.get('agreement', 0)}%")
-        line("Where it did not",
-             f"{alone.get('cases', 0)} cases, agreement {alone.get('agreement', 0)}%")
+        line(
+            "Where the memory had a near-twin",
+            f"{twinned.get('cases', 0)} cases, agreement {twinned.get('agreement', 0)}%",
+        )
+        line("Where it did not", f"{alone.get('cases', 0)} cases, agreement {alone.get('agreement', 0)}%")
 
     line("", "")
-    line("How the judge scores", "Both answers go to the model with one question: does ours "
-         "assert the same position as theirs. Not which is better written, and not whether "
-         "ours is true — the facts set measures that separately. 5/5 is the same position; "
-         "0/5 is the opposite of it.")
+    line(
+        "How the judge scores",
+        "Both answers go to the model with one question: does ours "
+        "assert the same position as theirs. Not which is better written, and not whether "
+        "ours is true — the facts set measures that separately. 5/5 is the same position; "
+        "0/5 is the opposite of it.",
+    )
     line("", "")
     for verdict, meaning in VERDICTS.items():
         line(verdict, meaning)
     line("", "")
-    line("nearest remembered question",
-         "Cosine similarity between this question and the closest question in the answer "
-         "memory. Above 0.88 the memory has effectively been asked this before.")
-    line("would be written",
-         "Whether `fill` would write this answer without a person confirming it. "
-         "'held for review' means flagged, or below the confidence floor.")
+    line(
+        "nearest remembered question",
+        "Cosine similarity between this question and the closest question in the answer "
+        "memory. Above 0.88 the memory has effectively been asked this before.",
+    )
+    line(
+        "would be written",
+        "Whether `fill` would write this answer without a person confirming it. "
+        "'held for review' means flagged, or below the confidence floor.",
+    )
 
     out.parent.mkdir(parents=True, exist_ok=True)
     book.save(out)

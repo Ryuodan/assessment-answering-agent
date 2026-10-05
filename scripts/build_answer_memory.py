@@ -40,8 +40,7 @@ async def main_async(args) -> int:
         return 0
 
     if args.rescan:
-        print(f"  putting {answer_memory.reopen_for_scan(origin=args.origin)} entries "
-              "back in the queue")
+        print(f"  putting {answer_memory.reopen_for_scan(origin=args.origin)} entries back in the queue")
 
     started = time.monotonic()
     done = 0
@@ -58,9 +57,11 @@ async def main_async(args) -> int:
         for finding in found:
             print(f"  [{finding.kind:12s}] {finding.because}")
             print(f"      other: {finding.other_question[:90]}")
-        print(f"  ... {done} compared, {waiting} left, "
-              f"{len(answer_memory.conflicts())} conflict(s) so far "
-              f"({time.monotonic() - started:.0f}s)")
+        print(
+            f"  ... {done} compared, {waiting} left, "
+            f"{len(answer_memory.conflicts())} conflict(s) so far "
+            f"({time.monotonic() - started:.0f}s)"
+        )
         if not waiting:
             break
         if before == waiting:
@@ -71,8 +72,10 @@ async def main_async(args) -> int:
 
     print("\n" + "=" * 74)
     final = answer_memory.stats()
-    print(f"  {final['entries']} entries, {final['superseded']} superseded, "
-          f"{final['open_conflicts']} conflict(s) waiting for a person")
+    print(
+        f"  {final['entries']} entries, {final['superseded']} superseded, "
+        f"{final['open_conflicts']} conflict(s) waiting for a person"
+    )
     for conflict in answer_memory.conflicts():
         first, second = answer_memory.get(conflict.entry_id), answer_memory.get(conflict.other_id)
         if first is None or second is None:
@@ -89,8 +92,7 @@ def main() -> int:
     parser.add_argument("--batch", type=int, default=25)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--sync-only", action="store_true")
-    parser.add_argument("--rescan", action="store_true",
-                        help="compare entries that have already been compared once")
+    parser.add_argument("--rescan", action="store_true", help="compare entries that have already been compared once")
     parser.add_argument("--origin", default="", help="with --rescan: only this origin")
     args = parser.parse_args()
     configure_logging()

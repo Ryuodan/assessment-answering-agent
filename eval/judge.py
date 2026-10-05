@@ -117,9 +117,7 @@ async def judge_case(case: GoldenCase, answer: ScoredAnswer | None) -> Judgement
     return await structured_llm(Judgement, temperature=0.0, model=settings.eval_judge_model).ainvoke(messages)
 
 
-async def judge_all(
-    pairs: list[tuple[GoldenCase, ScoredAnswer | None]], concurrency: int = 4
-) -> list[Judgement]:
+async def judge_all(pairs: list[tuple[GoldenCase, ScoredAnswer | None]], concurrency: int = 4) -> list[Judgement]:
     """Grade every pair, bounded so the judge does not trip Groq's rate limit."""
     semaphore = asyncio.Semaphore(concurrency)
 

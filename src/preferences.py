@@ -151,18 +151,21 @@ def recommended(short_name: str) -> Preferences:
 
 def load(email: str) -> Preferences:
     """This person's preferences, or the defaults when they have set none."""
-    row = store.connect().execute(
-        "SELECT * FROM user_preferences WHERE email = ?", (normalise(email),),
-    ).fetchone()
+    row = (
+        store.connect()
+        .execute(
+            "SELECT * FROM user_preferences WHERE email = ?",
+            (normalise(email),),
+        )
+        .fetchone()
+    )
     if row is None:
         return Preferences()
     return Preferences(
         default_length=row["default_length"] if row["default_length"] in LENGTHS else "full",
         verdict_first=bool(row["verdict_first"]),
         refer_to=row["refer_to"],
-        policy_references=(
-            row["policy_references"] if row["policy_references"] in REFERENCES else "keep"
-        ),
+        policy_references=(row["policy_references"] if row["policy_references"] in REFERENCES else "keep"),
         tone=row["tone"] if row["tone"] in TONES else "as_drafted",
         also=row["style"],
     )
@@ -192,9 +195,7 @@ def save(email: str, **changes) -> Preferences:
     if '"' in wanted.refer_to:
         raise PreferenceError("Write what to call us without quotation marks.")
     if len(wanted.also) > MAX_ALSO:
-        raise PreferenceError(
-            f"The extra line can be at most {MAX_ALSO} characters; this one is {len(wanted.also)}."
-        )
+        raise PreferenceError(f"The extra line can be at most {MAX_ALSO} characters; this one is {len(wanted.also)}.")
 
     conn = store.connect()
     conn.execute(
@@ -212,8 +213,14 @@ def save(email: str, **changes) -> Preferences:
             updated_at = excluded.updated_at
         """,
         (
-            normalise(email), wanted.also, wanted.default_length, int(wanted.verdict_first),
-            wanted.refer_to, wanted.policy_references, wanted.tone, store.utcnow(),
+            normalise(email),
+            wanted.also,
+            wanted.default_length,
+            int(wanted.verdict_first),
+            wanted.refer_to,
+            wanted.policy_references,
+            wanted.tone,
+            store.utcnow(),
         ),
     )
     conn.commit()
@@ -298,18 +305,26 @@ BUILTIN_READ_ONLY = "Built-in skills cannot be changed. Make a copy and edit tha
 
 def _skill(row) -> Skill:
     return Skill(
-        skill_id=row["skill_id"], owner_email=row["owner_email"], name=row["name"],
-        description=row["description"], instruction=row["instruction"],
-        created_at=row["created_at"], updated_at=row["updated_at"],
+        skill_id=row["skill_id"],
+        owner_email=row["owner_email"],
+        name=row["name"],
+        description=row["description"],
+        instruction=row["instruction"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
     )
 
 
 def own_skills(email: str) -> list[Skill]:
     """The skills this person wrote, by name."""
-    rows = store.connect().execute(
-        "SELECT * FROM skills WHERE owner_email = ? ORDER BY name COLLATE NOCASE",
-        (normalise(email),),
-    ).fetchall()
+    rows = (
+        store.connect()
+        .execute(
+            "SELECT * FROM skills WHERE owner_email = ? ORDER BY name COLLATE NOCASE",
+            (normalise(email),),
+        )
+        .fetchall()
+    )
     return [_skill(row) for row in rows]
 
 
@@ -327,10 +342,14 @@ def get_skill(email: str, skill_id: str) -> Skill | None:
     """
     if skill_id in _BUILTIN:
         return _BUILTIN[skill_id]
-    row = store.connect().execute(
-        "SELECT * FROM skills WHERE skill_id = ? AND owner_email = ?",
-        (skill_id, normalise(email)),
-    ).fetchone()
+    row = (
+        store.connect()
+        .execute(
+            "SELECT * FROM skills WHERE skill_id = ? AND owner_email = ?",
+            (skill_id, normalise(email)),
+        )
+        .fetchone()
+    )
     return _skill(row) if row else None
 
 
@@ -361,15 +380,18 @@ def add_skill(email: str, name: str, instruction: str, description: str = "") ->
     name, description, instruction = _validate(name, description, instruction)
     owner = normalise(email)
     if len(own_skills(owner)) >= MAX_SKILLS:
-        raise PreferenceError(
-            f"You can keep at most {MAX_SKILLS} skills. Remove one you no longer use first."
-        )
+        raise PreferenceError(f"You can keep at most {MAX_SKILLS} skills. Remove one you no longer use first.")
     _refuse_duplicate(owner, name)
 
     now = store.utcnow()
     skill = Skill(
-        skill_id=f"skill-{uuid.uuid4().hex[:12]}", owner_email=owner, name=name,
-        description=description, instruction=instruction, created_at=now, updated_at=now,
+        skill_id=f"skill-{uuid.uuid4().hex[:12]}",
+        owner_email=owner,
+        name=name,
+        description=description,
+        instruction=instruction,
+        created_at=now,
+        updated_at=now,
     )
     conn = store.connect()
     conn.execute(
@@ -452,15 +474,11 @@ def _validate(name: str, description: str, instruction: str) -> tuple[str, str, 
     if len(name) > MAX_NAME:
         raise PreferenceError(f"A skill's name can be at most {MAX_NAME} characters.")
     if len(description) > MAX_DESCRIPTION:
-        raise PreferenceError(
-            f"A skill's description can be at most {MAX_DESCRIPTION} characters."
-        )
+        raise PreferenceError(f"A skill's description can be at most {MAX_DESCRIPTION} characters.")
     if not instruction:
         raise PreferenceError("A skill needs an instruction: how should the answers change?")
     if len(instruction) > MAX_INSTRUCTION:
-        raise PreferenceError(
-            f"A skill's instruction can be at most {MAX_INSTRUCTION} characters."
-        )
+        raise PreferenceError(f"A skill's instruction can be at most {MAX_INSTRUCTION} characters.")
     return name, description, instruction
 
 
@@ -469,7 +487,8 @@ def _refuse_duplicate(owner: str, name: str) -> None:
         if skill.name.casefold() == name.casefold():
             raise PreferenceError(
                 f"There is already a built-in skill called {name!r}. Make a copy to change it."
-                if skill.builtin else f"You already have a skill called {name!r}."
+                if skill.builtin
+                else f"You already have a skill called {name!r}."
             )
 
 

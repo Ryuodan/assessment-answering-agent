@@ -41,7 +41,9 @@ _ARABIC_TEXT = re.compile(r"[؀-ۿ]")
 
 
 async def ingest(
-    path: str | Path, source_type: SourceType, authority: str = "ours",
+    path: str | Path,
+    source_type: SourceType,
+    authority: str = "ours",
     team_id: str | None = None,
 ) -> IngestResult:
     """Index one uploaded file as either a guideline or a previously answered assessment.
@@ -190,8 +192,7 @@ def _looks_like_a_questionnaire(text: str, name: str) -> str | None:
     density = 1000 * text.count("?") / len(text)
     if density <= _QUESTION_DENSITY_LIMIT:
         return None
-    logger.warning("'%s' reads like a questionnaire (%.1f ?/1k chars) but was indexed as a guideline",
-                   name, density)
+    logger.warning("'%s' reads like a questionnaire (%.1f ?/1k chars) but was indexed as a guideline", name, density)
     return (
         f"'{name}' is mostly questions, so it may be an assessment form rather than a policy. "
         "It has been indexed as a guideline, which means its contents will be treated as "
@@ -201,7 +202,9 @@ def _looks_like_a_questionnaire(text: str, name: str) -> str | None:
 
 
 async def answer_assessment(
-    path: str | Path, language: Language | None = None, run_id: str | None = None,
+    path: str | Path,
+    language: Language | None = None,
+    run_id: str | None = None,
     team_id: str | None = None,
 ) -> AssessmentResult:
     """Answer every question in an assessment document.
@@ -289,8 +292,8 @@ async def answer_questions(
         async with semaphore:
             try:
                 return await answer_one_question(
-                    question, language or question.language, run_id=run_id or "",
-                    team_id=team_id)
+                    question, language or question.language, run_id=run_id or "", team_id=team_id
+                )
             except Exception as exc:  # noqa: BLE001 - contained per question, as in the fan-out
                 # The document flow already contains a per-question failure; this
                 # path did not, so a single transient upstream error — a model
@@ -425,9 +428,7 @@ def delete_source(source_name: str, team_id: str | None = None) -> None:
     """
     kind = get_store(team_id).source_type_of(source_name)
     if kind == SourceType.PRIOR_ANSWER.value:
-        raise NotADocument(
-            "Previous answers are part of the answer memory. Manage them on the Answer memory page."
-        )
+        raise NotADocument("Previous answers are part of the answer memory. Manage them on the Answer memory page.")
     if not kind:
         # Said, rather than reported as deleted: a name that was never indexed,
         # or already removed by somebody else, is not something this removed.
@@ -447,7 +448,10 @@ def clear_knowledge(team_id: str | None = None) -> None:
 
 
 def save_upload(
-    filename: str, content: bytes, team_id: str | None = None, owner: str = "",
+    filename: str,
+    content: bytes,
+    team_id: str | None = None,
+    owner: str = "",
 ) -> Path:
     """Persist an uploaded file under the configured upload directory.
 
@@ -466,8 +470,7 @@ def save_upload(
     settings.ensure_directories()
     # A questionnaire goes to the person who uploaded it; a policy for the
     # knowledge base goes to the team, because that is who it answers for.
-    directory = (settings.user_upload_dir(team_id, owner) if owner
-                 else settings.team_upload_dir(team_id))
+    directory = settings.user_upload_dir(team_id, owner) if owner else settings.team_upload_dir(team_id)
     directory.mkdir(parents=True, exist_ok=True)
     name = Path(filename).name
     destination = directory / name
@@ -492,12 +495,11 @@ def list_documents(team_id: str | None = None, owner: str = "") -> list[dict]:
     settings.ensure_directories()
     paths = _document_files(settings.user_upload_dir(team_id, owner)) if owner else []
     paths += [
-        path for path in _document_files(settings.team_upload_dir(team_id))
+        path
+        for path in _document_files(settings.team_upload_dir(team_id))
         if _may_read_shared(path.name, team_id, owner)
     ]
-    documents = [
-        _document_info(path, origin="uploaded", category="uploaded") for path in paths
-    ]
+    documents = [_document_info(path, origin="uploaded", category="uploaded") for path in paths]
     return sorted(documents, key=lambda document: document["name"])
 
 
@@ -522,7 +524,11 @@ def _may_read_shared(name: str, team_id: str | None, owner: str) -> bool:
 
 
 def resolve_document(
-    origin: str, category: str, name: str, team_id: str | None = None, owner: str = "",
+    origin: str,
+    category: str,
+    name: str,
+    team_id: str | None = None,
+    owner: str = "",
 ) -> Path:
     """Resolve a catalog document without allowing traversal outside its directory.
 
@@ -697,9 +703,7 @@ def _preview_table(table) -> str:
 def _document_files(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
-    return sorted(
-        path for path in directory.iterdir() if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
-    )
+    return sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES)
 
 
 def _document_info(path: Path, *, origin: str, category: str) -> dict:

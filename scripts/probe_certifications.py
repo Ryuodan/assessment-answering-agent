@@ -40,8 +40,11 @@ def certification_questions() -> list[HouseCase]:
         rows.extend(json.loads((PROJECT_ROOT / "eval" / name).read_text(encoding="utf-8")))
     return [
         HouseCase(
-            test_id=row["test_id"], question=row["question"], answer=row["answer"],
-            file=row.get("file", ""), section=row.get("section", ""),
+            test_id=row["test_id"],
+            question=row["question"],
+            answer=row["answer"],
+            file=row.get("file", ""),
+            section=row.get("section", ""),
         )
         for row in rows
         if MENTIONS.search(row["question"]) or MENTIONS.search(row["answer"])
@@ -56,18 +59,19 @@ async def main_async(args) -> int:
         cases = cases[: args.limit]
     print(f"{len(cases)} question(s) turning on a certification\n")
 
-    answers = await service.answer_questions(
-        [c.as_question(i) for i, c in enumerate(cases)]
-    )
-    verdicts = await asyncio.gather(*(
-        judge_agreement(c, a.answer) for c, a in zip(cases, answers)
-    ))
+    answers = await service.answer_questions([c.as_question(i) for i, c in enumerate(cases)])
+    verdicts = await asyncio.gather(*(judge_agreement(c, a.answer) for c, a in zip(cases, answers)))
 
     denials = 0
     for case, produced, verdict in zip(cases, answers, verdicts):
-        denied = bool(re.search(
-            r"\b(do(es)? not (hold|have)|no .{0,20}certificat|not certified|"
-            r"holds no|without any certificat)\b", produced.answer, re.I))
+        denied = bool(
+            re.search(
+                r"\b(do(es)? not (hold|have)|no .{0,20}certificat|not certified|"
+                r"holds no|without any certificat)\b",
+                produced.answer,
+                re.I,
+            )
+        )
         denials += denied
         mark = "DENIES" if denied else verdict.verdict
         print(f"  [{mark:12s}] conf {produced.confidence:.2f}  {case.question[:70]}")
@@ -76,10 +80,11 @@ async def main_async(args) -> int:
         print()
 
     from collections import Counter
+
     counts = Counter(v.verdict for v in verdicts)
     agreed = sum(1 for v in verdicts if v.verdict in ("same", "broader"))
     print("=" * 74)
-    print(f"  agreed with the team on {agreed}/{len(cases)} ({agreed/len(cases):.0%})")
+    print(f"  agreed with the team on {agreed}/{len(cases)} ({agreed / len(cases):.0%})")
     print(f"  wrongly denied a certification: {denials}")
     print(f"  verdicts: " + ", ".join(f"{k} {v}" for k, v in counts.most_common()))
     return 0

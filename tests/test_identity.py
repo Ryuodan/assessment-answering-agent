@@ -93,9 +93,11 @@ def test_startup_removes_the_stand_in_once_people_sign_in(team):
     identity.bootstrap()
 
     assert identity.find_user_any(identity.LOCAL_EMAIL) is None
-    assert not store.connect().execute(
-        "SELECT COUNT(*) FROM sessions WHERE email = ?", (identity.LOCAL_EMAIL,)
-    ).fetchone()[0]
+    assert (
+        not store.connect()
+        .execute("SELECT COUNT(*) FROM sessions WHERE email = ?", (identity.LOCAL_EMAIL,))
+        .fetchone()[0]
+    )
 
 
 def test_a_script_run_against_a_deployment_does_not_recreate_the_stand_in(team):
@@ -191,8 +193,8 @@ def test_a_team_with_no_code_cannot_be_signed_in_to():
 @pytest.mark.parametrize(
     "email, secret",
     [
-        ("nobody@example.com", CODE),   # unknown address, right code
-        (ALICE, "wrong"),               # known address, wrong code
+        ("nobody@example.com", CODE),  # unknown address, right code
+        (ALICE, "wrong"),  # known address, wrong code
         ("nobody@example.com", "wrong"),
     ],
 )
@@ -223,7 +225,8 @@ def test_an_unknown_address_costs_the_same_as_a_known_one(team, monkeypatch):
     calls: list[str] = []
     real = credentials.verify_secret
     monkeypatch.setattr(
-        credentials, "verify_secret",
+        credentials,
+        "verify_secret",
         lambda secret, stored: calls.append(stored) or real(secret, stored),
     )
     monkeypatch.setattr(settings, "sign_in_max_attempts", 1000)
@@ -273,9 +276,7 @@ def test_clearing_a_password_returns_someone_to_the_team_code(team):
 
 def test_a_password_is_hashed_with_a_slow_kdf(team):
     identity.add_user(BOB, password="a-long-admin-password")
-    stored = store.connect().execute(
-        "SELECT password_hash FROM users WHERE email = ?", (BOB,)
-    ).fetchone()[0]
+    stored = store.connect().execute("SELECT password_hash FROM users WHERE email = ?", (BOB,)).fetchone()[0]
     assert stored.startswith("scrypt$")
     assert "a-long-admin-password" not in stored
 

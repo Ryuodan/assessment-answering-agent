@@ -7,7 +7,9 @@ from collections import Counter
 from harness.typecheck import TypeError_, judge
 
 
-def error(path: str = "src/a.py", line: int = 1, code: str = "type-arg", message: str = "Missing type parameters") -> TypeError_:
+def error(
+    path: str = "src/a.py", line: int = 1, code: str = "type-arg", message: str = "Missing type parameters"
+) -> TypeError_:
     return TypeError_(path=path, line=line, code=code, message=message)
 
 

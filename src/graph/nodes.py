@@ -223,9 +223,12 @@ async def retrieve(state: QuestionState) -> dict:
 
     attempt = state.get("attempt", 0) + 1
     logger.debug(
-        "Question %s attempt %d: %d queries, %d prior, %d guideline hits, "
-        "%d chunk(s) found by more than one query",
-        state["question"].id, attempt, len(queries), len(prior_answers), len(guidelines),
+        "Question %s attempt %d: %d queries, %d prior, %d guideline hits, %d chunk(s) found by more than one query",
+        state["question"].id,
+        attempt,
+        len(queries),
+        len(prior_answers),
+        len(guidelines),
         sum(1 for count in agreement.values() if count > 1),
     )
     return {"evidence": prior_answers + guidelines, "attempt": attempt}
@@ -268,11 +271,14 @@ async def draft(state: QuestionState) -> dict:
     # rather than the next restart.
     profile = organisation.load()
     messages = [
-        ("system", ANSWER_SYSTEM.format(
-            language_name=language_name,
-            organisation=profile.describe(),
-            addressed_as=organisation.ADDRESSED_AS,
-        )),
+        (
+            "system",
+            ANSWER_SYSTEM.format(
+                language_name=language_name,
+                organisation=profile.describe(),
+                addressed_as=organisation.ADDRESSED_AS,
+            ),
+        ),
         (
             "user",
             ANSWER_USER.format(
@@ -389,8 +395,9 @@ def route_after_review(state: QuestionState) -> str:
     if verdict.grounded:
         return "finalize"
     if state.get("attempt", 1) >= settings.max_answer_attempts:
-        logger.info("Question %s: accepting ungrounded answer after %d attempts",
-                    state["question"].id, state.get("attempt", 1))
+        logger.info(
+            "Question %s: accepting ungrounded answer after %d attempts", state["question"].id, state.get("attempt", 1)
+        )
         return "finalize"
     if not verdict.refined_query.strip():
         return "finalize"

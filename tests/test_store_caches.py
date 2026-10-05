@@ -46,7 +46,7 @@ def test_a_deleted_document_disappears_immediately(store):
 
 def test_reset_empties_every_derived_view(store):
     store.add_guideline("policy.pdf", "## 1 Scope\n\nSomething.")
-    store.stats()                      # warm every cache
+    store.stats()  # warm every cache
     store.documents_indexed()
     store.text_search("something", SourceType.GUIDELINE, 5)
 
@@ -90,14 +90,23 @@ def test_a_read_while_a_write_is_in_flight_does_not_leave_the_catalog_stale(stor
     from tests.conftest import FakeDocument
 
     store.add_guideline("old.pdf", "## 1 Scope\n\nRetention is 30 days.")
-    store.add_entry("MEM-1", FakeDocument("Q: a\nA: b", {
-        "source_type": "prior_answer", "source_name": "Answer memory", "entry_id": "MEM-1", "chunk": 0,
-    }))
+    store.add_entry(
+        "MEM-1",
+        FakeDocument(
+            "Q: a\nA: b",
+            {
+                "source_type": "prior_answer",
+                "source_name": "Answer memory",
+                "entry_id": "MEM-1",
+                "chunk": 0,
+            },
+        ),
+    )
 
     writing, deleting = store._store.add_documents, store._store.delete
 
     def add_while_someone_reads(documents, ids=None):
-        store.stats()                    # a page load, mid-embedding
+        store.stats()  # a page load, mid-embedding
         return writing(documents, ids=ids)
 
     def delete_while_someone_reads(where=None, ids=None):
@@ -111,9 +120,18 @@ def test_a_read_while_a_write_is_in_flight_does_not_leave_the_catalog_stale(stor
         store.add_guideline("new.pdf", "## 1 Scope\n\nBackups run nightly.")
         assert "new.pdf" in store.documents_indexed()
     elif write == "entry":
-        store.add_entry("MEM-2", FakeDocument("Q: c\nA: d", {
-            "source_type": "prior_answer", "source_name": "Answer memory", "entry_id": "MEM-2", "chunk": 1,
-        }))
+        store.add_entry(
+            "MEM-2",
+            FakeDocument(
+                "Q: c\nA: d",
+                {
+                    "source_type": "prior_answer",
+                    "source_name": "Answer memory",
+                    "entry_id": "MEM-2",
+                    "chunk": 1,
+                },
+            ),
+        )
         assert store.counts_by_type()["prior_answer"] == 2
     elif write == "remove_entry":
         store.remove_entry("MEM-1")
@@ -140,8 +158,7 @@ def test_caches_are_built_once_under_concurrency(store, monkeypatch):
     monkeypatch.setattr(store._store, "get", counting)
 
     with cf.ThreadPoolExecutor(8) as pool:
-        results = list(pool.map(
-            lambda _: len(store.text_search("access", SourceType.GUIDELINE, 5)), range(8)))
+        results = list(pool.map(lambda _: len(store.text_search("access", SourceType.GUIDELINE, 5)), range(8)))
 
     assert len(set(results)) == 1, "every thread must see the same corpus"
     assert len(builds) <= 2, f"the chunk map was fetched {len(builds)} times"

@@ -47,11 +47,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # a slow run from a stuck one.
 print = functools.partial(print, flush=True)  # noqa: A001
 
-from src import forms                                             # noqa: E402
-from src.forms import reading as reading_module                   # noqa: E402
-from src.forms.reading import Reading, disagreements, read        # noqa: E402
-from src.forms.model import Role                                  # noqa: E402
-from scripts.check_forms import _answers, _parts                  # noqa: E402
+from src import forms  # noqa: E402
+from src.forms import reading as reading_module  # noqa: E402
+from src.forms.reading import Reading, disagreements, read  # noqa: E402
+from src.forms.model import Role  # noqa: E402
+from scripts.check_forms import _answers, _parts  # noqa: E402
 
 
 def _write_back(path: Path, form, destination: Path, strategy: str) -> str:
@@ -79,7 +79,8 @@ def _write_back(path: Path, form, destination: Path, strategy: str) -> str:
     before, after = _parts(path), _parts(destination)
     lost = sorted(set(before) - set(after))
     changed = [
-        name for name in sorted(set(before) & set(after))
+        name
+        for name in sorted(set(before) & set(after))
         if before[name] != after[name] and not name.startswith("xl/worksheets/")
     ]
     if path.suffix.lower() == ".docx":
@@ -96,7 +97,9 @@ def _write_back(path: Path, form, destination: Path, strategy: str) -> str:
     # measures the strategy rather than always measuring the rules.
     again = read(destination, strategy).form
     landed = sum(
-        1 for question in again.questions for target in question.writable
+        1
+        for question in again.questions
+        for target in question.writable
         if target.role in (Role.ANSWER, Role.STATUS) and target.existing.strip()
     )
     stable = [q.id for q in again.questions] == [q.id for q in form.questions]
@@ -107,8 +110,7 @@ def _write_back(path: Path, form, destination: Path, strategy: str) -> str:
     return f"ok, wrote {result.written}, re-read {landed}"
 
 
-def compare(path: Path, strategies: list[str], *, write: bool, workspace: Path,
-            verbose: bool) -> dict:
+def compare(path: Path, strategies: list[str], *, write: bool, workspace: Path, verbose: bool) -> dict:
     """Read one file every way asked for, and report."""
     print(f"\n{'=' * 100}\n{path.name}")
     readings: dict[str, Reading] = {}
@@ -126,9 +128,7 @@ def compare(path: Path, strategies: list[str], *, write: bool, workspace: Path,
 
         readings[strategy] = result
         sheets = sum(1 for part in result.form.parts if part.used)
-        unsure = sum(
-            1 for part in result.form.parts for finding in part.findings if not finding.confident
-        )
+        unsure = sum(1 for part in result.form.parts for finding in part.findings if not finding.confident)
         line = (
             f"  {strategy:9s} {result.questions:5d} question(s)  {sheets:3d} sheet(s)  "
             f"{result.seconds:7.2f}s  {result.model_calls:3d} model call(s)  "
@@ -141,10 +141,15 @@ def compare(path: Path, strategies: list[str], *, write: bool, workspace: Path,
             print(f"             - {note}")
 
         entry = {
-            "questions": result.questions, "sheets": sheets, "seconds": round(result.seconds, 2),
-            "model_calls": result.model_calls, "tool_calls": result.tool_calls,
-            "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
-            "unconfident_findings": unsure, "notes": result.notes,
+            "questions": result.questions,
+            "sheets": sheets,
+            "seconds": round(result.seconds, 2),
+            "model_calls": result.model_calls,
+            "tool_calls": result.tool_calls,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "unconfident_findings": unsure,
+            "notes": result.notes,
         }
         if write:
             destination = workspace / f"{strategy}-{path.name}"
@@ -164,40 +169,46 @@ def compare(path: Path, strategies: list[str], *, write: bool, workspace: Path,
     if verbose:
         for strategy, result in readings.items():
             unsure = [
-                (part.name, finding)
-                for part in result.form.parts for finding in part.findings
-                if not finding.confident
+                (part.name, finding) for part in result.form.parts for finding in part.findings if not finding.confident
             ]
             for name, finding in unsure[:12]:
-                print(f"      [{strategy}] {name[:20]:20s} {finding.subject[:18]:18s} "
-                      f"-> {finding.verdict:10s} {finding.because[:60]}")
+                print(
+                    f"      [{strategy}] {name[:20]:20s} {finding.subject[:18]:18s} "
+                    f"-> {finding.verdict:10s} {finding.because[:60]}"
+                )
     return row
 
 
 def summarise(rows: list[dict], strategies: list[str]) -> None:
     print(f"\n{'=' * 100}\nSUMMARY over {len(rows)} file(s)\n")
-    header = f"  {'strategy':10s} {'questions':>10s} {'seconds':>9s} {'model calls':>12s} {'tokens':>10s} {'failures':>9s}"
+    header = (
+        f"  {'strategy':10s} {'questions':>10s} {'seconds':>9s} {'model calls':>12s} {'tokens':>10s} {'failures':>9s}"
+    )
     print(header)
     print("  " + "-" * (len(header) - 2))
     for strategy in strategies:
         entries = [
-            row["strategies"][strategy] for row in rows
+            row["strategies"][strategy]
+            for row in rows
             if strategy in row["strategies"] and "error" not in row["strategies"][strategy]
         ]
         # Anything that did not start with "ok" is a failure. Testing for an
         # all-upper-case message missed `UNSTABLE: re-opened as 0 question(s)`,
         # which is the most serious result this script can produce.
         failures = sum(
-            1 for row in rows
-            if strategy not in row["strategies"] or "error" in row["strategies"][strategy]
-            or not str(row["strategies"][strategy].get("write_back", "ok")).startswith(
-                ("ok", "nothing writable"))
+            1
+            for row in rows
+            if strategy not in row["strategies"]
+            or "error" in row["strategies"][strategy]
+            or not str(row["strategies"][strategy].get("write_back", "ok")).startswith(("ok", "nothing writable"))
         )
-        print(f"  {strategy:10s} {sum(e['questions'] for e in entries):10d} "
-              f"{sum(e['seconds'] for e in entries):9.1f} "
-              f"{sum(e['model_calls'] for e in entries):12d} "
-              f"{sum(e['input_tokens'] + e['output_tokens'] for e in entries):10d} "
-              f"{failures:9d}")
+        print(
+            f"  {strategy:10s} {sum(e['questions'] for e in entries):10d} "
+            f"{sum(e['seconds'] for e in entries):9.1f} "
+            f"{sum(e['model_calls'] for e in entries):12d} "
+            f"{sum(e['input_tokens'] + e['output_tokens'] for e in entries):10d} "
+            f"{failures:9d}"
+        )
 
     disputed = [row for row in rows if row["disagreements"]]
     print(f"\n  {len(disputed)} of {len(rows)} file(s) read differently by different strategies.")
@@ -209,14 +220,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("folder", type=Path, help="Directory of questionnaires")
     parser.add_argument(
-        "--strategies", default=",".join(reading_module.STRATEGIES),
+        "--strategies",
+        default=",".join(reading_module.STRATEGIES),
         help="Comma-separated: " + ", ".join(reading_module.STRATEGIES),
     )
-    parser.add_argument("--write", action="store_true",
-                        help="Also answer each reading into a copy and check fidelity")
+    parser.add_argument("--write", action="store_true", help="Also answer each reading into a copy and check fidelity")
     parser.add_argument("--json", type=Path, help="Write the results here as JSON")
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Show the readings marked for checking, and tracebacks")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show the readings marked for checking, and tracebacks"
+    )
     args = parser.parse_args()
 
     strategies = [s.strip() for s in args.strategies.split(",") if s.strip()]
@@ -229,7 +241,8 @@ def main() -> int:
         return 2
 
     files = sorted(
-        path for path in args.folder.rglob("*")
+        path
+        for path in args.folder.rglob("*")
         if path.suffix.lower() in forms.SUPPORTED and not path.name.startswith("~$")
     )
     if not files:
@@ -241,8 +254,7 @@ def main() -> int:
     rows = []
     try:
         for path in files:
-            rows.append(compare(path, strategies, write=args.write,
-                                workspace=workspace, verbose=args.verbose))
+            rows.append(compare(path, strategies, write=args.write, workspace=workspace, verbose=args.verbose))
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 

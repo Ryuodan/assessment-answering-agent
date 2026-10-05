@@ -294,6 +294,7 @@ def test_build_units_is_stable_on_headings_only():
     blocks = parse_blocks("# A\n\n## B\n\n### C\n")
     assert build_units(blocks)
 
+
 # --- coalescing ------------------------------------------------------------
 
 # The shape that caused the regression: "3.4 End or Termination of Employment"
@@ -397,6 +398,7 @@ def test_hard_wrap_leaves_short_text_alone():
 
 def _texts(doc: str, size: int = 1800) -> list[str]:
     from src.chunking import chunk_document
+
     return [c.text for c in chunk_document(doc, source_name="x.pdf", chunk_size=size)]
 
 
@@ -413,19 +415,14 @@ def test_a_heading_followed_by_a_heading_is_not_its_own_chunk():
 
 
 def test_an_arabic_heading_run_is_absorbed_the_same_way():
-    doc = (
-        "## المحتويات\n\n"
-        "## 1. المقدمة\n\n"
-        + ("تهدف هذه السياسة إلى تحديد المتطلبات. " * 20)
-        + "\n"
-    )
+    doc = "## المحتويات\n\n## 1. المقدمة\n\n" + ("تهدف هذه السياسة إلى تحديد المتطلبات. " * 20) + "\n"
     chunks = _texts(doc)
     assert len(chunks) == 1
     assert "المحتويات" in chunks[0]
 
 
 def test_a_trailing_runt_is_folded_backwards():
-    doc = ("## A\n\n" + ("Body text here. " * 120) + "\n\n## Z\n")
+    doc = "## A\n\n" + ("Body text here. " * 120) + "\n\n## Z\n"
     assert not any(c.strip() == "## Z" for c in _texts(doc))
 
 
@@ -473,8 +470,7 @@ def test_a_nearly_full_group_is_not_folded_into_an_unsplittable_block():
     doc = f"## 9.1.2 Controls\n\n{filler}\n\n| A | B |\n|---|---|\n{wide_row}\n"
 
     chunks = chunk_document(doc, source_name="x.pdf", chunk_size=1800)
-    assert all(len(c.text) <= 1800 * 1.3 for c in chunks), \
-        f"oversize: {sorted(len(c.text) for c in chunks)}"
+    assert all(len(c.text) <= 1800 * 1.3 for c in chunks), f"oversize: {sorted(len(c.text) for c in chunks)}"
 
 
 # --- two numbering conventions ---------------------------------------------
@@ -509,14 +505,17 @@ def test_dashed_ids_sort_numerically():
     assert clause_range(["1-1-10", "1-1-2", "1-1-9"]) == ("1-1-2", "1-1-10")
 
 
-@pytest.mark.parametrize(("row", "expected"), [
-    ("| 1-1-1     | The entity shall document its strategy. |", "1-1-1"),
-    ("| **2-3-4** | Bold, as a converter emits it. |", "2-3-4"),
-    ("|  1-2-3-4  | Four groups. |", "1-2-3-4"),
-    ("| 2024-2025 | A year range is not a control. |", None),
-    ("| 1-2 | Two groups could be a range. |", None),
-    ("Prose mentioning 1-1-1 mid-sentence.", None),
-])
+@pytest.mark.parametrize(
+    ("row", "expected"),
+    [
+        ("| 1-1-1     | The entity shall document its strategy. |", "1-1-1"),
+        ("| **2-3-4** | Bold, as a converter emits it. |", "2-3-4"),
+        ("|  1-2-3-4  | Four groups. |", "1-2-3-4"),
+        ("| 2024-2025 | A year range is not a control. |", None),
+        ("| 1-2 | Two groups could be a range. |", None),
+        ("Prose mentioning 1-1-1 mid-sentence.", None),
+    ],
+)
 def test_only_an_unambiguous_control_id_in_the_first_cell_counts(row, expected):
     from src.chunking import row_control_id
 
@@ -528,8 +527,7 @@ def test_a_control_table_chunk_carries_the_range_of_rows_it_holds():
     from src.chunking import chunk_document
 
     rows = "\n".join(
-        f"| 1-1-{n} | The entity shall satisfy requirement number {n}. " + "Detail. " * 40 + "|"
-        for n in range(1, 10)
+        f"| 1-1-{n} | The entity shall satisfy requirement number {n}. " + "Detail. " * 40 + "|" for n in range(1, 10)
     )
     # No numbered heading, so the range comes from the rows alone. A heading
     # that carries its own clause widens the span on purpose — see below.
@@ -550,13 +548,12 @@ def test_a_numbered_heading_does_not_narrow_the_table_it_introduces():
     rows must be cited by the rows, not by the section they sit under."""
     from src.chunking import chunk_document
 
-    rows = "\n".join(
-        f"| 1-1-{n} | Requirement {n}. " + "Detail. " * 40 + "|" for n in range(1, 6)
-    )
+    rows = "\n".join(f"| 1-1-{n} | Requirement {n}. " + "Detail. " * 40 + "|" for n in range(1, 6))
     doc = f"## 1 Governance\n\n| Control | Requirement |\n|---|---|\n{rows}\n"
 
-    table = next(c for c in chunk_document(doc, source_name="ecc.pdf", chunk_size=1800)
-                 if c.metadata.get("kind") == "table")
+    table = next(
+        c for c in chunk_document(doc, source_name="ecc.pdf", chunk_size=1800) if c.metadata.get("kind") == "table"
+    )
 
     assert table.metadata["clause_start"] == "1-1-1"
     assert table.metadata["clause_end"] == "1-1-5"
@@ -567,8 +564,7 @@ def test_a_dotted_document_is_unaffected():
     from src.chunking import chunk_document
 
     doc = "## 3.4 Access\n\n" + "\n".join(
-        f"- 3.4.{n} Access is reviewed at defined intervals. " + "Detail. " * 20
-        for n in range(1, 8)
+        f"- 3.4.{n} Access is reviewed at defined intervals. " + "Detail. " * 20 for n in range(1, 8)
     )
     chunks = chunk_document(doc, source_name="policy.pdf", chunk_size=1800)
     starts = [c.metadata.get("clause_start") for c in chunks if c.metadata.get("clause_start")]
@@ -654,10 +650,7 @@ def test_a_split_table_carries_the_row_that_names_the_columns():
     """Docling flattens a merged cell by repeating it once per column spanned,
     so row one can be `| | Systems | Systems | ... |` — which names nothing. A
     piece carrying only that header is unreadable."""
-    rows = "\n".join(
-        f"| Row {n} | 3 Monthly | Monthly | 3 Months | " + "pad " * 30 + "|"
-        for n in range(1, 12)
-    )
+    rows = "\n".join(f"| Row {n} | 3 Monthly | Monthly | 3 Months | " + "pad " * 30 + "|" for n in range(1, 12))
     doc = (
         "## 3.1 General\n\n"
         "|  | Systems | Systems | Systems | Systems |\n"
@@ -665,8 +658,7 @@ def test_a_split_table_carries_the_row_that_names_the_columns():
         "| Asset Type | All systems | Internet-facing | Internal | Cloud |\n"
         f"{rows}\n"
     )
-    tables = [c for c in chunk_document(doc, source_name="v.pdf", chunk_size=900)
-              if c.metadata["kind"] == "table"]
+    tables = [c for c in chunk_document(doc, source_name="v.pdf", chunk_size=900) if c.metadata["kind"] == "table"]
 
     assert len(tables) > 1, "expected the table to split"
     assert all("Asset Type | All systems" in t.text for t in tables)
@@ -677,8 +669,7 @@ def test_an_ordinary_header_is_not_padded_out_with_body_rows():
     would lose its first rows into every piece's header."""
     rows = "\n".join(f"| Row{n} | value-{n} | note {n} |" for n in range(1, 40))
     doc = "## 9.1 Matrix\n\n| Level | Handling | Retention |\n| --- | --- | --- |\n" + rows
-    tables = [c for c in chunk_document(doc, source_name="t.pdf", chunk_size=400)
-              if c.metadata["kind"] == "table"]
+    tables = [c for c in chunk_document(doc, source_name="t.pdf", chunk_size=400) if c.metadata["kind"] == "table"]
 
     assert len(tables) > 1
     assert sum(t.text.count("Row1 |") for t in tables) == 1, "a body row became a header"
@@ -710,8 +701,7 @@ def test_a_table_is_cited_by_the_clause_that_introduces_it():
     table = next(b for b in parse_blocks(doc) if b.kind == "table")
     assert table.clause == "3.1.1", "the colon clause introduces the table"
 
-    holding = next(c for c in chunk_document(doc, source_name="v.pdf", chunk_size=700)
-                   if "Operating Systems" in c.text)
+    holding = next(c for c in chunk_document(doc, source_name="v.pdf", chunk_size=700) if "Operating Systems" in c.text)
     assert holding.metadata["clause_start"] == "3.1.1"
 
 
@@ -825,10 +815,7 @@ def test_figure_placeholders_never_reach_a_chunk():
 def test_a_page_that_is_nothing_but_a_figure_is_not_indexed():
     """The cover page case: a chunk whose entire body was the placeholder used to
     be indexed, embed to something, and render as an empty card."""
-    doc = (
-        "--- page 1 ---\n\n<!-- image -->\n\n"
-        "--- page 2 ---\n\n## Access Control\n\nAccess is reviewed quarterly.\n"
-    )
+    doc = "--- page 1 ---\n\n<!-- image -->\n\n--- page 2 ---\n\n## Access Control\n\nAccess is reviewed quarterly.\n"
     chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
 
     assert chunks, "the real page must survive"

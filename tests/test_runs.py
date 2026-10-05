@@ -127,12 +127,17 @@ def test_a_run_survives_a_reconnect():
 
 
 def test_the_summary_counts_reviews_and_errors():
-    runs.save(ALICE, _result(answers=[
-        _answer(1),
-        _answer(2, needs_review=True),
-        _answer(3, needs_review=True),
-        _answer(4, error="Groq rate limit"),
-    ]))
+    runs.save(
+        ALICE,
+        _result(
+            answers=[
+                _answer(1),
+                _answer(2, needs_review=True),
+                _answer(3, needs_review=True),
+                _answer(4, error="Groq rate limit"),
+            ]
+        ),
+    )
     summary = runs.load("r1").summary
     assert summary.answer_count == 4
     assert summary.needs_review_count == 2

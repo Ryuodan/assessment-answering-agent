@@ -83,7 +83,8 @@ def test_a_good_reading_produces_questions_and_targets(book):
     ]
     assert questions[0].number == "1.1"
     assert {role.value: target.id for role, target in questions[0].targets.items()} == {
-        "status": "Assessment!C6", "answer": "Assessment!D6",
+        "status": "Assessment!C6",
+        "answer": "Assessment!D6",
     }
     assert questions[0].targets[Role.STATUS].vocabulary == ["Yes", "No", "Partial"]
 
@@ -122,10 +123,16 @@ def test_a_column_letter_the_sheet_does_not_have_is_dropped(book):
     """Not fatal -- the rest of the reading may be perfectly good -- but it
     cannot become a target, because there is nothing there to write into."""
     workbook, sheet = book
-    part, questions = llm_layout.apply(workbook, sheet, reading(columns=[
-        ColumnReading(column="C", role="status", because="dropdown"),
-        ColumnReading(column="ZZ", role="answer", because="invented"),
-    ]))
+    part, questions = llm_layout.apply(
+        workbook,
+        sheet,
+        reading(
+            columns=[
+                ColumnReading(column="C", role="status", because="dropdown"),
+                ColumnReading(column="ZZ", role="answer", because="invented"),
+            ]
+        ),
+    )
     assert [t.id for t in questions[0].targets.values()] == ["Assessment!C6"]
 
 
@@ -142,10 +149,14 @@ def test_lower_case_and_spaced_column_letters_are_understood(book):
     """Worth accepting rather than refusing: ' c ' is the right answer typed
     untidily, and refusing it would cost a whole sheet over whitespace."""
     workbook, sheet = book
-    part, questions = llm_layout.apply(workbook, sheet, reading(
-        question_column=" b ",
-        columns=[ColumnReading(column="c", role="status", because="dropdown")],
-    ))
+    part, questions = llm_layout.apply(
+        workbook,
+        sheet,
+        reading(
+            question_column=" b ",
+            columns=[ColumnReading(column="c", role="status", because="dropdown")],
+        ),
+    )
     assert questions[0].targets[Role.STATUS].id == "Assessment!C6"
 
 
@@ -166,15 +177,19 @@ def test_a_banner_saying_a_column_belongs_to_the_sender_beats_the_model(tmp_path
     not be able to hand us the assessing bank's own column."""
     with Workbook(shapes.ownership_banner(tmp_path / "banner.xlsx")) as workbook:
         sheet = workbook["General Information"]
-        part, questions = llm_layout.apply(workbook, sheet, reading(
-            header_row=5,
-            question_column="B",
-            columns=[
-                ColumnReading(column="A", role="number", because="GI.1.1 codes"),
-                ColumnReading(column="D", role="answer", because="ours"),
-                ColumnReading(column="F", role="answer", because="looks writable"),
-            ],
-        ))
+        part, questions = llm_layout.apply(
+            workbook,
+            sheet,
+            reading(
+                header_row=5,
+                question_column="B",
+                columns=[
+                    ColumnReading(column="A", role="number", because="GI.1.1 codes"),
+                    ColumnReading(column="D", role="answer", because="ours"),
+                    ColumnReading(column="F", role="answer", because="looks writable"),
+                ],
+            ),
+        )
         written = {target.id[-2:-1] for question in questions for target in question.targets.values()}
         assert "F" not in written, "the bank's column was offered as somewhere to write"
         assert "D" in written
@@ -257,6 +272,7 @@ def test_assistance_defaults_to_the_setting(tmp_path, monkeypatch):
     stub(monkeypatch, reading())
 
     from src.config import settings
+
     monkeypatch.setattr(settings, "detection_assist", True)
     assert len(forms.detect(shapes.two_row_header(tmp_path / "a.xlsx")).questions) == 5
 
@@ -272,9 +288,14 @@ def test_a_sheet_read_thinly_is_offered_for_a_second_reading(tmp_path, monkeypat
     from src.forms.model import Finding, Part
 
     sheet_rows = list(range(1, 60))
-    part = Part(name="S", kind="questions", questions=3, findings=[
-        Finding(subject="S", verdict="3 questions", because="headings on row 1; questions in column B"),
-    ])
+    part = Part(
+        name="S",
+        kind="questions",
+        questions=3,
+        findings=[
+            Finding(subject="S", verdict="3 questions", because="headings on row 1; questions in column B"),
+        ],
+    )
 
     class Fake:
         rows = sheet_rows
@@ -345,9 +366,18 @@ def test_a_long_cell_is_truncated_rather_than_wrapped(tmp_path):
     would bury the grid they sit in."""
     from src.forms import sheet_view
 
-    path = shapes.build(tmp_path / "wordy.xlsx", [shapes.SheetSpec("S", {
-        "A1": "Question", "A2": "Explain in detail " * 40,
-    })])
+    path = shapes.build(
+        tmp_path / "wordy.xlsx",
+        [
+            shapes.SheetSpec(
+                "S",
+                {
+                    "A1": "Question",
+                    "A2": "Explain in detail " * 40,
+                },
+            )
+        ],
+    )
     with Workbook(path) as workbook:
         drawn = sheet_view.grid(workbook["S"])
 

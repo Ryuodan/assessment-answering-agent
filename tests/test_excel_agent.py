@@ -132,7 +132,9 @@ def test_column_roles_are_read_out_of_one_string(tools):
     single call."""
     parsed = excel_agent._parse_roles("A=number, C=status; D = answer")
     assert [(c.column, c.role) for c in parsed] == [
-        ("A", "number"), ("C", "status"), ("D", "answer"),
+        ("A", "number"),
+        ("C", "status"),
+        ("D", "answer"),
     ]
 
 
@@ -147,7 +149,9 @@ def test_an_unparseable_role_is_dropped_rather_than_failing_the_call(tools):
 
 def _record(run, sheet="Human Resources", **overrides):
     fields = {
-        "is_questionnaire": True, "header_row": 1, "question_column": "B",
+        "is_questionnaire": True,
+        "header_row": 1,
+        "question_column": "B",
         "columns": excel_agent._parse_roles("C=status, D=answer"),
         "reason": "Questions in column B under row 1.",
     }
@@ -167,8 +171,9 @@ def test_a_reading_becomes_the_same_questions_the_rules_would_have_made(book, tm
 
     rules = forms.detect(shapes.status_and_comment(tmp_path / "same.xlsx"))
     assert [q.id for q in questions] == [q.id for q in rules.questions]
-    assert [sorted(t.id for t in q.targets.values()) for q in questions] == \
-           [sorted(t.id for t in q.targets.values()) for q in rules.questions]
+    assert [sorted(t.id for t in q.targets.values()) for q in questions] == [
+        sorted(t.id for t in q.targets.values()) for q in rules.questions
+    ]
 
 
 def test_a_sheet_the_agent_called_not_a_questionnaire_is_skipped_with_its_reason(book):
@@ -252,15 +257,18 @@ def test_a_second_round_is_asked_about_the_sheets_it_forgot(tmp_path, monkeypatc
     def pretend(workbook, run, path, sheets, tools, steps):
         rounds.append(set(sheets))
         if len(rounds) == 1:
-            _record(run, "Human Resources")          # one of two, then "done"
+            _record(run, "Human Resources")  # one of two, then "done"
         else:
             _record(run, "Second")
 
     monkeypatch.setattr(excel_agent, "_round", pretend)
-    path = shapes.build(tmp_path / "two.xlsx", [
-        shapes.SheetSpec("Human Resources", {"A1": "#", "B1": "Question", "B2": "Is there a policy?"}),
-        shapes.SheetSpec("Second", {"A1": "#", "B1": "Question", "B2": "Is there another?"}),
-    ])
+    path = shapes.build(
+        tmp_path / "two.xlsx",
+        [
+            shapes.SheetSpec("Human Resources", {"A1": "#", "B1": "Question", "B2": "Is there a policy?"}),
+            shapes.SheetSpec("Second", {"A1": "#", "B1": "Question", "B2": "Is there another?"}),
+        ],
+    )
     excel_agent.read_workbook(path)
 
     assert rounds[0] == {"Human Resources", "Second"}
@@ -285,8 +293,7 @@ def test_the_conversation_is_pruned_once_it_grows(tmp_path):
     """Every screenful looked at is resent with every later turn. Clearing old
     tool results is safe here only because a reading is recorded into the run
     the moment it is made, so the answer never lives in the transcript."""
-    assert excel_agent.CONTEXT_TRIGGER <= 20_000, \
-        "a threshold above one request's size never fires"
+    assert excel_agent.CONTEXT_TRIGGER <= 20_000, "a threshold above one request's size never fires"
 
 
 def test_the_budget_has_a_ceiling(monkeypatch):
@@ -296,5 +303,6 @@ def test_the_budget_has_a_ceiling(monkeypatch):
     assert excel_agent.budget(500) == excel_agent.STEPS_CEILING
 
     from src.config import settings
+
     monkeypatch.setattr(settings, "excel_agent_max_steps", 10_000)
     assert excel_agent.budget(1) == excel_agent.STEPS_CEILING

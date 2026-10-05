@@ -162,9 +162,7 @@ class Evidence(BaseModel):
         end = self.clause_end or start
         clause = ""
         if start:
-            clause = (
-                f" \u00a7{start}\u2013{end}" if end and end != start else f" \u00a7{start}"
-            )
+            clause = f" \u00a7{start}\u2013{end}" if end and end != start else f" \u00a7{start}"
 
         # The page is shown *alongside* the clause rather than only when there
         # is no clause. A clause number says what to look for; the page says
@@ -271,7 +269,9 @@ class AnsweredQuestion(BaseModel):
     what we actually say.
     """
 
-    citations: list[str] = Field(default_factory=list, description="Clause-level locators for the sources actually used")
+    citations: list[str] = Field(
+        default_factory=list, description="Clause-level locators for the sources actually used"
+    )
     review_reasons: list[str] = Field(
         default_factory=list,
         description="Why this answer was flagged: unsupported citations, partial series, ungrounded",

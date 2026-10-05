@@ -51,8 +51,7 @@ def grid(sheet: Sheet, rows: int = GRID_ROWS, columns: int = GRID_COLUMNS) -> st
 
     lines = []
     for row in shown_rows:
-        cells = [f"{column}: {cell(sheet.value(row, column))}"
-                 for column in shown_columns if sheet.value(row, column)]
+        cells = [f"{column}: {cell(sheet.value(row, column))}" for column in shown_columns if sheet.value(row, column)]
         lines.append(f"row {row} | " + " | ".join(cells) if cells else f"row {row} | (blank)")
     if len(sheet.rows) > len(shown_rows):
         lines.append(f"... {len(sheet.rows) - len(shown_rows)} more row(s) below")
@@ -68,9 +67,7 @@ def columns(workbook: Workbook, sheet: Sheet, below: int) -> str:
     heading does. The dropdown vocabulary is spelled out because it is the one
     thing a status column cannot be recognised without.
     """
-    candidates = sorted(
-        set(sheet.columns) | workbook.validated_columns(sheet), key=column_number
-    )
+    candidates = sorted(set(sheet.columns) | workbook.validated_columns(sheet), key=column_number)
     if not candidates:
         return "(no columns)"
 

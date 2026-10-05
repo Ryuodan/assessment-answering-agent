@@ -39,17 +39,20 @@ def client():
 # --- reading a document ----------------------------------------------------
 
 
-@pytest.mark.parametrize("name", [
-    "../../.env",
-    "....//....//.env",
-    "%2e%2e%2f%2e%2e%2f.env",
-    "..%5c..%5c.env",
-    "..",
-    ".",
-    "",
-    "a/b/c.pdf",
-    "x.pdf%00.txt",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "../../.env",
+        "....//....//.env",
+        "%2e%2e%2f%2e%2e%2f.env",
+        "..%5c..%5c.env",
+        "..",
+        ".",
+        "",
+        "a/b/c.pdf",
+        "x.pdf%00.txt",
+    ],
+)
 def test_no_document_name_escapes_its_directory(client, name):
     response = client.get(f"/api/documents/uploaded/uploaded/{name}/file")
 
@@ -57,12 +60,15 @@ def test_no_document_name_escapes_its_directory(client, name):
     assert "GROQ" not in response.text and "API_KEY" not in response.text
 
 
-@pytest.mark.parametrize(("origin", "category"), [
-    ("uploaded", "secrets"),
-    ("trial", "uploaded"),          # an origin that no longer exists
-    ("..", ".."),
-    ("trial", "../../.."),
-])
+@pytest.mark.parametrize(
+    ("origin", "category"),
+    [
+        ("uploaded", "secrets"),
+        ("trial", "uploaded"),  # an origin that no longer exists
+        ("..", ".."),
+        ("trial", "../../.."),
+    ],
+)
 def test_only_known_locations_can_be_read(client, origin, category):
     response = client.get(f"/api/documents/{origin}/{category}/policy.pdf/file")
     assert response.status_code in (400, 404, 422)
@@ -88,8 +94,10 @@ def test_a_supported_suffix_is_still_required(client):
 @pytest.mark.parametrize("name", ["../../.env.pdf", "a/b/c.pdf", r"..\..\evil.pdf"])
 def test_an_upload_lands_inside_the_upload_directory(client, isolated, monkeypatch, name):
     """A crafted name must be reduced to a bare filename before it is written."""
-    async def stub(path, source_type, authority='ours', team_id=None):
+
+    async def stub(path, source_type, authority="ours", team_id=None):
         from src.models import IngestResult
+
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0)
 
     monkeypatch.setattr(service, "ingest", stub)
@@ -122,14 +130,18 @@ def test_one_unusable_file_refuses_the_upload_before_any_of_it_is_indexed(client
 
     async def stub(path, source_type, authority="ours"):
         from src.models import IngestResult
+
         indexed.append(path.name)
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=1)
 
     monkeypatch.setattr(service, "ingest", stub)
-    response = client.post("/api/knowledge/guidelines", files=[
-        ("files", ("Access Policy.pdf", b"%PDF-1.4 stub", "application/pdf")),
-        ("files", ("archive.zip", b"PK stub", "application/zip")),
-    ])
+    response = client.post(
+        "/api/knowledge/guidelines",
+        files=[
+            ("files", ("Access Policy.pdf", b"%PDF-1.4 stub", "application/pdf")),
+            ("files", ("archive.zip", b"PK stub", "application/zip")),
+        ],
+    )
 
     assert response.status_code == 415
     assert indexed == [] and not list(isolated.rglob("*.pdf"))
@@ -142,17 +154,20 @@ def test_an_upload_with_no_files_is_refused(client):
 # --- search ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("query", [
-    "'; DROP TABLE chunks; --",
-    "<script>alert(1)</script>",
-    "../../etc/passwd",
-    "\x00",
-    "a" * 5000,
-    '"' * 50,
-    "-" * 50,
-    "\\",
-    "[",
-])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "'; DROP TABLE chunks; --",
+        "<script>alert(1)</script>",
+        "../../etc/passwd",
+        "\x00",
+        "a" * 5000,
+        '"' * 50,
+        "-" * 50,
+        "\\",
+        "[",
+    ],
+)
 def test_no_search_query_can_break_the_endpoint(client, query):
     """The query reaches a regex, a tokeniser and a vector store; none of them
     may turn a strange string into a 500."""
@@ -170,11 +185,14 @@ def test_the_search_limit_cannot_be_driven_negative_or_huge(client):
 # --- when something downstream is broken -----------------------------------
 
 
-@pytest.mark.parametrize(("target", "url"), [
-    ("src.service.knowledge_stats", "/api/knowledge"),
-    ("src.service.search_knowledge", "/api/search?q=policy"),
-    ("src.service.list_documents", "/api/documents"),
-])
+@pytest.mark.parametrize(
+    ("target", "url"),
+    [
+        ("src.service.knowledge_stats", "/api/knowledge"),
+        ("src.service.search_knowledge", "/api/search?q=policy"),
+        ("src.service.list_documents", "/api/documents"),
+    ],
+)
 def test_a_broken_dependency_returns_a_clean_500(target, url):
     """Everything here talks to something that can be down. The person gets a
     sentence; the stack trace stays in the log rather than in the browser."""

@@ -38,8 +38,10 @@ def scrambled(monkeypatch):
         try:
             await asyncio.sleep(0.05 * (10 - int(question.id)) / 10)
             return AnsweredQuestion(
-                question=question, answer=f"answer to {question.text}",
-                confidence=0.9, needs_review=False,
+                question=question,
+                answer=f"answer to {question.text}",
+                confidence=0.9,
+                needs_review=False,
             )
         finally:
             in_flight -= 1

@@ -49,7 +49,7 @@ async def test_two_retrieval_rounds_union_into_one_prompt(series_doc):
     fake.stage(chunk_indexes=[second["metadata"]["chunk"]], score=0.66)
     round_two = await store.search("remediation windows", SourceType.GUIDELINE, k=1, expand=False)
 
-    replaced = round_two                      # old behaviour
+    replaced = round_two  # old behaviour
     accumulated = merge_evidence(round_one, round_two)  # new behaviour
 
     assert len(replaced) == 1
@@ -78,7 +78,9 @@ async def test_arabic_document_survives_the_full_chain(arabic_doc):
     series = next(r for r in fake.records if r["metadata"]["kind"] == "series")
     fake.stage(chunk_indexes=[series["metadata"]["chunk"]], score=0.7)
 
-    evidence = await store.search("\u0634\u0631\u0648\u0637 \u0627\u0644\u062a\u0646\u0628\u064a\u0647", SourceType.GUIDELINE, k=1)
+    evidence = await store.search(
+        "\u0634\u0631\u0648\u0637 \u0627\u0644\u062a\u0646\u0628\u064a\u0647", SourceType.GUIDELINE, k=1
+    )
     block = format_sources_block(merge_evidence([], evidence))
 
     assert "[MDS-CS-STD-003] \u00a77" in block, "Arabic clause not folded into the locator"

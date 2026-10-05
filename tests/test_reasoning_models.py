@@ -39,13 +39,16 @@ def test_the_thinking_comes_out_and_the_answer_stays():
     assert without_reasoning(THINKING) == SAID
 
 
-@pytest.mark.parametrize("text", [
-    "<THINK>working</THINK>Yes.",
-    "< think >working</ think >Yes.",
-    "<thinking>working</thinking>\nYes.",
-    "<reasoning>working</reasoning>Yes.",
-    "<think>first</think><think>second</think>Yes.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "<THINK>working</THINK>Yes.",
+        "< think >working</ think >Yes.",
+        "<thinking>working</thinking>\nYes.",
+        "<reasoning>working</reasoning>Yes.",
+        "<think>first</think><think>second</think>Yes.",
+    ],
+)
 def test_the_shapes_a_provider_returns_it_in(text):
     assert without_reasoning(text) == "Yes."
 
@@ -82,7 +85,8 @@ def _answered() -> AnsweredQuestion:
     return AnsweredQuestion(
         question=Question(id="q1", text="Do you encrypt backups?", language="en"),
         answer="Yes. Backups are encrypted at rest with AES-256 and restores are tested quarterly.",
-        confidence=0.9, needs_review=False,
+        confidence=0.9,
+        needs_review=False,
     )
 
 
@@ -90,6 +94,7 @@ def _answered() -> AnsweredQuestion:
 def thinking_model(monkeypatch):
     def use(content: str):
         monkeypatch.setattr(rewrite, "chat_llm", lambda **_: Model(content))
+
     return use
 
 
@@ -295,9 +300,16 @@ def test_the_json_shape_still_recovers(groq_refusal):
 
     from src.models import AnswerReview
 
-    payload = json.dumps({"name": "not_the_tool", "arguments": {
-        "grounded": True, "confidence": 0.5, "verdict_reason": "Supported.",
-    }})
+    payload = json.dumps(
+        {
+            "name": "not_the_tool",
+            "arguments": {
+                "grounded": True,
+                "confidence": 0.5,
+                "verdict_reason": "Supported.",
+            },
+        }
+    )
 
     recovered = llm._recover_from_tool_use_failed(Refused(payload), AnswerReview)
 
@@ -323,6 +335,10 @@ def test_nonsense_is_not_recovered_into_an_answer(groq_refusal):
     from src.models import AnswerReview
 
     assert llm._recover_from_tool_use_failed(Refused("I could not decide."), AnswerReview) is None
-    assert llm._recover_from_tool_use_failed(
-        Refused("<parameter=grounded>\nmaybe\n</parameter>"), AnswerReview,
-    ) is None
+    assert (
+        llm._recover_from_tool_use_failed(
+            Refused("<parameter=grounded>\nmaybe\n</parameter>"),
+            AnswerReview,
+        )
+        is None
+    )

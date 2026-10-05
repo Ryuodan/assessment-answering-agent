@@ -57,9 +57,7 @@ def supports_clause(evidence: Evidence, clause: str) -> bool:
     return evidence.covers_clause(clause) or _appears_in(clause, evidence.snippet)
 
 
-def unsupported_clauses(
-    answer: str, cited: list[Evidence], retrieved: list[Evidence] | None = None
-) -> list[str]:
+def unsupported_clauses(answer: str, cited: list[Evidence], retrieved: list[Evidence] | None = None) -> list[str]:
     """Clauses named in prose that nothing the drafter read actually covers.
 
     Support is judged against everything retrieved, not only what the drafter
@@ -79,9 +77,7 @@ def unsupported_clauses(
     if not universe:
         return mentioned_clauses(answer)
     return [
-        clause
-        for clause in mentioned_clauses(answer)
-        if not any(supports_clause(item, clause) for item in universe)
+        clause for clause in mentioned_clauses(answer) if not any(supports_clause(item, clause) for item in universe)
     ]
 
 
@@ -197,10 +193,7 @@ def assess(
         confidence = min(confidence, incomplete_cap)
 
     if rests_on_memory_alone(cited):
-        reasons.append(
-            "nothing in our documents backs this — it rests only on what we told "
-            "somebody before"
-        )
+        reasons.append("nothing in our documents backs this — it rests only on what we told somebody before")
 
     if not grounded:
         reasons.append("the reviewer did not find the answer grounded")
@@ -226,9 +219,7 @@ def rests_on_memory_alone(cited: list[Evidence]) -> bool:
     the wrong kind of source. That is a fact about provenance, and provenance is
     what a reviewer is for.
     """
-    return bool(cited) and all(
-        item.source_type is SourceType.PRIOR_ANSWER for item in cited
-    )
+    return bool(cited) and all(item.source_type is SourceType.PRIOR_ANSWER for item in cited)
 
 
 # ---------------------------------------------------------------------------

@@ -72,9 +72,7 @@ def test_duplicate_does_not_downgrade_an_existing_score():
 
 def test_same_chunk_index_in_different_documents_is_not_a_duplicate():
     """De-duplication keys on (source_name, chunk), not chunk alone."""
-    merged = merge_evidence(
-        [guideline(1, source_name="a.pdf")], [guideline(1, source_name="b.pdf")]
-    )
+    merged = merge_evidence([guideline(1, source_name="a.pdf")], [guideline(1, source_name="b.pdf")])
     assert len(merged) == 2
 
 
@@ -131,9 +129,7 @@ def test_higher_scoring_document_leads_among_guidelines():
 
 
 def test_sources_block_shows_clause_locators():
-    block = format_sources_block(
-        [guideline(1, doc_id="MDS-CS-STD-003", clause_start="7.2.1", heading="7 Monitoring")]
-    )
+    block = format_sources_block([guideline(1, doc_id="MDS-CS-STD-003", clause_start="7.2.1", heading="7 Monitoring")])
     assert "std.pdf [MDS-CS-STD-003] \u00a77.2.1" in block
     assert "(7 Monitoring)" in block
     assert block.startswith("[1] OUR POLICY")
@@ -179,6 +175,7 @@ def test_citation_list_is_deduplicated_and_ordered():
     citations = list(dict.fromkeys(item.locator for item in cited))
     assert citations == ["std.pdf [MDS-CS-STD-003] \u00a77.2.1", "std.pdf [MDS-CS-STD-003] \u00a77.4"]
 
+
 # --- what actually fits in the prompt --------------------------------------
 #
 # Ordering and selection used to be the same operation: prior answers sort
@@ -192,8 +189,7 @@ def test_citation_list_is_deduplicated_and_ordered():
 def test_prior_answers_cannot_take_the_whole_prompt():
     """The reported bug, in miniature: 12 weak prior answers, one strong clause."""
     evidence = order_evidence(
-        [prior(n, score=0.2 + n / 100) for n in range(12)]
-        + [guideline(90 + n, score=0.9) for n in range(4)]
+        [prior(n, score=0.2 + n / 100) for n in range(12)] + [guideline(90 + n, score=0.9) for n in range(4)]
     )
 
     selected = select_evidence(evidence, limit=6, prior_cap=4)
@@ -206,8 +202,7 @@ def test_prior_answers_cannot_take_the_whole_prompt():
 def test_the_prior_answers_kept_are_the_best_scoring_ones():
     """Which four survive matters as much as how many."""
     evidence = order_evidence(
-        [prior(1, score=0.2), prior(2, score=0.9), prior(3, score=0.5)]
-        + [guideline(n) for n in range(90, 99)]
+        [prior(1, score=0.2), prior(2, score=0.9), prior(3, score=0.5)] + [guideline(n) for n in range(90, 99)]
     )
 
     selected = select_evidence(evidence, limit=10, prior_cap=1)
@@ -226,9 +221,7 @@ def test_the_budget_is_filled_when_there_are_few_guidelines():
 
 
 def test_spare_room_goes_back_to_prior_answers_in_score_order():
-    evidence = order_evidence(
-        [prior(1, score=0.9), prior(2, score=0.8), prior(3, score=0.1)] + [guideline(99)]
-    )
+    evidence = order_evidence([prior(1, score=0.9), prior(2, score=0.8), prior(3, score=0.1)] + [guideline(99)])
 
     selected = select_evidence(evidence, limit=3, prior_cap=1)
     chunks = {item.chunk for item in selected}
@@ -268,8 +261,7 @@ def test_the_cap_binds_only_while_guidelines_are_competing():
     """
     priors = [prior(n, score=0.5) for n in range(6)]
 
-    contested = select_evidence(
-        order_evidence(priors + [guideline(n) for n in range(90, 96)]), limit=6, prior_cap=2)
+    contested = select_evidence(order_evidence(priors + [guideline(n) for n in range(90, 96)]), limit=6, prior_cap=2)
     uncontested = select_evidence(order_evidence(priors), limit=6, prior_cap=2)
 
     assert sum(1 for i in contested if i.source_type is SourceType.PRIOR_ANSWER) == 2
@@ -360,8 +352,14 @@ def test_a_negative_score_does_not_collapse_into_a_tie():
 
 def _chunk(name, chunk, score, unit="", hits=1, part=1):
     return Evidence(
-        source_type=SourceType.GUIDELINE, source_name=name, snippet="x",
-        score=score, chunk=chunk, unit_id=unit, part=part, query_hits=hits,
+        source_type=SourceType.GUIDELINE,
+        source_name=name,
+        snippet="x",
+        score=score,
+        chunk=chunk,
+        unit_id=unit,
+        part=part,
+        query_hits=hits,
     )
 
 
@@ -382,7 +380,7 @@ def test_agreement_rescues_a_chunk_the_raw_score_would_lose(monkeypatch):
     has to be able to outvote a slightly lower cosine."""
     monkeypatch.setattr(settings, "query_agreement_weight", 0.15)
     strong = _chunk("a.pdf", 1, 1.00, "u1", hits=1)
-    agreed = _chunk("b.pdf", 2, 0.85, "u2", hits=4)   # 0.85 * 1.45 = 1.23
+    agreed = _chunk("b.pdf", 2, 0.85, "u2", hits=4)  # 0.85 * 1.45 = 1.23
     alone = _chunk("c.pdf", 3, 0.85, "u3", hits=1)
 
     kept = {item.source_name for item in prune_weak_units([strong, agreed, alone], 0.95, 1)}
@@ -396,7 +394,7 @@ def test_a_split_series_is_kept_or_dropped_whole():
     items of nine and calls it the list; pruning by chunk would undo that."""
     evidence = [
         _chunk("a.pdf", 1, 0.90, "u1", part=1),
-        _chunk("a.pdf", 2, 0.20, "u1", part=2),   # weak, but same unit
+        _chunk("a.pdf", 2, 0.20, "u1", part=2),  # weak, but same unit
         _chunk("b.pdf", 3, 0.20, "u2"),
     ]
     kept = prune_weak_units(evidence, floor=0.9, minimum=1)
@@ -412,8 +410,9 @@ def test_a_weak_best_hit_does_not_starve_the_prompt():
 
 
 def test_prior_answers_are_exempt_from_the_floor():
-    prior = Evidence(source_type=SourceType.PRIOR_ANSWER, source_name="q.pdf",
-                     snippet="x", score=0.10, chunk=9, unit_id="p1")
+    prior = Evidence(
+        source_type=SourceType.PRIOR_ANSWER, source_name="q.pdf", snippet="x", score=0.10, chunk=9, unit_id="p1"
+    )
     kept = prune_weak_units([_chunk("a.pdf", 1, 0.90, "u1"), prior], floor=0.9, minimum=1)
 
     assert prior in kept, "priors are capped separately and scored differently"
@@ -447,10 +446,7 @@ async def test_agreement_counts_searches_not_copies(monkeypatch):
 
         async def search_types(self, query, wanted, *, expand=True):
             # Mirrors the real store: one call, one result per source type.
-            return {
-                source_type: await self.search(query, source_type, k)
-                for source_type, k in wanted
-            }
+            return {source_type: await self.search(query, source_type, k) for source_type, k in wanted}
 
         async def search(self, query, source_type, k):
             self.searched.append(source_type)
@@ -462,16 +458,19 @@ async def test_agreement_counts_searches_not_copies(monkeypatch):
     monkeypatch.setattr(settings, "top_k_guidelines", 8)
 
     queries = [f"query {n}" for n in range(6)]
-    out = await nodes.retrieve({
-        "question": Question(id="q1", text="anything"),
-        "search_queries": queries,
-    })
+    out = await nodes.retrieve(
+        {
+            "question": Question(id="q1", text="anything"),
+            "search_queries": queries,
+        }
+    )
 
     found = [e for e in out["evidence"] if e.source_name == "std.pdf"]
     assert len(found) == 1, "one entry per chunk, not one per search"
     assert found[0].query_hits == len(queries)
     assert agreement_bonus(found[0].query_hits) == pytest.approx(
-        1 + settings.query_agreement_weight * (len(queries) - 1))
+        1 + settings.query_agreement_weight * (len(queries) - 1)
+    )
     # An empty collection is not searched at all: the query is embedded before
     # the filter is applied, so asking costs a remote round trip to learn nothing.
     assert SourceType.PRIOR_ANSWER not in store.searched
@@ -492,17 +491,19 @@ class CountingStore:
 
     async def search_types(self, query, wanted, *, expand=True):
         # Mirrors the real store: one call, one result per source type.
-        return {
-            source_type: await self.search(query, source_type, k)
-            for source_type, k in wanted
-        }
+        return {source_type: await self.search(query, source_type, k) for source_type, k in wanted}
 
     async def search(self, query, source_type, k):
         self.searched.append((source_type, query))
-        return [Evidence(
-            source_type=source_type, source_name=f"{source_type.value}.pdf",
-            snippet="text", chunk=1, score=0.7,
-        )]
+        return [
+            Evidence(
+                source_type=source_type,
+                source_name=f"{source_type.value}.pdf",
+                snippet="text",
+                chunk=1,
+                score=0.7,
+            )
+        ]
 
 
 async def _retrieve_with(monkeypatch, counts, queries):
@@ -511,10 +512,12 @@ async def _retrieve_with(monkeypatch, counts, queries):
     store = CountingStore(counts)
     monkeypatch.setattr(nodes, "get_store", lambda team_id=None: store, raising=False)
     monkeypatch.setattr("src.knowledge.get_store", lambda team_id=None: store, raising=False)
-    out = await nodes.retrieve({
-        "question": Question(id="1", text="anything"),
-        "search_queries": queries,
-    })
+    out = await nodes.retrieve(
+        {
+            "question": Question(id="1", text="anything"),
+            "search_queries": queries,
+        }
+    )
     return store, out
 
 
@@ -522,8 +525,7 @@ async def _retrieve_with(monkeypatch, counts, queries):
 async def test_an_empty_collection_is_never_searched(monkeypatch):
     """The query is embedded before the filter is applied, so asking an empty
     collection costs a full remote round trip to be told nothing."""
-    store, _ = await _retrieve_with(
-        monkeypatch, {SourceType.GUIDELINE.value: 500}, ["a", "b", "c"])
+    store, _ = await _retrieve_with(monkeypatch, {SourceType.GUIDELINE.value: 500}, ["a", "b", "c"])
 
     kinds = {kind for kind, _ in store.searched}
     assert kinds == {SourceType.GUIDELINE}

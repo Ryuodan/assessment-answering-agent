@@ -55,14 +55,9 @@ def test_the_repair_runs_on_an_existing_database():
     assert conn.execute("PRAGMA user_version").fetchone()[0] == len(store.MIGRATIONS)
 
 
-
-
 def test_connect_creates_the_schema():
     conn = store.connect()
-    tables = {
-        row["name"]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-    }
+    tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"teams", "users", "sessions", "events", "runs", "run_answers"} <= tables
 
 
@@ -80,9 +75,7 @@ def test_reapplying_the_schema_is_a_no_op():
 
 
 def test_existing_data_survives_a_reopen():
-    store.connect().execute(
-        "INSERT INTO teams (id, created_at) VALUES ('cyber', '2026-01-01T00:00:00+00:00')"
-    )
+    store.connect().execute("INSERT INTO teams (id, created_at) VALUES ('cyber', '2026-01-01T00:00:00+00:00')")
     store.connect().commit()
     store.reset_connection()
     assert store.connect().execute("SELECT COUNT(*) FROM teams").fetchone()[0] == 1
@@ -99,9 +92,8 @@ def test_a_version_1_database_upgrades_without_losing_anything():
     # remember every new table, and it silently stopped dropping the two that
     # migration 3 added.
     tables = [
-        row[0] for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-        )
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
     ]
     conn.execute("PRAGMA foreign_keys = OFF")
     conn.executescript("".join(f"DROP TABLE IF EXISTS {name};" for name in tables))

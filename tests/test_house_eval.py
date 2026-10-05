@@ -36,7 +36,9 @@ def result(**overrides) -> HouseResult:
     base.update(overrides)
     item = HouseResult(**base)
     item.agreement = Agreement(
-        verdict=overrides.get("verdict", "same"), score=score, note="",
+        verdict=overrides.get("verdict", "same"),
+        score=score,
+        note="",
     )
     return item
 
@@ -165,27 +167,54 @@ def test_the_report_has_the_columns_it_was_asked_for(tmp_path):
 
     from scripts.eval_to_xlsx import build
 
-    out = build({
-        "label": "a run",
-        "summary": {"graded": 1, "agreement": 80.0, "form": 100.0, "held_back": 1,
-                    "median_words_ours": 40, "median_words_theirs": 12,
-                    "with_a_twin": {"cases": 0, "agreement": 0.0},
-                    "without_a_twin": {"cases": 1, "agreement": 80.0}},
-        "cases": [{
-            "test_id": "T1", "file": "vendor.xlsx", "question": "Do you encrypt backups?",
-            "reference": "Yes.", "answer": "Yes, with AES-256.", "verdict": "broader",
-            "agreement_score": 4, "note": "same position, more detail",
-            "confidence": 0.9, "needs_review": True, "twin": 0.71,
-            "found_own_answer": False,
-        }],
-    }, tmp_path / "report.xlsx", "A run")
+    out = build(
+        {
+            "label": "a run",
+            "summary": {
+                "graded": 1,
+                "agreement": 80.0,
+                "form": 100.0,
+                "held_back": 1,
+                "median_words_ours": 40,
+                "median_words_theirs": 12,
+                "with_a_twin": {"cases": 0, "agreement": 0.0},
+                "without_a_twin": {"cases": 1, "agreement": 80.0},
+            },
+            "cases": [
+                {
+                    "test_id": "T1",
+                    "file": "vendor.xlsx",
+                    "question": "Do you encrypt backups?",
+                    "reference": "Yes.",
+                    "answer": "Yes, with AES-256.",
+                    "verdict": "broader",
+                    "agreement_score": 4,
+                    "note": "same position, more detail",
+                    "confidence": 0.9,
+                    "needs_review": True,
+                    "twin": 0.71,
+                    "found_own_answer": False,
+                }
+            ],
+        },
+        tmp_path / "report.xlsx",
+        "A run",
+    )
 
     sheet = load_workbook(out)["Results"]
     assert [cell.value for cell in sheet[1]][:5] == [
-        "file name", "question", "real answer", "generated answer", "Judge score/approval",
+        "file name",
+        "question",
+        "real answer",
+        "generated answer",
+        "Judge score/approval",
     ]
     assert [cell.value for cell in sheet[2]][:5] == [
-        "vendor.xlsx", "Do you encrypt backups?", "Yes.", "Yes, with AES-256.", "4/5 agrees",
+        "vendor.xlsx",
+        "Do you encrypt backups?",
+        "Yes.",
+        "Yes, with AES-256.",
+        "4/5 agrees",
     ]
     assert "cited its own memory entry" not in [cell.value for cell in sheet[1]], (
         "a column empty on every row invites the reader to wonder what broke"

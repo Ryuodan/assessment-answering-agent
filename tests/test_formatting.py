@@ -6,8 +6,8 @@ import pytest
 
 from src.formatting import Block, parse, strip_source_markers, to_plain_text
 
-MARKER = "【3】"          # 【3】
-MARKER_ALT = "〔1〕"      # 〔1〕
+MARKER = "【3】"  # 【3】
+MARKER_ALT = "〔1〕"  # 〔1〕
 
 
 # --- leaked source indices -------------------------------------------------
@@ -93,7 +93,9 @@ def test_empty_text_produces_no_blocks():
 
 def test_bold_spans_are_split_out():
     assert Block("paragraph", "Kept **twelve months** minimum.").spans == [
-        ("Kept ", False), ("twelve months", True), (" minimum.", False),
+        ("Kept ", False),
+        ("twelve months", True),
+        (" minimum.", False),
     ]
 
 

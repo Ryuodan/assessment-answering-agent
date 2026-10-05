@@ -39,7 +39,7 @@ from src.chunking import chunk_document, fold_digits
 
 logger = logging.getLogger(__name__)
 
-_SQRT2 = 2.0 ** 0.5
+_SQRT2 = 2.0**0.5
 
 
 def cosine_from_relevance(relevance: float, space: str) -> float:
@@ -141,7 +141,11 @@ class KnowledgeStore:
     # -- writing ------------------------------------------------------------
 
     def add_guideline(
-        self, source_name: str, text: str, content_hash: str = "", authority: str = "ours",
+        self,
+        source_name: str,
+        text: str,
+        content_hash: str = "",
+        authority: str = "ours",
     ) -> int:
         """Chunk and index a guideline document. Replaces any earlier upload of the same name.
 
@@ -225,9 +229,7 @@ class KnowledgeStore:
         For adopting answers indexed before the memory kept rows of its own;
         everything those rows need is already here.
         """
-        found = self._store.get(
-            where={"source_type": SourceType.PRIOR_ANSWER.value}, include=["metadatas"]
-        )
+        found = self._store.get(where={"source_type": SourceType.PRIOR_ANSWER.value}, include=["metadatas"])
         return list(found.get("metadatas") or [])
 
     def source_with_hash(self, content_hash: str, *, excluding: str = "") -> str | None:
@@ -346,11 +348,7 @@ class KnowledgeStore:
         conversion exists to undo.
         """
         meta = document.metadata
-        cosine = (
-            cosine_from_relevance(score, self._distance_space)
-            if similarity is None
-            else similarity
-        )
+        cosine = cosine_from_relevance(score, self._distance_space) if similarity is None else similarity
         return Evidence(
             source_type=source_type,
             source_name=meta.get("source_name", "unknown"),
@@ -377,11 +375,7 @@ class KnowledgeStore:
             parts=int(meta.get("parts", 1)),
             questionnaire=meta.get("questionnaire", ""),
             answered_date=meta.get("answered_date", ""),
-            entry_id=(
-                answer_memory.entry_id_of(meta)
-                if source_type is SourceType.PRIOR_ANSWER
-                else ""
-            ),
+            entry_id=(answer_memory.entry_id_of(meta) if source_type is SourceType.PRIOR_ANSWER else ""),
         )
 
     def _still_standing(self, evidence: list[Evidence]) -> list[Evidence]:
@@ -406,9 +400,7 @@ class KnowledgeStore:
             return evidence
         return [item for item in evidence if item.entry_id not in replaced]
 
-    async def search(
-        self, query: str, source_type: SourceType, k: int, *, expand: bool = True
-    ) -> list[Evidence]:
+    async def search(self, query: str, source_type: SourceType, k: int, *, expand: bool = True) -> list[Evidence]:
         """Return the `k` closest chunks of one type, best first.
 
         A hit inside a split table or clause series is expanded to the whole unit
@@ -473,10 +465,7 @@ class KnowledgeStore:
                 dense_k,
                 {"source_type": source_type.value},
             )
-            evidence = [
-                self._evidence(document, to_relevance(distance), source_type)
-                for document, distance in hits
-            ]
+            evidence = [self._evidence(document, to_relevance(distance), source_type) for document, distance in hits]
             if source_type is SourceType.PRIOR_ANSWER:
                 evidence = self._still_standing(evidence)
             if settings.hybrid_search:
@@ -594,13 +583,18 @@ class KnowledgeStore:
                         key = metadata.get("source_type", "")
                         counts[key] = counts.get(key, 0) + 1
                         name = metadata.get("source_name") or "unknown"
-                        entry = sources.setdefault(name, {
-                            "name": name, "source_type": key, "chunks": 0,
-                            # A document is one or the other; the first chunk
-                            # settles it. Defaults to "ours" for anything
-                            # indexed before the distinction existed.
-                            "authority": metadata.get("authority", "ours"),
-                        })
+                        entry = sources.setdefault(
+                            name,
+                            {
+                                "name": name,
+                                "source_type": key,
+                                "chunks": 0,
+                                # A document is one or the other; the first chunk
+                                # settles it. Defaults to "ours" for anything
+                                # indexed before the distinction existed.
+                                "authority": metadata.get("authority", "ours"),
+                            },
+                        )
                         entry["chunks"] += 1
                     self._catalog_cache = (counts, sources)
         return self._catalog_cache
@@ -613,9 +607,7 @@ class KnowledgeStore:
         """Every distinct file name in the store, sorted — for the search filter."""
         return sorted(name for name in self._catalog()[1] if name != "unknown")
 
-    def _fuse_with_lexical(
-        self, query: str, dense: list[Evidence], source_type: SourceType, k: int
-    ) -> list[Evidence]:
+    def _fuse_with_lexical(self, query: str, dense: list[Evidence], source_type: SourceType, k: int) -> list[Evidence]:
         """Re-rank dense hits against a BM25 pass over the same collection."""
         index, documents = self._lexical(source_type)
         if not len(index):
@@ -628,15 +620,15 @@ class KnowledgeStore:
             if key not in by_key and key in documents:
                 text, metadata = documents[key]
                 by_key[key] = self._evidence(
-                    Document(page_content=text, metadata=metadata), 0.0, source_type,
+                    Document(page_content=text, metadata=metadata),
+                    0.0,
+                    source_type,
                     similarity=0.0,  # never vector-scored; fusion ranks it by position
                 )
 
         dense_ranking = [(item.source_name, item.chunk) for item in dense]
         lexical_ranking = [key for key in index.search(query, k) if key in by_key]
-        fused = reciprocal_rank_fusion(
-            [dense_ranking, lexical_ranking], weights=[1.0, settings.lexical_weight]
-        )
+        fused = reciprocal_rank_fusion([dense_ranking, lexical_ranking], weights=[1.0, settings.lexical_weight])
         return [by_key[key] for key in fused if key in by_key]
 
     def _chunks(self, source_type: SourceType) -> dict:
@@ -654,9 +646,7 @@ class KnowledgeStore:
             cached = self._chunk_cache.get(source_type)
             if cached is not None:
                 return cached
-            records = self._store.get(
-                where={"source_type": source_type.value}, include=["documents", "metadatas"]
-            )
+            records = self._store.get(where={"source_type": source_type.value}, include=["documents", "metadatas"])
             texts = records.get("documents") or []
             metadatas = records.get("metadatas") or []
             documents = {
@@ -710,7 +700,9 @@ class KnowledgeStore:
             if item.parts > settings.max_expanded_parts:
                 logger.debug(
                     "Not expanding %s unit %s: %d parts is a chapter, not a series",
-                    item.source_name, item.unit_id, item.parts,
+                    item.source_name,
+                    item.unit_id,
+                    item.parts,
                 )
                 continue
 
@@ -763,14 +755,14 @@ class KnowledgeStore:
         third parties, and a document that ranks first at cosine 0.76 when
         asked for directly is never asked for at all.
         """
-        records = self._store.get(
-            where={"source_type": SourceType.GUIDELINE.value}, include=["metadatas"]
+        records = self._store.get(where={"source_type": SourceType.GUIDELINE.value}, include=["metadatas"])
+        return sorted(
+            {
+                metadata.get("source_name", "")
+                for metadata in (records.get("metadatas") or [])
+                if metadata.get("source_name")
+            }
         )
-        return sorted({
-            metadata.get("source_name", "")
-            for metadata in (records.get("metadatas") or [])
-            if metadata.get("source_name")
-        })
 
     def stats(self) -> dict:
         """Counts per source type and the list of indexed file names, for the UI.
@@ -790,8 +782,7 @@ class KnowledgeStore:
             # remove button beside it that would have deleted every vector and
             # left 698 rows on the memory page pointing at nothing.
             "sources": sorted(
-                (source for source in sources.values()
-                 if source["source_type"] != SourceType.PRIOR_ANSWER.value),
+                (source for source in sources.values() if source["source_type"] != SourceType.PRIOR_ANSWER.value),
                 key=lambda source: source["name"],
             ),
         }

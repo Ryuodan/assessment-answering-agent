@@ -18,8 +18,12 @@ from src.models import Evidence, RelevanceVerdict, RelevanceVerdicts, SourceType
 
 def chunk(n: int, unit: str = "", name: str = "policy.pdf") -> Evidence:
     return Evidence(
-        source_type=SourceType.GUIDELINE, source_name=name,
-        snippet=f"content of chunk {n}", chunk=n, unit_id=unit or f"u{n}", score=0.7,
+        source_type=SourceType.GUIDELINE,
+        source_name=name,
+        snippet=f"content of chunk {n}",
+        chunk=n,
+        unit_id=unit or f"u{n}",
+        score=0.7,
     )
 
 
@@ -32,8 +36,10 @@ def _enabled(monkeypatch):
 
 def grader(verdicts: dict[int, bool]):
     """Stand in for the model, returning the verdicts a test dictates."""
+
     async def fake(question, batch):
         return {index: verdicts.get(index, True) for index, _ in batch}
+
     return fake
 
 
@@ -87,7 +93,7 @@ async def test_a_series_is_judged_as_one_unit(monkeypatch):
 @pytest.mark.asyncio
 async def test_an_omitted_verdict_is_not_read_as_a_rejection(monkeypatch):
     async def partial(question, batch):
-        return {batch[0][0]: True}          # the model answered about one only
+        return {batch[0][0]: True}  # the model answered about one only
 
     monkeypatch.setattr(relevance, "_grade_batch", partial)
     evidence = [chunk(n) for n in range(6)]

@@ -147,7 +147,10 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
 
 
 def load(
-    run_id: str, *, team_id: str | None = None, actor_email: str | None = None,
+    run_id: str,
+    *,
+    team_id: str | None = None,
+    actor_email: str | None = None,
 ) -> StoredRun | None:
     """One run with its answers, or None.
 

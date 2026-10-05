@@ -118,23 +118,27 @@ def _detect_prose(document, form: DetectedForm) -> list[FormQuestion]:
         # of it. Targets stay positional -- they have to, that is how a
         # paragraph is found -- but they are resolved within a single write.
         number = f"Q{match.group(1)}"
-        questions.append(FormQuestion(
-            id=f"{section}/{number}" if section else f"{number}@{index}",
-            number=number,
-            text=_QUESTION.sub("", text).strip(),
-            section=section,
-            language=_language(text),
-            targets={Role.ANSWER: Target(
-                id=f"para:{anchor}",
-                role=Role.ANSWER,
-                label="Answer",
-                existing=existing,
-            )},
-            # Named the way the document names it. "paragraph 142" is a number
-            # nothing in Word will show you; the section and the printed
-            # question number are what a person scrolls to find.
-            location=f"{section}, {number}" if section else f"{number} (paragraph {index + 1})",
-        ))
+        questions.append(
+            FormQuestion(
+                id=f"{section}/{number}" if section else f"{number}@{index}",
+                number=number,
+                text=_QUESTION.sub("", text).strip(),
+                section=section,
+                language=_language(text),
+                targets={
+                    Role.ANSWER: Target(
+                        id=f"para:{anchor}",
+                        role=Role.ANSWER,
+                        label="Answer",
+                        existing=existing,
+                    )
+                },
+                # Named the way the document names it. "paragraph 142" is a number
+                # nothing in Word will show you; the section and the printed
+                # question number are what a person scrolls to find.
+                location=f"{section}, {number}" if section else f"{number} (paragraph {index + 1})",
+            )
+        )
     return questions
 
 
@@ -160,7 +164,7 @@ def _insert_answer(document, anchor: Paragraph, text: str, *, replace: bool) -> 
     else:
         shell = copy.deepcopy(anchor._p)
         for run in shell.findall(qn("w:r")):
-            shell.remove(run)          # keep the paragraph properties, drop the words
+            shell.remove(run)  # keep the paragraph properties, drop the words
         anchor._p.addnext(shell)
         target = Paragraph(shell, anchor._parent)
 
@@ -275,22 +279,24 @@ def _detect_tables(document, form: DetectedForm) -> list[FormQuestion]:
                 number = " ".join(cells[columns["number"]].text.split())
 
             answer_cell = cells[columns["answer"]]
-            questions.append(FormQuestion(
-                id=f"table:{table_index}/r{actual}",
-                number=number,
-                text=text,
-                section=section,
-                language=_language(text),
-                targets={Role.ANSWER: Target(
-                    id=f"table:{table_index}/r{actual}/c{columns['answer']}",
-                    role=Role.ANSWER,
-                    label="Answer",
-                    existing=" ".join(answer_cell.text.split()),
-                )},
-                location=_table_location(
-                    section or above.get(table_index, ""), number, table_index, actual
-                ),
-            ))
+            questions.append(
+                FormQuestion(
+                    id=f"table:{table_index}/r{actual}",
+                    number=number,
+                    text=text,
+                    section=section,
+                    language=_language(text),
+                    targets={
+                        Role.ANSWER: Target(
+                            id=f"table:{table_index}/r{actual}/c{columns['answer']}",
+                            role=Role.ANSWER,
+                            label="Answer",
+                            existing=" ".join(answer_cell.text.split()),
+                        )
+                    },
+                    location=_table_location(section or above.get(table_index, ""), number, table_index, actual),
+                )
+            )
     return questions
 
 
@@ -321,7 +327,7 @@ def _open(path: Path):
     _guard_size(path)
     try:
         return Document(str(path))
-    except Exception as error:                 # PackageNotFoundError, KeyError, lxml errors
+    except Exception as error:  # PackageNotFoundError, KeyError, lxml errors
         raise FormatError(f"{path.name} is not a readable .docx file.") from error
 
 
@@ -353,24 +359,36 @@ def detect(path: str | Path) -> DetectedForm:
 
     if prose:
         form.questions.extend(prose)
-        form.parts.append(Part(
-            name="document body", kind="questions", questions=len(prose),
-            findings=[Finding(
-                subject="document body",
-                verdict=f"{len(prose)} questions",
-                because="paragraphs beginning 'Q<n>', each answered in a paragraph after it",
-            )],
-        ))
+        form.parts.append(
+            Part(
+                name="document body",
+                kind="questions",
+                questions=len(prose),
+                findings=[
+                    Finding(
+                        subject="document body",
+                        verdict=f"{len(prose)} questions",
+                        because="paragraphs beginning 'Q<n>', each answered in a paragraph after it",
+                    )
+                ],
+            )
+        )
     if tables:
         form.questions.extend(tables)
-        form.parts.append(Part(
-            name="tables", kind="questions", questions=len(tables),
-            findings=[Finding(
-                subject="tables",
-                verdict=f"{len(tables)} questions",
-                because=f"{len(document.tables)} table(s), stitched where a header was missing",
-            )],
-        ))
+        form.parts.append(
+            Part(
+                name="tables",
+                kind="questions",
+                questions=len(tables),
+                findings=[
+                    Finding(
+                        subject="tables",
+                        verdict=f"{len(tables)} questions",
+                        because=f"{len(document.tables)} table(s), stitched where a header was missing",
+                    )
+                ],
+            )
+        )
     if not form.questions:
         form.warnings.append(
             "No questions were found: no paragraphs beginning 'Q<n>', and no table "
@@ -387,7 +405,7 @@ def write(path: str | Path, destination: str | Path, values: dict[str, str]) -> 
     put the second answer in the wrong place and every later one further adrift.
     """
     path, destination = Path(path), Path(destination)
-    parts_before = _part_count(path)      # before the source can be replaced
+    parts_before = _part_count(path)  # before the source can be replaced
     document = _open(path)
     paragraphs = _paragraph_index(document)
 

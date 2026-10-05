@@ -48,6 +48,7 @@ def limit(monkeypatch):
     def set_limit(megabytes: int, keep_days: int = 30):
         monkeypatch.setattr(settings, "storage_limit_per_user_mb", megabytes)
         monkeypatch.setattr(settings, "storage_keep_days", keep_days)
+
     set_limit(1)
     return set_limit
 
@@ -76,18 +77,28 @@ def shared_upload(person: storage.Person, name: str, size_mb: float, days_old: f
     return _age(path, days_old)
 
 
-def questionnaire(person: storage.Person, name: str, size_mb: float, days_old: float, *,
-                  touched_days_ago: float | None = None, filled_mb: float = 0,
-                  source: Path | None = None) -> batches.Batch:
+def questionnaire(
+    person: storage.Person,
+    name: str,
+    size_mb: float,
+    days_old: float,
+    *,
+    touched_days_ago: float | None = None,
+    filled_mb: float = 0,
+    source: Path | None = None,
+) -> batches.Batch:
     """An uploaded questionnaire with its batch, optionally filled."""
     source = source or upload(person, name, size_mb, days_old)
-    batch = batches.create(User(email=person.email, team_id=person.team_id), source,
-                           DetectedForm(source_name=name, format="xlsx"))
+    batch = batches.create(
+        User(email=person.email, team_id=person.team_id), source, DetectedForm(source_name=name, format="xlsx")
+    )
     touched = NOW - timedelta(days=days_old if touched_days_ago is None else touched_days_ago)
     from src import store
+
     conn = store.connect()
-    conn.execute("UPDATE form_batches SET updated_at = ? WHERE batch_id = ?",
-                 (touched.isoformat(timespec="seconds"), batch.id))
+    conn.execute(
+        "UPDATE form_batches SET updated_at = ? WHERE batch_id = ?", (touched.isoformat(timespec="seconds"), batch.id)
+    )
     conn.commit()
     if filled_mb:
         copy = settings.filled_dir / batch.id / f"{Path(name).stem} - answered.xlsx"
@@ -111,6 +122,7 @@ def test_over_the_limit_the_longest_unused_work_goes_first_until_under(indexed, 
     middle = questionnaire(ALICE, "Middle.xlsx", 1, days_old=200)
     newest = questionnaire(ALICE, "Newest.xlsx", 0.5, days_old=100)
     from src.service import _extracted_text_cache_path
+
     read_out = _extracted_text_cache_path(oldest.source_path)
     read_out.parent.mkdir(parents=True, exist_ok=True)
     read_out.write_text("the other company's answers", encoding="utf-8")
@@ -269,6 +281,7 @@ def test_everybody_with_files_is_checked_including_people_who_have_left(indexed,
 def test_under_the_limit_the_index_is_not_even_opened(limit, monkeypatch):
     """Checking runs at startup and every hour. Under the limit it must cost two
     directory listings, not a connection to the vector store."""
+
     def never(team_id=None):
         raise AssertionError("the index was opened while under the limit")
 

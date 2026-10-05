@@ -31,8 +31,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src import forms                                            # noqa: E402
-from src.forms.model import Role                                 # noqa: E402
+from src import forms  # noqa: E402
+from src.forms.model import Role  # noqa: E402
 
 ANSWER = "Yes. An approved policy is in place and reviewed annually."
 ARABIC = "\u0646\u0639\u0645\u060c \u062a\u0648\u062c\u062f \u0633\u064a\u0627\u0633\u0629 \u0645\u0639\u062a\u0645\u062f\u0629 \u0648\u0645\u0631\u0627\u062c\u0639\u0629 \u0633\u0646\u0648\u064a\u0627\u064b."
@@ -40,10 +40,7 @@ ARABIC = "\u0646\u0639\u0645\u060c \u062a\u0648\u062c\u062f \u0633\u064a\u0627\u
 
 def _parts(path: Path) -> dict[str, str]:
     with zipfile.ZipFile(path) as package:
-        return {
-            item.filename: hashlib.sha256(package.read(item.filename)).hexdigest()
-            for item in package.infolist()
-        }
+        return {item.filename: hashlib.sha256(package.read(item.filename)).hexdigest() for item in package.infolist()}
 
 
 def _answers(form) -> dict[str, str]:
@@ -51,7 +48,7 @@ def _answers(form) -> dict[str, str]:
     for question in form.questions:
         for target in question.writable:
             if target.role is Role.EVIDENCE:
-                continue                      # blank by default
+                continue  # blank by default
             if target.role is Role.STATUS:
                 values[target.id] = target.vocabulary[0] if target.vocabulary else "Yes"
             else:
@@ -63,8 +60,10 @@ def report(path: Path, *, verbose: bool) -> int:
     form = forms.detect(path)
     languages = {question.language for question in form.questions}
     print(f"\n{'=' * 96}\n{path.name}")
-    print(f"  {len(form.questions)} question(s), {form.answered_count} already answered, "
-          f"language(s): {', '.join(sorted(languages)) or '-'}")
+    print(
+        f"  {len(form.questions)} question(s), {form.answered_count} already answered, "
+        f"language(s): {', '.join(sorted(languages)) or '-'}"
+    )
 
     for part in form.parts:
         mark = "  +" if part.used else "  -"
@@ -116,16 +115,20 @@ def check_write(path: Path, destination: Path) -> bool:
 
     again = forms.detect(destination)
     landed = sum(
-        1 for question in again.questions for target in question.writable
+        1
+        for question in again.questions
+        for target in question.writable
         if target.role in (Role.ANSWER, Role.STATUS) and target.existing.strip()
     )
     stable = [q.id for q in again.questions] == [q.id for q in form.questions]
 
     ok = result.intact and not lost and not content and landed >= len(values) * 0.97 and stable
-    print(f"  {'ok ' if ok else '!! '}wrote {result.written:>4d} "
-          f"(new {len(result.created)}, over {len(result.replaced)})  "
-          f"parts {result.parts_before}->{result.parts_after}  "
-          f"read back {landed}/{len(values)}  ids stable: {stable}")
+    print(
+        f"  {'ok ' if ok else '!! '}wrote {result.written:>4d} "
+        f"(new {len(result.created)}, over {len(result.replaced)})  "
+        f"parts {result.parts_before}->{result.parts_after}  "
+        f"read back {landed}/{len(values)}  ids stable: {stable}"
+    )
     if lost:
         print(f"      LOST PARTS: {lost[:6]}")
     if content:
@@ -150,7 +153,8 @@ def main() -> int:
         return 2
 
     files = sorted(
-        path for path in args.folder.rglob("*")
+        path
+        for path in args.folder.rglob("*")
         if path.suffix.lower() in forms.SUPPORTED and not path.name.startswith("~$")
     )
     if not files:
@@ -165,7 +169,7 @@ def main() -> int:
                 total += report(path, verbose=args.verbose)
                 if args.write and not check_write(path, workspace / path.name):
                     failures += 1
-            except Exception as error:                 # a bad file is a result, not a crash
+            except Exception as error:  # a bad file is a result, not a crash
                 failures += 1
                 print(f"  !! {type(error).__name__}: {error}")
     finally:

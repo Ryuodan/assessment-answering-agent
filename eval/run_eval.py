@@ -60,9 +60,7 @@ async def answer_golden_set(golden_path: Path, out: Path) -> None:
     print(f"Run {result.run_id} written to {out}")
 
 
-async def score(
-    answers_path: Path, golden_path: Path, label: str, baseline_path: Path | None, notes: str = ""
-) -> None:
+async def score(answers_path: Path, golden_path: Path, label: str, baseline_path: Path | None, notes: str = "") -> None:
     cases = load_golden_set(golden_path)
 
     async def report_for(path: Path, name: str) -> dict:
@@ -93,8 +91,12 @@ async def score(
 
 
 async def score_retrieval(
-    targets_path: Path, golden_path: Path, label: str, out: Path | None,
-    baseline: Path | None, plans_path: Path | None = None,
+    targets_path: Path,
+    golden_path: Path,
+    label: str,
+    out: Path | None,
+    baseline: Path | None,
+    plans_path: Path | None = None,
 ) -> None:
     """Measure retrieval on its own. No judge, no drafting, no tokens to speak of."""
     targets = load_targets(targets_path, golden=load_golden_set(golden_path))
@@ -128,9 +130,14 @@ async def score_retrieval(
         previous = json.loads(baseline.read_text(encoding="utf-8"))
         print(f"\nagainst {previous.get('label', baseline.stem)}")
         print("-" * 62)
-        for key in ("document_recall_pct", "clause_recall_pct",
-                    "selection_loss_documents", "never_retrieved_documents",
-                    "cases_fully_covered", "mrr"):
+        for key in (
+            "document_recall_pct",
+            "clause_recall_pct",
+            "selection_loss_documents",
+            "never_retrieved_documents",
+            "cases_fully_covered",
+            "mrr",
+        ):
             before = previous["summary"].get(key)
             after = payload["summary"].get(key)
             if isinstance(before, (int, float)) and isinstance(after, (int, float)):
@@ -138,8 +145,9 @@ async def score_retrieval(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="eval", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="eval", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--golden", type=Path, default=DEFAULT_GOLDEN_SET, help="golden set JSON")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -155,16 +163,21 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("history", help="show every recorded run")
 
     retrieval = subparsers.add_parser(
-        "retrieval", help="score retrieval alone, without asking a model to write anything")
+        "retrieval", help="score retrieval alone, without asking a model to write anything"
+    )
     retrieval.add_argument("--targets", type=Path, default=DEFAULT_TARGETS)
     retrieval.add_argument("--label", default="retrieval")
-    retrieval.add_argument("--out", type=Path, default=None,
-                           help="write the full per-case result here")
-    retrieval.add_argument("--baseline", type=Path, default=None,
-                           help="a previous retrieval result file to compare against")
-    retrieval.add_argument("--plans", type=Path, default=None,
-                           help="reuse (or create) a fixed set of expanded queries, so a sweep "
-                                "measures the setting rather than the planner's variation")
+    retrieval.add_argument("--out", type=Path, default=None, help="write the full per-case result here")
+    retrieval.add_argument(
+        "--baseline", type=Path, default=None, help="a previous retrieval result file to compare against"
+    )
+    retrieval.add_argument(
+        "--plans",
+        type=Path,
+        default=None,
+        help="reuse (or create) a fixed set of expanded queries, so a sweep "
+        "measures the setting rather than the planner's variation",
+    )
 
     return parser
 
@@ -178,8 +191,7 @@ def main() -> int:
     elif args.command == "history":
         print(format_history(load_history()))
     elif args.command == "retrieval":
-        llm.run(score_retrieval(args.targets, args.golden, args.label, args.out,
-                                    args.baseline, args.plans))
+        llm.run(score_retrieval(args.targets, args.golden, args.label, args.out, args.baseline, args.plans))
     else:
         label = args.label or args.answers.stem
         llm.run(score(args.answers, args.golden, label, args.baseline, args.notes))

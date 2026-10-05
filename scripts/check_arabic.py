@@ -1,6 +1,7 @@
 """Stress the chunker against realistic Arabic document shapes."""
 
 import sys
+
 sys.path.insert(0, "/home/claude/work/repo")
 
 from src.chunking import chunk_document, parse_blocks

@@ -240,6 +240,7 @@ async def test_empty_query_short_circuits(series_doc):
     assert await store.search("   ", SourceType.GUIDELINE, k=5) == []
     assert await store.search("alerts", SourceType.GUIDELINE, k=0) == []
 
+
 # --- previously answered assessments ---------------------------------------
 
 
@@ -316,12 +317,15 @@ def test_duplicate_upload_is_reported_against_the_original():
 # the cosine, so a chunk matching at 0.72 was displayed as 0.60.
 
 
-@pytest.mark.parametrize(("relevance", "cosine"), [
-    (1.0, 1.0),        # identical vectors
-    (0.6006, 0.7176),  # measured against the real corpus
-    (0.4993, 0.6460),
-    (1 - 2 ** 0.5 / 2, 0.5),
-])
+@pytest.mark.parametrize(
+    ("relevance", "cosine"),
+    [
+        (1.0, 1.0),  # identical vectors
+        (0.6006, 0.7176),  # measured against the real corpus
+        (0.4993, 0.6460),
+        (1 - 2**0.5 / 2, 0.5),
+    ],
+)
 def test_the_cosine_is_recovered_from_the_l2_relevance(relevance, cosine):
     assert cosine_from_relevance(relevance, "l2") == pytest.approx(cosine, abs=1e-4)
 
@@ -445,8 +449,7 @@ async def test_each_source_type_keeps_its_own_budget(series_doc):
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
     fake.stage(chunk_indexes=[0, 1, 2], score=0.7)
 
-    found = await store.search_types(
-        "alerts", [(SourceType.PRIOR_ANSWER, 1), (SourceType.GUIDELINE, 3)], expand=False)
+    found = await store.search_types("alerts", [(SourceType.PRIOR_ANSWER, 1), (SourceType.GUIDELINE, 3)], expand=False)
 
     assert len(found[SourceType.PRIOR_ANSWER]) == 1
     assert len(found[SourceType.GUIDELINE]) == 3
@@ -457,8 +460,7 @@ async def test_a_zero_budget_type_is_not_searched(series_doc):
     store, fake = build_store(series_doc, source_name="std.pdf", chunk_size=400)
     fake.stage(chunk_indexes=[0], score=0.7)
 
-    found = await store.search_types(
-        "alerts", [(SourceType.PRIOR_ANSWER, 0), (SourceType.GUIDELINE, 5)])
+    found = await store.search_types("alerts", [(SourceType.PRIOR_ANSWER, 0), (SourceType.GUIDELINE, 5)])
 
     assert SourceType.PRIOR_ANSWER not in found
     assert len(fake.searched_vectors) == 1

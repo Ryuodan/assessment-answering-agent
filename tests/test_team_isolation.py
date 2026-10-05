@@ -22,8 +22,8 @@ from src.config import settings
 from src.models import IngestResult
 from tests.conftest import FakeVectorStore, bare_store
 
-ALICE = "m.alsaif@t2.sa"            # the team the system was set up for
-CAROL = "carol@example.com"         # another team
+ALICE = "m.alsaif@t2.sa"  # the team the system was set up for
+CAROL = "carol@example.com"  # another team
 CODE, OTHER_CODE = "TEAM-CODE-FOR-TESTS", "OTHER-TEAM-CODE"
 OTHER = "privacy"
 
@@ -87,20 +87,28 @@ def test_another_team_cannot_change_restore_or_forget_them(teams, stores):
 def test_disagreements_belong_to_the_team_whose_answers_they_are(teams, stores):
     first = answer_memory.record("Do you run drills?", "Yes.", team_id=settings.default_team)
     second = answer_memory.record("Do you run drills?", "No.", team_id=settings.default_team)
-    answer_memory.raise_conflict(first.entry_id, second.entry_id, "they disagree",
-                                 team_id=settings.default_team)
+    answer_memory.raise_conflict(first.entry_id, second.entry_id, "they disagree", team_id=settings.default_team)
     alice, carol = as_person(ALICE, CODE), as_person(CAROL, OTHER_CODE)
 
     assert len(alice.get("/api/memory/conflicts").json()["conflicts"]) == 1
     assert carol.get("/api/memory/conflicts").json()["conflicts"] == []
-    assert carol.post("/api/memory/conflicts/resolve", json={
-        "entry_id": first.entry_id, "other_id": second.entry_id, "resolution": "keep_this",
-    }).status_code == 404
+    assert (
+        carol.post(
+            "/api/memory/conflicts/resolve",
+            json={
+                "entry_id": first.entry_id,
+                "other_id": second.entry_id,
+                "resolution": "keep_this",
+            },
+        ).status_code
+        == 404
+    )
 
 
 def test_two_teams_may_import_a_questionnaire_of_the_same_name(stores):
     """Imported entries are named `<file>::<n>`, so the same file name in two
     teams is the same id -- one team's import used to overwrite the other's."""
+
     class Pair:
         def __init__(self, question, answer):
             self.question, self.answer, self.section = question, answer, ""
@@ -146,8 +154,9 @@ def test_one_teams_documents_and_index_are_its_own(teams, stores, monkeypatch):
     monkeypatch.setattr("src.api.service.ingest", indexed)
     alice, carol = as_person(ALICE, CODE), as_person(CAROL, OTHER_CODE)
 
-    alice.post("/api/knowledge/guidelines",
-               files={"files": ("T2 - Retention Policy.pdf", b"%PDF-1.4 ours", "application/pdf")})
+    alice.post(
+        "/api/knowledge/guidelines", files={"files": ("T2 - Retention Policy.pdf", b"%PDF-1.4 ours", "application/pdf")}
+    )
 
     assert [s["name"] for s in alice.get("/api/knowledge").json()["sources"]] == ["T2 - Retention Policy.pdf"]
     assert carol.get("/api/knowledge").json()["sources"] == []
@@ -162,8 +171,9 @@ def test_another_teams_documents_cannot_be_listed_or_opened(teams, stores, monke
 
     monkeypatch.setattr("src.api.service.ingest", indexed)
     alice, carol = as_person(ALICE, CODE), as_person(CAROL, OTHER_CODE)
-    carol.post("/api/knowledge/guidelines",
-               files={"files": ("Privacy Charter.pdf", b"%PDF-1.4 theirs", "application/pdf")})
+    carol.post(
+        "/api/knowledge/guidelines", files={"files": ("Privacy Charter.pdf", b"%PDF-1.4 theirs", "application/pdf")}
+    )
 
     assert [d["name"] for d in carol.get("/api/documents").json()["documents"]] == ["Privacy Charter.pdf"]
     assert alice.get("/api/documents").json()["documents"] == []
@@ -184,13 +194,17 @@ async def test_a_question_is_answered_from_its_own_teams_index(stores):
         return {}
 
     import src.knowledge as module
+
     original = module.KnowledgeStore.search_types
     module.KnowledgeStore.search_types = search_types
     try:
-        await nodes.retrieve({
-            "question": Question(id="1", text="How long is data retained?"),
-            "search_queries": ["retention"], "team_id": OTHER,
-        })
+        await nodes.retrieve(
+            {
+                "question": Question(id="1", text="How long is data retained?"),
+                "search_queries": ["retention"],
+                "team_id": OTHER,
+            }
+        )
     finally:
         module.KnowledgeStore.search_types = original
 
@@ -261,9 +275,7 @@ def test_what_was_remembered_before_teams_belongs_to_the_default_team(tmp_path, 
     migrated = store.connect()
 
     assert migrated.execute("PRAGMA user_version").fetchone()[0] == len(store.MIGRATIONS)
-    assert {row["team_id"] for row in migrated.execute("SELECT team_id FROM memory_entries")} == {
-        settings.default_team
-    }
+    assert {row["team_id"] for row in migrated.execute("SELECT team_id FROM memory_entries")} == {settings.default_team}
     assert [row["team_id"] for row in migrated.execute("SELECT team_id FROM memory_conflicts")] == [
         settings.default_team
     ]

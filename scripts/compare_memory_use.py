@@ -40,7 +40,11 @@ from src.config import PROJECT_ROOT, configure_logging, settings  # noqa: E402
 from src import llm  # noqa: E402
 from src import prompts  # noqa: E402
 from eval.house import (  # noqa: E402
-    form_score, judge_agreement, load_house_set, summarise, HouseResult,
+    form_score,
+    judge_agreement,
+    load_house_set,
+    summarise,
+    HouseResult,
 )
 from scripts.run_house_eval import stratified  # noqa: E402
 
@@ -99,37 +103,38 @@ async def run_one(name: str, cases) -> dict:
         # The graph reads the module attribute at call time, so the swap has to
         # reach `src.graph.nodes` too -- it imported the name directly.
         from src.graph import nodes
+
         nodes.ANSWER_SYSTEM = prompts.ANSWER_SYSTEM
         if top_k is not None:
             settings.top_k_prior_answers = top_k
 
         print(f"\n[{name}] answering {len(cases)}…")
-        answers = await service.answer_questions(
-            [c.as_question(i) for i, c in enumerate(cases)]
-        )
+        answers = await service.answer_questions([c.as_question(i) for i, c in enumerate(cases)])
     finally:
         prompts.ANSWER_SYSTEM = original_prompt
         from src.graph import nodes
+
         nodes.ANSWER_SYSTEM = original_prompt
         settings.top_k_prior_answers = original_k
 
     results = []
     for case, produced in zip(cases, answers):
         score, shape = form_score(case, produced.answer)
-        results.append(HouseResult(
-            case=case, answer=produced.answer, register=score, shape=shape,
-            confidence=produced.confidence, needs_review=produced.needs_review,
-        ))
+        results.append(
+            HouseResult(
+                case=case,
+                answer=produced.answer,
+                register=score,
+                shape=shape,
+                confidence=produced.confidence,
+                needs_review=produced.needs_review,
+            )
+        )
     print(f"[{name}] judging…")
-    for result, verdict in zip(results, await asyncio.gather(
-        *(judge_agreement(r.case, r.answer) for r in results)
-    )):
+    for result, verdict in zip(results, await asyncio.gather(*(judge_agreement(r.case, r.answer) for r in results))):
         result.agreement = verdict
 
-    used = sum(
-        1 for produced in answers
-        if any(e.source_type.value == "prior_answer" for e in produced.evidence)
-    )
+    used = sum(1 for produced in answers if any(e.source_type.value == "prior_answer" for e in produced.evidence))
     return {
         "name": name,
         "summary": summarise(results),
@@ -148,36 +153,52 @@ async def main_async(args) -> int:
         # Written as each finishes: four answering passes is the expensive part
         # of this script and a crash in the fourth should not cost the first
         # three.
-        (RESULTS / "memory_wirings.json").write_text(json.dumps({
-            n: {
-                "summary": r["summary"], "cited_memory": r["cited_memory"],
-                "cases": [
-                    {"test_id": x.case.test_id, "question": x.case.question,
-                     "team": x.case.answer, "answer": x.answer,
-                     "verdict": x.agreement.verdict if x.agreement else "",
-                     "score": x.agreement.score if x.agreement else 0,
-                     "words": x.shape.words, "confidence": x.confidence}
-                    for x in r["results"]
-                ],
-            }
-            for n, r in runs.items()
-        }, ensure_ascii=False, indent=1), encoding="utf-8")
+        (RESULTS / "memory_wirings.json").write_text(
+            json.dumps(
+                {
+                    n: {
+                        "summary": r["summary"],
+                        "cited_memory": r["cited_memory"],
+                        "cases": [
+                            {
+                                "test_id": x.case.test_id,
+                                "question": x.case.question,
+                                "team": x.case.answer,
+                                "answer": x.answer,
+                                "verdict": x.agreement.verdict if x.agreement else "",
+                                "score": x.agreement.score if x.agreement else 0,
+                                "words": x.shape.words,
+                                "confidence": x.confidence,
+                            }
+                            for x in r["results"]
+                        ],
+                    }
+                    for n, r in runs.items()
+                },
+                ensure_ascii=False,
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
 
     print("\n" + "=" * 78)
     print("  FOUR WAYS OF USING THE SAME REMEMBERED ANSWERS")
     print("=" * 78)
-    print(f"  {'wiring':12s} {'agreement':>10s} {'form':>7s} {'contradicts':>12s} "
-          f"{'cited memory':>13s} {'median words':>13s}")
+    print(
+        f"  {'wiring':12s} {'agreement':>10s} {'form':>7s} {'contradicts':>12s} "
+        f"{'cited memory':>13s} {'median words':>13s}"
+    )
     for name, run in runs.items():
         s = run["summary"]
-        print(f"  {name:12s} {s['agreement']:9.1f}% {s['form']:6.1f}% "
-              f"{s['verdicts'].get('contradicts', 0):12d} "
-              f"{run['cited_memory']:13d} {s['median_words_ours']:13.0f}")
+        print(
+            f"  {name:12s} {s['agreement']:9.1f}% {s['form']:6.1f}% "
+            f"{s['verdicts'].get('contradicts', 0):12d} "
+            f"{run['cited_memory']:13d} {s['median_words_ours']:13.0f}"
+        )
 
     # Paired: same question, did the wiring beat the control on it?
     if "off" in runs and len(runs) > 1:
-        base = {r.case.test_id: (r.agreement.score if r.agreement else 0)
-                for r in runs["off"]["results"]}
+        base = {r.case.test_id: (r.agreement.score if r.agreement else 0) for r in runs["off"]["results"]}
         print("\n  against `off`, question by question:")
         for name, run in runs.items():
             if name == "off":
@@ -189,8 +210,7 @@ async def main_async(args) -> int:
                 better += mine > theirs
                 worse += mine < theirs
                 same += mine == theirs
-            print(f"    {name:12s} better on {better:3d}   worse on {worse:3d}   "
-                  f"unchanged {same:3d}")
+            print(f"    {name:12s} better on {better:3d}   worse on {worse:3d}   unchanged {same:3d}")
     return 0
 
 

@@ -72,9 +72,9 @@ INK_SOFT = colors.HexColor("#4a5361")
 INK_FAINT = colors.HexColor("#7b8595")
 RULE = colors.HexColor("#dfe3ea")
 
-ACCENT = colors.HexColor("#2c5ce6")       # sources
+ACCENT = colors.HexColor("#2c5ce6")  # sources
 ACCENT_BG = colors.HexColor("#eef3ff")
-VIOLET = colors.HexColor("#6d3fd4")       # reasoning
+VIOLET = colors.HexColor("#6d3fd4")  # reasoning
 VIOLET_BG = colors.HexColor("#f3eeff")
 OK = colors.HexColor("#0f7a4d")
 OK_BG = colors.HexColor("#e6f5ed")
@@ -140,13 +140,34 @@ def _register_fonts() -> None:
 # missing glyph is substituted with .notdef rather than reported as an error.
 # Mapping to the ASCII equivalent loses nothing a reader would notice.
 _PUNCTUATION = {
-    0x2010: "-", 0x2011: "-", 0x2012: "-", 0x2043: "-",
-    0x2018: "'", 0x2019: "'", 0x201A: "'", 0x201B: "'",
-    0x201C: '"', 0x201D: '"', 0x201E: '"', 0x201F: '"',
-    0x2032: "'", 0x2033: '"',
-    0x00A0: " ", 0x202F: " ", 0x2007: " ", 0x2009: " ", 0x200A: " ",
-    0x00AD: "", 0x200B: "", 0x200C: "", 0x200D: "", 0xFEFF: "",
-    0x2066: "", 0x2067: "", 0x2068: "", 0x2069: "",  # bidi isolates
+    0x2010: "-",
+    0x2011: "-",
+    0x2012: "-",
+    0x2043: "-",
+    0x2018: "'",
+    0x2019: "'",
+    0x201A: "'",
+    0x201B: "'",
+    0x201C: '"',
+    0x201D: '"',
+    0x201E: '"',
+    0x201F: '"',
+    0x2032: "'",
+    0x2033: '"',
+    0x00A0: " ",
+    0x202F: " ",
+    0x2007: " ",
+    0x2009: " ",
+    0x200A: " ",
+    0x00AD: "",
+    0x200B: "",
+    0x200C: "",
+    0x200D: "",
+    0xFEFF: "",
+    0x2066: "",
+    0x2067: "",
+    0x2068: "",
+    0x2069: "",  # bidi isolates
 }
 
 
@@ -273,10 +294,7 @@ def _join(spans: list[tuple[str, bool]], rtl: bool) -> str:
     while still placing it correctly against the Arabic around it.
     """
     ordered = list(reversed(spans)) if rtl else spans
-    return "".join(
-        f"<b>{_escape(_shape(text))}</b>" if bold else _escape(_shape(text))
-        for text, bold in ordered
-    )
+    return "".join(f"<b>{_escape(_shape(text))}</b>" if bold else _escape(_shape(text)) for text, bold in ordered)
 
 
 def _lay_out(spans: list[tuple[str, bool]], style: ParagraphStyle, width: float) -> str:
@@ -294,9 +312,7 @@ def _paragraph(text: str, style: ParagraphStyle, width: float = CONTENT_WIDTH) -
     spans = [(segment, False) for segment in text.split("\n")]
     if len(spans) == 1:
         return Paragraph(_lay_out(spans, style, width), style)
-    return Paragraph(
-        "<br/>".join(_lay_out([span], style, width) for span in spans), style
-    )
+    return Paragraph("<br/>".join(_lay_out([span], style, width) for span in spans), style)
 
 
 def _markup(block, style: ParagraphStyle, width: float) -> str:
@@ -308,69 +324,144 @@ def _styles() -> dict[str, ParagraphStyle]:
     _register_fonts()
     base = getSampleStyleSheet()
     return {
-        "title": ParagraphStyle("t", parent=base["Title"], fontName=FONT_BOLD, fontSize=18,
-                                leading=23, textColor=INK, alignment=0),
+        "title": ParagraphStyle(
+            "t", parent=base["Title"], fontName=FONT_BOLD, fontSize=18, leading=23, textColor=INK, alignment=0
+        ),
         "subtitle": ParagraphStyle(
-            "st", parent=base["Normal"], fontName=FONT, fontSize=9.5, leading=13,
+            "st",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=9.5,
+            leading=13,
             textColor=INK_SOFT,
         ),
         "question": ParagraphStyle(
-            "q", parent=base["Normal"], fontName=FONT_BOLD, fontSize=10.5, leading=14.5,
+            "q",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=10.5,
+            leading=14.5,
             textColor=INK,
         ),
         "question_rtl": ParagraphStyle(
-            "q_rtl", parent=base["Normal"], fontName=FONT_BOLD, fontSize=10.5, leading=16,
-            alignment=TA_RIGHT, textColor=INK,
+            "q_rtl",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=10.5,
+            leading=16,
+            alignment=TA_RIGHT,
+            textColor=INK,
         ),
         "qnum": ParagraphStyle(
-            "qn", parent=base["Normal"], fontName=FONT_BOLD, fontSize=10.5, leading=14.5,
+            "qn",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=10.5,
+            leading=14.5,
             textColor=ACCENT,
         ),
         "qnum_rtl": ParagraphStyle(
-            "qn_rtl", parent=base["Normal"], fontName=FONT_BOLD, fontSize=10.5, leading=16,
-            alignment=TA_RIGHT, textColor=ACCENT,
+            "qn_rtl",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=10.5,
+            leading=16,
+            alignment=TA_RIGHT,
+            textColor=ACCENT,
         ),
         "answer": ParagraphStyle(
-            "a", parent=base["Normal"], fontName=FONT, fontSize=10, leading=14.5,
-            spaceBefore=4, textColor=INK,
+            "a",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=10,
+            leading=14.5,
+            spaceBefore=4,
+            textColor=INK,
         ),
         "answer_rtl": ParagraphStyle(
-            "a_rtl", parent=base["Normal"], fontName=FONT, fontSize=10, leading=16.5,
-            alignment=TA_RIGHT, spaceBefore=4, textColor=INK,
+            "a_rtl",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=10,
+            leading=16.5,
+            alignment=TA_RIGHT,
+            spaceBefore=4,
+            textColor=INK,
         ),
         # `bulletFontName` matters for the left-to-right path: ReportLab draws
         # the bullet in Helvetica unless told otherwise, and Helvetica has no
         # glyph for U+2022 in the encoding used here.
         "bullet": ParagraphStyle(
-            "b", parent=base["Normal"], fontName=FONT, fontSize=10, leading=14.5,
-            leftIndent=14, bulletIndent=3, spaceBefore=2,
-            bulletFontName=FONT, bulletFontSize=10, textColor=INK,
+            "b",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=10,
+            leading=14.5,
+            leftIndent=14,
+            bulletIndent=3,
+            spaceBefore=2,
+            bulletFontName=FONT,
+            bulletFontSize=10,
+            textColor=INK,
         ),
         "bullet_rtl": ParagraphStyle(
-            "b_rtl", parent=base["Normal"], fontName=FONT, fontSize=10, leading=16.5,
-            alignment=TA_RIGHT, textColor=INK,
+            "b_rtl",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=10,
+            leading=16.5,
+            alignment=TA_RIGHT,
+            textColor=INK,
         ),
         "marker_rtl": ParagraphStyle(
-            "mk_rtl", parent=base["Normal"], fontName=FONT, fontSize=10, leading=16.5,
-            alignment=TA_RIGHT, textColor=ACCENT,
+            "mk_rtl",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=10,
+            leading=16.5,
+            alignment=TA_RIGHT,
+            textColor=ACCENT,
         ),
         "answer_heading": ParagraphStyle(
-            "ah", parent=base["Normal"], fontName=FONT_BOLD, fontSize=10, leading=14,
-            spaceBefore=7, spaceAfter=1, textColor=INK,
+            "ah",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=10,
+            leading=14,
+            spaceBefore=7,
+            spaceAfter=1,
+            textColor=INK,
         ),
         "label": ParagraphStyle(
-            "lbl", parent=base["Normal"], fontName=FONT_BOLD, fontSize=7, leading=9.5,
+            "lbl",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=7,
+            leading=9.5,
         ),
         "meta": ParagraphStyle(
-            "m", parent=base["Normal"], fontName=FONT, fontSize=8.8, leading=12.5,
+            "m",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=8.8,
+            leading=12.5,
             textColor=INK_SOFT,
         ),
         "meta_rtl": ParagraphStyle(
-            "m_rtl", parent=base["Normal"], fontName=FONT, fontSize=8.8, leading=13.5,
-            alignment=TA_RIGHT, textColor=INK_SOFT,
+            "m_rtl",
+            parent=base["Normal"],
+            fontName=FONT,
+            fontSize=8.8,
+            leading=13.5,
+            alignment=TA_RIGHT,
+            textColor=INK_SOFT,
         ),
         "pill": ParagraphStyle(
-            "p", parent=base["Normal"], fontName=FONT_BOLD, fontSize=9, leading=12,
+            "p",
+            parent=base["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=9,
+            leading=12,
             alignment=1,
         ),
     }
@@ -388,23 +479,25 @@ def _section(label: str, colour, body: list, styles: dict) -> Table:
     came from, why it was written, how far to trust it — separable at a glance
     instead of reading as one grey footnote.
     """
-    heading = Paragraph(
-        f'<font color="{colour.hexval()}">{_escape(label.upper())}</font>', styles["label"]
-    )
+    heading = Paragraph(f'<font color="{colour.hexval()}">{_escape(label.upper())}</font>', styles["label"])
     table = Table(
         [["", [heading, *body]]],
         colWidths=[_BAR_WIDTH, _SECTION_WIDTH + _BAR_GAP],
     )
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), colour),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (0, 0), 0),
-        ("RIGHTPADDING", (0, 0), (0, 0), 0),
-        ("LEFTPADDING", (1, 0), (1, 0), _BAR_GAP),
-        ("RIGHTPADDING", (1, 0), (1, 0), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), colour),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 0),
+                ("LEFTPADDING", (1, 0), (1, 0), _BAR_GAP),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     return table
 
 
@@ -413,14 +506,18 @@ def _pill(text: str, ink, background, styles: dict) -> Table:
     width = pdfmetrics.stringWidth(text, FONT_BOLD, 9) + 18
     cell = Paragraph(f'<font color="{ink.hexval()}">{_escape(text)}</font>', styles["pill"])
     table = Table([[cell]], colWidths=[width])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), background),
-        ("ROUNDEDCORNERS", [5, 5, 5, 5]),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("ROUNDEDCORNERS", [5, 5, 5, 5]),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     return table
 
 
@@ -449,14 +546,18 @@ def _list_item(markup: str, marker: str, styles: dict, rtl: bool, width: float) 
         [[body, Paragraph(_escape(marker), styles["marker_rtl"])]],
         colWidths=[width - _MARKER_WIDTH, _MARKER_WIDTH],
     )
-    table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (0, 0), 6),
-        ("RIGHTPADDING", (1, 0), (1, 0), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ]
+        )
+    )
     return table
 
 
@@ -500,17 +601,21 @@ def _question_header(answered: AnsweredQuestion, styles: dict) -> Table:
     widths = [body_width, number_width] if rtl else [number_width, body_width]
 
     table = Table([cells], colWidths=widths)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), HEADER_BG),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LEFTPADDING", (0, 0), (0, 0), 10),
-        ("RIGHTPADDING", (0, 0), (0, 0), 6),
-        ("LEFTPADDING", (1, 0), (1, 0), 6),
-        ("RIGHTPADDING", (1, 0), (1, 0), 10),
-        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), HEADER_BG),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (0, 0), 10),
+                ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                ("LEFTPADDING", (1, 0), (1, 0), 6),
+                ("RIGHTPADDING", (1, 0), (1, 0), 10),
+                ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+            ]
+        )
+    )
     return table
 
 
@@ -598,7 +703,10 @@ def render_pdf(result: AssessmentResult, options: ExportOptions | None = None) -
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=_MARGIN, rightMargin=_MARGIN, topMargin=18 * mm, bottomMargin=18 * mm,
+        leftMargin=_MARGIN,
+        rightMargin=_MARGIN,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
         title=result.source_name,
         author="Assessment Answering Agent",
     )

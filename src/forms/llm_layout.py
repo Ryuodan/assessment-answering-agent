@@ -49,9 +49,7 @@ class ColumnReading(BaseModel):
     """One column and what it is for."""
 
     column: str = Field(description="The column letter, e.g. 'C'")
-    role: Literal[
-        "number", "question", "answer", "status", "evidence", "theirs", "context", "ignore"
-    ]
+    role: Literal["number", "question", "answer", "status", "evidence", "theirs", "context", "ignore"]
     because: str = Field(default="", description="Six words at most")
 
 
@@ -60,7 +58,7 @@ class SheetReading(BaseModel):
 
     is_questionnaire: bool = Field(
         description="True only if this sheet holds questions somebody is expected to answer. "
-                    "False for cover pages, instructions, legends, rating scales, lookup tables."
+        "False for cover pages, instructions, legends, rating scales, lookup tables."
     )
     header_row: int = Field(
         default=0,
@@ -142,7 +140,8 @@ def _validate(
     if question_column not in set(sheet.columns):
         logger.info(
             "Model proposed column %r, which holds nothing on %r",
-            reading.question_column, sheet.name,
+            reading.question_column,
+            sheet.name,
         )
         return None
 
@@ -155,9 +154,7 @@ def _validate(
         return None
 
     known = set(sheet.columns) | workbook.validated_columns(sheet)
-    resolved: dict[str, tuple[Role, str]] = {
-        question_column: (Role.QUESTION, f"{source}: {_reason(reading)}")
-    }
+    resolved: dict[str, tuple[Role, str]] = {question_column: (Role.QUESTION, f"{source}: {_reason(reading)}")}
     for column in reading.columns:
         letters = _letters(column.column)
         if letters == question_column or letters not in known:
@@ -221,18 +218,20 @@ def apply(
     # One verdict per sheet. `read_sheet` writes the mechanical summary -- which
     # row, which column -- and this replaces it with the same facts plus where
     # the reading came from, rather than leaving the report with two.
-    mechanical = next(
-        (f for f in part.findings if f.subject == sheet.name), None
-    )
+    mechanical = next((f for f in part.findings if f.subject == sheet.name), None)
     where = mechanical.because if mechanical else ""
     part.findings = [f for f in part.findings if f is not mechanical]
-    part.findings.insert(0, Finding(
-        subject=sheet.name,
-        verdict=f"{len(questions)} questions",
-        because=f"{source}, not by the rules ({where}) — {_reason(reading)}"
-                if where else f"{source}, not by the rules — {_reason(reading)}",
-        confident=False,
-    ))
+    part.findings.insert(
+        0,
+        Finding(
+            subject=sheet.name,
+            verdict=f"{len(questions)} questions",
+            because=f"{source}, not by the rules ({where}) — {_reason(reading)}"
+            if where
+            else f"{source}, not by the rules — {_reason(reading)}",
+            confident=False,
+        ),
+    )
     return part, questions
 
 
@@ -243,10 +242,12 @@ def read(workbook: Workbook, sheet: Sheet) -> tuple[Part, list[FormQuestion]] | 
     the caller leaves the rules' own verdict in place.
     """
     try:
-        reading = structured_llm(SheetReading, temperature=TEMPERATURE).invoke([
-            ("system", SYSTEM),
-            ("user", USER.format(description=sheet_view.describe(workbook, sheet))),
-        ])
+        reading = structured_llm(SheetReading, temperature=TEMPERATURE).invoke(
+            [
+                ("system", SYSTEM),
+                ("user", USER.format(description=sheet_view.describe(workbook, sheet))),
+            ]
+        )
     except Exception as failed:
         # Logged as a line, not a traceback. The common case is not a fault: a
         # model looking at a table of contents answers "this is not a

@@ -83,7 +83,7 @@ def _find(document: Document, needle: str):
 
 def test_the_document_opens_as_a_word_file():
     content = render_docx(_result())
-    assert content[:2] == b"PK"          # a .docx is a zip
+    assert content[:2] == b"PK"  # a .docx is a zip
     assert len(_open(content).paragraphs) > 5
 
 
@@ -112,8 +112,7 @@ def test_citations_are_on_by_default_and_can_be_turned_off():
 
 def test_reasoning_is_off_by_default_and_can_be_turned_on():
     assert "cryptography policy" not in _text(render_docx(_result()))
-    assert "cryptography policy" in _text(
-        render_docx(_result(), ExportOptions(include_reasoning=True)))
+    assert "cryptography policy" in _text(render_docx(_result(), ExportOptions(include_reasoning=True)))
 
 
 def test_a_file_with_nothing_confident_still_renders_an_explanation():
@@ -123,12 +122,15 @@ def test_a_file_with_nothing_confident_still_renders_an_explanation():
     assert "No answer met the confidence threshold" in _text(render_docx(result))
 
 
-@pytest.mark.parametrize("options", [
-    ExportOptions(),
-    ExportOptions(include_flagged=True),
-    ExportOptions(include_citations=False, include_reasoning=True),
-    ExportOptions(include_flagged=True, include_citations=True, include_reasoning=True),
-])
+@pytest.mark.parametrize(
+    "options",
+    [
+        ExportOptions(),
+        ExportOptions(include_flagged=True),
+        ExportOptions(include_citations=False, include_reasoning=True),
+        ExportOptions(include_flagged=True, include_citations=True, include_reasoning=True),
+    ],
+)
 def test_every_option_combination_renders(options):
     assert render_docx(_result(), options)[:2] == b"PK"
 
@@ -198,11 +200,13 @@ def test_a_character_xml_cannot_hold_does_not_cost_the_export():
     answer, rationale or citation can carry one: the whole download failed."""
     question = Question(id="1", text="Do you\x0b encrypt data?", language="en")
     answered = AnsweredQuestion(
-        question=question, answer="Yes,\x0b we do\x0c.", confidence=0.9,
-        rationale="Because\x01 the policy says so.", citations=["T2 Policy §1\x02"],
+        question=question,
+        answer="Yes,\x0b we do\x0c.",
+        confidence=0.9,
+        rationale="Because\x01 the policy says so.",
+        citations=["T2 Policy §1\x02"],
     )
-    result = AssessmentResult(run_id="x", source_name="t.xlsx", language="en",
-                              questions_found=1, answers=[answered])
+    result = AssessmentResult(run_id="x", source_name="t.xlsx", language="en", questions_found=1, answers=[answered])
 
     text = _text(render_docx(result, ExportOptions(include_flagged=True, include_reasoning=True)))
 

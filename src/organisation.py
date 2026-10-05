@@ -68,9 +68,9 @@ class Organisation:
         """The block the drafter is given. Plain sentences, no headings."""
         lines = [
             f"You are answering on behalf of {self.legal_name} ("
-            f"\"{self.short_name}\"), a {self.sector} company based in {self.locations}.",
-            f"Write as {self.short_name} -- \"we\", \"our\", or \"{self.short_name}\". "
-            "Never write \"the organisation\" as though describing somebody else.",
+            f'"{self.short_name}"), a {self.sector} company based in {self.locations}.',
+            f'Write as {self.short_name} -- "we", "our", or "{self.short_name}". '
+            'Never write "the organisation" as though describing somebody else.',
         ]
         if self.certifications:
             lines.append(
@@ -119,10 +119,7 @@ def load(path: Path | str = PROFILE_PATH) -> Organisation:
         return Organisation()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return Organisation(**{
-            key: value for key, value in data.items()
-            if key in Organisation.__dataclass_fields__
-        })
+        return Organisation(**{key: value for key, value in data.items() if key in Organisation.__dataclass_fields__})
     except Exception:  # noqa: BLE001 - a bad profile falls back, it does not stop a run
         logger.exception("Could not read %s; using the built-in profile", path)
         return Organisation()
@@ -135,12 +132,16 @@ def save(profile: Organisation, path: Path | str = PROFILE_PATH) -> None:
     path.write_text(
         json.dumps(
             {
-                "legal_name": profile.legal_name, "short_name": profile.short_name,
-                "sector": profile.sector, "country": profile.country,
+                "legal_name": profile.legal_name,
+                "short_name": profile.short_name,
+                "sector": profile.sector,
+                "country": profile.country,
                 "locations": profile.locations,
-                "certifications": profile.certifications, "notes": profile.notes,
+                "certifications": profile.certifications,
+                "notes": profile.notes,
             },
-            ensure_ascii=False, indent=1,
+            ensure_ascii=False,
+            indent=1,
         ),
         encoding="utf-8",
     )

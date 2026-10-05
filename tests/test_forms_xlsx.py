@@ -45,15 +45,31 @@ def test_a_sheet_reads_back_its_cells(simple):
 
 
 def test_an_inline_dropdown_resolves_to_its_words(tmp_path):
-    path = shapes.build(tmp_path / "dv.xlsx", [shapes.SheetSpec("Q", {
-        "A1": "S.No", "B1": "Question", "G1": "Implementation Status",
-        "A2": "1.0", "B2": "Does your company have a cyber risk management framework?",
-        "A3": "2.0", "B3": "Does your company assess cybersecurity risks regularly?",
-        "A4": "3.0", "B4": "Are all policies signed off at least annually?",
-    }, validations=(("G2:G4", '"Not Applicable,Fully Implemented,Partially Implemented"'),))])
+    path = shapes.build(
+        tmp_path / "dv.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q",
+                {
+                    "A1": "S.No",
+                    "B1": "Question",
+                    "G1": "Implementation Status",
+                    "A2": "1.0",
+                    "B2": "Does your company have a cyber risk management framework?",
+                    "A3": "2.0",
+                    "B3": "Does your company assess cybersecurity risks regularly?",
+                    "A4": "3.0",
+                    "B4": "Are all policies signed off at least annually?",
+                },
+                validations=(("G2:G4", '"Not Applicable,Fully Implemented,Partially Implemented"'),),
+            )
+        ],
+    )
     with Workbook(path) as workbook:
         assert workbook.vocabulary_for(workbook["Q"], "G") == [
-            "Not Applicable", "Fully Implemented", "Partially Implemented"
+            "Not Applicable",
+            "Fully Implemented",
+            "Partially Implemented",
         ]
 
 
@@ -63,7 +79,10 @@ def test_a_dropdown_pointing_at_a_hidden_sheet_resolves(tmp_path):
     path = shapes.status_and_comment(tmp_path / "isra.xlsx")
     with Workbook(path) as workbook:
         assert workbook.vocabulary_for(workbook["Human Resources"], "C") == [
-            "Fully Compliant", "Partially Compliant", "Non Compliant", "Not Applicable"
+            "Fully Compliant",
+            "Partially Compliant",
+            "Non Compliant",
+            "Not Applicable",
         ]
 
 
@@ -117,9 +136,7 @@ def test_arabic_questions_are_marked_arabic(tmp_path):
 def test_a_status_column_carries_the_files_own_vocabulary(tmp_path):
     form = forms.detect(shapes.status_and_comment(tmp_path / "isra.xlsx"))
     status = form.questions[0].targets[Role.STATUS]
-    assert status.vocabulary == [
-        "Fully Compliant", "Partially Compliant", "Non Compliant", "Not Applicable"
-    ]
+    assert status.vocabulary == ["Fully Compliant", "Partially Compliant", "Non Compliant", "Not Applicable"]
     assert form.questions[0].targets[Role.ANSWER].id.endswith("!D2")
 
 
@@ -208,9 +225,7 @@ def _answer_everything(form) -> dict[str, str]:
         for target in question.writable:
             if target.role is Role.EVIDENCE:
                 continue
-            values[target.id] = (
-                target.vocabulary[0] if target.vocabulary else "Yes, and it is reviewed annually."
-            )
+            values[target.id] = target.vocabulary[0] if target.vocabulary else "Yes, and it is reviewed annually."
     return values
 
 
@@ -319,7 +334,7 @@ EXCEL_SHEET = (
     'xr:uid="{00000000-0001-0000-0000-000000000000}">'
     '<dimension ref="A1:C5"/><sheetViews><sheetView workbookViewId="0"/></sheetViews>'
     '<sheetFormatPr defaultRowHeight="15" x14ac:dyDescent="0.25"/>'
-    '<sheetData>'
+    "<sheetData>"
     '<row r="1" spans="1:3" x14ac:dyDescent="0.25"><c r="A1" t="inlineStr"><is><t>S.No</t></is></c>'
     '<c r="B1" t="inlineStr"><is><t>Vendor Due Diligence Questions</t></is></c>'
     '<c r="C1" t="inlineStr"><is><t>Vendor Response</t></is></c></row>'
@@ -329,12 +344,12 @@ EXCEL_SHEET = (
     '<row r="3" spans="1:3" x14ac:dyDescent="0.25"><c r="A3"><v>2</v></c>'
     '<c r="B3" t="inlineStr"><is><t>Does the vendor review those policies at least annually?</t></is></c></row>'
     '<row r="5" spans="1:3" x14ac:dyDescent="0.25"/>'
-    '</sheetData>'
+    "</sheetData>"
     '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
     '<extLst><ext uri="{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}" '
     'xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">'
     '<x14:dataValidations count="0" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"/>'
-    '</ext></extLst></worksheet>'
+    "</ext></extLst></worksheet>"
 )
 
 
@@ -358,12 +373,16 @@ def test_an_excel_sheets_namespaces_survive_answering(tmp_path):
 
     path = _excel_workbook(tmp_path)
     out = tmp_path / "answered.xlsx"
-    forms.write(path, out, {
-        "Questionnaire!C2": "Yes, reviewed annually.",
-        "Questionnaire!C3": "Yes.",
-        "Questionnaire!C4": "A row that was never there.",
-        "Questionnaire!C5": "A row that was empty.",
-    })
+    forms.write(
+        path,
+        out,
+        {
+            "Questionnaire!C2": "Yes, reviewed annually.",
+            "Questionnaire!C3": "Yes.",
+            "Questionnaire!C4": "A row that was never there.",
+            "Questionnaire!C5": "A row that was empty.",
+        },
+    )
 
     text = _sheet_text(out)
     root = regex.search(r"<worksheet[^>]*>", text).group(0)
@@ -375,7 +394,10 @@ def test_an_excel_sheets_namespaces_survive_answering(tmp_path):
     with Workbook(out) as workbook:
         sheet = workbook["Questionnaire"]
         assert [sheet.value(row, "C") for row in (2, 3, 4, 5)] == [
-            "Yes, reviewed annually.", "Yes.", "A row that was never there.", "A row that was empty.",
+            "Yes, reviewed annually.",
+            "Yes.",
+            "A row that was never there.",
+            "A row that was empty.",
         ]
 
 
@@ -386,9 +408,9 @@ def test_only_the_answered_cells_change(tmp_path):
 
     before, after = EXCEL_SHEET, _sheet_text(out)
     cell = '<c r="C3" t="inlineStr"><is><t xml:space="preserve">Yes.</t></is></c>'
-    assert after == before.replace(
-        "annually?</t></is></c></row>", "annually?</t></is></c>" + cell + "</row>", 1
-    ), "every byte but the answered cell is the file's own"
+    assert after == before.replace("annually?</t></is></c></row>", "annually?</t></is></c>" + cell + "</row>", 1), (
+        "every byte but the answered cell is the file's own"
+    )
 
 
 def test_a_cell_keeps_its_style_when_answered(tmp_path):
@@ -414,7 +436,7 @@ def test_a_sheet_written_with_a_namespace_prefix_is_answered_in_it(tmp_path):
         '<x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
         '<x:sheetData><x:row r="1"><x:c r="B1" t="inlineStr"><x:is><x:t>Question</x:t></x:is></x:c>'
         '<x:c r="C1" t="inlineStr"><x:is><x:t>Response</x:t></x:is></x:c></x:row></x:sheetData>'
-        '</x:worksheet>'
+        "</x:worksheet>"
     )
     out = tmp_path / "answered.xlsx"
     forms.write(_excel_workbook(tmp_path, prefixed), out, {"Questionnaire!C2": "Yes."})
@@ -451,14 +473,17 @@ def test_a_shape_the_splice_does_not_know_still_writes(tmp_path):
 # --- the invariant that matters --------------------------------------------
 
 
-@pytest.mark.parametrize("shape", [
-    shapes.simple,
-    shapes.header_below_preamble,
-    shapes.status_and_comment,
-    shapes.ownership_banner,
-    shapes.headless_numbered,
-    shapes.legend_sheet,
-])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        shapes.simple,
+        shapes.header_below_preamble,
+        shapes.status_and_comment,
+        shapes.ownership_banner,
+        shapes.headless_numbered,
+        shapes.legend_sheet,
+    ],
+)
 def test_detection_is_unchanged_by_answering(shape, tmp_path):
     """Detect, answer, detect again: the same questions and the same targets.
 
@@ -475,8 +500,9 @@ def test_detection_is_unchanged_by_answering(shape, tmp_path):
     second = forms.detect(out)
 
     assert [q.id for q in second.questions] == [q.id for q in first.questions]
-    assert [sorted(t.id for t in q.writable) for q in second.questions] == \
-           [sorted(t.id for t in q.writable) for q in first.questions]
+    assert [sorted(t.id for t in q.writable) for q in second.questions] == [
+        sorted(t.id for t in q.writable) for q in first.questions
+    ]
 
 
 def test_an_answered_form_knows_it_is_answered(simple, tmp_path):
@@ -490,12 +516,29 @@ def test_an_answered_form_knows_it_is_answered(simple, tmp_path):
 def test_an_evidence_column_left_blank_still_counts_as_answered(tmp_path):
     """Evidence is blank by default, and a question with an answer and no
     attachment is answered, not outstanding."""
-    path = shapes.build(tmp_path / "ev.xlsx", [shapes.SheetSpec("Q", {
-        "A1": "S.No", "B1": "Question", "C1": "Response", "D1": "Evidence",
-        "A2": "1.0", "B2": "Does the vendor have documented security policies?", "C2": "Yes.",
-        "A3": "2.0", "B3": "Does the vendor review those policies annually?", "C3": "Yes.",
-        "A4": "3.0", "B4": "Are staff bound by non-disclosure agreements?", "C4": "Yes.",
-    })])
+    path = shapes.build(
+        tmp_path / "ev.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q",
+                {
+                    "A1": "S.No",
+                    "B1": "Question",
+                    "C1": "Response",
+                    "D1": "Evidence",
+                    "A2": "1.0",
+                    "B2": "Does the vendor have documented security policies?",
+                    "C2": "Yes.",
+                    "A3": "2.0",
+                    "B3": "Does the vendor review those policies annually?",
+                    "C3": "Yes.",
+                    "A4": "3.0",
+                    "B4": "Are staff bound by non-disclosure agreements?",
+                    "C4": "Yes.",
+                },
+            )
+        ],
+    )
     form = forms.detect(path)
     assert form.answered_count == 3
     assert Role.EVIDENCE in form.questions[0].targets
@@ -506,14 +549,28 @@ def test_a_dropdown_column_with_nothing_in_it_is_still_found(tmp_path):
     dropdown holds none. On a blank questionnaire that is the normal state of
     the status column -- so the one place the form most wants an answer was
     invisible, and only the prose column got written."""
-    path = shapes.build(tmp_path / "blank-status.xlsx", [shapes.SheetSpec("Questionnaire", {
-        "A1": "#", "E1": "Security Control", "F1": "Evidence Requirement",
-        "H1": "Comments by Third Party",
-        "A2": "1.0", "E2": "Does your company have a cyber risk management framework?",
-        "A3": "2.0", "E3": "Does your company assess cybersecurity risks regularly?",
-        "A4": "3.0", "E4": "Are all information security policies signed off annually?",
-        # column G carries the dropdown and not one value
-    }, validations=(("G2:G4", '"Not Applicable,Fully Implemented,Not Implemented"'),))])
+    path = shapes.build(
+        tmp_path / "blank-status.xlsx",
+        [
+            shapes.SheetSpec(
+                "Questionnaire",
+                {
+                    "A1": "#",
+                    "E1": "Security Control",
+                    "F1": "Evidence Requirement",
+                    "H1": "Comments by Third Party",
+                    "A2": "1.0",
+                    "E2": "Does your company have a cyber risk management framework?",
+                    "A3": "2.0",
+                    "E3": "Does your company assess cybersecurity risks regularly?",
+                    "A4": "3.0",
+                    "E4": "Are all information security policies signed off annually?",
+                    # column G carries the dropdown and not one value
+                },
+                validations=(("G2:G4", '"Not Applicable,Fully Implemented,Not Implemented"'),),
+            )
+        ],
+    )
 
     form = forms.detect(path)
     status = form.questions[0].targets[Role.STATUS]
@@ -525,12 +582,25 @@ def test_a_dropdown_column_with_nothing_in_it_is_still_found(tmp_path):
 def test_validated_columns_are_listed_even_when_empty(tmp_path):
     from src.forms.xlsx_package import Workbook
 
-    path = shapes.build(tmp_path / "dv.xlsx", [shapes.SheetSpec("Q", {
-        "A1": "S.No", "B1": "Question",
-        "A2": "1.0", "B2": "Does the vendor have documented information security policies?",
-        "A3": "2.0", "B3": "Does the vendor review those policies at least annually?",
-        "A4": "3.0", "B4": "Are staff bound by non-disclosure agreements?",
-    }, validations=(("D2:E4", '"Yes,No"'),))])
+    path = shapes.build(
+        tmp_path / "dv.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q",
+                {
+                    "A1": "S.No",
+                    "B1": "Question",
+                    "A2": "1.0",
+                    "B2": "Does the vendor have documented information security policies?",
+                    "A3": "2.0",
+                    "B3": "Does the vendor review those policies at least annually?",
+                    "A4": "3.0",
+                    "B4": "Are staff bound by non-disclosure agreements?",
+                },
+                validations=(("D2:E4", '"Yes,No"'),),
+            )
+        ],
+    )
     with Workbook(path) as workbook:
         assert workbook.validated_columns(workbook["Q"]) == {"D", "E"}
 
@@ -562,9 +632,7 @@ def test_a_reference_column_headed_id_is_a_numbering_column(tmp_path):
     """`ID` is the commonest heading for the column holding `GE-01` or `GQ7`,
     and without it there is no numbering column at all."""
     form = forms.detect(shapes.reference_column_headed_id(tmp_path / "id.xlsx"))
-    verdicts = {
-        part.name: {f.subject: f.verdict for f in part.findings} for part in form.parts
-    }
+    verdicts = {part.name: {f.subject: f.verdict for f in part.findings} for part in form.parts}
     # Per sheet: the two sheets both have a column A, and they are not the same
     # kind of column -- one is the ID, the other the security domain.
     assert verdicts["Vendor Info"]["column A"] == "number"
@@ -606,10 +674,15 @@ def test_a_headless_sheet_survives_its_own_answers(tmp_path):
     assert len(before.questions) == 10
 
     answered = tmp_path / "answered.xlsx"
-    forms.write(path, answered, {
-        target.id: "Yes. An approved policy is in place and reviewed annually."
-        for question in before.questions for target in question.writable
-    })
+    forms.write(
+        path,
+        answered,
+        {
+            target.id: "Yes. An approved policy is in place and reviewed annually."
+            for question in before.questions
+            for target in question.writable
+        },
+    )
     after = forms.detect(answered)
     assert [q.id for q in after.questions] == [q.id for q in before.questions]
     assert after.questions[0].text == before.questions[0].text
@@ -645,8 +718,9 @@ def test_a_sentence_in_the_first_row_is_data_and_not_a_label(tmp_path):
 
     with Workbook(path) as workbook:
         layout = _find_headless_layout(workbook["S"])
-    assert layout is not None and layout.question_column == "A", \
+    assert layout is not None and layout.question_column == "A", (
         "a question beginning with a recognised word is still a question"
+    )
 
 
 # --- the instruction column -------------------------------------------------
@@ -663,19 +737,37 @@ def test_the_instruction_column_is_not_promoted_to_the_answer(tmp_path):
     """The shape of `Vendors annual Review 1.xlsx`: a verdict dropdown, a column
     of instructions, and the real prose one column further right under a heading
     that reads as context."""
-    path = shapes.build(tmp_path / "instructions.xlsx", [shapes.SheetSpec("Review", {
-        "A1": "#", "B1": "Question", "C1": "Response", "D1": "Details / Evidence",
-        "E1": "Document Reference",
-        "A2": "1", "B2": "Are user accounts reviewed periodically?",
-        "C2": "Yes", "D2": "List accounts if applicable",
-        "E2": "T2 reviews user accounts quarterly and records the outcome.",
-        "A3": "2", "B3": "Is MFA enforced?",
-        "C3": "Yes", "D3": "Provide screenshot or policy doc",
-        "E3": "T2 enforces multi-factor authentication on all remote access.",
-        "A4": "3", "B4": "Are privileged accounts separated?",
-        "C4": "Yes", "D4": "Provide offboarding evidence",
-        "E4": "Administrative accounts are separate from day-to-day accounts.",
-    }, validations=(("C2:C4", '"Yes,No,N/A"'),))])
+    path = shapes.build(
+        tmp_path / "instructions.xlsx",
+        [
+            shapes.SheetSpec(
+                "Review",
+                {
+                    "A1": "#",
+                    "B1": "Question",
+                    "C1": "Response",
+                    "D1": "Details / Evidence",
+                    "E1": "Document Reference",
+                    "A2": "1",
+                    "B2": "Are user accounts reviewed periodically?",
+                    "C2": "Yes",
+                    "D2": "List accounts if applicable",
+                    "E2": "T2 reviews user accounts quarterly and records the outcome.",
+                    "A3": "2",
+                    "B3": "Is MFA enforced?",
+                    "C3": "Yes",
+                    "D3": "Provide screenshot or policy doc",
+                    "E3": "T2 enforces multi-factor authentication on all remote access.",
+                    "A4": "3",
+                    "B4": "Are privileged accounts separated?",
+                    "C4": "Yes",
+                    "D4": "Provide offboarding evidence",
+                    "E4": "Administrative accounts are separate from day-to-day accounts.",
+                },
+                validations=(("C2:C4", '"Yes,No,N/A"'),),
+            )
+        ],
+    )
 
     form = forms.detect(path)
     answers = [q.existing_answer for q in form.questions]
@@ -689,31 +781,72 @@ def test_an_evidence_column_is_still_promoted_when_it_holds_the_answers(tmp_path
     """The promotion exists for a reason and must survive: plenty of forms word
     their only free-text column as a request for evidence and then answer in
     it."""
-    path = shapes.build(tmp_path / "evidence.xlsx", [shapes.SheetSpec("Q", {
-        "A1": "#", "B1": "Question", "C1": "Compliance", "D1": "Evidence",
-        "A2": "1", "B2": "Do you encrypt backups?",
-        "C2": "Yes", "D2": "Backups are encrypted with AES-256 at rest and in transit.",
-        "A3": "2", "B3": "Are logs retained?",
-        "C3": "Yes", "D3": "Security event logs are retained for twelve months.",
-        "A4": "3", "B4": "Is access reviewed?",
-        "C4": "Yes", "D4": "Access rights are reviewed every quarter by the owner.",
-    }, validations=(("C2:C4", '"Yes,No"'),))])
+    path = shapes.build(
+        tmp_path / "evidence.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q",
+                {
+                    "A1": "#",
+                    "B1": "Question",
+                    "C1": "Compliance",
+                    "D1": "Evidence",
+                    "A2": "1",
+                    "B2": "Do you encrypt backups?",
+                    "C2": "Yes",
+                    "D2": "Backups are encrypted with AES-256 at rest and in transit.",
+                    "A3": "2",
+                    "B3": "Are logs retained?",
+                    "C3": "Yes",
+                    "D3": "Security event logs are retained for twelve months.",
+                    "A4": "3",
+                    "B4": "Is access reviewed?",
+                    "C4": "Yes",
+                    "D4": "Access rights are reviewed every quarter by the owner.",
+                },
+                validations=(("C2:C4", '"Yes,No"'),),
+            )
+        ],
+    )
 
     form = forms.detect(path)
-    assert all("encrypt" in q.existing_answer or "retained" in q.existing_answer
-               or "reviewed" in q.existing_answer for q in form.questions)
+    assert all(
+        "encrypt" in q.existing_answer or "retained" in q.existing_answer or "reviewed" in q.existing_answer
+        for q in form.questions
+    )
 
 
 def test_the_promotion_says_when_the_column_it_chose_looks_instructional(tmp_path):
     """Where there is no better candidate the column is still used -- an answer
     the person can correct beats no answer -- but the finding says why it is
     worth a look."""
-    path = shapes.build(tmp_path / "only.xlsx", [shapes.SheetSpec("Q", {
-        "A1": "#", "B1": "Question", "C1": "Compliance", "D1": "Evidence",
-        "A2": "1", "B2": "Do you encrypt backups?", "C2": "Yes", "D2": "Provide the policy",
-        "A3": "2", "B3": "Are logs retained?", "C3": "Yes", "D3": "Provide the retention schedule",
-        "A4": "3", "B4": "Is access reviewed?", "C4": "Yes", "D4": "Provide the review record",
-    }, validations=(("C2:C4", '"Yes,No"'),))])
+    path = shapes.build(
+        tmp_path / "only.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q",
+                {
+                    "A1": "#",
+                    "B1": "Question",
+                    "C1": "Compliance",
+                    "D1": "Evidence",
+                    "A2": "1",
+                    "B2": "Do you encrypt backups?",
+                    "C2": "Yes",
+                    "D2": "Provide the policy",
+                    "A3": "2",
+                    "B3": "Are logs retained?",
+                    "C3": "Yes",
+                    "D3": "Provide the retention schedule",
+                    "A4": "3",
+                    "B4": "Is access reviewed?",
+                    "C4": "Yes",
+                    "D4": "Provide the review record",
+                },
+                validations=(("C2:C4", '"Yes,No"'),),
+            )
+        ],
+    )
 
     form = forms.detect(path)
     said = " ".join(f.because for part in form.parts for f in part.findings)

@@ -50,7 +50,10 @@ def test_fold_digits(raw, expected):
         ("\u0667\u066b\u0662\u066b\u0661 \u0646\u0635", "7.2.1"),  # Arabic decimal separator
         ("\u0627\u0644\u0645\u0627\u062f\u0629 \u0665 \u0645\u0628\u0627\u062f\u0626", "5"),  # المادة 5
         ("\u0627\u0644\u0628\u0646\u062f \u0667\u066b\u0662 \u0646\u0635", "7.2"),  # البند 7.2
-        ("\u0661) \u0627\u0644\u0625\u0628\u0644\u0627\u063a \u062e\u0644\u0627\u0644 \u0667\u0662 \u0633\u0627\u0639\u0629", "1"),
+        (
+            "\u0661) \u0627\u0644\u0625\u0628\u0644\u0627\u063a \u062e\u0644\u0627\u0644 \u0667\u0662 \u0633\u0627\u0639\u0629",
+            "1",
+        ),
     ],
 )
 def test_arabic_clause_forms(line, expected):
@@ -184,6 +187,7 @@ def test_english_documents_never_enter_visual_order_mode():
     doc = "Policy revised in 2024.\nSee also standard 4.2\nApproved under version 1.3\nReviewed 2.0\n"
     blocks = parse_blocks(doc)
     assert not any(b.kind == "clause" for b in blocks)
+
 
 # --- visual-order PDF text layers ------------------------------------------
 

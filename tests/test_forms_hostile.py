@@ -54,19 +54,25 @@ def test_a_zip_without_a_workbook_part_is_refused(tmp_path):
 
 
 def test_unparseable_xml_is_refused(tmp_path):
-    path = _zip(tmp_path / "broken.xlsx", {
-        "xl/workbook.xml": "<workbook><sheets><sheet",
-        "xl/_rels/workbook.xml.rels": "<Relationships/>",
-    })
+    path = _zip(
+        tmp_path / "broken.xlsx",
+        {
+            "xl/workbook.xml": "<workbook><sheets><sheet",
+            "xl/_rels/workbook.xml.rels": "<Relationships/>",
+        },
+    )
     with pytest.raises(forms.FormatError, match="could not be read"):
         forms.detect(path)
 
 
 def test_a_workbook_listing_no_sheets_is_refused(tmp_path):
-    path = _zip(tmp_path / "nosheets.xlsx", {
-        "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>',
-        "xl/_rels/workbook.xml.rels": "<Relationships/>",
-    })
+    path = _zip(
+        tmp_path / "nosheets.xlsx",
+        {
+            "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>',
+            "xl/_rels/workbook.xml.rels": "<Relationships/>",
+        },
+    )
     with pytest.raises(forms.FormatError, match="lists no sheets"):
         forms.detect(path)
 
@@ -95,9 +101,13 @@ def test_an_xml_entity_bomb_is_refused(tmp_path):
         + "".join(f'<!ENTITY lol{i} "{"&lol%d;" % (i - 1) * 10}">' for i in range(1, 10))
         + "]><workbook>&lol9;</workbook>"
     )
-    path = _zip(tmp_path / "bomb.xlsx", {
-        "xl/workbook.xml": bomb, "xl/_rels/workbook.xml.rels": "<Relationships/>",
-    })
+    path = _zip(
+        tmp_path / "bomb.xlsx",
+        {
+            "xl/workbook.xml": bomb,
+            "xl/_rels/workbook.xml.rels": "<Relationships/>",
+        },
+    )
     with pytest.raises(forms.FormatError):
         forms.detect(path)
 
@@ -110,12 +120,15 @@ def test_a_zip_bomb_is_refused_before_it_is_expanded(tmp_path, suffix):
     and still be the vulnerability.
     """
     inner = "xl/workbook.xml" if suffix == ".xlsx" else "word/document.xml"
-    path = _zip(tmp_path / f"bomb{suffix}", {
-        inner: "<x/>" + " " * (MAX_PART_BYTES + 1024),
-        "xl/_rels/workbook.xml.rels": "<Relationships/>",
-        "[Content_Types].xml": "<Types/>",
-        "_rels/.rels": "<Relationships/>",
-    })
+    path = _zip(
+        tmp_path / f"bomb{suffix}",
+        {
+            inner: "<x/>" + " " * (MAX_PART_BYTES + 1024),
+            "xl/_rels/workbook.xml.rels": "<Relationships/>",
+            "[Content_Types].xml": "<Types/>",
+            "_rels/.rels": "<Relationships/>",
+        },
+    )
     start = time.perf_counter()
     with pytest.raises(forms.FormatError, match="past the"):
         forms.detect(path)
@@ -149,12 +162,25 @@ def test_a_large_but_legitimate_sheet_stays_fast(tmp_path):
 def test_a_sheet_name_that_looks_like_a_path_is_harmless(tmp_path):
     """Sheet names reach target ids and come back from the interface. They never
     reach the filesystem, and this proves the id survives the round trip."""
-    path = shapes.build(tmp_path / "traversal.xlsx", [shapes.SheetSpec("../../../etc/passwd", {
-        "A1": "S.No", "B1": "Question", "C1": "Response",
-        "A2": "1.0", "B2": "Does the vendor have documented information security policies?",
-        "A3": "2.0", "B3": "Does the vendor review those policies at least annually?",
-        "A4": "3.0", "B4": "Are staff bound by non-disclosure agreements?",
-    })])
+    path = shapes.build(
+        tmp_path / "traversal.xlsx",
+        [
+            shapes.SheetSpec(
+                "../../../etc/passwd",
+                {
+                    "A1": "S.No",
+                    "B1": "Question",
+                    "C1": "Response",
+                    "A2": "1.0",
+                    "B2": "Does the vendor have documented information security policies?",
+                    "A3": "2.0",
+                    "B3": "Does the vendor review those policies at least annually?",
+                    "A4": "3.0",
+                    "B4": "Are staff bound by non-disclosure agreements?",
+                },
+            )
+        ],
+    )
     form = forms.detect(path)
     target = form.questions[0].writable[0]
     assert target.id == "../../../etc/passwd!C2"
@@ -168,12 +194,25 @@ def test_a_sheet_name_that_looks_like_a_path_is_harmless(tmp_path):
 
 def test_a_sheet_name_containing_a_bang_still_round_trips(tmp_path):
     """Target ids are 'sheet!ref', so a '!' in the name is a parsing hazard."""
-    path = shapes.build(tmp_path / "bang.xlsx", [shapes.SheetSpec("Q! Section", {
-        "A1": "S.No", "B1": "Question", "C1": "Response",
-        "A2": "1.0", "B2": "Does the vendor have documented information security policies?",
-        "A3": "2.0", "B3": "Does the vendor review those policies at least annually?",
-        "A4": "3.0", "B4": "Are staff bound by non-disclosure agreements?",
-    })])
+    path = shapes.build(
+        tmp_path / "bang.xlsx",
+        [
+            shapes.SheetSpec(
+                "Q! Section",
+                {
+                    "A1": "S.No",
+                    "B1": "Question",
+                    "C1": "Response",
+                    "A2": "1.0",
+                    "B2": "Does the vendor have documented information security policies?",
+                    "A3": "2.0",
+                    "B3": "Does the vendor review those policies at least annually?",
+                    "A4": "3.0",
+                    "B4": "Are staff bound by non-disclosure agreements?",
+                },
+            )
+        ],
+    )
     form = forms.detect(path)
     target = form.questions[0].writable[0].id
     assert target == "Q! Section!C2"

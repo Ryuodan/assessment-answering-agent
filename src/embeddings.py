@@ -50,7 +50,6 @@ def get_embeddings() -> Embeddings:
     )
 
 
-
 # from __future__ import annotations
 
 # import logging
