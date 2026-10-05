@@ -19,12 +19,22 @@ def test_the_shipped_parameters_are_the_interactive_ones():
 
     Asserted because `conftest` lowers the cost for every other test, so a
     change to the default would otherwise pass the whole suite unnoticed.
+    The values are read from the module's source, because by the time a test
+    runs the attribute itself has been patched -- and from its syntax tree
+    rather than its text, so a formatter writing `2**14` cannot fail it.
     """
+    import ast
     import inspect
 
-    source = inspect.getsource(credentials)
-    assert "SCRYPT_N = 2 ** 14" in source
-    assert "SCRYPT_R = 8" in source
+    shipped = {
+        node.targets[0].id: eval(compile(ast.Expression(node.value), "<credentials>", "eval"))
+        for node in ast.parse(inspect.getsource(credentials)).body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in ("SCRYPT_N", "SCRYPT_R")
+    }
+    assert shipped["SCRYPT_N"] == 2**14
+    assert shipped["SCRYPT_R"] == 8
     assert 128 * (2 ** 14) * 8 < credentials.SCRYPT_MAXMEM, (
         "maxmem must leave room for the parameters, or OpenSSL refuses outright"
     )
