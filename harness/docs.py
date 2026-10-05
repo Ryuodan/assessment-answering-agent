@@ -153,7 +153,7 @@ def check_required(root: Path) -> list[Violation]:
             path,
             1,
             "required by the documentation layout but missing",
-            "create it (see docs/plans/active/001-foundations.md for the layout); "
+            "create it (see docs/plans/completed/001-foundations.md for the layout); "
             "generated files come from `uv run poe gen`",
         )
         for path in REQUIRED

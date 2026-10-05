@@ -1,6 +1,6 @@
 # Plan 001: Foundations
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -18,7 +18,7 @@ eval data (plan 002).
 
 ## Acceptance criteria
 
-- [ ] `uv run poe check` runs `fmt`, `lint`, `types`, `arch`, `docs`, `test` in that order, prints one pass/fail line per task, exits non-zero if any fails, and passes on a clean checkout. Each task also runs alone (`uv run poe lint`, ...).
+- [x] `uv run poe check` runs `fmt`, `lint`, `types`, `arch`, `docs`, `test` in that order, prints one pass/fail line per task, exits non-zero if any fails, and passes on a clean checkout. Each task also runs alone (`uv run poe lint`, ...).
 - [x] `uv.lock` is committed and `uv lock --check` passes.
 - [x] `fmt`: `ruff format --check` passes on the whole repo, after one mechanical format commit whose syntax trees are verified unchanged and which is listed in `.git-blame-ignore-revs`.
 - [x] `lint`: ruff passes with today's rule set (no rules widened in this plan).
@@ -55,6 +55,7 @@ eval data (plan 002).
 - 2026-10-05: Step 9. Audit of what was already pinned end to end: the questionnaire fixtures had property tests but no whole-reading or whole-fill assertion; the only pipeline-level graph test replaces the per-question graph with a stub; the fixture documents in `tests/fixtures/` were read only by the opt-in live tests and one unit test; the exports had option tests but no text assertion. Added `tests/characterization/` (42 tests, 42 snapshots, 280 KB): 15 questionnaire readings and 15 fills (11 spreadsheets, 4 Word layouts), the pipeline through `service.answer_questions` with a scripted model on two paths (accepted first draft; rejected draft retried), every prompt sent pinned, 5 fixture documents loaded locally and chunked, DOCX and PDF exports under two option sets, the flat-text formatters. Snapshots are re-recorded only by `uv run poe snapshots`. Verified stable over 3 runs. One mistake caught on the way: the .docx and .pdf of `new_assessment_2026` shared a snapshot name by file stem and overwrote each other; snapshots are now named by full file name and the fixture fails if two tests claim one name. One export fixture gave a high-confidence answer a `confidence_reason`, which the real pipeline never produces; corrected rather than reported. Found and recorded, not fixed: TD-023 (organisation profile read from `data/` in tests), TD-024 (a `[n]` marker a model writes reaches the customer's cell).
 - 2026-10-05: Coverage baseline (`uv run poe cov`, 1656 passed, 1 skipped, 286 s): 91% of 8,784 statements. By package: `src/` top level 91.6%, `src/agents` 89.8%, `src/forms` 92.4%, `src/graph` 98.7%, `harness/` 72.2%. Lowest: `src/cli.py` 0%, `src/extraction.py` 43%, `src/docling_client.py` 52%, `src/llm.py` 82%; in the harness, `same_ast.py` 0% and `check.py` 24% (exercised by running them, not by tests).
 - 2026-10-05: Step 10, clean-checkout verification. A fresh clone into the scratchpad failed at checkout (Windows' 260-character limit; the scratchpad path alone is about 170 characters), and with `core.longpaths` it failed to load `_xxhash.pyd` (DLL loading ignores long-path support). With the user's permission the clone went to a sibling folder, `../aa-clean`, with an environment built only from `uv.lock` and no `.env`, `data/` or `chroma_db/`. Result: fmt, lint, arch, docs and test passed (1656 passed, 1 skipped), but `types` failed with 2 new errors: mypy could not find `phoenix.otel` and `openinference.instrumentation.langchain`, because the original venv had the optional `phoenix` extra installed by hand and the clone did not. Fixed by D-009 (dev group carries every optional extra; `import-not-found` now gets a FIX pointing at the environment). Side effect: `tests/test_house_eval.py::test_the_report_has_the_columns_it_was_asked_for`, skipped in every earlier run for want of openpyxl, now runs and passes. In the real checkout the longest path is 205 characters, under the limit.
+- 2026-10-05: Clean-checkout run after D-009, in `../aa-clean` built only from `uv.lock` with no `.env`, `data/` or `chroma_db/`: every task passed, 1658 passed, 0 skipped, 9 deselected (`live_ai`), test task 254 s. The clone was deleted afterwards. All acceptance criteria met; plan moved to `completed/`. Open items carried forward, not part of this plan: plan 002 (seal eval data), TD-011 and TD-023 (tests and the real `.env` / `data/organisation.json`; the clean-clone run shows the suite passes without either), TD-024 (needs a decision).
 
 ## Decision log
 
