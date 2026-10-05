@@ -1,0 +1,2 @@
+# Sealed eval data is ciphertext: never convert line endings or diff it as text.
+eval/sealed/*.enc binary
