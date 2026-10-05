@@ -1,0 +1,4774 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Assessment Answering Agent",
+    "description": "Answers assessment questionnaires from your guidelines and previously answered assessments.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/auth/session": {
+      "get": {
+        "summary": "Whoami",
+        "description": "The current user, or who would be required to sign in.\n\nNever 401s: the interface asks this on load to decide whether to show a\nsign-in screen, and an error response would make \"signed out\" look like a\nfault.",
+        "operationId": "whoami_api_auth_session_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Whoami Api Auth Session Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Sign In",
+        "description": "Open a session for a known address and its access code.",
+        "operationId": "sign_in_api_auth_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Sign In Api Auth Session Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Sign Out",
+        "description": "End the current session.",
+        "operationId": "sign_out_api_auth_session_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Sign Out Api Auth Session Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/overview": {
+      "get": {
+        "summary": "Admin Overview",
+        "operationId": "admin_overview_api_admin_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Admin Overview Api Admin Overview Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "post": {
+        "summary": "Admin Add User",
+        "operationId": "admin_add_user_api_admin_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Admin Add User Api Admin Users Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{email}": {
+      "patch": {
+        "summary": "Admin Update User",
+        "operationId": "admin_update_user_api_admin_users__email__patch",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Email"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Admin Update User Api Admin Users  Email  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Admin Remove User",
+        "operationId": "admin_remove_user_api_admin_users__email__delete",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Admin Remove User Api Admin Users  Email  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{email}/password": {
+      "post": {
+        "summary": "Admin Set Password",
+        "description": "Give an admin their own password, or clear it back to the team code.",
+        "operationId": "admin_set_password_api_admin_users__email__password_post",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Email"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Admin Set Password Api Admin Users  Email  Password Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/teams": {
+      "post": {
+        "summary": "Admin Add Team",
+        "operationId": "admin_add_team_api_admin_teams_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Admin Add Team Api Admin Teams Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/teams/{team_id}": {
+      "delete": {
+        "summary": "Admin Remove Team",
+        "operationId": "admin_remove_team_api_admin_teams__team_id__delete",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Admin Remove Team Api Admin Teams  Team Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/teams/{team_id}/access-code": {
+      "post": {
+        "summary": "Admin Rotate Code",
+        "description": "Issue a new access code. The plaintext is returned exactly once.\n\nEveryone on the team has to be given the new one — rotating is what you do\nwhen somebody leaves, so the old code ceasing to work is the feature.",
+        "operationId": "admin_rotate_code_api_admin_teams__team_id__access_code_post",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Admin Rotate Code Api Admin Teams  Team Id  Access Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin": {
+      "get": {
+        "summary": "Admin Page",
+        "description": "A deep link to the access panel, which lives inside the app itself.\n\nThe same document as `/`, because a deployment may only expose the\napplication's own address — an administrator who cannot reach a second URL\nwould otherwise have no way in. Nothing is protected by living at a separate\npath anyway: `/api/admin/*` is what checks the role, and it does so whatever\npage the request came from. This route exists only so the link still works\nwhere that path *is* reachable.",
+        "operationId": "admin_page_admin_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms": {
+      "post": {
+        "summary": "Open Questionnaire",
+        "description": "Read an uploaded questionnaire and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.",
+        "operationId": "open_questionnaire_api_forms_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_open_questionnaire_api_forms_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Open Questionnaire Api Forms Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Questionnaires",
+        "operationId": "list_questionnaires_api_forms_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Questionnaires Api Forms Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}": {
+      "get": {
+        "summary": "Get Questionnaire",
+        "operationId": "get_questionnaire_api_forms__batch_id__get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Questionnaire Api Forms  Batch Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/answer": {
+      "post": {
+        "summary": "Answer Questionnaire",
+        "description": "Answer a selection. Long: a large questionnaire is minutes of work.\n\n`/api/assessments/progress/{batch_id}` reports how far it has got while this\nrequest is still open — the batch id is the run id, so it can be watched\nfrom the moment the call is made.",
+        "operationId": "answer_questionnaire_api_forms__batch_id__answer_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Answer Questionnaire Api Forms  Batch Id  Answer Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/revise": {
+      "post": {
+        "summary": "Revise Questionnaire",
+        "operationId": "revise_questionnaire_api_forms__batch_id__revise_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviseBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Revise Questionnaire Api Forms  Batch Id  Revise Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/answers": {
+      "post": {
+        "summary": "Write Answer By Hand",
+        "operationId": "write_answer_by_hand_api_forms__batch_id__answers_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAnswerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Write Answer By Hand Api Forms  Batch Id  Answers Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/blank": {
+      "post": {
+        "summary": "Leave An Answer Blank",
+        "description": "Leave a question deliberately blank rather than unanswered, or undo that.\n\nThe id travels in the body rather than the path: a question's id is the\nfile's own -- `Human Resources!4` -- and a sheet name may contain anything\na spreadsheet allows, slashes included.",
+        "operationId": "leave_an_answer_blank_api_forms__batch_id__blank_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlankAnswerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Leave An Answer Blank Api Forms  Batch Id  Blank Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/columns": {
+      "get": {
+        "summary": "Get Column Roles",
+        "description": "Which column each sheet's answers go into, and why detection thinks so.",
+        "operationId": "get_column_roles_api_forms__batch_id__columns_get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Column Roles Api Forms  Batch Id  Columns Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Column Role",
+        "description": "Move a sheet's answers to a different column, or stop writing one.",
+        "operationId": "set_column_role_api_forms__batch_id__columns_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ColumnRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Set Column Role Api Forms  Batch Id  Columns Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/questions": {
+      "patch": {
+        "summary": "Correct Questions",
+        "description": "Set questions aside, bring them back, or correct their wording.",
+        "operationId": "correct_questions_api_forms__batch_id__questions_patch",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionChanges"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Correct Questions Api Forms  Batch Id  Questions Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/detail": {
+      "post": {
+        "summary": "Choose Answer Length",
+        "description": "Switch a questionnaire between full and brief answers.\n\nSwitching to brief derives the short form of every answer that does not\nhave one yet -- one rewrite each, once. Switching back is instant, because\nthe full answer was never replaced: both are stored against the question and\nthe choice only says which one `fill` writes.",
+        "operationId": "choose_answer_length_api_forms__batch_id__detail_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Choose Answer Length Api Forms  Batch Id  Detail Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/answers/length": {
+      "post": {
+        "summary": "Choose One Answer Length",
+        "description": "Write this one answer full or brief, whatever the rest of the file does.",
+        "operationId": "choose_one_answer_length_api_forms__batch_id__answers_length_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferLengthRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Choose One Answer Length Api Forms  Batch Id  Answers Length Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/approve": {
+      "post": {
+        "summary": "Approve An Answer",
+        "description": "Release one answer for writing, with the reviewer's name on it.\n\nApproving an answer somebody *wrote* also teaches the answer memory, which\nis where the team's own answers come from once the imported questionnaires\nrun out; approving a draft nobody changed teaches it nothing, and\n`remembered` comes back empty. The sweep for what a new entry supersedes or\ncontradicts runs after the response: it is model calls, and a reviewer\nclicking through twenty answers should not wait for any of them.",
+        "operationId": "approve_an_answer_api_forms__batch_id__approve_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Approve An Answer Api Forms  Batch Id  Approve Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/fill": {
+      "post": {
+        "summary": "Fill Questionnaire",
+        "description": "Write the confirmed answers into a copy of the original, and report the rest.",
+        "operationId": "fill_questionnaire_api_forms__batch_id__fill_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FillRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Fill Questionnaire Api Forms  Batch Id  Fill Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/file": {
+      "get": {
+        "summary": "Download Filled Questionnaire",
+        "description": "The filled copy. Produced by `/fill`, which must have run first.",
+        "operationId": "download_filled_questionnaire_api_forms__batch_id__file_get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "summary": "List Runs",
+        "description": "The team's answered runs, newest first.",
+        "operationId": "list_runs_api_runs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Runs Api Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}": {
+      "get": {
+        "summary": "Get Run",
+        "description": "One run with its answers.\n\nScoped to the caller's team, so an id belonging to another team reads as\nabsent rather than forbidden.",
+        "operationId": "get_run_api_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Run Api Runs  Run Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "List Events",
+        "description": "Recent activity for the team.",
+        "operationId": "list_events_api_events_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Events Api Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/knowledge": {
+      "get": {
+        "summary": "Get Knowledge",
+        "description": "What is currently indexed for the caller's team.",
+        "operationId": "get_knowledge_api_knowledge_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Knowledge Api Knowledge Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear Knowledge",
+        "description": "Remove every policy document. The answer memory is left as it is.",
+        "operationId": "clear_knowledge_api_knowledge_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Clear Knowledge Api Knowledge Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/knowledge/guidelines": {
+      "post": {
+        "summary": "Upload Guidelines",
+        "description": "Index policy and guideline documents.\n\n`authority` is \"ours\" for something this organisation wrote and is bound by,\n\"external\" for a law, regulation or framework it is subject to. The drafter\nis told which, because our policy says what we *do* and a regulation says\nwhat we are *required* to do -- and answering the second as though it were\nthe first claims a control we may not have.",
+        "operationId": "upload_guidelines_api_knowledge_guidelines_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_guidelines_api_knowledge_guidelines_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IngestResult"
+                  },
+                  "type": "array",
+                  "title": "Response Upload Guidelines Api Knowledge Guidelines Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/knowledge/sources/{source_name}": {
+      "delete": {
+        "summary": "Remove Source",
+        "description": "Remove one indexed policy document.",
+        "operationId": "remove_source_api_knowledge_sources__source_name__delete",
+        "parameters": [
+          {
+            "name": "source_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Remove Source Api Knowledge Sources  Source Name  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory": {
+      "get": {
+        "summary": "List Memory",
+        "description": "What we have said before, newest first.",
+        "operationId": "list_memory_api_memory_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Query"
+            }
+          },
+          {
+            "name": "standing",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Standing"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Memory Api Memory Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add Memory Entry",
+        "description": "Teach the memory an answer by hand.",
+        "operationId": "add_memory_entry_api_memory_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryEntryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Add Memory Entry Api Memory Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory/conflicts": {
+      "get": {
+        "summary": "List Memory Conflicts",
+        "description": "Pairs that disagree, with both answers, for somebody to decide between.",
+        "operationId": "list_memory_conflicts_api_memory_conflicts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Memory Conflicts Api Memory Conflicts Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory/{entry_id}": {
+      "patch": {
+        "summary": "Edit Memory Entry",
+        "description": "Correct an entry. Not a supersession: nothing changed its mind.\n\nA corrected answer is compared again, because correcting one is one of the\nways it comes to contradict another.",
+        "operationId": "edit_memory_entry_api_memory__entry_id__patch",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Edit Memory Entry Api Memory  Entry Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove Memory Entry",
+        "description": "Forget an entry: the row, its vector, and the conflicts it raised.",
+        "operationId": "remove_memory_entry_api_memory__entry_id__delete",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Remove Memory Entry Api Memory  Entry Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory/{entry_id}/restore": {
+      "post": {
+        "summary": "Restore Memory Entry",
+        "description": "Put a superseded entry back into use, when the later answer was wrong.",
+        "operationId": "restore_memory_entry_api_memory__entry_id__restore_post",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Restore Memory Entry Api Memory  Entry Id  Restore Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory/conflicts/resolve": {
+      "post": {
+        "summary": "Resolve Memory Conflict",
+        "description": "Say which of two disagreeing answers is our position, or that neither loses.",
+        "operationId": "resolve_memory_conflict_api_memory_conflicts_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveConflictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Resolve Memory Conflict Api Memory Conflicts Resolve Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory/scan": {
+      "post": {
+        "summary": "Scan Memory Now",
+        "description": "Compare everything that has arrived since the last sweep, and report it.\n\nThe same sweep that runs by itself after an upload or an approval, exposed\nso a person can ask for it — after importing eleven questionnaires at once,\n\"has anything I just added contradicted us\" is a question with an answer,\nand waiting for a background task to have got round to it is not one.\n\nBounded, and it says how much is left. A sweep is one model call per entry\nand a backlog can be hundreds: a button that returns in twenty seconds\nsaying what it found and what remains is a button somebody will press again,\nand one that hangs for four minutes is one they will reload the page on.",
+        "operationId": "scan_memory_now_api_memory_scan_post",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Scan Memory Now Api Memory Scan Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences": {
+      "get": {
+        "summary": "Get Preferences",
+        "description": "Preferences, what they add up to, and every skill this person can use.",
+        "operationId": "get_preferences_api_preferences_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Preferences Api Preferences Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save Preferences",
+        "operationId": "save_preferences_api_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Save Preferences Api Preferences Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/compose": {
+      "post": {
+        "summary": "Compose Preferences",
+        "description": "What a set of choices would tell the rewrite, without saving them.\n\nSo the page can show the instruction as the choices change, and try it on a\nsample, from the one place that assembles it -- a copy of that logic in the\nbrowser would drift from the one that actually runs.",
+        "operationId": "compose_preferences_api_preferences_compose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Compose Preferences Api Preferences Compose Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/try": {
+      "post": {
+        "summary": "Try A Style",
+        "description": "What an instruction does to one answer, before it is let loose on all of them.\n\nPreferences are applied to every answer somebody drafts and a skill to a\nwhole selection, so a badly worded one reaches a questionnaire at once.\nThis is the same rewrite over one sample, stored nowhere, so the person sees\nthe effect first.",
+        "operationId": "try_a_style_api_preferences_try_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TryStyleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Try A Style Api Preferences Try Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills": {
+      "post": {
+        "summary": "Add Skill",
+        "operationId": "add_skill_api_skills_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Add Skill Api Skills Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills/{skill_id}": {
+      "patch": {
+        "summary": "Edit Skill",
+        "operationId": "edit_skill_api_skills__skill_id__patch",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Skill Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Edit Skill Api Skills  Skill Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove Skill",
+        "operationId": "remove_skill_api_skills__skill_id__delete",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Skill Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Remove Skill Api Skills  Skill Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills/{skill_id}/copy": {
+      "post": {
+        "summary": "Copy Skill",
+        "description": "A skill of your own, starting from a built-in one or another of yours.",
+        "operationId": "copy_skill_api_skills__skill_id__copy_post",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Skill Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Copy Skill Api Skills  Skill Id  Copy Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/skills/{skill_id}": {
+      "post": {
+        "summary": "Apply A Skill",
+        "description": "Reword a selection of a questionnaire's answers with one of your skills.",
+        "operationId": "apply_a_skill_api_forms__batch_id__skills__skill_id__post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Skill Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplySkillRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Apply A Skill Api Forms  Batch Id  Skills  Skill Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/answers/draft": {
+      "post": {
+        "summary": "Put Back The Draft",
+        "description": "Undo a house style on one answer: the draft goes back as it was written.",
+        "operationId": "put_back_the_draft_api_forms__batch_id__answers_draft_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Back The Draft Api Forms  Batch Id  Answers Draft Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "summary": "Search Knowledge",
+        "description": "Search the indexed corpus directly.\n\nSeparate from answering: this is for a person checking what the corpus\nactually says, so it returns the chunks that matched rather than an answer\nwritten from them.",
+        "operationId": "search_knowledge_api_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "hybrid",
+              "title": "Mode"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Search Knowledge Api Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents": {
+      "get": {
+        "summary": "Get Documents",
+        "description": "The documents somebody has uploaded, for the interface to open.",
+        "operationId": "get_documents_api_documents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Documents Api Documents Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{origin}/{category}/{name}/file": {
+      "get": {
+        "summary": "View Document",
+        "description": "Open or download the original PDF/DOCX document.",
+        "operationId": "view_document_api_documents__origin___category___name__file_get",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{origin}/{category}/{name}/preview": {
+      "get": {
+        "summary": "Preview Document",
+        "description": "Return a browser preview: the original PDF or safe HTML converted from DOCX.",
+        "operationId": "preview_document_api_documents__origin___category___name__preview_get",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{origin}/{category}/{name}/text": {
+      "get": {
+        "summary": "View Extracted Text",
+        "description": "Extract and return the document text, using the persistent extraction cache.",
+        "operationId": "view_extracted_text_api_documents__origin___category___name__text_get",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response View Extracted Text Api Documents  Origin   Category   Name  Text Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/answer": {
+      "post": {
+        "summary": "Answer Assessment",
+        "description": "Answer a new assessment.\n\n`language` forces the output language (\"ar\" or \"en\"); omit it to answer each\nquestion in the language it was asked.\n\n`run_id` is chosen by the caller so it can watch the run while this request\nis still open — answering a long assessment is minutes of silence, and the\nidentifier has to be known before the work starts to be of any use.",
+        "operationId": "answer_assessment_api_assessments_answer_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_answer_assessment_api_assessments_answer_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/extract": {
+      "post": {
+        "summary": "Extract Assessment",
+        "description": "Pull the questions out of an assessment without answering them.\n\nThe first half of `/answer`, separated so the questions can be reviewed and\ncorrected before a run that costs minutes. Extraction is the step most\nlikely to need a human eye: a numbered list can lose an item to a page\nbreak, and a row of guidance can read as a question.",
+        "operationId": "extract_assessment_api_assessments_extract_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_assessment_api_assessments_extract_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Extract Assessment Api Assessments Extract Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/answer-questions": {
+      "post": {
+        "summary": "Answer Question List",
+        "description": "Answer a list of questions supplied directly, with no document involved.\n\nServes three cases the document endpoint cannot: questions typed by hand,\nquestions extracted from a file and then corrected, and a second batch\nadded once an earlier one has been answered. The caller keeps the answers\nand decides how to merge them, so this returns only what it was asked for.",
+        "operationId": "answer_question_list_api_assessments_answer_questions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerQuestionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/revise": {
+      "post": {
+        "summary": "Revise Answer List",
+        "description": "Reword answers the caller is holding, with no questionnaire behind them.\n\nThe batch route does this for a file, keyed to the cells the answers belong\nin. Questions typed by hand have no cells and no batch, so the answers come\nin and go back out; the caller keeps them, exactly as it does for\n`/answer-questions`. Both routes run the same rewrite, so an instruction\nbehaves the same whichever list it is given.",
+        "operationId": "revise_answer_list_api_assessments_revise_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviseAnswersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Revise Answer List Api Assessments Revise Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/progress/{run_id}": {
+      "get": {
+        "summary": "Assessment Progress",
+        "description": "How far a run has got: questions found, answered, and left to answer.",
+        "operationId": "assessment_progress_api_assessments_progress__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Assessment Progress Api Assessments Progress  Run Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/export/pdf": {
+      "post": {
+        "summary": "Export Pdf",
+        "description": "Render an answered assessment as a PDF.\n\nThe result is posted back rather than looked up, because the interface lets\na reviewer edit answers before exporting and those edits are the point.\n\nBy default the file carries only answers that were not flagged for review:\nwhat goes back to an assessor should not silently include drafts the system\nitself was unsure of.",
+        "operationId": "export_pdf_api_assessments_export_pdf_post",
+        "parameters": [
+          {
+            "name": "include_flagged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Flagged"
+            }
+          },
+          {
+            "name": "include_citations",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Citations"
+            }
+          },
+          {
+            "name": "include_reasoning",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Reasoning"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentResult-Input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assessments/export/docx": {
+      "post": {
+        "summary": "Export Docx",
+        "description": "Render an answered assessment as a Word document.\n\nSame selection rule and same options as the PDF export; the difference is\nthat the reviewer can carry on editing in the file. Arabic is laid out by\nWord rather than by us, which makes this the better format for an Arabic\nquestionnaire.",
+        "operationId": "export_docx_api_assessments_export_docx_post",
+        "parameters": [
+          {
+            "name": "include_flagged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Flagged"
+            }
+          },
+          {
+            "name": "include_citations",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Citations"
+            }
+          },
+          {
+            "name": "include_reasoning",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Reasoning"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentResult-Input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "get": {
+        "summary": "List Conversations",
+        "operationId": "list_conversations_api_chat_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Conversations Api Chat Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Say To Assistant",
+        "description": "One exchange with the assistant.\n\nLong: a message can mean \"answer 183 questions\", which is minutes of work.\nThe conversation is saved by the assistant itself before this returns, so a\nrequest that times out at a proxy has still recorded what it did.",
+        "operationId": "say_to_assistant_api_chat_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Say To Assistant Api Chat Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/upload": {
+      "post": {
+        "summary": "Say With A File",
+        "description": "A message with a questionnaire attached.\n\nSeparate from the plain message route because it is multipart, not because\nit does anything different: the file is saved, the assistant is told it is\nthere, and it decides to open it like any other operation.",
+        "operationId": "say_with_a_file_api_chat_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_say_with_a_file_api_chat_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Say With A File Api Chat Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/{conversation_id}": {
+      "get": {
+        "summary": "Get Conversation",
+        "description": "One conversation, as a transcript plus whatever answers it has produced.\n\nThe stored messages are LangChain's, tool calls included, because the agent\nresumes from them. What comes back here is the readable half of that -- who\nsaid what -- because a person scrolling their own conversation has no use\nfor a serialised tool call.",
+        "operationId": "get_conversation_api_chat__conversation_id__get",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Conversation Api Chat  Conversation Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Forget Conversation",
+        "operationId": "forget_conversation_api_chat__conversation_id__delete",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Forget Conversation Api Chat  Conversation Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddUserRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "member"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "AddUserRequest"
+      },
+      "AnswerBatchRequest": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/ScopeRequest"
+          },
+          "replace_existing": {
+            "type": "boolean",
+            "title": "Replace Existing",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "AnswerBatchRequest"
+      },
+      "AnswerQuestionsRequest": {
+        "properties": {
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionRequest"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Questions"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ar",
+                  "en"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name",
+            "default": "questions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions"
+        ],
+        "title": "AnswerQuestionsRequest"
+      },
+      "AnsweredQuestion-Input": {
+        "properties": {
+          "question": {
+            "$ref": "#/components/schemas/Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "default": ""
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.0
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review",
+            "default": true
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence-Input"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 1
+          },
+          "brief": {
+            "type": "string",
+            "title": "Brief",
+            "description": "The same answer, condensed. Empty until somebody asks for it.",
+            "default": ""
+          },
+          "prefer": {
+            "type": "string",
+            "title": "Prefer",
+            "description": "'full' or 'brief' for this answer alone; '' follows the questionnaire",
+            "default": ""
+          },
+          "drafted": {
+            "type": "string",
+            "title": "Drafted",
+            "description": "The answer as the pipeline drafted it, before anything reworded it; '' when nothing has",
+            "default": ""
+          },
+          "by_hand": {
+            "type": "boolean",
+            "title": "By Hand",
+            "description": "Whether a person typed these words, rather than agreeing with them",
+            "default": false
+          },
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Citations",
+            "description": "Clause-level locators for the sources actually used"
+          },
+          "review_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Review Reasons",
+            "description": "Why this answer was flagged: unsupported citations, partial series, ungrounded"
+          },
+          "confidence_reason": {
+            "type": "string",
+            "title": "Confidence Reason",
+            "description": "Plain-English cause of a low confidence score; '' when the answer scored well",
+            "default": ""
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "description": "Why answering this question failed; '' when it produced an answer",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "AnsweredQuestion",
+        "description": "A question plus the agent's answer and its supporting evidence."
+      },
+      "AnsweredQuestion-Output": {
+        "properties": {
+          "question": {
+            "$ref": "#/components/schemas/Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "default": ""
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.0
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review",
+            "default": true
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence-Output"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 1
+          },
+          "brief": {
+            "type": "string",
+            "title": "Brief",
+            "description": "The same answer, condensed. Empty until somebody asks for it.",
+            "default": ""
+          },
+          "prefer": {
+            "type": "string",
+            "title": "Prefer",
+            "description": "'full' or 'brief' for this answer alone; '' follows the questionnaire",
+            "default": ""
+          },
+          "drafted": {
+            "type": "string",
+            "title": "Drafted",
+            "description": "The answer as the pipeline drafted it, before anything reworded it; '' when nothing has",
+            "default": ""
+          },
+          "by_hand": {
+            "type": "boolean",
+            "title": "By Hand",
+            "description": "Whether a person typed these words, rather than agreeing with them",
+            "default": false
+          },
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Citations",
+            "description": "Clause-level locators for the sources actually used"
+          },
+          "review_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Review Reasons",
+            "description": "Why this answer was flagged: unsupported citations, partial series, ungrounded"
+          },
+          "confidence_reason": {
+            "type": "string",
+            "title": "Confidence Reason",
+            "description": "Plain-English cause of a low confidence score; '' when the answer scored well",
+            "default": ""
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "description": "Why answering this question failed; '' when it produced an answer",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "AnsweredQuestion",
+        "description": "A question plus the agent's answer and its supporting evidence."
+      },
+      "ApplySkillRequest": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/ScopeRequest"
+          },
+          "include_written": {
+            "type": "boolean",
+            "title": "Include Written",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ApplySkillRequest"
+      },
+      "ApproveRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Question Id"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "ApproveRequest",
+        "description": "One answer a person has read and accepted as it stands."
+      },
+      "AssessmentResult-Input": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ],
+            "title": "Language"
+          },
+          "questions_found": {
+            "type": "integer",
+            "title": "Questions Found"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/AnsweredQuestion-Input"
+            },
+            "type": "array",
+            "title": "Answers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "source_name",
+          "language",
+          "questions_found"
+        ],
+        "title": "AssessmentResult",
+        "description": "Everything produced by one run over a submitted assessment."
+      },
+      "AssessmentResult-Output": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ],
+            "title": "Language"
+          },
+          "questions_found": {
+            "type": "integer",
+            "title": "Questions Found"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/AnsweredQuestion-Output"
+            },
+            "type": "array",
+            "title": "Answers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "source_name",
+          "language",
+          "questions_found"
+        ],
+        "title": "AssessmentResult",
+        "description": "Everything produced by one run over a submitted assessment."
+      },
+      "BlankAnswerRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Question Id"
+          },
+          "blank": {
+            "type": "boolean",
+            "title": "Blank",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "BlankAnswerRequest",
+        "description": "Which question to leave blank, or to stop leaving blank."
+      },
+      "Body_answer_assessment_api_assessments_answer_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ar",
+                  "en"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_answer_assessment_api_assessments_answer_post"
+      },
+      "Body_extract_assessment_api_assessments_extract_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_extract_assessment_api_assessments_extract_post"
+      },
+      "Body_open_questionnaire_api_forms_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_open_questionnaire_api_forms_post"
+      },
+      "Body_say_with_a_file_api_chat_upload_post": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id",
+            "default": ""
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "default": ""
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_say_with_a_file_api_chat_upload_post"
+      },
+      "Body_upload_guidelines_api_knowledge_guidelines_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "authority": {
+            "type": "string",
+            "title": "Authority",
+            "default": "ours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "Body_upload_guidelines_api_knowledge_guidelines_post"
+      },
+      "ColumnRoleRequest": {
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Sheet"
+          },
+          "column": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 1,
+            "pattern": "^[A-Za-z]{1,3}$",
+            "title": "Column"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sheet",
+          "column",
+          "role"
+        ],
+        "title": "ColumnRoleRequest"
+      },
+      "DetailRequest": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "pattern": "^(full|brief)$",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "DetailRequest",
+        "description": "How long the answers in this questionnaire should be."
+      },
+      "Evidence-Input": {
+        "properties": {
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "default": 0.0
+          },
+          "raw_score": {
+            "type": "number",
+            "title": "Raw Score",
+            "default": 0.0
+          },
+          "is_lexical": {
+            "type": "boolean",
+            "title": "Is Lexical",
+            "default": false
+          },
+          "query_hits": {
+            "type": "integer",
+            "title": "Query Hits",
+            "default": 1
+          },
+          "authority": {
+            "type": "string",
+            "title": "Authority",
+            "default": "ours"
+          },
+          "doc_id": {
+            "type": "string",
+            "title": "Doc Id",
+            "default": ""
+          },
+          "clause": {
+            "type": "string",
+            "title": "Clause",
+            "default": ""
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading",
+            "default": ""
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "default": -1
+          },
+          "page_end": {
+            "type": "integer",
+            "title": "Page End",
+            "default": -1
+          },
+          "chunk": {
+            "type": "integer",
+            "title": "Chunk",
+            "default": -1
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "prose"
+          },
+          "unit_id": {
+            "type": "string",
+            "title": "Unit Id",
+            "default": ""
+          },
+          "part": {
+            "type": "integer",
+            "title": "Part",
+            "default": 1
+          },
+          "parts": {
+            "type": "integer",
+            "title": "Parts",
+            "default": 1
+          },
+          "questionnaire": {
+            "type": "string",
+            "title": "Questionnaire",
+            "default": ""
+          },
+          "answered_date": {
+            "type": "string",
+            "title": "Answered Date",
+            "default": ""
+          },
+          "entry_id": {
+            "type": "string",
+            "title": "Entry Id",
+            "default": ""
+          },
+          "clause_start": {
+            "type": "string",
+            "title": "Clause Start",
+            "default": ""
+          },
+          "clause_end": {
+            "type": "string",
+            "title": "Clause End",
+            "default": ""
+          },
+          "section_clause": {
+            "type": "string",
+            "title": "Section Clause",
+            "default": ""
+          },
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_name",
+          "snippet"
+        ],
+        "title": "Evidence",
+        "description": "A retrieved chunk that supported (or could support) an answer."
+      },
+      "Evidence-Output": {
+        "properties": {
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "default": 0.0
+          },
+          "raw_score": {
+            "type": "number",
+            "title": "Raw Score",
+            "default": 0.0
+          },
+          "is_lexical": {
+            "type": "boolean",
+            "title": "Is Lexical",
+            "default": false
+          },
+          "query_hits": {
+            "type": "integer",
+            "title": "Query Hits",
+            "default": 1
+          },
+          "authority": {
+            "type": "string",
+            "title": "Authority",
+            "default": "ours"
+          },
+          "doc_id": {
+            "type": "string",
+            "title": "Doc Id",
+            "default": ""
+          },
+          "clause": {
+            "type": "string",
+            "title": "Clause",
+            "default": ""
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading",
+            "default": ""
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "default": -1
+          },
+          "page_end": {
+            "type": "integer",
+            "title": "Page End",
+            "default": -1
+          },
+          "chunk": {
+            "type": "integer",
+            "title": "Chunk",
+            "default": -1
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "prose"
+          },
+          "unit_id": {
+            "type": "string",
+            "title": "Unit Id",
+            "default": ""
+          },
+          "part": {
+            "type": "integer",
+            "title": "Part",
+            "default": 1
+          },
+          "parts": {
+            "type": "integer",
+            "title": "Parts",
+            "default": 1
+          },
+          "questionnaire": {
+            "type": "string",
+            "title": "Questionnaire",
+            "default": ""
+          },
+          "answered_date": {
+            "type": "string",
+            "title": "Answered Date",
+            "default": ""
+          },
+          "entry_id": {
+            "type": "string",
+            "title": "Entry Id",
+            "default": ""
+          },
+          "clause_start": {
+            "type": "string",
+            "title": "Clause Start",
+            "default": ""
+          },
+          "clause_end": {
+            "type": "string",
+            "title": "Clause End",
+            "default": ""
+          },
+          "section_clause": {
+            "type": "string",
+            "title": "Section Clause",
+            "default": ""
+          },
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count",
+            "default": 0
+          },
+          "locator": {
+            "type": "string",
+            "title": "Locator",
+            "description": "Human-readable citation, e.g. 'MDS-CS-STD-003 §7.2.1'.\n\nA computed field rather than a plain property so it is serialised: the\nweb interface and the exports show the clause, and rebuilding it in\nJavaScript would be a second implementation to keep in step.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_name",
+          "snippet",
+          "locator"
+        ],
+        "title": "Evidence",
+        "description": "A retrieved chunk that supported (or could support) an answer."
+      },
+      "FillRequest": {
+        "properties": {
+          "include_unreviewed": {
+            "type": "boolean",
+            "title": "Include Unreviewed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "FillRequest",
+        "description": "How much of the questionnaire to write."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IngestResult": {
+        "properties": {
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "chunks_indexed": {
+            "type": "integer",
+            "title": "Chunks Indexed"
+          },
+          "qa_pairs_found": {
+            "type": "integer",
+            "title": "Qa Pairs Found",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning",
+            "description": "Indexed, but something about the file suggests it was filed as the wrong type"
+          },
+          "duplicate_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of",
+            "description": "Name of an already-indexed file with identical content; set when this upload was skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_name",
+          "source_type",
+          "chunks_indexed"
+        ],
+        "title": "IngestResult",
+        "description": "Summary of ingesting one uploaded file into the knowledge base."
+      },
+      "MemoryEditRequest": {
+        "properties": {
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "title": "MemoryEditRequest"
+      },
+      "MemoryEntryRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Answer"
+          },
+          "section": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Section",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "MemoryEntryRequest"
+      },
+      "PasswordRequest": {
+        "properties": {
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "title": "PasswordRequest"
+      },
+      "PreferLengthRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Question Id"
+          },
+          "prefer": {
+            "type": "string",
+            "pattern": "^(full|brief|)$",
+            "title": "Prefer",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "PreferLengthRequest",
+        "description": "The length for one answer, overriding the questionnaire's default."
+      },
+      "PreferencesRequest": {
+        "properties": {
+          "default_length": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(full|brief)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Length"
+          },
+          "verdict_first": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict First"
+          },
+          "refer_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refer To"
+          },
+          "policy_references": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(keep|citations_only)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy References"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(as_drafted|formal|plain)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          },
+          "also": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Also"
+          }
+        },
+        "type": "object",
+        "title": "PreferencesRequest"
+      },
+      "Question": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Stable identifier, e.g. 'q1' or the number printed on the form"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section",
+            "description": "Heading the question sits under, if any"
+          },
+          "question_type": {
+            "$ref": "#/components/schemas/QuestionType",
+            "default": "free_text"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options",
+            "description": "Allowed choices for choice questions"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ],
+            "title": "Language",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "Question",
+        "description": "One question lifted out of an assessment document."
+      },
+      "QuestionChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "skip": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Text",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "QuestionChange"
+      },
+      "QuestionChanges": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionChange"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changes"
+        ],
+        "title": "QuestionChanges"
+      },
+      "QuestionRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "question_type": {
+            "$ref": "#/components/schemas/QuestionType",
+            "default": "free_text"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ar",
+                  "en"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "QuestionRequest",
+        "description": "A question to answer, as the interface holds it.\n\nDeliberately narrower than `Question`: the interface is allowed to say what\nis asked and in which language, and nothing else. Identifiers are assigned\nhere so a caller cannot collide two questions on one id, which would make\nthe answers ambiguous to match back."
+      },
+      "QuestionType": {
+        "type": "string",
+        "enum": [
+          "free_text",
+          "yes_no",
+          "single_choice",
+          "multi_choice"
+        ],
+        "title": "QuestionType"
+      },
+      "ResolveConflictRequest": {
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Entry Id"
+          },
+          "other_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Other Id"
+          },
+          "resolution": {
+            "type": "string",
+            "pattern": "^(keep_this|keep_other|keep_both)$",
+            "title": "Resolution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry_id",
+          "other_id",
+          "resolution"
+        ],
+        "title": "ResolveConflictRequest"
+      },
+      "RestoreDraftRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Question Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "RestoreDraftRequest"
+      },
+      "ReviseAnswersRequest": {
+        "properties": {
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/AnsweredQuestion-Input"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Answers"
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Instruction"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ar",
+                  "en"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answers",
+          "instruction"
+        ],
+        "title": "ReviseAnswersRequest",
+        "description": "Answers to reword, handed straight back rather than stored."
+      },
+      "ReviseBatchRequest": {
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Instruction"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ScopeRequest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instruction"
+        ],
+        "title": "ReviseBatchRequest"
+      },
+      "SayRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "conversation_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Conversation Id",
+            "default": ""
+          },
+          "run_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Run Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "SayRequest"
+      },
+      "ScopeRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Ids"
+          },
+          "part": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Part",
+            "default": ""
+          },
+          "matching": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Matching",
+            "default": ""
+          },
+          "unanswered_only": {
+            "type": "boolean",
+            "title": "Unanswered Only",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ScopeRequest",
+        "description": "Which questions an operation applies to."
+      },
+      "SetAnswerRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Question Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Text"
+          },
+          "which": {
+            "type": "string",
+            "pattern": "^(answer|brief)$",
+            "title": "Which",
+            "default": "answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "text"
+        ],
+        "title": "SetAnswerRequest"
+      },
+      "SignInRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "code"
+        ],
+        "title": "SignInRequest"
+      },
+      "SkillEditRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          }
+        },
+        "type": "object",
+        "title": "SkillEditRequest"
+      },
+      "SkillRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Description",
+            "default": ""
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Instruction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "instruction"
+        ],
+        "title": "SkillRequest"
+      },
+      "SourceType": {
+        "type": "string",
+        "enum": [
+          "guideline",
+          "prior_answer"
+        ],
+        "title": "SourceType",
+        "description": "Which knowledge collection a chunk belongs to."
+      },
+      "TeamRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "TeamRequest"
+      },
+      "TryStyleRequest": {
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Instruction"
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instruction",
+          "question",
+          "answer"
+        ],
+        "title": "TryStyleRequest"
+      },
+      "UpdateUserRequest": {
+        "properties": {
+          "team": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "disabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled"
+          }
+        },
+        "type": "object",
+        "title": "UpdateUserRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

@@ -20,6 +20,8 @@ GATE: list[tuple[str, str]] = [
     ("fmt", "run `uv run poe format`, then review the diff"),
     ("lint", "fix each file:line above; `uv run python -m ruff check --fix .` repairs the auto-fixable ones"),
     ("types", "each TYPES-* line above has its own FIX"),
+    ("arch", "each ARCH-* line above has its own FIX"),
+    ("docs", "each DOCS-* line above has its own FIX"),
     ("test", "read the first failure above; rerun one with `uv run python -m pytest path::name -x`"),
 ]
 

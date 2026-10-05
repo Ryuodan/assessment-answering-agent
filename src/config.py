@@ -33,8 +33,6 @@ class Settings(BaseSettings):
     # --- LLM (Groq) --------------------------------------------------------
     groq_api_key: str = ""
     groq_chat_model: str = "openai/gpt-oss-120b"
-    # ME-Central-1 regional endpoint. Host root only — the groq client appends
-    # `/openai/v1` to it. Set to "" to fall back to the global api.groq.com.
     groq_reasoning_format: str = Field(
         default="parsed",
         description="Groq's reasoning_format: parsed, hidden, raw, or '' to send nothing",
@@ -49,6 +47,8 @@ class Settings(BaseSettings):
     Empty sends nothing, for a gateway that rejects the parameter.
     """
 
+    # ME-Central-1 regional endpoint. Host root only — the groq client appends
+    # `/openai/v1` to it. Set to "" to fall back to the global api.groq.com.
     groq_base_url: str | None = "https://api.me-central-1.groqcloud.com"
     llm_temperature: float = 0.0
     # Grading model for eval/. Deliberately not the drafting model: a system

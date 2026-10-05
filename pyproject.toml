@@ -137,4 +137,7 @@ format = { cmd = "python -m ruff format .", help = "Apply ruff formatting" }
 lint = { cmd = "python -m ruff check .", help = "Lint with ruff" }
 types = { cmd = "python -m harness.typecheck", help = "mypy --strict against harness/mypy-baseline.txt" }
 types-baseline = { cmd = "python -m harness.typecheck --shrink", help = "Drop fixed errors from the mypy baseline" }
+arch = { cmd = "python -m harness.arch", help = "Architecture invariants (rule IDs in harness/arch.py)" }
+docs = { cmd = "python -m harness.docs", help = "Docs exist, links resolve, nothing orphaned, plans well-formed" }
+gen = { cmd = "python -m harness.gen", help = "Regenerate docs/generated/ (never edit those by hand)" }
 test = { cmd = "python -m pytest -q", help = "Offline test suite (live_ai tests excluded)" }

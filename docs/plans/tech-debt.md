@@ -25,6 +25,7 @@ or docs and has not been verified by running anything.
 - **What:** measured: `/openapi.json` has 70 operations; the README table has 46 rows. Missing among others: the memory, preferences and skills routes.
 - **Impact:** the API cannot be learned from the docs.
 - **Fix:** plan 001 generates `docs/generated/openapi.json`; the README table should link to it instead of listing routes by hand.
+- **Partly resolved** 2026-10-05 (plan 001): the generated contract exists and is kept current by a test; the README table is still hand-written.
 
 ## TD-004: References to the deleted `demo_data` package
 
@@ -37,12 +38,14 @@ or docs and has not been verified by running anything.
 - **What:** the README configuration table lists `DOCLING_DO_OCR` twice. In `src/config.py` the comment "ME-Central-1 regional endpoint ..." sits above `groq_reasoning_format`, not above `groq_base_url` which it describes. Read.
 - **Impact:** minor confusion.
 - **Fix:** the generated `docs/generated/settings.md` replaces the hand-written table; move the comment.
+- **Partly resolved** 2026-10-05 (plan 001): the comment is above `groq_base_url` again and `docs/generated/settings.md` exists; the README table still lists `DOCLING_DO_OCR` twice.
 
 ## TD-006: Eighteen modules in `src/` exceed 400 lines
 
 - **What:** measured 2026-10-05: `api.py` 1987, `agents/assistant.py` 1653, `tools.py` 1403, `chunking.py` 1103, `forms/xlsx.py` 886, `answer_memory.py` 864, `knowledge.py` 836, `service.py` 740, `forms/xlsx_package.py` 705, `identity.py` 644, `export_pdf.py` 643, `config.py` 544, `agents/excel_agent.py` 513, `forms/docx.py` 486, `preferences.py` 479, `store.py` 475, `models.py` 430, `documents.py` 427. The static pages are larger still (`index.html` 3412).
 - **Impact:** a module that does many things is hard to change safely and hard to read into an agent's context.
 - **Fix:** allow-listed in ARCH-SIZE at their current length so they cannot grow; split them one at a time, behind characterization tests, in later plans.
+- **Update** 2026-10-05: after the format commit `4a7c3c6` the count is 19 (`src/graph/nodes.py` went from 399 to 406 lines through formatting alone); the current ceilings are in `harness/arch-allowlist.toml`.
 
 ## TD-007: Import cycles and upward imports
 
@@ -127,3 +130,21 @@ or docs and has not been verified by running anything.
 - **What:** read: the second half of the file is a commented-out `HuggingFaceEmbeddings` variant.
 - **Impact:** it reads as if local embeddings were supported (see TD-001).
 - **Fix:** delete it or turn it into a real, configured option; a product decision for the user.
+
+## TD-021: No test holds "server text is never markup on the page"
+
+- **What:** the README ("Facing a network") says status lines are written as text and that "a test uploads exactly such a name". Searching `tests/` (2026-10-05, Claude) found markup payloads only in `tests/test_document_library.py` (the Word preview) and `tests/test_hostile_input.py` (a search query that must not cause a 500); nothing checks how the pages render a file name or an error.
+- **Impact:** a regression to `innerHTML` in a page would pass the suite.
+- **Fix:** a browser test (M5) that uploads a file named as markup and asserts it is shown as text; until then, a review rule.
+
+## TD-022: The PDF export reads `WINDIR` directly
+
+- **What:** read: `src/export_pdf.py` builds its font candidate list with `os.environ.get("WINDIR", "C:/Windows")`, outside `src/config.py`. The candidates are hard-coded per operating system; no setting can point the export at a font.
+- **Impact:** small: the one environment read outside the settings module (allow-listed in ARCH-ENV), and a deployment without one of the three fonts cannot configure another.
+- **Fix:** a `pdf_font_path` setting with the OS candidates as the fallback.
+
+## TD-023: The organisation profile is read from a hard-coded path, in tests too
+
+- **What:** read: `src/organisation.py` loads `PROJECT_ROOT / "data" / "organisation.json"` (`PROFILE_PATH`, bound as a default argument), not a setting. `graph.nodes.draft` and `GET /api/preferences` call `organisation.load()`, and `tests/conftest.py` does not redirect it, so tests that reach either read the developer's real profile (found 2026-10-05 while writing characterization tests, Claude).
+- **Impact:** test results can depend on a file in `data/`; the profile cannot be relocated with the rest of the data.
+- **Fix:** an `organisation_path` setting under the data directory, redirected by the `isolated_storage` fixture.

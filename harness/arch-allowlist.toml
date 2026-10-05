@@ -1,0 +1,102 @@
+# Existing violations of harness/arch.py rules, each tied to a tech-debt item.
+# Entries may only be removed or tightened (max_lines only goes down); a new
+# violation is fixed, never added here. `uv run poe arch` says when one can go.
+
+[[size]]
+path = "src/api.py"
+max_lines = 2127
+debt = "TD-006"
+
+[[size]]
+path = "src/agents/assistant.py"
+max_lines = 1742
+debt = "TD-006"
+
+[[size]]
+path = "src/tools.py"
+max_lines = 1499
+debt = "TD-006"
+
+[[size]]
+path = "src/chunking.py"
+max_lines = 1109
+debt = "TD-006"
+
+[[size]]
+path = "src/forms/xlsx.py"
+max_lines = 939
+debt = "TD-006"
+
+[[size]]
+path = "src/answer_memory.py"
+max_lines = 918
+debt = "TD-006"
+
+[[size]]
+path = "src/knowledge.py"
+max_lines = 827
+debt = "TD-006"
+
+[[size]]
+path = "src/export_pdf.py"
+max_lines = 751
+debt = "TD-006"
+
+[[size]]
+path = "src/service.py"
+max_lines = 744
+debt = "TD-006"
+
+[[size]]
+path = "src/forms/xlsx_package.py"
+max_lines = 697
+debt = "TD-006"
+
+[[size]]
+path = "src/identity.py"
+max_lines = 632
+debt = "TD-006"
+
+[[size]]
+path = "src/config.py"
+max_lines = 545
+debt = "TD-006"
+
+[[size]]
+path = "src/agents/excel_agent.py"
+max_lines = 525
+debt = "TD-006"
+
+[[size]]
+path = "src/forms/docx.py"
+max_lines = 504
+debt = "TD-006"
+
+[[size]]
+path = "src/preferences.py"
+max_lines = 498
+debt = "TD-006"
+
+[[size]]
+path = "src/store.py"
+max_lines = 475
+debt = "TD-006"
+
+[[size]]
+path = "src/models.py"
+max_lines = 430
+debt = "TD-006"
+
+[[size]]
+path = "src/documents.py"
+max_lines = 427
+debt = "TD-006"
+
+[[size]]
+path = "src/graph/nodes.py"
+max_lines = 406
+debt = "TD-006"
+
+[[env]]
+path = "src/export_pdf.py"
+debt = "TD-022"
