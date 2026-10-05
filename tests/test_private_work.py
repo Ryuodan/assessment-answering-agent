@@ -125,7 +125,7 @@ def test_a_questionnaire_and_its_answers_belong_to_whoever_uploaded_it(team, tmp
     batch = _open(alice, tmp_path)
 
     assert bob.get("/api/forms").json()["forms"] == []
-    assert bob.get(f"/api/forms/{batch['id']}").status_code == 400
+    assert bob.get(f"/api/forms/{batch['id']}").status_code == 404
     assert alice.get(f"/api/forms/{batch['id']}").status_code == 200
 
 

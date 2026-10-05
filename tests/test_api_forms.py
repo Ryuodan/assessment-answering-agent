@@ -134,8 +134,8 @@ def test_questionnaires_are_listed(client, tmp_path):
     assert [form["source_name"] for form in listed] == ["two.xlsx", "one.xlsx"]
 
 
-def test_an_unknown_questionnaire_is_a_400(client):
-    assert client.get("/api/forms/nope").status_code == 400
+def test_an_unknown_questionnaire_is_a_404(client):
+    assert client.get("/api/forms/nope").status_code == 404
 
 
 # --- answering -------------------------------------------------------------
@@ -331,7 +331,7 @@ def test_a_questionnaire_is_scoped_to_its_team(client, tmp_path, monkeypatch):
 
     identity.ensure_team("privacy")
     identity.update_user(identity.LOCAL_EMAIL, team_id="privacy")
-    assert client.get(f"/api/forms/{batch_id}").status_code == 400
+    assert client.get(f"/api/forms/{batch_id}").status_code == 404
     assert client.get("/api/forms").json()["forms"] == []
 
 

@@ -154,3 +154,14 @@ class ToolError(Invalid):
     """An operation could not be performed. The message is safe to show."""
 
     code = "operation_refused"
+
+
+# Raised by src.tools, for a questionnaire that is absent or somebody else's.
+class QuestionnaireNotFound(NotFound, ToolError):
+    """No such questionnaire for this person: absent, or a colleague's (TD-026).
+
+    A NotFound, so the API answers 404 like every other missing thing; also a
+    ToolError, so the chat assistant still reports it to the model as a refusal.
+    """
+
+    code = "questionnaire_not_found"

@@ -102,10 +102,10 @@
   },
   "questionnaire not found": {
     "body": {
-      "code": "operation_refused",
+      "code": "questionnaire_not_found",
       "detail": "No questionnaire 'nope'."
     },
-    "status": 400
+    "status": 404
   },
   "questionnaire that cannot be read": {
     "body": {

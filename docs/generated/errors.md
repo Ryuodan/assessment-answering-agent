@@ -19,6 +19,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `Forbidden` | 403 | `forbidden` | Signed in, but not allowed to do this. |
 | `AccessDenied` | 403 | `access_denied` | Sign-in was refused. The message is safe to show the person. |
 | `NotFound` | 404 | `not_found` | Absent -- or belonging to somebody else, which is deliberately the same answer. |
+| `QuestionnaireNotFound` | 404 | `questionnaire_not_found` | No such questionnaire for this person: absent, or a colleague's (TD-026). |
 | `UnsupportedFile` | 415 | `unsupported_file` | A file of a type this cannot take. |
 | `Unprocessable` | 422 | `unprocessable` | Understood, but cannot be used: an unreadable file, nothing to export. |
 | `FormatError` | 422 | `questionnaire_unreadable` | The file is not a workbook this can read. The message is safe to show. |

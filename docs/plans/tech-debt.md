@@ -169,11 +169,13 @@ or docs and has not been verified by running anything.
 - **Impact:** a reader cannot tell which number a reported score is over.
 - **Fix:** correct it when the README is reorganised (M4); numbers about a dataset should come from the dataset (a generated summary) rather than be typed.
 
-## TD-026: A questionnaire that is not yours answers 400, everything else 404
+## TD-026: A questionnaire that was not yours answered 400, everything else 404
 
 - **What:** read 2026-10-05 (Claude, plan 004): `tools._require` raises `ToolError("No questionnaire ...")`, which the API turns into 400, for a questionnaire that does not exist or belongs to a colleague; a missing or colleague's run, conversation, memory entry, skill or document answers 404. `tests/test_private_work.py` pins the 400.
 - **Impact:** a client cannot tell "not there" from "bad request" for questionnaires; the README's rule that another person's work "reads as absent" holds in wording but not in status.
 - **Fix (needs a decision):** raise `NotFound` from `_require` and update the test, if nothing in the pages depends on the 400.
+- **Decision** 2026-10-05, by the user: questionnaires answer 404 like everything else.
+- **Resolved** 2026-10-05 (Claude): `tools._require` raises `QuestionnaireNotFound`, a `NotFound` (404, code `questionnaire_not_found`) that is also a `ToolError`, so the chat assistant still reports it to the model as a refusal instead of failing. No page depends on the 400 (checked: only the chat page reads a status, 401). Eight assertions in three test files changed from 400 to 404; the error snapshot changed in exactly that scenario. Missing questions *inside* a questionnaire still answer 400 ("No question 'x' in this questionnaire"); that was not part of the decision.
 
 ## TD-027: Docling's diagnostics reach the person who uploaded a file
 

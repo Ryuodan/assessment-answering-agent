@@ -101,10 +101,10 @@ def test_a_teammate_cannot_open_the_file_somebody_else_uploaded(team, tmp_path, 
     batch_id = _open(alice, tmp_path)["id"]
 
     assert bob.get("/api/forms").json()["forms"] == []
-    assert bob.get(f"/api/forms/{batch_id}").status_code == 400
-    assert bob.post(f"/api/forms/{batch_id}/answer", json={"scope": {}}).status_code == 400
-    assert bob.post(f"/api/forms/{batch_id}/fill").status_code == 400
-    assert bob.get(f"/api/forms/{batch_id}/file").status_code == 400
+    assert bob.get(f"/api/forms/{batch_id}").status_code == 404
+    assert bob.post(f"/api/forms/{batch_id}/answer", json={"scope": {}}).status_code == 404
+    assert bob.post(f"/api/forms/{batch_id}/fill").status_code == 404
+    assert bob.get(f"/api/forms/{batch_id}/file").status_code == 404
 
     assert batch_id in [f["id"] for f in alice.get("/api/forms").json()["forms"]]
     assert alice.get(f"/api/forms/{batch_id}").status_code == 200
@@ -115,8 +115,8 @@ def test_another_team_cannot_see_it_at_all(team, tmp_path, answers_yes):
     carol = as_person(CAROL, OTHER_CODE)
 
     assert carol.get("/api/forms").json()["forms"] == []
-    assert carol.get(f"/api/forms/{batch_id}").status_code == 400
-    assert carol.post(f"/api/forms/{batch_id}/fill").status_code == 400
+    assert carol.get(f"/api/forms/{batch_id}").status_code == 404
+    assert carol.post(f"/api/forms/{batch_id}/fill").status_code == 404
 
 
 def test_what_one_person_approves_reaches_the_whole_team(team, tmp_path, answers_yes, memory_index):

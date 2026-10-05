@@ -180,6 +180,8 @@ def error_codes() -> tuple[list[type[AppError]], list[tuple[str, str, str]]]:
     pending: list[type[AppError]] = [errors.AppError]
     while pending:
         cls = pending.pop()
+        if cls in classes:  # a class with two parents in the hierarchy is reached twice
+            continue
         classes.append(cls)
         pending.extend(cls.__subclasses__())
     by_name = {cls.__name__: cls for cls in classes}

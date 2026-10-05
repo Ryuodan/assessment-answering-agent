@@ -37,7 +37,7 @@ from src.forms import status as status_map
 from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role, Target
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
-from src.errors import ToolError as ToolError
+from src.errors import QuestionnaireNotFound, ToolError as ToolError
 
 logger = logging.getLogger(__name__)
 
@@ -330,7 +330,7 @@ def _require(user: User, batch_id: str) -> Batch:
     """
     batch = batches.load(batch_id, team_id=user.team_id, actor_email=user.email)
     if batch is None:
-        raise ToolError(f"No questionnaire {batch_id!r}.")
+        raise QuestionnaireNotFound(f"No questionnaire {batch_id!r}.")
     return batch
 
 
