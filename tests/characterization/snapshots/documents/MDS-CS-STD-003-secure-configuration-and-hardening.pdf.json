@@ -1,0 +1,535 @@
+{
+  "chunk_size": 1200,
+  "chunks": [
+    {
+      "metadata": {
+        "chunk": 0,
+        "clause": "",
+        "clause_end": "",
+        "clause_start": "",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 0,
+        "kind": "prose",
+        "page": 1,
+        "page_end": 1,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 2,
+        "section_clause": "",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u0"
+      },
+      "text": "Secure Configuration and\nHardening Standard\nMirqab Digital Solutions Company\nDocument Control\nField Value\nDocument title Secure Configuration and Hardening\nStandard\nDocument identifier MDS-CS-STD-003\nDocument class Technical Standard (Tier 3)\nClassification Internal — Restricted\nVersion 4.4\nDocument owner Head of Cybersecurity Engineering\nTechnical authority Chief Information Security Officer\nApproving authority Cybersecurity Committee (CSC)\nApproval reference CSC/2026/01-09\nDate of approval 22 Rajab 1447H / 11 January 2026G\nEffective date 1 Sha'ban 1447H / 20 January 2026G\nNext scheduled 1 Sha'ban 1448H / 9 January 2027G\nreview\nParent documents MDS-CS-POL-001; MDS-CS-POL-002"
+    },
+    {
+      "metadata": {
+        "chunk": 1,
+        "clause": "",
+        "clause_end": "",
+        "clause_start": "",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 0,
+        "kind": "table",
+        "page": 1,
+        "page_end": 1,
+        "parent_clause": "",
+        "part": 2,
+        "parts": 2,
+        "section_clause": "",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u0"
+      },
+      "text": "Secure Configuration and\nField | Value\nDocument title | Secure Configuration and Hardening Standard\nDocument identifier | MDS-CS-STD-003\nDocument class | Technical Standard (Tier 3)\nClassification | Internal — Restricted\nVersion | 4.4\nDocument owner | Head of Cybersecurity Engineering\nTechnical authority | Chief Information Security Officer\nApproving authority | Cybersecurity Committee (CSC)\nApproval reference | CSC/2026/01-09\nDate of approval | 22 Rajab 1447H / 11 January 2026G\nEffective date | 1 Sha'ban 1447H / 20 January 2026G\nNext scheduled review | 1 Sha'ban 1448H / 9 January 2027G\nParent documents | MDS-CS-POL-001; MDS-CS-POL-002\n\nDocument | identifier\n\nMDS- | CS- | STD-00\n\nInternal | — | Restricted\n\nDocument | owner\n\nHead | of | Cybersecurity |  | Engineering\n\nApproving | authority\n\nCybersecurity |  | Committee |  | (CSC)\n\nDate | of |  | approval\n\n22 |  | Raja | b | 1447H | / | 11 | January | 2026G\n\nNext | scheduled\nreview |\n\n1 |  | Sha'ban | 1448H | / 9 | January | 2027G"
+    },
+    {
+      "metadata": {
+        "chunk": 2,
+        "clause": "1",
+        "clause_end": "1.2",
+        "clause_start": "1",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 3,
+        "kind": "series",
+        "page": 2,
+        "page_end": 2,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "1",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u1"
+      },
+      "text": "1. Purpose\n\n1.1 This Standard sets the mandatory requirements for the secure\nconfiguration of technology assets, the management of technical\nvulnerabilities, the application of patches, the treatment of unsupported\ntechnology, and the control of change. It is the sole authoritative source\nin this corpus for configuration baselines, vulnerability remediation\ntimelines and change control requirements.\n\n1.2 This Standard gives effect to the secure-by-design-and-by-default\nprinciple at [MDS-CS-POL-001 §7.5] and the deny-by-default principle at\n[§7.3]."
+    },
+    {
+      "metadata": {
+        "chunk": 3,
+        "clause": "2",
+        "clause_end": "3.1",
+        "clause_start": "2",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 2,
+        "page_end": 3,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "2",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u2"
+      },
+      "text": "2. Scope\n\n2.1 This Standard applies to every technology asset in the Company\nestate, including: servers, workstations, laptops and mobile devices;\nnetwork and security appliances; hypervisors and container platforms;\ndatabases, middleware and message brokers; operating systems and\ntheir components; cloud resources and managed services; container\nimages; infrastructure-as-code definitions; and the operational\ntechnology in scope of [MDS-CS-POL-002 §13], subject to §13.6 of that\nManual.\n\n2.2 The Standard applies in all environments. Non-production\nenvironments are in scope; a lower baseline is not permitted merely\nbecause an environment is non-production, although §7.2 sets different\nremediation timelines by environment.\n\n3. Definitions\n\n3.1 Terms have the meanings at [MDS-CS-REF-001], in particular:\nbaseline, golden image, configuration drift, authenticated scan, actively\n\nexploited vulnerability, and emergency change."
+    },
+    {
+      "metadata": {
+        "chunk": 4,
+        "clause": "4",
+        "clause_end": "4.3",
+        "clause_start": "4",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 4,
+        "kind": "series",
+        "page": 3,
+        "page_end": 3,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "4",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u3"
+      },
+      "text": "4. Roles\n\n4.1 The Head of Cybersecurity Engineering owns this Standard and\napproves every baseline.\n\n4.2 The technical custodian of an asset, as recorded under [MDS-CS-\nPOL-002 §4.2], is accountable for applying the baseline, remediating\nvulnerabilities within the timelines at §7.2, and maintaining the asset\nwithin vendor support.\n\n4.3 The business information asset owner is accountable for\naccepting any residual risk arising from a deviation, through the\nexception process at [MDS-CS-POL-001 §10]."
+    },
+    {
+      "metadata": {
+        "chunk": 5,
+        "clause": "5",
+        "clause_end": "5.4",
+        "clause_start": "5",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 3,
+        "page_end": 4,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 2,
+        "section_clause": "5",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u4"
+      },
+      "text": "5. Configuration Baselines\n\n5.1 Every asset type in the Company estate shall have a documented,\napproved configuration baseline. An asset shall not be deployed into any\nenvironment before a baseline exists for its type and has been applied.\n\n5.2 Baselines shall be derived from a recognised secure configuration\nbenchmark — Center for Internet Security Benchmarks at Level 1 as a\nminimum, or the vendor's published security configuration guidance\nwhere no benchmark exists — and shall then be adjusted for the\nCompany environment. Every deviation from the source benchmark\nshall be documented with its justification in the baseline document itself.\n\n5.3 Baselines shall be approved by the Head of Cybersecurity\nEngineering before use, and shall be version-controlled with a\ndocumented change history.\n\n5.4 Baselines shall be reviewed at intervals not exceeding twelve (12)\nmonths, and additionally within sixty (60) calendar days of the\n\npublication of a new major version of the source benchmark or of the\nunderlying product."
+    },
+    {
+      "metadata": {
+        "chunk": 6,
+        "clause": "5.5",
+        "clause_end": "5.5",
+        "clause_start": "5.5",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 1,
+        "kind": "prose",
+        "page": 4,
+        "page_end": 4,
+        "parent_clause": "5",
+        "part": 2,
+        "parts": 2,
+        "section_clause": "5",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u4"
+      },
+      "text": "5. Configuration Baselines\n5.5 Every baseline shall address, as a minimum: removal or disabling of\nunnecessary services, protocols, daemons, roles, features and sample\ncontent; closure of unnecessary network ports; removal or disabling of\ndefault and guest accounts and change of default credentials per [MDS-\nCS-STD-001 §8.6]; the minimum authentication configuration required\nby [MDS-CS-STD-001]; the cryptographic configuration required by\n[MDS-CS-STD-002], including approved protocol versions and cipher\nsuites; the audit logging configuration required by [MDS-CS-STD-004"
+    },
+    {
+      "metadata": {
+        "chunk": 7,
+        "clause": "5",
+        "clause_end": "5.6",
+        "clause_start": "5",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 3,
+        "kind": "series",
+        "page": 4,
+        "page_end": 4,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 2,
+        "section_clause": "5",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u5"
+      },
+      "text": "§5]; time synchronisation per [MDS-CS-STD-004 §8]; host firewall\nconfiguration; malicious code protection per §10; secure boot and\nfirmware protection where supported; file integrity monitoring on systems\nin criticality Tier 1; and the administrative access restrictions at [MDS-\nCS-STD-001 §7].\n\n5.6 Privileged access workstations shall be built to a dedicated\nhardened baseline that additionally: removes email, instant messaging\nand general web browsing capability; permits outbound network\nconnections only to a defined list of management endpoints; enforces\napplication allow-listing in default-deny mode; prohibits removable media\nentirely; requires AAL-3 authentication at logon per [MDS-CS-STD-001\n\n§5.3.1]; prohibits the workstation being used for any non-administrative\ntask; and is rebuilt from the golden image at intervals not exceeding one\nhundred and eighty (180) calendar days."
+    },
+    {
+      "metadata": {
+        "chunk": 8,
+        "clause": "5.4",
+        "clause_end": "5.9",
+        "clause_start": "5.4",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 4,
+        "kind": "series",
+        "page": 4,
+        "page_end": 5,
+        "parent_clause": "5",
+        "part": 2,
+        "parts": 2,
+        "section_clause": "5",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u5"
+      },
+      "text": "§5]; time synchronisation per [MDS-CS-STD-004 §8]; host firewall\n5.7 Systems shall be built from an approved golden image where one\nexists. Golden images shall be rebuilt and re-hardened at intervals not\nexceeding thirty (30) calendar days so that newly deployed systems\nare not deployed already requiring patches, and shall be scanned for\nvulnerabilities before release.\n\n5.8 Infrastructure defined as code shall have its definitions stored in\nversion control, peer-reviewed before merge per [MDS-CS-STD-006\n\n§5.4], and scanned automatically for insecure configuration before\ndeployment. Manual changes to infrastructure that is managed as code\nare prohibited outside an emergency change under §9.6, and shall be\nreconciled back into code within five (5) business days.\n\n5.9 Container images shall be built from an approved minimal base\nimage, shall not run as root, shall not include a shell or package\nmanager in the production image where the runtime permits, and shall\nbe scanned per [MDS-CS-STD-006 §8.4] before being admitted to a\nproduction registry."
+    },
+    {
+      "metadata": {
+        "chunk": 9,
+        "clause": "6",
+        "clause_end": "6.4",
+        "clause_start": "6",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 5,
+        "page_end": 5,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "6",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u6"
+      },
+      "text": "6. Configuration Compliance and Drift\n\n6.1 Compliance with the applicable baseline shall be measured\nautomatically for every asset at intervals not exceeding twenty-four (24)\nhours, and results shall be reported to the platform required by [MDS-\nCS-STD-004].\n\n6.2 Configuration drift from an approved baseline shall be alerted to the\ntechnical custodian and shall be remediated within: seven (7) calendar\ndays for a setting classified in the baseline as security-critical; thirty\n(30) calendar days otherwise. Drift on a system in criticality Tier 1 that\naffects a security-critical setting shall additionally raise an alert per\n[MDS-CS-STD-004 §7.2].\n\n6.3 An asset shall not be admitted to a production network until it\nevidences baseline compliance. Assets found in production without an\napplied baseline shall be treated as an incident under [MDS-CS-\nPOL-001 §8].\n\n6.4 Baseline compliance percentage by asset class shall be reported\nmonthly to the Cybersecurity Operations Forum and quarterly to the\nCybersecurity Committee, using the metric at [MDS-CS-REF-003 Annex\nG]."
+    },
+    {
+      "metadata": {
+        "chunk": 10,
+        "clause": "7",
+        "clause_end": "7.1.3",
+        "clause_start": "7",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 5,
+        "page_end": 6,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\n\n7.1 Discovery\n\n7.1.1 Vulnerability scanning shall be performed at the following minimum\nfrequencies:\nTarget Frequency Type\nInternet-facing Daily Unauthenticated, plus\nassets authenticated weekly\nCardholder data Weekly Authenticated\nenvironment\nInternal production Weekly Authenticated\nservers and network\ndevices\nEnd-user endpoints Weekly Authenticated, via the\nendpoint agent\nNon-production Monthly Authenticated\nenvironments\nContainer images On every build, and Image composition\nre-scanned in the analysis\nregistry weekly\nCloud resource Continuous Cloud posture\nconfiguration management per [MDS-\nCS-STD-005 §8]\n\n7.1.2 External attack surface discovery shall run continuously and shall\nreconcile discovered internet-facing assets against the inventory\nrequired by [MDS-CS-POL-002 §4.3]. An internet-facing asset not\npresent in the inventory shall be investigated within twenty-four (24)\nhours.\n\n7.1.3 Scanning shall be authenticated wherever technically possible. An\nunauthenticated scan shall not be reported as evidence of the absence\nof vulnerabilities."
+    },
+    {
+      "metadata": {
+        "chunk": 11,
+        "clause": "7.1.4",
+        "clause_end": "7.1.4",
+        "clause_start": "7.1.4",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 1,
+        "kind": "mixed",
+        "page": 6,
+        "page_end": 6,
+        "parent_clause": "7.1",
+        "part": 2,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\n7.1.4 Assets that cannot be scanned by the standard tooling — including\ncertain operational technology in scope of [MDS-CS-POL-002 §13] —\nshall be assessed by an alternative method, such as passive network\nmonitoring or vendor advisory review, at the same frequency.\n\nTarget | Frequency | Type\nInternet-facing assets | Daily | Unauthenticated, plus authenticated weekly\nCardholder data environment | Weekly | Authenticated\nInternal production servers and network devices | Weekly | Authenticated\nEnd-user endpoints | Weekly | Authenticated, via the endpoint agent\nNon-production environments | Monthly | Authenticated\nContainer images | On every build, and re-scanned in the registry weekly | Image composition analysis\nCloud resource configuration | Continuous | Cloud posture management per [MDS- CS-STD-005 §8]\n\nCardholder |  | data\nenvironment |  |\n\nEnd- | user |  | endpoints\n\nAuthenticated, |  |  | via |  | the\nendpoint |  | agent |  |  |\n\nContainer |  | images\n\nOn |  | every |  |  |  | build, |  |  |  |  |  | and\nre- | scanned |  |  |  |  |  |  | in |  | the |  | \nregistry |  |  |  | weekly |  |  |  |  |  |  |  |"
+    },
+    {
+      "metadata": {
+        "chunk": 12,
+        "clause": "3.9",
+        "clause_end": "8.9",
+        "clause_start": "3.9",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 4,
+        "kind": "series",
+        "page": 6,
+        "page_end": 7,
+        "parent_clause": "3",
+        "part": 3,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\nImage |  | composition\nanalysis |  |\n\n7.2 Remediation timelines\n\n7.2.1 Vulnerabilities shall be remediated within the following maximum\nperiods, measured from the date the vulnerability is first identified in the\nCompany estate by any means — scan, vendor advisory, threat\nintelligence per [MDS-CS-POL-002 §10.11], penetration test, or third-\nparty notification:\nSeverity Internet-facing Internal Non-\n(CVSS v3.1 assets, and the production production\nbase cardholder data assets assets\nscore) environment\nCritical (9.0 72 hours 7 calendar 30 calendar\n– 10.0) days days\nHigh (7.0 – 7 calendar days 14 calendar 60 calendar\n\n8.9) days days\nMedium 30 calendar days 60 calendar 120 calendar\n(4.0 – 6.9) days days\nLow (0.1 – 90 calendar days 180 calendar Next\n\n3.9) days scheduled\nmaintenance"
+    },
+    {
+      "metadata": {
+        "chunk": 13,
+        "clause": "7.2.2",
+        "clause_end": "7.2.4",
+        "clause_start": "7.2.2",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 3,
+        "kind": "series",
+        "page": 7,
+        "page_end": 7,
+        "parent_clause": "7.2",
+        "part": 4,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\n7.2.2 The base score shall be adjusted using environmental and\ntemporal metrics where the Company's context materially changes the\nrisk. An adjustment that lowers a severity shall be documented, shall\nstate the compensating factor relied upon, and shall be approved by the\nHead of Cybersecurity Engineering. An adjustment that raises a severity\nrequires no approval and takes effect immediately.\n\n7.2.3 Where a vendor patch is not available within the applicable period,\nthe technical custodian shall implement a documented mitigation —\nconfiguration change, virtual patching at the network or application layer,\nservice disablement, or isolation — within the same period, and shall\nraise an exception per [MDS-CS-POL-001 §10] for the residual exposure\nuntil the patch is applied.\n\n7.2.4 Remediation is not complete until a subsequent authenticated"
+    },
+    {
+      "metadata": {
+        "chunk": 14,
+        "clause": "7.2.4",
+        "clause_end": "7.3",
+        "clause_start": "7.2.4",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 1,
+        "kind": "mixed",
+        "page": 7,
+        "page_end": 8,
+        "parent_clause": "7.2",
+        "part": 5,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\nSeverity (CVSS v3.1 base score) | Internet-facing assets, and the cardholder data environment | Internal production assets | Non- production assets\nCritical (9.0 – 10.0) | 72 hours | 7 calendar days | 30 calendar days\nHigh (7.0 – 8.9) | 7 calendar days | 14 calendar days | 60 calendar days\nMedium (4.0 – 6.9) | 30 calendar days | 60 calendar days | 120 calendar days\nLow (0.1 – 3.9) | 90 calendar days | 180 calendar days | Next scheduled maintenance\n\nHigh | (7.0 | –\n\n7 |  | calendar |  | days\n\n14 |  | calendar\ndays |  |\n\n60 |  | calendar\ndays |  |\n\nLow | (0.1 | –\n\n90 |  | calendar |  | days\n\n180 |  | calendar\ndays |  |\n\nNext\nscheduled\nmaintenance\n\nscan or equivalent verification confirms the vulnerability is no longer\npresent. Closure on the basis of a change record alone is not permitted.\n\n7.3 Prioritisation and exploitation"
+    },
+    {
+      "metadata": {
+        "chunk": 15,
+        "clause": "7.3.1",
+        "clause_end": "7.4.2",
+        "clause_start": "7.3.1",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 6,
+        "kind": "series",
+        "page": 8,
+        "page_end": 8,
+        "parent_clause": "7.3",
+        "part": 6,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\n7.3.1 Where a vulnerability is subject to active exploitation —\nevidenced by an advisory of the National Cybersecurity Authority, a\nrecognised known-exploited-vulnerability catalogue, credible threat\nintelligence assessed under [MDS-CS-POL-002 §10.12], or observation\nwithin the Company estate — the timelines at §7.2.1 do not apply and\n\n§7.4 applies instead, irrespective of the CVSS score.\n\n7.3.2 A vulnerability with a working public exploit but no evidence of\nactive exploitation shall be treated as one severity level higher than its\nbase score for the purpose of §7.2.1.\n\n7.4 Emergency response to actively exploited\nvulnerabilities\n\n7.4.1 On confirmation that a vulnerability meeting §7.3.1 affects the\nCompany estate, the following maximum periods apply, measured from\nthe Company's confirmation of applicability:\nAsset location Mitigate or patch\nwithin\nInternet-facing assets, and the cardholder data 24 hours\nenvironment\nInternal production assets 72 hours\nAll other assets 7 calendar days\n\n7.4.2 Remediation under this clause shall proceed as an emergency\nchange under §9.6 and does not require prior Change Advisory Board\napproval."
+    },
+    {
+      "metadata": {
+        "chunk": 16,
+        "clause": "7.4.3",
+        "clause_end": "7.5.2",
+        "clause_start": "7.4.3",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 8,
+        "page_end": 9,
+        "parent_clause": "7.4",
+        "part": 7,
+        "parts": 7,
+        "section_clause": "7",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u7"
+      },
+      "text": "7. Vulnerability and Patch Management\n7.4.3 Where the applicable period cannot be met, the affected service\nshall be isolated or withdrawn from service until it can be remediated,\n\nAsset location | Mitigate or patch within\nInternet-facing assets, and the cardholder data environment | 24 hours\nInternal production assets | 72 hours\nAll other assets | 7 calendar days\n\nInternal |  | production |  | assets\n\n72 |  | hours\n\nunless the CISO decides otherwise in writing having weighed the\nbusiness impact. That decision shall be reported to the Cybersecurity\nCommittee.\n\n7.4.4 The CISO may direct the immediate isolation of any asset\npresenting an imminent threat, without prior change approval and\nwithout the consent of the asset owner.\n\n7.5 Reporting\n\n7.5.1 Open vulnerabilities past their §7.2.1 or §7.4.1 due date shall be\nreported weekly to the technical custodian's line management, monthly\nto the Cybersecurity Operations Forum, and quarterly to the\nCybersecurity Committee, using the metric at [MDS-CS-REF-003 Annex\nG].\n\n7.5.2 Findings from penetration testing under [MDS-CS-POL-001 §9.2]\nshall be entered into the same remediation workflow, with severity\nmapped to the scale at §7.2.1, and shall be closed on the evidence\nstandard at [MDS-CS-POL-001 §9.6]."
+    },
+    {
+      "metadata": {
+        "chunk": 17,
+        "clause": "8",
+        "clause_end": "8.3.2",
+        "clause_start": "8",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 6,
+        "kind": "series",
+        "page": 9,
+        "page_end": 10,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 2,
+        "section_clause": "8",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u8"
+      },
+      "text": "8. Unsupported and End-of-Life Technology\n\n8.1 Technology that has reached the end of vendor security support\nshall not be operated in any Company environment. Its removal or\nupgrade shall be planned at least twelve (12) months before the\npublished end-of-support date.\n\n8.2 The Company shall maintain a forward register of end-of-support\ndates for all products in the estate, reviewed quarterly, and shall report\nto the Cybersecurity Committee any product reaching end of support\nwithin the next twelve months without a funded replacement plan.\n\n8.3 Where continued operation is unavoidable, an exception shall be\napproved under [MDS-CS-POL-001 §10] at the authority level\ncorresponding to the residual risk, and shall implement all of the\n\nfollowing compensating controls, each with a named owner:\n\n• 8.3.1 network isolation of the asset into a dedicated segment with\nan explicit, minimal allow-list of permitted flows;\n\n• 8.3.2 removal of all direct user access, with access mediated\nthrough a broker or jump host under [MDS-CS-STD-001 §7.4];"
+    },
+    {
+      "metadata": {
+        "chunk": 18,
+        "clause": "8.3.3",
+        "clause_end": "8.4",
+        "clause_start": "8.3.3",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 6,
+        "kind": "series",
+        "page": 10,
+        "page_end": 10,
+        "parent_clause": "8.3",
+        "part": 2,
+        "parts": 2,
+        "section_clause": "8",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u8"
+      },
+      "text": "following compensating controls, each with a named owner:\n• 8.3.3 enhanced monitoring, with the asset's events treated as\nhigh-fidelity and alerted on per [MDS-CS-STD-004 §7.2];\n\n• 8.3.4 application allow-listing in default-deny mode on the asset\nwhere the platform supports it;\n\n• 8.3.5 virtual patching at the network or application layer for known\nvulnerabilities affecting it;\n\n• 8.3.6 a documented, funded migration plan with dates, reported to\nthe Cybersecurity Committee at each quarterly meeting until the\nasset is decommissioned; and\n\n• 8.3.7 where the asset is internet-facing, its withdrawal from\ninternet exposure — an internet-facing unsupported asset shall\nnot be permitted to remain internet-facing under any exception.\n\n8.4 Extended security support purchased from the vendor satisfies §8.1\nfor the duration of that support, provided it includes security patches for\nthe vulnerabilities in scope of §7."
+    },
+    {
+      "metadata": {
+        "chunk": 19,
+        "clause": "9",
+        "clause_end": "9.4",
+        "clause_start": "9",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 10,
+        "page_end": 11,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 3,
+        "section_clause": "9",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u9"
+      },
+      "text": "9. Change Management\n\n9.1 Every change to a production system, network, security control or\ncloud configuration shall be recorded, assessed, authorised,\nimplemented and reviewed through the Company change management\nprocess. Undocumented change to production is prohibited.\n\n9.2 A change record shall state: the change description and its purpose;\nthe systems and services affected; the assessed risk, including its\ncybersecurity impact; the implementation plan; the test evidence; the\nback-out plan; the verification steps; and the named implementer and\napprover.\n\n9.3 Changes shall be classified as standard (pre-approved, low-risk,\n\nrepeatable, executed from a documented procedure), normal (requiring\nChange Advisory Board authorisation), or emergency (§9.6).\n\n9.4 Every normal change shall be assessed for cybersecurity impact\nbefore authorisation. A change assessed as having a cybersecurity\nimpact shall not proceed without the approval of the Cybersecurity\nrepresentative on the Change Advisory Board, who holds a veto per\n[MDS-CS-POL-001 §5.3]."
+    },
+    {
+      "metadata": {
+        "chunk": 20,
+        "clause": "9.5",
+        "clause_end": "9.7",
+        "clause_start": "9.5",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 3,
+        "kind": "series",
+        "page": 11,
+        "page_end": 11,
+        "parent_clause": "9",
+        "part": 2,
+        "parts": 3,
+        "section_clause": "9",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u9"
+      },
+      "text": "9. Change Management\n9.5 Changes shall be tested in a non-production environment\nrepresentative of production before implementation. The person who\nimplements a change into production shall not be the sole person who\napproved it, per the segregation principle at [MDS-CS-POL-001 §7.2].\n\n9.6 Emergency change. An emergency change may be implemented\nwithout prior Change Advisory Board authorisation where delay would\ncause a service outage, a security compromise, or a breach of the\ntimelines at §7.4. It shall be authorised at the time by the on-call senior\nmanager of the affected platform and the CISO or a delegate for any\nsecurity-affecting change; shall be recorded in the change system\nwithin four (4) hours of implementation; and shall be reviewed at the\nnext Change Advisory Board meeting, which shall assess whether the\nemergency route was justified.\n\n9.7 A change freeze shall apply during periods of elevated business risk\nas published by IT Service Management. Changes during a freeze\nrequire executive authorisation, except emergency changes under §9.6."
+    },
+    {
+      "metadata": {
+        "chunk": 21,
+        "clause": "9.8",
+        "clause_end": "9.9",
+        "clause_start": "9.8",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 2,
+        "kind": "series",
+        "page": 11,
+        "page_end": 11,
+        "parent_clause": "9",
+        "part": 3,
+        "parts": 3,
+        "section_clause": "9",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u9"
+      },
+      "text": "9. Change Management\n9.8 Post-implementation verification shall confirm that the change\nachieved its purpose and that security controls — logging,\nauthentication, encryption, monitoring agents — remain in place and\nfunctioning. Where a change disables a security control temporarily, its\nrestoration shall be verified explicitly and recorded.\n\n9.9 Unauthorised change detected by configuration monitoring under §6\nshall be investigated as a potential incident under [MDS-CS-POL-001"
+    },
+    {
+      "metadata": {
+        "chunk": 22,
+        "clause": "8",
+        "clause_end": "10.3",
+        "clause_start": "8",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 11,
+        "page_end": 12,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 2,
+        "section_clause": "8",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u10"
+      },
+      "text": "§8] and shall not be retrospectively legitimised by raising a change\nrecord after the fact.\n\n10. Malicious Code Protection\n\n10.1 Malicious code protection shall be deployed on all servers,\nendpoints, email gateways, web gateways and file transfer points, and\nshall be configured to update signatures and detection content\nautomatically at intervals not exceeding four (4) hours.\n\n10.2 Protection shall include behavioural and heuristic detection in\naddition to signature matching, and shall be integrated with the detection\nplatform required by [MDS-CS-STD-004].\n\n10.3 Scanning exclusions shall be approved by the Head of\nCybersecurity Engineering, shall be as narrow as possible, shall be\ndocumented with justification, and shall be reviewed at intervals not\nexceeding one hundred and eighty (180) calendar days. Exclusion of\nan entire drive, an entire file type, or a user-writable directory tree is\nprohibited."
+    },
+    {
+      "metadata": {
+        "chunk": 23,
+        "clause": "10.4",
+        "clause_end": "10.5",
+        "clause_start": "10.4",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 2,
+        "kind": "series",
+        "page": 12,
+        "page_end": 12,
+        "parent_clause": "10",
+        "part": 2,
+        "parts": 2,
+        "section_clause": "8",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u10"
+      },
+      "text": "§8] and shall not be retrospectively legitimised by raising a change\n10.4 Email attachments and downloaded files of types capable of\ncarrying executable content shall be detonated in a sandbox before\ndelivery, and macros in files originating from outside the Company shall\nbe blocked by policy.\n\n10.5 Detection of malicious code shall be treated as a cybersecurity\nincident and reported per [MDS-CS-POL-001 §8.2], whether or not the\nprotection reports successful remediation."
+    },
+    {
+      "metadata": {
+        "chunk": 24,
+        "clause": "6.1",
+        "clause_end": "11.3",
+        "clause_start": "6.1",
+        "doc_id": "MDS-CS-STD-003",
+        "heading": "",
+        "item_count": 5,
+        "kind": "series",
+        "page": 12,
+        "page_end": 13,
+        "parent_clause": "6",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "11",
+        "source_name": "MDS-CS-STD-003-secure-configuration-and-hardening.pdf",
+        "unit_id": "MDS-CS-STD-003:u11"
+      },
+      "text": "11. Compliance, Exceptions and Related\nDocuments\n\n11.1 Compliance shall be measured by the automated mechanisms at\n\n§6.1 and §7.1 and reported per §6.4 and §7.5.1.\n\n11.2 Exceptions shall be handled per [MDS-CS-POL-001 §10], and\nunsupported technology exceptions additionally per §8.3.\n\n11.3 Related documents: [MDS-CS-POL-001 §7.5], §9.2, §10; [MDS-\nCS-POL-002] §4.10, §7, §10.12, §13; [MDS-CS-STD-001 §7], §8.6;\n[MDS-CS-STD-002] §5, §6.1; [MDS-CS-STD-004] §5, §7, §8; [MDS-CS-\nSTD-005 §8]; [MDS-CS-STD-006] §5.4, §8.4; [MDS-CS-REF-003 §4]\n(criticality tiers), Annex G (metrics).\nClassification: Internal — Restricted. Synthetic material describing a\nfictional entity, generated for the testing of automated systems."
+    }
+  ],
+  "extracted": {
+    "characters": 22397,
+    "opening": "\n--- page 1 ---\nSecure Configuration and\nHardening Standard\nMirqab Digital Solutions Company\nDocument Control\nField Value\nDocument title Secure Configuration and Hardening\nStandard\nDocument identifier MDS-CS-STD-003\nDocument class Technical Standard (Tier 3)\nClassification Internal — Restricted\nVers",
+    "sha256": "116e4e3e544ee7befc7245d2b5d2af7b32f6515292eb934a304c4f88d889de84"
+  }
+}

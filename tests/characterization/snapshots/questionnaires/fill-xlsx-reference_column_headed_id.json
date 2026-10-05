@@ -1,0 +1,78 @@
+{
+  "file": {
+    "Questionnaire": {
+      "A1": "Security Domain",
+      "A3": "General",
+      "A4": "Incident Response",
+      "B1": "ID",
+      "B3": "GE-01",
+      "B4": "IR-01",
+      "B5": "IR-03",
+      "B6": "IR-04",
+      "C1": "Question",
+      "C2": "Description",
+      "C3": "Are the services that your organisation provides located in the Kingdom?",
+      "C4": "Do you have an incident management policy or crisis management plan?",
+      "C5": "Do you maintain an incident register",
+      "C6": "Do you undertake a post incident review?",
+      "D1": "Main Response",
+      "D2": "Response",
+      "D3": "Answer for Questionnaire!D3 (answer)",
+      "D4": "Answer for Questionnaire!D4 (answer)",
+      "D5": "Answer for Questionnaire!D5 (answer)",
+      "D6": "Answer for Questionnaire!D6 (answer)",
+      "E2": "Further Guidance"
+    },
+    "Vendor Info": {
+      "A1": "Please complete the below questions.",
+      "A3": "ID",
+      "A4": "GQ1",
+      "A5": "GQ2",
+      "A6": "GQ3",
+      "A7": "GQ4",
+      "A8": "GQ5",
+      "B3": "Question",
+      "B4": "Organisation name",
+      "B5": "Year established",
+      "B6": "Office locations and Country",
+      "B7": "Email address",
+      "B8": "Contact Number",
+      "F3": "Answer",
+      "F4": "Answer for Vendor Info!F4 (answer)",
+      "F5": "Answer for Vendor Info!F5 (answer)",
+      "F6": "Answer for Vendor Info!F6 (answer)",
+      "F7": "Answer for Vendor Info!F7 (answer)",
+      "F8": "Answer for Vendor Info!F8 (answer)",
+      "G3": "Notes"
+    }
+  },
+  "report": {
+    "created": [
+      "Questionnaire!D3",
+      "Questionnaire!D4",
+      "Questionnaire!D5",
+      "Questionnaire!D6",
+      "Vendor Info!F4",
+      "Vendor Info!F5",
+      "Vendor Info!F6",
+      "Vendor Info!F7",
+      "Vendor Info!F8"
+    ],
+    "parts_after": 6,
+    "parts_before": 6,
+    "path": "<tmp>\\filled-reference_column_headed_id.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "Questionnaire!D3": "Answer for Questionnaire!D3 (answer)",
+    "Questionnaire!D4": "Answer for Questionnaire!D4 (answer)",
+    "Questionnaire!D5": "Answer for Questionnaire!D5 (answer)",
+    "Questionnaire!D6": "Answer for Questionnaire!D6 (answer)",
+    "Vendor Info!F4": "Answer for Vendor Info!F4 (answer)",
+    "Vendor Info!F5": "Answer for Vendor Info!F5 (answer)",
+    "Vendor Info!F6": "Answer for Vendor Info!F6 (answer)",
+    "Vendor Info!F7": "Answer for Vendor Info!F7 (answer)",
+    "Vendor Info!F8": "Answer for Vendor Info!F8 (answer)"
+  }
+}

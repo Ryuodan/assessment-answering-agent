@@ -1,0 +1,214 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 0; questions in column A",
+          "confident": true,
+          "subject": "Sheet1",
+          "verdict": "10 questions"
+        },
+        {
+          "because": "the column holding the questions, under the headings on row 0",
+          "confident": false,
+          "subject": "column A",
+          "verdict": "question"
+        },
+        {
+          "because": "the first column after the questions that carries values",
+          "confident": false,
+          "subject": "column B",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "Sheet1",
+      "questions": 10
+    }
+  ],
+  "questions": [
+    {
+      "id": "Sheet1!2",
+      "language": "en",
+      "location": "Sheet1, row 2",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B2",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "What is the name of the vendor?"
+    },
+    {
+      "id": "Sheet1!3",
+      "language": "en",
+      "location": "Sheet1, row 3",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B3",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Who is the internal owner responsible for this relationship?"
+    },
+    {
+      "id": "Sheet1!4",
+      "language": "en",
+      "location": "Sheet1, row 4",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B4",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Provide a brief description of the product or service supplied."
+    },
+    {
+      "id": "Sheet1!5",
+      "language": "en",
+      "location": "Sheet1, row 5",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B5",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "What is the PII data collection?"
+    },
+    {
+      "id": "Sheet1!6",
+      "language": "en",
+      "location": "Sheet1, row 6",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B6",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "How does the vendor ensure data minimization?"
+    },
+    {
+      "id": "Sheet1!7",
+      "language": "en",
+      "location": "Sheet1, row 7",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B7",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "What is the retention period for each data category?"
+    },
+    {
+      "id": "Sheet1!8",
+      "language": "en",
+      "location": "Sheet1, row 8",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B8",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Describe the data deletion or anonymization process in place."
+    },
+    {
+      "id": "Sheet1!9",
+      "language": "en",
+      "location": "Sheet1, row 9",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B9",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor support Single Sign-On and Multi-Factor Authentication?"
+    },
+    {
+      "id": "Sheet1!10",
+      "language": "en",
+      "location": "Sheet1, row 10",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B10",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "When did the vendor last carry out penetration testing?"
+    },
+    {
+      "id": "Sheet1!11",
+      "language": "en",
+      "location": "Sheet1, row 11",
+      "number": "",
+      "section": "Queations",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Sheet1!B11",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Describe the incident management process for a data breach."
+    }
+  ],
+  "source_name": "headless_typo_header.xlsx",
+  "warnings": []
+}

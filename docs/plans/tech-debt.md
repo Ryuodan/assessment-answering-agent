@@ -148,3 +148,9 @@ or docs and has not been verified by running anything.
 - **What:** read: `src/organisation.py` loads `PROJECT_ROOT / "data" / "organisation.json"` (`PROFILE_PATH`, bound as a default argument), not a setting. `graph.nodes.draft` and `GET /api/preferences` call `organisation.load()`, and `tests/conftest.py` does not redirect it, so tests that reach either read the developer's real profile (found 2026-10-05 while writing characterization tests, Claude).
 - **Impact:** test results can depend on a file in `data/`; the profile cannot be relocated with the rest of the data.
 - **Fix:** an `organisation_path` setting under the data directory, redirected by the `isolated_storage` fixture.
+
+## TD-024: Suspected: a bracketed source number in a draft reaches the customer's cell
+
+- **What:** found 2026-10-05 by Claude while recording `tests/characterization/snapshots/pipeline/`; not observed in production. The drafting prompt says "Never put a source number in the answer text", but nothing enforces it: `strip_source_markers` removes only the `【1†source】` shape, and `to_cell_text("... 24 hours [1].")` returns the `[1]` unchanged. A model that disobeys writes `[1]` into the answer, the card, the exports and, through `fill`, the customer's file. The pinned behaviour is in `pipeline/grounded-first-draft.json` (the scripted draft contains `[1]`, and so does the final answer).
+- **Impact:** a citation that points at nothing, in a document sent to a customer. How often real models do it is unmeasured.
+- **Fix (needs a decision):** strip `[n]` markers mechanically where plain text becomes an answer, as `without_reasoning` does for thinking, or count their occurrence in the evaluation first. Not fixed: changing what reaches a customer's file is the user's call.

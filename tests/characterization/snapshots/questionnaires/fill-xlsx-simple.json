@@ -1,0 +1,40 @@
+{
+  "file": {
+    "Questionnaire": {
+      "A1": "S.No",
+      "A2": "1.0",
+      "A3": "2.0",
+      "A4": "3.0",
+      "A5": "4.0",
+      "B1": "Vendor Due Diligence Questions",
+      "B2": "Does the vendor have documented information security policies?",
+      "B3": "Does the vendor review those policies at least annually?",
+      "B4": "Are staff bound by non-disclosure agreements?",
+      "B5": "Is multi-factor authentication enforced on privileged accounts?",
+      "C1": "Vendor Response",
+      "C2": "Answer for Questionnaire!C2 (answer)",
+      "C3": "Answer for Questionnaire!C3 (answer)",
+      "C4": "Answer for Questionnaire!C4 (answer)",
+      "C5": "Answer for Questionnaire!C5 (answer)"
+    }
+  },
+  "report": {
+    "created": [
+      "Questionnaire!C2",
+      "Questionnaire!C3",
+      "Questionnaire!C4",
+      "Questionnaire!C5"
+    ],
+    "parts_after": 5,
+    "parts_before": 5,
+    "path": "<tmp>\\filled-simple.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "Questionnaire!C2": "Answer for Questionnaire!C2 (answer)",
+    "Questionnaire!C3": "Answer for Questionnaire!C3 (answer)",
+    "Questionnaire!C4": "Answer for Questionnaire!C4 (answer)",
+    "Questionnaire!C5": "Answer for Questionnaire!C5 (answer)"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "file": {
+    "General Information": {
+      "A5": "#",
+      "A6": "GI.1.1",
+      "A7": "GI.1.2",
+      "A8": "GI.1.3",
+      "A9": "GI.1.4",
+      "B5": "Question",
+      "B6": "Organization's legal name",
+      "B7": "Industry",
+      "B8": "Address of the organization",
+      "B9": "Transfer of personal data inside or outside the Kingdom?",
+      "C3": "General Information",
+      "C5": "Description",
+      "C6": "Specify your company's legal name",
+      "C7": "What industry are you in?",
+      "C8": "Specify the full mailing address",
+      "C9": "Provide the processing and hosting location",
+      "D4": "To be Filled by the Service Provider/ Third Party",
+      "D5": "Answer",
+      "D6": "Answer for General Information!D6 (answer)",
+      "D7": "Answer for General Information!D7 (answer)",
+      "D8": "Answer for General Information!D8 (answer)",
+      "D9": "Answer for General Information!D9 (answer)",
+      "E5": "Additional Information to Support the Answer",
+      "F4": "To be Filled by Bank Albilad",
+      "F5": "Compliance Code\n(Give a compliance level code that best suits the answer)",
+      "G5": "Comments and Required Next Steps"
+    }
+  },
+  "report": {
+    "created": [
+      "General Information!D6",
+      "General Information!D7",
+      "General Information!D8",
+      "General Information!D9"
+    ],
+    "parts_after": 5,
+    "parts_before": 5,
+    "path": "<tmp>\\filled-ownership_banner.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "General Information!D6": "Answer for General Information!D6 (answer)",
+    "General Information!D7": "Answer for General Information!D7 (answer)",
+    "General Information!D8": "Answer for General Information!D8 (answer)",
+    "General Information!D9": "Answer for General Information!D9 (answer)"
+  }
+}

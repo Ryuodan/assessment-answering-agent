@@ -1,0 +1,58 @@
+{
+  "file": {
+    "Compliance Levels": {
+      "A2": "Category",
+      "A3": "Full Compliance",
+      "A4": "Partial Compliance",
+      "A5": "Non Compliance",
+      "B2": "Code",
+      "B3": "FC",
+      "B4": "PC",
+      "B5": "NC",
+      "C2": "Description",
+      "C3": "The vendor fully meets all the specified requirements and standards.",
+      "C4": "The vendor meets some, but not all, of the specified requirements.",
+      "C5": "The vendor fails to meet the specified requirements and standards.",
+      "D2": "Action",
+      "D3": "Continue to monitor and maintain this vendor relationship.",
+      "D4": "Vendor to submit a detailed corrective action plan.",
+      "D5": "Immediate action is required to address non-compliance."
+    },
+    "Questions": {
+      "A1": "S.No",
+      "A2": "1.0",
+      "A3": "2.0",
+      "A4": "3.0",
+      "A5": "4.0",
+      "B1": "Question",
+      "B2": "Does the vendor have documented information security policies?",
+      "B3": "Does the vendor review those policies at least annually?",
+      "B4": "Are staff bound by non-disclosure agreements?",
+      "B5": "Is multi-factor authentication enforced?",
+      "C1": "Response",
+      "C2": "Answer for Questions!C2 (answer)",
+      "C3": "Answer for Questions!C3 (answer)",
+      "C4": "Answer for Questions!C4 (answer)",
+      "C5": "Answer for Questions!C5 (answer)"
+    }
+  },
+  "report": {
+    "created": [
+      "Questions!C2",
+      "Questions!C3",
+      "Questions!C4",
+      "Questions!C5"
+    ],
+    "parts_after": 6,
+    "parts_before": 6,
+    "path": "<tmp>\\filled-legend_sheet.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "Questions!C2": "Answer for Questions!C2 (answer)",
+    "Questions!C3": "Answer for Questions!C3 (answer)",
+    "Questions!C4": "Answer for Questions!C4 (answer)",
+    "Questions!C5": "Answer for Questions!C5 (answer)"
+  }
+}

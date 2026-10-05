@@ -1,0 +1,94 @@
+{
+  "format": "docx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "2 table(s), stitched where a header was missing",
+          "confident": true,
+          "subject": "tables",
+          "verdict": "4 questions"
+        }
+      ],
+      "kind": "questions",
+      "name": "tables",
+      "questions": 4
+    }
+  ],
+  "questions": [
+    {
+      "id": "table:0/r1",
+      "language": "en",
+      "location": "1. Company Information, 1.",
+      "number": "1.",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "table:0/r1/c2",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Full legal name of company"
+    },
+    {
+      "id": "table:0/r2",
+      "language": "en",
+      "location": "1. Company Information, 2.",
+      "number": "2.",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "table:0/r2/c2",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Company's address"
+    },
+    {
+      "id": "table:1/r1",
+      "language": "en",
+      "location": "table 2, 3.",
+      "number": "3.",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "table:1/r1/c2",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Contact email address"
+    },
+    {
+      "id": "table:1/r2",
+      "language": "en",
+      "location": "table 2, 4.",
+      "number": "4.",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "table:1/r2/c2",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Do you comply with the PDPL?"
+    }
+  ],
+  "source_name": "table.docx",
+  "warnings": []
+}

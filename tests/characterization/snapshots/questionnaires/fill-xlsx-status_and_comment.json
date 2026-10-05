@@ -1,0 +1,60 @@
+{
+  "file": {
+    "Human Resources": {
+      "A2": "1.0",
+      "A3": "2.0",
+      "A4": "3.0",
+      "A5": "4.0",
+      "B1": "HR Security",
+      "B2": "Has the human resources process been defined and approved?",
+      "B3": "Do employees receive regular cybersecurity awareness training?",
+      "B4": "Are access rights revoked immediately on termination?",
+      "B5": "Do you perform background checks before hiring?",
+      "C1": "Compliance Status",
+      "C2": "Fully Compliant",
+      "C3": "Fully Compliant",
+      "C4": "Fully Compliant",
+      "C5": "Fully Compliant",
+      "D1": "Additional Comments",
+      "D2": "Answer for Human Resources!D2 (answer)",
+      "D3": "Answer for Human Resources!D3 (answer)",
+      "D4": "Answer for Human Resources!D4 (answer)",
+      "D5": "Answer for Human Resources!D5 (answer)"
+    },
+    "Score": {
+      "B1": "Compliance Status",
+      "B2": "Fully Compliant",
+      "B3": "Partially Compliant",
+      "B4": "Non Compliant",
+      "B5": "Not Applicable",
+      "C7": "133"
+    }
+  },
+  "report": {
+    "created": [
+      "Human Resources!C2",
+      "Human Resources!C3",
+      "Human Resources!C4",
+      "Human Resources!C5",
+      "Human Resources!D2",
+      "Human Resources!D3",
+      "Human Resources!D4",
+      "Human Resources!D5"
+    ],
+    "parts_after": 6,
+    "parts_before": 6,
+    "path": "<tmp>\\filled-status_and_comment.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "Human Resources!C2": "Fully Compliant",
+    "Human Resources!C3": "Fully Compliant",
+    "Human Resources!C4": "Fully Compliant",
+    "Human Resources!C5": "Fully Compliant",
+    "Human Resources!D2": "Answer for Human Resources!D2 (answer)",
+    "Human Resources!D3": "Answer for Human Resources!D3 (answer)",
+    "Human Resources!D4": "Answer for Human Resources!D4 (answer)",
+    "Human Resources!D5": "Answer for Human Resources!D5 (answer)"
+  }
+}

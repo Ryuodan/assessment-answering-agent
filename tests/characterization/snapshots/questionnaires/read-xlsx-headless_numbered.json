@@ -1,0 +1,148 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 0; questions in column C",
+          "confident": true,
+          "subject": "2. Environment",
+          "verdict": "6 questions"
+        },
+        {
+          "because": "short item labels beside each question",
+          "confident": false,
+          "subject": "column B",
+          "verdict": "number"
+        },
+        {
+          "because": "the column holding the questions, under the headings on row 0",
+          "confident": false,
+          "subject": "column C",
+          "verdict": "question"
+        },
+        {
+          "because": "the first column after the questions that carries values",
+          "confident": false,
+          "subject": "column H",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "2. Environment",
+      "questions": 6
+    }
+  ],
+  "questions": [
+    {
+      "id": "2. Environment!9",
+      "language": "en",
+      "location": "2. Environment, row 9",
+      "number": "A.1",
+      "section": "Health, Safety & Environment",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes\nNo",
+          "id": "2. Environment!H9",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the company have a management system in place for HS&E?"
+    },
+    {
+      "id": "2. Environment!10",
+      "language": "en",
+      "location": "2. Environment, row 10",
+      "number": "A.2",
+      "section": "Health, Safety & Environment",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes\nNo",
+          "id": "2. Environment!H10",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Is the management system compliant with ISO 14001?"
+    },
+    {
+      "id": "2. Environment!11",
+      "language": "en",
+      "location": "2. Environment, row 11",
+      "number": "A.3",
+      "section": "Health, Safety & Environment",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "2. Environment!H11",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Company Name:"
+    },
+    {
+      "id": "2. Environment!12",
+      "language": "en",
+      "location": "2. Environment, row 12",
+      "number": "A.4",
+      "section": "Health, Safety & Environment",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes\nNo",
+          "id": "2. Environment!H12",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Are environmental expectations communicated to staff?"
+    },
+    {
+      "id": "2. Environment!13",
+      "language": "en",
+      "location": "2. Environment, row 13",
+      "number": "A.5",
+      "section": "Health, Safety & Environment",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "2. Environment!H13",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "If \"Yes\", please provide the information below, and attach a copy of the certificate"
+    },
+    {
+      "id": "2. Environment!14",
+      "language": "en",
+      "location": "2. Environment, row 14",
+      "number": "A.6",
+      "section": "Health, Safety & Environment",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "2. Environment!H14",
+          "label": "",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Certificate Type:"
+    }
+  ],
+  "source_name": "headless_numbered.xlsx",
+  "warnings": []
+}

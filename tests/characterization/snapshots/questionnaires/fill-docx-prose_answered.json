@@ -1,0 +1,42 @@
+{
+  "file": {
+    "paragraphs": [
+      "Cybersecurity Governance :",
+      "Q1 : Has your organization established and approved a Cybersecurity strategy?",
+      "Answer :  Answer for para:2 (answer)",
+      "Q2 : Has your organization defined Cybersecurity roles and responsibilities?",
+      "Evidence Required: – Organizational Chart.",
+      "Answer :  Answer for para:5 (answer)",
+      "Q3 : Are Cybersecurity policies reviewed periodically?",
+      "Answer :  Answer for para:7 (answer)",
+      "Cybersecurity Compliance:",
+      "Q1 : Has your organization defined Cybersecurity audit requirements?",
+      "Evidence Required: – Organizational Chart.",
+      "Answer :  Answer for para:11 (answer)",
+      "Q2 : Has your organization undergone independent external audits?",
+      "Answer :  Answer for para:13 (answer)"
+    ],
+    "tables": []
+  },
+  "report": {
+    "created": [],
+    "parts_after": 17,
+    "parts_before": 17,
+    "path": "<tmp>\\filled-prose_answered.docx",
+    "replaced": [
+      "para:11",
+      "para:13",
+      "para:2",
+      "para:5",
+      "para:7"
+    ],
+    "skipped": {}
+  },
+  "values": {
+    "para:11": "Answer for para:11 (answer)",
+    "para:13": "Answer for para:13 (answer)",
+    "para:2": "Answer for para:2 (answer)",
+    "para:5": "Answer for para:5 (answer)",
+    "para:7": "Answer for para:7 (answer)"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "file": {
+    "RA Questionarie": {
+      "A10": "2.0",
+      "A11": "3.0",
+      "A12": "4.0",
+      "A8": "S.No",
+      "A9": "1.0",
+      "B1": "نموذج استبيان أمن المعلومات",
+      "B10": "Does the vendor review those policies at least annually?",
+      "B11": "Are staff bound by non-disclosure agreements?",
+      "B12": "هل يتم تشفير البيانات الحساسة أثناء النقل والتخزين؟",
+      "B5": "Vendor name :",
+      "B8": "Vendor Due Diligence Questions",
+      "B9": "Does the vendor have documented information security policies?",
+      "C10": "Answer for RA Questionarie!C10 (answer)",
+      "C11": "Answer for RA Questionarie!C11 (answer)",
+      "C12": "Answer for RA Questionarie!C12 (answer)",
+      "C8": "Vendor Response",
+      "C9": "Answer for RA Questionarie!C9 (answer)",
+      "D5": "date :",
+      "D8": "Compliance (To be updated by BAB)"
+    }
+  },
+  "report": {
+    "created": [
+      "RA Questionarie!C10",
+      "RA Questionarie!C11",
+      "RA Questionarie!C12",
+      "RA Questionarie!C9"
+    ],
+    "parts_after": 5,
+    "parts_before": 5,
+    "path": "<tmp>\\filled-header_below_preamble.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "RA Questionarie!C10": "Answer for RA Questionarie!C10 (answer)",
+    "RA Questionarie!C11": "Answer for RA Questionarie!C11 (answer)",
+    "RA Questionarie!C12": "Answer for RA Questionarie!C12 (answer)",
+    "RA Questionarie!C9": "Answer for RA Questionarie!C9 (answer)"
+  }
+}

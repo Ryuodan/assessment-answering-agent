@@ -1,0 +1,112 @@
+{
+  "format": "docx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "paragraphs beginning 'Q<n>', each answered in a paragraph after it",
+          "confident": true,
+          "subject": "document body",
+          "verdict": "5 questions"
+        }
+      ],
+      "kind": "questions",
+      "name": "document body",
+      "questions": 5
+    }
+  ],
+  "questions": [
+    {
+      "id": "Cybersecurity Governance/Q1",
+      "language": "en",
+      "location": "Cybersecurity Governance, Q1",
+      "number": "Q1",
+      "section": "Cybersecurity Governance",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes, this is documented and approved.",
+          "id": "para:2",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Has your organization established and approved a Cybersecurity strategy?"
+    },
+    {
+      "id": "Cybersecurity Governance/Q2",
+      "language": "en",
+      "location": "Cybersecurity Governance, Q2",
+      "number": "Q2",
+      "section": "Cybersecurity Governance",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes, this is documented and approved.",
+          "id": "para:5",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Has your organization defined Cybersecurity roles and responsibilities?"
+    },
+    {
+      "id": "Cybersecurity Governance/Q3",
+      "language": "en",
+      "location": "Cybersecurity Governance, Q3",
+      "number": "Q3",
+      "section": "Cybersecurity Governance",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes, this is documented and approved.",
+          "id": "para:7",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Are Cybersecurity policies reviewed periodically?"
+    },
+    {
+      "id": "Cybersecurity Compliance/Q1",
+      "language": "en",
+      "location": "Cybersecurity Compliance, Q1",
+      "number": "Q1",
+      "section": "Cybersecurity Compliance",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes, this is documented and approved.",
+          "id": "para:11",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Has your organization defined Cybersecurity audit requirements?"
+    },
+    {
+      "id": "Cybersecurity Compliance/Q2",
+      "language": "en",
+      "location": "Cybersecurity Compliance, Q2",
+      "number": "Q2",
+      "section": "Cybersecurity Compliance",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes, this is documented and approved.",
+          "id": "para:13",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Has your organization undergone independent external audits?"
+    }
+  ],
+  "source_name": "prose_answered.docx",
+  "warnings": []
+}

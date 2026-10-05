@@ -1,0 +1,245 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 3; questions in column B",
+          "confident": true,
+          "subject": "Vendor Info",
+          "verdict": "5 questions"
+        },
+        {
+          "because": "'ID': heading is a numbering column",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "number"
+        },
+        {
+          "because": "'Question': heading mentions 'question'",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "question"
+        },
+        {
+          "because": "'Answer': heading mentions 'answer'",
+          "confident": true,
+          "subject": "column F",
+          "verdict": "answer"
+        },
+        {
+          "because": "'Notes': heading mentions 'notes'",
+          "confident": true,
+          "subject": "column G",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "Vendor Info",
+      "questions": 5
+    },
+    {
+      "findings": [
+        {
+          "because": "headings on row 1; questions in column C",
+          "confident": true,
+          "subject": "Questionnaire",
+          "verdict": "4 questions"
+        },
+        {
+          "because": "'Security Domain': heading mentions 'domain'",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "context"
+        },
+        {
+          "because": "'ID': heading is a numbering column",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "number"
+        },
+        {
+          "because": "'Question': heading mentions 'question'",
+          "confident": true,
+          "subject": "column C",
+          "verdict": "question"
+        },
+        {
+          "because": "'Main Response': heading mentions 'response'",
+          "confident": true,
+          "subject": "column D",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "Questionnaire",
+      "questions": 4
+    }
+  ],
+  "questions": [
+    {
+      "id": "Vendor Info!4",
+      "language": "en",
+      "location": "Vendor Info, row 4",
+      "number": "GQ1",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Vendor Info!F4",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Organisation name"
+    },
+    {
+      "id": "Vendor Info!5",
+      "language": "en",
+      "location": "Vendor Info, row 5",
+      "number": "GQ2",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Vendor Info!F5",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Year established"
+    },
+    {
+      "id": "Vendor Info!6",
+      "language": "en",
+      "location": "Vendor Info, row 6",
+      "number": "GQ3",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Vendor Info!F6",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Office locations and Country"
+    },
+    {
+      "id": "Vendor Info!7",
+      "language": "en",
+      "location": "Vendor Info, row 7",
+      "number": "GQ4",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Vendor Info!F7",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Email address"
+    },
+    {
+      "id": "Vendor Info!8",
+      "language": "en",
+      "location": "Vendor Info, row 8",
+      "number": "GQ5",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Vendor Info!F8",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Contact Number"
+    },
+    {
+      "id": "Questionnaire!3",
+      "language": "en",
+      "location": "Questionnaire, row 3",
+      "number": "GE-01",
+      "section": "Description",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!D3",
+          "label": "Main Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Are the services that your organisation provides located in the Kingdom?"
+    },
+    {
+      "id": "Questionnaire!4",
+      "language": "en",
+      "location": "Questionnaire, row 4",
+      "number": "IR-01",
+      "section": "Description",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!D4",
+          "label": "Main Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Do you have an incident management policy or crisis management plan?"
+    },
+    {
+      "id": "Questionnaire!5",
+      "language": "en",
+      "location": "Questionnaire, row 5",
+      "number": "IR-03",
+      "section": "Description",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!D5",
+          "label": "Main Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Do you maintain an incident register"
+    },
+    {
+      "id": "Questionnaire!6",
+      "language": "en",
+      "location": "Questionnaire, row 6",
+      "number": "IR-04",
+      "section": "Description",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!D6",
+          "label": "Main Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Do you undertake a post incident review?"
+    }
+  ],
+  "source_name": "reference_column_headed_id.xlsx",
+  "warnings": []
+}

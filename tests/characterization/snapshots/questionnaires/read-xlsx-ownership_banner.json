@@ -1,0 +1,130 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 5; questions in column B",
+          "confident": true,
+          "subject": "General Information",
+          "verdict": "4 questions"
+        },
+        {
+          "because": "'#': heading is a numbering column",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "number"
+        },
+        {
+          "because": "'Question': heading mentions 'question'",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "question"
+        },
+        {
+          "because": "'Answer': heading mentions 'answer'",
+          "confident": true,
+          "subject": "column D",
+          "verdict": "answer"
+        },
+        {
+          "because": "'Additional Information to Support the Answer': heading mentions 'answer'",
+          "confident": true,
+          "subject": "column E",
+          "verdict": "answer"
+        },
+        {
+          "because": "'Compliance Code\\n(Give a compliance level code that best suits the answer)': a banner on row 4 says this column is 'Bank Albilad''s",
+          "confident": true,
+          "subject": "column F",
+          "verdict": "theirs"
+        },
+        {
+          "because": "'Comments and Required Next Steps': a banner on row 4 says this column is 'Bank Albilad''s",
+          "confident": true,
+          "subject": "column G",
+          "verdict": "theirs"
+        }
+      ],
+      "kind": "questions",
+      "name": "General Information",
+      "questions": 4
+    }
+  ],
+  "questions": [
+    {
+      "id": "General Information!6",
+      "language": "en",
+      "location": "General Information, row 6",
+      "number": "GI.1.1",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "General Information!D6",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Organization's legal name"
+    },
+    {
+      "id": "General Information!7",
+      "language": "en",
+      "location": "General Information, row 7",
+      "number": "GI.1.2",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "General Information!D7",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Industry"
+    },
+    {
+      "id": "General Information!8",
+      "language": "en",
+      "location": "General Information, row 8",
+      "number": "GI.1.3",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "General Information!D8",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Address of the organization"
+    },
+    {
+      "id": "General Information!9",
+      "language": "en",
+      "location": "General Information, row 9",
+      "number": "GI.1.4",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "General Information!D9",
+          "label": "Answer",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Transfer of personal data inside or outside the Kingdom?"
+    }
+  ],
+  "source_name": "ownership_banner.xlsx",
+  "warnings": []
+}

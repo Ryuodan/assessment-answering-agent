@@ -1,0 +1,31 @@
+{
+  "chunk_size": 1200,
+  "chunks": [
+    {
+      "metadata": {
+        "chunk": 0,
+        "clause": "",
+        "clause_end": "",
+        "clause_start": "",
+        "doc_id": "",
+        "heading": "Vendor Security Assessment 2024 — Completed",
+        "item_count": 0,
+        "kind": "table",
+        "page": -1,
+        "page_end": -1,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "",
+        "source_name": "prior_assessment_2024.docx",
+        "unit_id": "prior_assessment_2024.docx:u0"
+      },
+      "text": "# Vendor Security Assessment 2024 — Completed\n\n# | Question | Response\n1 | Do you hold a recognised information security certification? | Yes. Acme Corp is ISO 27001:2022 certified, recertified by BSI in March 2025. The certificate is available on request.\n2 | How is customer data protected at rest? | All customer data is encrypted at rest using AES-256. Keys are managed in AWS KMS and rotated annually.\n3 | Do you enforce multi-factor authentication for production access? | Yes. MFA is mandatory for all production access, and access reviews are carried out quarterly by the Head of Security.\n4 | ما هي مدة الاحتفاظ ببيانات العملاء؟ | يتم الاحتفاظ ببيانات العملاء لمدة سبع سنوات وفقاً للمتطلبات التنظيمية، ثم يتم حذفها بشكل آمن."
+    }
+  ],
+  "extracted": {
+    "characters": 750,
+    "opening": "# Vendor Security Assessment 2024 — Completed\n\n[table]\n# | Question | Response\n1 | Do you hold a recognised information security certification? | Yes. Acme Corp is ISO 27001:2022 certified, recertified by BSI in March 2025. The certificate is available on request.\n2 | How is customer data protected ",
+    "sha256": "a67385196ca2424624b6f089956ac135cabfe0d2a77aa4eff8be72142f495113"
+  }
+}

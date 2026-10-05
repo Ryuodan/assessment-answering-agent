@@ -1,0 +1,31 @@
+{
+  "chunk_size": 1200,
+  "chunks": [
+    {
+      "metadata": {
+        "chunk": 0,
+        "clause": "",
+        "clause_end": "",
+        "clause_start": "",
+        "doc_id": "",
+        "heading": "Question Answer",
+        "item_count": 0,
+        "kind": "mixed",
+        "page": 1,
+        "page_end": 1,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "",
+        "source_name": "new_assessment_2026.pdf",
+        "unit_id": "new_assessment_2026.pdf:u0"
+      },
+      "text": "Vendor Security Assessment 2026\nPlease complete every row.\n\n# Question Answer\n\n1 Is your organisation certified against a recognised information security\nstandard? (Yes/No)\n2 Describe how customer data is encrypted at rest and in transit.\n3 Is multi-factor authentication required for administrative access?\n(Yes/No)\n4 How long is customer data retained before secure deletion?\n\n# | Question | Answer\n1 | Is your organisation certified against a recognised information security standard? (Yes/No) | \n2 | Describe how customer data is encrypted at rest and in transit. | \n3 | Is multi-factor authentication required for administrative access? (Yes/No) | \n4 | How long is customer data retained before secure deletion? |"
+    }
+  ],
+  "extracted": {
+    "characters": 749,
+    "opening": "\n--- page 1 ---\nVendor Security Assessment 2026\nPlease complete every row.\n# Question Answer\n1 Is your organisation certified against a recognised information security\nstandard? (Yes/No)\n2 Describe how customer data is encrypted at rest and in transit.\n3 Is multi-factor authentication required for a",
+    "sha256": "a1b05e6cb847ff5938e17996ea4bf8a9b6c324fd8796cd4dd712566f5f8720a2"
+  }
+}

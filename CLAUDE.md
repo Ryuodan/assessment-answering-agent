@@ -17,6 +17,8 @@ uv run poe fmt | lint | types | arch | docs | test   # one task
 uv run poe format                               # apply formatting
 uv run poe types-baseline                       # drop fixed errors from the mypy baseline
 uv run poe gen                                  # regenerate docs/generated/
+uv run poe snapshots                            # re-record characterization snapshots; review the diff
+uv run poe cov                                  # line coverage per module (measured, not gated)
 uv run python -m pytest tests/test_x.py -x      # one test file
 uv run python -m uvicorn src.api:app --reload   # the app on :8000
 ```
@@ -53,7 +55,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | `src/static/` | the browser pages |
 | `harness/` | the checks behind `poe` (not application code) |
 | `eval/`, `scripts/` | evaluation; operational scripts (some write the real index) |
-| `tests/` | offline suite; `tests/harness/` tests the checks |
+| `tests/` | offline suite; `tests/harness/` tests the checks; `tests/characterization/` pins today's behaviour |
 
 ## Non-negotiables
 

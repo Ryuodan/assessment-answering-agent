@@ -1,0 +1,52 @@
+{
+  "file": {
+    "2. Environment": {
+      "B10": "A.2",
+      "B11": "A.3",
+      "B12": "A.4",
+      "B13": "A.5",
+      "B14": "A.6",
+      "B7": "Part 2:",
+      "B8": "A)",
+      "B9": "A.1",
+      "C10": "Is the management system compliant with ISO 14001?",
+      "C11": "Company Name:",
+      "C12": "Are environmental expectations communicated to staff?",
+      "C13": "If \"Yes\", please provide the information below, and attach a copy of the certificate",
+      "C14": "Certificate Type:",
+      "C7": "Environment, Health & Safety",
+      "C8": "Health, Safety & Environment",
+      "C9": "Does the company have a management system in place for HS&E?",
+      "H10": "Answer for 2. Environment!H10 (answer)",
+      "H11": "Answer for 2. Environment!H11 (answer)",
+      "H12": "Answer for 2. Environment!H12 (answer)",
+      "H13": "Answer for 2. Environment!H13 (answer)",
+      "H14": "Answer for 2. Environment!H14 (answer)",
+      "H9": "Answer for 2. Environment!H9 (answer)"
+    }
+  },
+  "report": {
+    "created": [
+      "2. Environment!H11",
+      "2. Environment!H13",
+      "2. Environment!H14"
+    ],
+    "parts_after": 5,
+    "parts_before": 5,
+    "path": "<tmp>\\filled-headless_numbered.xlsx",
+    "replaced": [
+      "2. Environment!H10",
+      "2. Environment!H12",
+      "2. Environment!H9"
+    ],
+    "skipped": {}
+  },
+  "values": {
+    "2. Environment!H10": "Answer for 2. Environment!H10 (answer)",
+    "2. Environment!H11": "Answer for 2. Environment!H11 (answer)",
+    "2. Environment!H12": "Answer for 2. Environment!H12 (answer)",
+    "2. Environment!H13": "Answer for 2. Environment!H13 (answer)",
+    "2. Environment!H14": "Answer for 2. Environment!H14 (answer)",
+    "2. Environment!H9": "Answer for 2. Environment!H9 (answer)"
+  }
+}

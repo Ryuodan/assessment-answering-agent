@@ -1,0 +1,125 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "only 3 rows of prose and no numbering column, so this reads as a reference table",
+          "confident": true,
+          "subject": "Compliance Levels",
+          "verdict": "skipped"
+        }
+      ],
+      "kind": "reference table",
+      "name": "Compliance Levels",
+      "questions": 0
+    },
+    {
+      "findings": [
+        {
+          "because": "headings on row 1; questions in column B",
+          "confident": true,
+          "subject": "Questions",
+          "verdict": "4 questions"
+        },
+        {
+          "because": "'S.No': heading is a numbering column",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "number"
+        },
+        {
+          "because": "'Question': heading mentions 'question'",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "question"
+        },
+        {
+          "because": "'Response': heading mentions 'response'",
+          "confident": true,
+          "subject": "column C",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "Questions",
+      "questions": 4
+    }
+  ],
+  "questions": [
+    {
+      "id": "Questions!2",
+      "language": "en",
+      "location": "Questions, row 2",
+      "number": "1.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questions!C2",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor have documented information security policies?"
+    },
+    {
+      "id": "Questions!3",
+      "language": "en",
+      "location": "Questions, row 3",
+      "number": "2.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questions!C3",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor review those policies at least annually?"
+    },
+    {
+      "id": "Questions!4",
+      "language": "en",
+      "location": "Questions, row 4",
+      "number": "3.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questions!C4",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Are staff bound by non-disclosure agreements?"
+    },
+    {
+      "id": "Questions!5",
+      "language": "en",
+      "location": "Questions, row 5",
+      "number": "4.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questions!C5",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Is multi-factor authentication enforced?"
+    }
+  ],
+  "source_name": "legend_sheet.xlsx",
+  "warnings": []
+}

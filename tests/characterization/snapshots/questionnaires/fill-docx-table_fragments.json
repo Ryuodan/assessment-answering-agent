@@ -1,0 +1,57 @@
+{
+  "file": {
+    "paragraphs": [
+      "1. Company Information"
+    ],
+    "tables": [
+      [
+        [
+          "No.",
+          "Question",
+          "Answer"
+        ],
+        [
+          "1.",
+          "Full legal name of company",
+          "Answer for table:0/r1/c2 (answer)"
+        ],
+        [
+          "2.",
+          "Company's address",
+          "Answer for table:0/r2/c2 (answer)"
+        ]
+      ],
+      [
+        [
+          "3.",
+          "Contact email address",
+          "Answer for table:1/r0/c2 (answer)"
+        ],
+        [
+          "4.",
+          "Do you comply with the PDPL?",
+          "Answer for table:1/r1/c2 (answer)"
+        ]
+      ]
+    ]
+  },
+  "report": {
+    "created": [
+      "table:0/r1/c2",
+      "table:0/r2/c2",
+      "table:1/r0/c2",
+      "table:1/r1/c2"
+    ],
+    "parts_after": 17,
+    "parts_before": 17,
+    "path": "<tmp>\\filled-table_fragments.docx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "table:0/r1/c2": "Answer for table:0/r1/c2 (answer)",
+    "table:0/r2/c2": "Answer for table:0/r2/c2 (answer)",
+    "table:1/r0/c2": "Answer for table:1/r0/c2 (answer)",
+    "table:1/r1/c2": "Answer for table:1/r1/c2 (answer)"
+  }
+}

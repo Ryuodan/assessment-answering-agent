@@ -1,0 +1,94 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 1; questions in column B",
+          "confident": true,
+          "subject": "Questionnaire",
+          "verdict": "3 questions"
+        },
+        {
+          "because": "'S.No': heading is a numbering column",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "number"
+        },
+        {
+          "because": "'Question': heading mentions 'question'",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "question"
+        },
+        {
+          "because": "'Response': heading mentions 'response'",
+          "confident": true,
+          "subject": "column C",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "Questionnaire",
+      "questions": 3
+    }
+  ],
+  "questions": [
+    {
+      "id": "Questionnaire!2",
+      "language": "en",
+      "location": "Questionnaire, row 2",
+      "number": "1.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!C2",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor have documented information security policies?"
+    },
+    {
+      "id": "Questionnaire!3",
+      "language": "en",
+      "location": "Questionnaire, row 3",
+      "number": "2.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!C3",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor review those policies at least annually?"
+    },
+    {
+      "id": "Questionnaire!4",
+      "language": "en",
+      "location": "Questionnaire, row 4",
+      "number": "3.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Questionnaire!C4",
+          "label": "Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Are staff bound by non-disclosure agreements?"
+    }
+  ],
+  "source_name": "with_extra_parts.xlsx",
+  "warnings": []
+}

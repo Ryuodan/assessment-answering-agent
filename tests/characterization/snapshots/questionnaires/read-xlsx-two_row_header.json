@@ -1,0 +1,35 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "'Control': heading mentions 'control'",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "question"
+        },
+        {
+          "because": "'Supplier response': the column has a dropdown",
+          "confident": true,
+          "subject": "column C",
+          "verdict": "status"
+        },
+        {
+          "because": "column A was read as questions but no row held one",
+          "confident": true,
+          "subject": "Assessment",
+          "verdict": "skipped"
+        }
+      ],
+      "kind": "no questions",
+      "name": "Assessment",
+      "questions": 0
+    }
+  ],
+  "questions": [],
+  "source_name": "two_row_header.xlsx",
+  "warnings": [
+    "No questions were found. The sheets were read as: Assessment (no questions)"
+  ]
+}

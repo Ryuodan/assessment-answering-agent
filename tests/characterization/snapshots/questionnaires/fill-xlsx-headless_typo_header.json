@@ -1,0 +1,59 @@
+{
+  "file": {
+    "Sheet1": {
+      "A1": "Queations",
+      "A10": "When did the vendor last carry out penetration testing?",
+      "A11": "Describe the incident management process for a data breach.",
+      "A2": "What is the name of the vendor?",
+      "A3": "Who is the internal owner responsible for this relationship?",
+      "A4": "Provide a brief description of the product or service supplied.",
+      "A5": "What is the PII data collection?",
+      "A6": "How does the vendor ensure data minimization?",
+      "A7": "What is the retention period for each data category?",
+      "A8": "Describe the data deletion or anonymization process in place.",
+      "A9": "Does the vendor support Single Sign-On and Multi-Factor Authentication?",
+      "B1": "Answer",
+      "B10": "Answer for Sheet1!B10 (answer)",
+      "B11": "Answer for Sheet1!B11 (answer)",
+      "B2": "Answer for Sheet1!B2 (answer)",
+      "B3": "Answer for Sheet1!B3 (answer)",
+      "B4": "Answer for Sheet1!B4 (answer)",
+      "B5": "Answer for Sheet1!B5 (answer)",
+      "B6": "Answer for Sheet1!B6 (answer)",
+      "B7": "Answer for Sheet1!B7 (answer)",
+      "B8": "Answer for Sheet1!B8 (answer)",
+      "B9": "Answer for Sheet1!B9 (answer)"
+    }
+  },
+  "report": {
+    "created": [
+      "Sheet1!B10",
+      "Sheet1!B11",
+      "Sheet1!B2",
+      "Sheet1!B3",
+      "Sheet1!B4",
+      "Sheet1!B5",
+      "Sheet1!B6",
+      "Sheet1!B7",
+      "Sheet1!B8",
+      "Sheet1!B9"
+    ],
+    "parts_after": 5,
+    "parts_before": 5,
+    "path": "<tmp>\\filled-headless_typo_header.xlsx",
+    "replaced": [],
+    "skipped": {}
+  },
+  "values": {
+    "Sheet1!B10": "Answer for Sheet1!B10 (answer)",
+    "Sheet1!B11": "Answer for Sheet1!B11 (answer)",
+    "Sheet1!B2": "Answer for Sheet1!B2 (answer)",
+    "Sheet1!B3": "Answer for Sheet1!B3 (answer)",
+    "Sheet1!B4": "Answer for Sheet1!B4 (answer)",
+    "Sheet1!B5": "Answer for Sheet1!B5 (answer)",
+    "Sheet1!B6": "Answer for Sheet1!B6 (answer)",
+    "Sheet1!B7": "Answer for Sheet1!B7 (answer)",
+    "Sheet1!B8": "Answer for Sheet1!B8 (answer)",
+    "Sheet1!B9": "Answer for Sheet1!B9 (answer)"
+  }
+}

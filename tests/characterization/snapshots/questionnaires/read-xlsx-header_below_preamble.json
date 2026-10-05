@@ -1,0 +1,118 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 8; questions in column B",
+          "confident": true,
+          "subject": "RA Questionarie",
+          "verdict": "4 questions"
+        },
+        {
+          "because": "'S.No': heading is a numbering column",
+          "confident": true,
+          "subject": "column A",
+          "verdict": "number"
+        },
+        {
+          "because": "'Vendor Due Diligence Questions': heading mentions 'question'",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "question"
+        },
+        {
+          "because": "'Vendor Response': heading mentions 'response'",
+          "confident": true,
+          "subject": "column C",
+          "verdict": "answer"
+        },
+        {
+          "because": "'Compliance (To be updated by BAB)': addressed to 'bab'",
+          "confident": true,
+          "subject": "column D",
+          "verdict": "theirs"
+        }
+      ],
+      "kind": "questions",
+      "name": "RA Questionarie",
+      "questions": 4
+    }
+  ],
+  "questions": [
+    {
+      "id": "RA Questionarie!9",
+      "language": "en",
+      "location": "RA Questionarie, row 9",
+      "number": "1.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "RA Questionarie!C9",
+          "label": "Vendor Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor have documented information security policies?"
+    },
+    {
+      "id": "RA Questionarie!10",
+      "language": "en",
+      "location": "RA Questionarie, row 10",
+      "number": "2.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "RA Questionarie!C10",
+          "label": "Vendor Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Does the vendor review those policies at least annually?"
+    },
+    {
+      "id": "RA Questionarie!11",
+      "language": "en",
+      "location": "RA Questionarie, row 11",
+      "number": "3.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "RA Questionarie!C11",
+          "label": "Vendor Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "Are staff bound by non-disclosure agreements?"
+    },
+    {
+      "id": "RA Questionarie!12",
+      "language": "ar",
+      "location": "RA Questionarie, row 12",
+      "number": "4.0",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "RA Questionarie!C12",
+          "label": "Vendor Response",
+          "role": "answer",
+          "vocabulary": []
+        }
+      },
+      "text": "هل يتم تشفير البيانات الحساسة أثناء النقل والتخزين؟"
+    }
+  ],
+  "source_name": "header_below_preamble.xlsx",
+  "warnings": []
+}

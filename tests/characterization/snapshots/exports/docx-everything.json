@@ -1,0 +1,30 @@
+{
+  "paragraphs": [
+    "Vendor Security Review.xlsx",
+    "3 of 3 answers. Every answer is a draft and should be read before submission.",
+    "1.  How quickly is a leaver's access revoked?",
+    "Within 24 hours. All logical access is revoked within 24 hours of the end of employment.",
+    "•  Privileged accounts: on the last working day",
+    "•  Other accounts: within 24 hours",
+    "SOURCES",
+    "•  Access Control Policy.pdf §3.4.2",
+    "REASONING",
+    "Clause 3.4.2.",
+    "High confidence — 86%",
+    "2.  Do you hold ISO 27001 certification?",
+    "The documentation does not state a certification.",
+    "NEEDS REVIEW",
+    "below the confidence threshold; no supporting source",
+    "WHY THE CONFIDENCE IS LOW",
+    "Nothing retrieved addresses certification.",
+    "REASONING",
+    "No source mentions ISO 27001.",
+    "Low confidence — 35%",
+    "3.  هل يتم مراجعة صلاحيات الوصول بشكل دوري؟",
+    "نعم، تتم مراجعة صلاحيات المستخدمين كل ربع سنة من قبل مالك النظام.",
+    "SOURCES",
+    "•  Access Control Policy.pdf §3.5.1",
+    "High confidence — 80%"
+  ],
+  "tables": []
+}

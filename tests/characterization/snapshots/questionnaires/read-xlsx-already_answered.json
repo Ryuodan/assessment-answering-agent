@@ -1,0 +1,156 @@
+{
+  "format": "xlsx",
+  "parts": [
+    {
+      "findings": [
+        {
+          "because": "headings on row 1; questions in column B",
+          "confident": true,
+          "subject": "Human Resources",
+          "verdict": "4 questions"
+        },
+        {
+          "because": "'HR Security': the column holding the questions, by where the text is",
+          "confident": true,
+          "subject": "column B",
+          "verdict": "question"
+        },
+        {
+          "because": "'Compliance Status': the column has a dropdown",
+          "confident": true,
+          "subject": "column C",
+          "verdict": "status"
+        },
+        {
+          "because": "'Additional Comments': heading mentions 'comment'",
+          "confident": true,
+          "subject": "column D",
+          "verdict": "answer"
+        }
+      ],
+      "kind": "questions",
+      "name": "Human Resources",
+      "questions": 4
+    }
+  ],
+  "questions": [
+    {
+      "id": "Human Resources!2",
+      "language": "en",
+      "location": "Human Resources, row 2",
+      "number": "",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "Yes. The HR process is documented and was approved in March.",
+          "id": "Human Resources!D2",
+          "label": "Additional Comments",
+          "role": "answer",
+          "vocabulary": []
+        },
+        "status": {
+          "existing": "Fully Compliant",
+          "id": "Human Resources!C2",
+          "label": "Compliance Status",
+          "role": "status",
+          "vocabulary": [
+            "Fully Compliant",
+            "Partially Compliant",
+            "Non Compliant"
+          ]
+        }
+      },
+      "text": "Has the human resources process been defined and approved?"
+    },
+    {
+      "id": "Human Resources!3",
+      "language": "en",
+      "location": "Human Resources, row 3",
+      "number": "",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Human Resources!D3",
+          "label": "Additional Comments",
+          "role": "answer",
+          "vocabulary": []
+        },
+        "status": {
+          "existing": "Partially Compliant",
+          "id": "Human Resources!C3",
+          "label": "Compliance Status",
+          "role": "status",
+          "vocabulary": [
+            "Fully Compliant",
+            "Partially Compliant",
+            "Non Compliant"
+          ]
+        }
+      },
+      "text": "Do employees receive regular cybersecurity awareness training?"
+    },
+    {
+      "id": "Human Resources!4",
+      "language": "en",
+      "location": "Human Resources, row 4",
+      "number": "",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Human Resources!D4",
+          "label": "Additional Comments",
+          "role": "answer",
+          "vocabulary": []
+        },
+        "status": {
+          "existing": "",
+          "id": "Human Resources!C4",
+          "label": "Compliance Status",
+          "role": "status",
+          "vocabulary": [
+            "Fully Compliant",
+            "Partially Compliant",
+            "Non Compliant"
+          ]
+        }
+      },
+      "text": "Are access rights revoked immediately on termination?"
+    },
+    {
+      "id": "Human Resources!5",
+      "language": "en",
+      "location": "Human Resources, row 5",
+      "number": "",
+      "section": "",
+      "skip": false,
+      "targets": {
+        "answer": {
+          "existing": "",
+          "id": "Human Resources!D5",
+          "label": "Additional Comments",
+          "role": "answer",
+          "vocabulary": []
+        },
+        "status": {
+          "existing": "",
+          "id": "Human Resources!C5",
+          "label": "Compliance Status",
+          "role": "status",
+          "vocabulary": [
+            "Fully Compliant",
+            "Partially Compliant",
+            "Non Compliant"
+          ]
+        }
+      },
+      "text": "Do you perform background checks before hiring?"
+    }
+  ],
+  "source_name": "already_answered.xlsx",
+  "warnings": []
+}

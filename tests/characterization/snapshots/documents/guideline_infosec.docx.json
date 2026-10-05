@@ -1,0 +1,31 @@
+{
+  "chunk_size": 1200,
+  "chunks": [
+    {
+      "metadata": {
+        "chunk": 0,
+        "clause": "",
+        "clause_end": "",
+        "clause_start": "",
+        "doc_id": "",
+        "heading": "Information Security Policy > سياسة أمن المعلومات",
+        "item_count": 0,
+        "kind": "prose",
+        "page": -1,
+        "page_end": -1,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "",
+        "source_name": "guideline_infosec.docx",
+        "unit_id": "guideline_infosec.docx:u0"
+      },
+      "text": "# Information Security Policy\n\nAcme Corp maintains an ISO 27001:2022 certified information security management system, recertified in March 2025 by BSI.\n\nAll customer data is encrypted at rest with AES-256 and in transit with TLS 1.3. Encryption keys are rotated annually and held in AWS KMS.\n\nAccess to production systems requires multi-factor authentication. Access reviews are performed quarterly by the Head of Security.\n\n# سياسة أمن المعلومات\n\nتحتفظ شركة أكمي بنظام إدارة أمن المعلومات المعتمد وفق معيار آيزو 27001 وتم تجديد الاعتماد في مارس 2025.\n\nيتم تشفير جميع بيانات العملاء أثناء التخزين باستخدام معيار AES-256 وأثناء النقل باستخدام TLS 1.3."
+    }
+  ],
+  "extracted": {
+    "characters": 651,
+    "opening": "# Information Security Policy\n\nAcme Corp maintains an ISO 27001:2022 certified information security management system, recertified in March 2025 by BSI.\n\nAll customer data is encrypted at rest with AES-256 and in transit with TLS 1.3. Encryption keys are rotated annually and held in AWS KMS.\n\nAccess",
+    "sha256": "3c8f136472a3a10d47b14f27a8d24884a5ffd01453934096637542a339f544a7"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "chunk_size": 1200,
+  "chunks": [
+    {
+      "metadata": {
+        "chunk": 0,
+        "clause": "",
+        "clause_end": "",
+        "clause_start": "",
+        "doc_id": "",
+        "heading": "Vendor Security Assessment 2026",
+        "item_count": 0,
+        "kind": "mixed",
+        "page": -1,
+        "page_end": -1,
+        "parent_clause": "",
+        "part": 1,
+        "parts": 1,
+        "section_clause": "",
+        "source_name": "new_assessment_2026.docx",
+        "unit_id": "new_assessment_2026.docx:u0"
+      },
+      "text": "# Vendor Security Assessment 2026\n\nPlease complete every row. Leave no field blank.\n\n# | Question | Answer\n1 | Is your organisation certified against a recognised information security standard? (Yes/No) | \n2 | Describe how customer data is encrypted at rest and in transit. | \n3 | Is multi-factor authentication required for administrative access? (Yes/No) | \n4 | كم مدة الاحتفاظ ببيانات العملاء لديكم؟ | \n5 | Describe your quantum-resistant cryptography roadmap. |"
+    }
+  ],
+  "extracted": {
+    "characters": 483,
+    "opening": "# Vendor Security Assessment 2026\n\nPlease complete every row. Leave no field blank.\n\n[table]\n# | Question | Answer\n1 | Is your organisation certified against a recognised information security standard? (Yes/No) | \n2 | Describe how customer data is encrypted at rest and in transit. | \n3 | Is multi-fa",
+    "sha256": "265770215d2d835e8a68be879327d790c1a4bfe9d0e2a949ecc985c86f309e36"
+  }
+}
