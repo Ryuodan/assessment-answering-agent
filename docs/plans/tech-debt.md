@@ -167,3 +167,9 @@ or docs and has not been verified by running anything.
 - **What:** measured 2026-10-05 (Claude): `eval/house_set.json` holds 135 cases. The README's "Evaluation" introduction says it "holds 122 questions"; its "Splitting the team's answers" section says 135.
 - **Impact:** a reader cannot tell which number a reported score is over.
 - **Fix:** correct it when the README is reorganised (M4); numbers about a dataset should come from the dataset (a generated summary) rather than be typed.
+
+## TD-026: A questionnaire that is not yours answers 400, everything else 404
+
+- **What:** read 2026-10-05 (Claude, plan 004): `tools._require` raises `ToolError("No questionnaire ...")`, which the API turns into 400, for a questionnaire that does not exist or belongs to a colleague; a missing or colleague's run, conversation, memory entry, skill or document answers 404. `tests/test_private_work.py` pins the 400.
+- **Impact:** a client cannot tell "not there" from "bad request" for questionnaires; the README's rule that another person's work "reads as absent" holds in wording but not in status.
+- **Fix (needs a decision):** raise `NotFound` from `_require` and update the test, if nothing in the pages depends on the 400.
