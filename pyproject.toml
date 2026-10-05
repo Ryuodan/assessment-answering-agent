@@ -38,12 +38,19 @@ dependencies = [
     "arabic-reshaper>=3.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
+# Development tools. A uv dependency group rather than an extra, so `uv sync`
+# and `uv run` install them without a flag. `uv run poe check` is the gate.
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6",
     "ruff",
+    "mypy>=1.15",
+    "poethepoet>=0.34",
 ]
+
+[project.optional-dependencies]
 # Only needed to regenerate the bundled trial corpus (`python -m demo_data.generate`).
 # reportlab and arabic-reshaper are core dependencies — the PDF export uses them.
 demo = []
@@ -84,3 +91,18 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F401", "F841"]
+
+# ---------------------------------------------------------------------------
+# Tasks. `uv run poe check` is the definition of done: it runs the gate tasks
+# below in order and fails if any of them fails. See CLAUDE.md.
+# ---------------------------------------------------------------------------
+[tool.poe]
+# Tasks run in the environment `uv run` already prepared; no nested `uv run`.
+executor = { type = "simple" }
+
+[tool.poe.tasks]
+check = { cmd = "python -m harness.check", help = "The gate: every task below, in order; fails if any fails" }
+fmt = { cmd = "ruff format --check .", help = "Formatting is ruff's (fix: uv run poe format)" }
+format = { cmd = "ruff format .", help = "Apply ruff formatting" }
+lint = { cmd = "ruff check .", help = "Lint with ruff" }
+test = { cmd = "pytest -q", help = "Offline test suite (live_ai tests excluded)" }
