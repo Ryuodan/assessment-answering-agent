@@ -33,6 +33,16 @@ _BOLD = re.compile(r"(?<!\w)(\*\*|__)(?=\S)(.+?)(?<=\S)\1(?!\w)", re.DOTALL)
 # the held-out set. Without it the brackets were stripped and the word "source"
 # was left standing in the sentence.
 _SOURCE_MARKER = re.compile(r"[【〔]\s*\d{1,2}\s*(?:†[^】〕]*)?[】〕]")
+# The prompt's own numbering, which it forbids in the answer and models write
+# anyway: measured 2026-10-05 in 115 of 2,121 stored answers (5.4%) and 255 of
+# 2,716 evaluated ones, against 0 of 698 answers people wrote (TD-024). `[3]`,
+# `[1, 2]`, `[2-4]`; not `[1](url)`, and not after a word that makes it a real
+# reference -- "annex [1]", "section [2]" -- which is what `_REAL_REFERENCE` keeps.
+_BRACKET_MARKER = re.compile(r"\[\s*\d{1,2}(?:\s*[,–\-]\s*\d{1,2})*\s*\](?!\()")
+_REAL_REFERENCE = re.compile(
+    r"(?i)\b(?:annex|appendix|section|clause|article|item|figure|table|footnote|note|schedule|exhibit|"
+    r"attachment|paragraph|chapter|step)\s*$"
+)
 
 # A reasoning model's thinking, which some providers return inside the message
 # rather than beside it. Groq's `reasoning_format` defaults to "raw", which
@@ -72,9 +82,16 @@ def _split_bold(text: str) -> list[tuple[str, bool]]:
     return [span for span in spans if span[0]] or [("", False)]
 
 
+def _unless_a_real_reference(match: re.Match[str]) -> str:
+    """'' for a leaked source number; the text itself for "annex [1]" and the like."""
+    before = match.string[max(0, match.start() - 30) : match.start()]
+    return match.group(0) if _REAL_REFERENCE.search(before) else ""
+
+
 def strip_source_markers(text: str) -> str:
     """Remove internal source indices the drafter leaked into the prose."""
     cleaned = _SOURCE_MARKER.sub("", text or "")
+    cleaned = _BRACKET_MARKER.sub(_unless_a_real_reference, cleaned)
     # The marker usually trails a closing bracket or a space; tidy what is left
     # so the sentence does not end " ." or carry a double space.
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)

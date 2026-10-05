@@ -46,9 +46,49 @@ def test_text_without_markers_is_untouched():
 
 
 def test_a_square_bracket_reference_is_left_alone():
-    """Only the CJK bracket form is a model artefact; [1] may be real text."""
+    """After a word that makes it a reference, [1] is real text, not a leak."""
     text = "See annex [1] of the contract."
     assert strip_source_markers(text) == text
+
+
+@pytest.mark.parametrize(
+    ("leaked", "clean"),
+    [
+        ("Access is revoked within 24 hours [1].", "Access is revoked within 24 hours."),
+        ("Access is revoked within 24 hours[1][2].", "Access is revoked within 24 hours."),
+        ("Reviews are quarterly [1, 3] and logged [2-4].", "Reviews are quarterly and logged."),
+        (
+            "As the Access Control Policy [3] states, MFA is required.",
+            "As the Access Control Policy states, MFA is required.",
+        ),
+    ],
+)
+def test_the_prompts_own_source_numbers_are_removed(leaked, clean):
+    """TD-024: measured in 5.4% of stored answers and 9.4% of evaluated ones,
+    never in an answer a person wrote. "Policy [3]" is a citation, not a reference."""
+    assert strip_source_markers(leaked) == clean
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Requirements are listed in section [2] of the standard.",
+        "See Table [4] for the schedule.",
+        "The certificate is valid until [2027].",
+        "Details: [1](https://example.com/policy).",
+    ],
+)
+def test_bracketed_numbers_that_are_real_text_survive(text):
+    assert strip_source_markers(text) == text
+
+
+def test_a_leaked_number_never_reaches_the_customers_cell():
+    from src.formatting import to_cell_text
+
+    assert (
+        to_cell_text("Yes. MFA is enforced for all administrators [2].")
+        == "Yes. MFA is enforced for all administrators."
+    )
 
 
 def test_markers_are_stripped_before_parsing():

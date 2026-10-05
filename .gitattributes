@@ -1,2 +1,7 @@
 # Sealed eval data is ciphertext: never convert line endings or diff it as text.
 eval/sealed/*.enc binary
+
+# Written by generators with LF line endings. Keep them LF in the working tree
+# too, so regenerating them changes nothing and Windows checkouts stay quiet.
+docs/generated/** text eol=lf
+tests/characterization/snapshots/** text eol=lf

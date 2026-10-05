@@ -150,11 +150,14 @@ or docs and has not been verified by running anything.
 - **Impact:** test results can depend on a file in `data/`; the profile cannot be relocated with the rest of the data.
 - **Fix:** an `organisation_path` setting under the data directory, redirected by the `isolated_storage` fixture.
 
-## TD-024: Suspected: a bracketed source number in a draft reaches the customer's cell
+## TD-024: A bracketed source number in a draft reached the customer's cell
 
 - **What:** found 2026-10-05 by Claude while recording `tests/characterization/snapshots/pipeline/`; not observed in production. The drafting prompt says "Never put a source number in the answer text", but nothing enforces it: `strip_source_markers` removes only the `【1†source】` shape, and `to_cell_text("... 24 hours [1].")` returns the `[1]` unchanged. A model that disobeys writes `[1]` into the answer, the card, the exports and, through `fill`, the customer's file. The pinned behaviour is in `pipeline/grounded-first-draft.json` (the scripted draft contains `[1]`, and so does the final answer).
 - **Impact:** a citation that points at nothing, in a document sent to a customer. How often real models do it is unmeasured.
 - **Fix (needs a decision):** strip `[n]` markers mechanically where plain text becomes an answer, as `without_reasoning` does for thinking, or count their occurrence in the evaluation first. Not fixed: changing what reaches a customer's file is the user's call.
+- **Decision** 2026-10-05, by the user: measure how often, and strip automatically if it is often enough.
+- **Measured** 2026-10-05 (Claude), read-only, counts only, no new model calls: answers written since the prompt forbade source numbers (`a9af237`, 2026-08-20). Stored model answers in `data/app.db`: 115 of 2,121 (5.4%) contain `[n]`, 68 of them not held back for review; still present on the latest day recorded (3 of 100 on 2026-09-20). Saved evaluation answers in `eval/results/`: 255 of 2,716 (9.4%). Answers people wrote: 0 of 698 in the answer memory and 0 of 3 written by hand. Three answers recorded as edited by a person but not written by hand carry 2 to 10 markers each, the model's pattern; they were not read. Of 4,928 markers in all, 51 follow a noun, 44 of them "Policy [n]", itself a citation.
+- **Resolved** 2026-10-05 (Claude, under the user's rule: 5.4% of stored answers, recurring, never written by people, is often enough): `strip_source_markers` removes `[n]`, `[n, m]` and `[n-m]` unless a document-structure word precedes it ("annex [1]", "section [2]") or it is a Markdown link. It runs where an answer is finalized, exported and written into a cell. Replayed over every stored answer: 615 of 5,886 model-written answers change and 2 keep a bracketed number (a real reference); the answer memory is unchanged. Answers already stored still carry their markers in the database and on the answer card, but not in a filled file or an export, which strip on the way out.
 
 ## TD-025: The README gives two sizes for the house set
 
