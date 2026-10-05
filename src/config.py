@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     groq_chat_model: str = "openai/gpt-oss-120b"
     # ME-Central-1 regional endpoint. Host root only — the groq client appends
     # `/openai/v1` to it. Set to "" to fall back to the global api.groq.com.
+    groq_reasoning_format: str = Field(
+        default="parsed",
+        description="Groq's reasoning_format: parsed, hidden, raw, or '' to send nothing",
+    )
+    """How a reasoning model's thinking comes back.
+
+    Groq defaults to `raw`, which puts the thinking inside the message as
+    `<think>...</think>` -- so a deployment pointed at a reasoning model
+    (qwen3, minimax-m2, deepseek-r1) had "<think>The user wants me to rewrite
+    the answer..." written where the answer belongs. `parsed` keeps it beside
+    the message instead, where the traces can still show it; `hidden` drops it.
+    Empty sends nothing, for a gateway that rejects the parameter.
+    """
+
     groq_base_url: str | None = "https://api.me-central-1.groqcloud.com"
     llm_temperature: float = 0.0
     # Grading model for eval/. Deliberately not the drafting model: a system

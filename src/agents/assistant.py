@@ -48,6 +48,7 @@ from src import batches, conversations, events, preferences, progress, rewrite, 
 from src.config import settings
 from src.conversations import Conversation
 from src.extraction import detect_question_language
+from src.formatting import without_reasoning
 from src.identity import User
 from src.llm import chat_llm
 from src.models import Question
@@ -1324,8 +1325,11 @@ def _reply_from(state: dict) -> str:
                 content = "".join(
                     block.get("text", "") for block in content if isinstance(block, dict)
                 )
-            if str(content).strip():
-                return without_repetition(str(content))
+            # Whatever a reasoning model thought on the way is not what it
+            # said, and the reply is shown to a person verbatim.
+            spoken_text = without_reasoning(str(content))
+            if spoken_text:
+                return without_repetition(spoken_text)
     return ""
 
 

@@ -536,6 +536,83 @@ Interactive docs at `/docs`.
 
 ---
 
+### A reasoning model's thinking is not the answer
+
+Groq returns a reasoning model's working **inside the message** unless it is
+told otherwise: `reasoning_format` defaults to `raw`, which is
+`<think>...</think>` in front of the answer. Nothing set it, so a deployment
+pointed at a reasoning model -- qwen3, minimax-m2, deepseek-r1 -- answered the
+Brief button with *"&lt;think&gt;The user wants me to rewrite the answer to be
+more concise..."*. Against `openai/gpt-oss-120b` the same code is fine, because
+that model's reasoning comes back in a field of its own.
+
+**Drafting was never affected.** A drafted answer arrives as the arguments of a
+tool call, and thinking cannot reach those -- verified against gpt-oss-120b,
+qwen3 and minimax-m2, all three clean. What used the model's *plain text* was
+rewording (`src/rewrite.py`), the assistant's replies, and query planning --
+and query planning already stripped the tags.
+
+So the damage was rewording, which is the Brief button, a house style, a skill,
+"make these shorter" and translation. Three things follow from it, and the
+third is the one nobody would have noticed:
+
+* The answer card shows the thinking, which is how it was found.
+* **`fill` writes it into the customer's file.** A reworded answer is not
+  re-reviewed -- that is the point of rewording -- so it keeps the confidence
+  the drafted answer earned, is not held back, and goes into the cell.
+* **The compliance dropdown is set from it.** The verdict is read from what the
+  answer opens with; with thinking in front, the opening verdict is hidden and
+  the fallback phrase scan reads the reasoning's words instead. Reasoning about
+  a yes talks through the alternatives, so an answer whose prose says *Yes* set
+  the customer's dropdown to *Not Applicable*.
+
+The answer memory was not reached: rewording sets `by_hand=False`, and only an
+answer a person wrote and approved is remembered.
+
+Two locks now. `GROQ_REASONING_FORMAT` (default `parsed`) asks the provider to
+keep the thinking beside the message rather than in it, which is the real fix;
+and `formatting.without_reasoning` takes the tags out of anything that arrives
+with them anyway -- for a gateway that drops the parameter, or a model that
+emits them regardless. It is applied where plain text becomes an answer, where
+an answer becomes a cell, and where an answer becomes a verdict. A reply cut off
+mid-thought has no answer in it at all, and yields "": the rewording fails and
+the answer it was given stays, which is the rule that path already had.
+
+Answers stored while this was broken keep the thinking, and
+`python -m scripts.strip_thinking` takes it out (reporting first; `--apply` to
+write). An answer that is *only* thinking is reported and left alone: there is
+nothing underneath to keep, and a silently blanked answer is worse than an
+obviously wrong one.
+
+### A tool call in the model's own dialect
+
+Looking into that turned up something worse on the same deployment, and it is
+not about reasoning at all. Qwen-trained models write a tool call as XML:
+
+```
+<tool_call><function=AnswerReview><parameter=grounded>
+True
+</parameter>...
+```
+
+Every value there is text, so a boolean field arrives as `"True"` and Groq
+refuses the whole call -- *parameters for tool AnswerReview did not match
+schema: `/grounded`: expected boolean, but got string*. Against `qwen3.6-27b`
+**every review call failed**, under every reasoning format, which means every
+question came back unanswered: the drafted answer is thrown away because the
+review it has to pass never returns. `minimax-m2` and `gpt-oss-120b` are
+unaffected, and drafting alone survives on all three -- `DraftedAnswer` has no
+boolean field to trip over, which is why this hid behind the reasoning bug.
+
+`llm._recover_from_tool_use_failed` already pulled a result out of a refused
+call when the arguments were valid JSON under the wrong tool name. It now also
+reads this dialect, handing the values to the schema as text -- pydantic reads
+"True" as true and "0.92" as 0.92 -- and parsing a value that is JSON in its
+own right. Measured again on qwen3.6: three review calls in three recovered,
+and a question that could not be answered at all now comes back with its
+citations. A payload that is not a tool call in any dialect still re-raises;
+recovery must not invent a result.
+
 ## Language handling
 
 By default each question is answered in the language it was asked in, so a form
@@ -2530,6 +2607,7 @@ to change:
 | Setting | Default | Notes |
 | --- | --- | --- |
 | `GROQ_CHAT_MODEL` | `openai/gpt-oss-120b` | Used for extraction, drafting and review |
+| `GROQ_REASONING_FORMAT` | `parsed` | Keeps a reasoning model's thinking out of the message; `''` sends nothing — see [A reasoning model's thinking is not the answer](#a-reasoning-models-thinking-is-not-the-answer) |
 | `LANGSMITH_TRACING` | `false` | Record traces to LangSmith — **sends policy text outside Saudi Arabia**; see [Tracing](#tracing) |
 | `DOCLING_BASE_URL` | `http://localhost:8092` | Docling host root; clear it to use the local loaders only |
 | `DOCLING_DO_OCR` | `false` | Turn on for scanned documents — much slower |

@@ -26,6 +26,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from src.formatting import without_reasoning
+
 
 class Stance(str, Enum):
     """What an answer commits to, before it is mapped to any file's wording."""
@@ -96,7 +98,12 @@ def stance_of(answer: str) -> Stance:
     affirmation, because 'we do not…' contains 'we do'; 'not applicable' first of
     all, because it contains 'not'.
     """
-    text = " ".join(answer.split()).lower()[:_LEAD]
+    # Thinking first, in case any reached the answer: the verdict is read from
+    # what the answer opens with, and a "<think>" preamble both hides the real
+    # verdict and offers the reasoning's own words to the fallback scan. One
+    # that mentioned "not applicable" while concluding yes set the customer's
+    # dropdown to Not Applicable beside a prose answer that said Yes.
+    text = " ".join(without_reasoning(answer).split()).lower()[:_LEAD]
     if not text:
         return Stance.UNCLEAR
 

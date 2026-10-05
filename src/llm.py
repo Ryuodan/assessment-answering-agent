@@ -8,9 +8,10 @@ output, covering provider and model-specific structured-output edge cases:
 
 1. The provider's own tool-calling structured output.
 2. `with_retry` on schema/parser failures and Groq's `tool_use_failed`.
-3. A recovery wrapper for the specific case where the model emitted *valid*
-   arguments under the *wrong* tool name — Groq rejects the call before it
-   returns, but the usable payload is sitting in `error.failed_generation`.
+3. A recovery wrapper for the case where the model emitted usable arguments
+   that the provider would not accept — the wrong tool name, or a dialect of
+   its own. Groq rejects the call before it returns, but the payload is sitting
+   in `error.failed_generation`.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 from collections.abc import Coroutine
 from functools import lru_cache
 from typing import Any, TypeVar
@@ -80,6 +82,11 @@ def chat_llm(temperature: float | None = None, model: str | None = None) -> Base
     }
     if settings.groq_base_url:
         kwargs["base_url"] = settings.groq_base_url
+    # Without this Groq answers with the model's thinking inside the message:
+    # its default is "raw", which is `<think>...</think>` in front of the
+    # answer. It costs nothing on a model that does not reason.
+    if settings.groq_reasoning_format:
+        kwargs["reasoning_format"] = settings.groq_reasoning_format
 
     logger.debug("Creating ChatGroq model=%s temperature=%s", kwargs["model"], kwargs["temperature"])
     model_made = ChatGroq(**kwargs)
@@ -150,6 +157,43 @@ def structured_llm(
 # ---------------------------------------------------------------------------
 
 
+_XML_PARAMETER = re.compile(r"<parameter=([A-Za-z_][\w-]*)>(.*?)</parameter>", re.DOTALL)
+
+
+def _arguments_in_a_models_own_dialect(failed_generation: str) -> dict[str, Any] | None:
+    """The arguments out of a tool call written as XML rather than JSON.
+
+    Qwen-trained models write
+
+        <tool_call><function=AnswerReview><parameter=grounded>
+        True
+        </parameter>...
+
+    and every value arrives as text, so a boolean field reads "True" and the
+    provider refuses the call: `parameters for tool AnswerReview did not match
+    schema: /grounded: expected boolean, but got string`. Every review call
+    failed that way on qwen3.6, which meant every question came back unanswered.
+
+    The values are handed to the schema as they were written, because pydantic
+    reads "True" as true and "0.92" as 0.92; a value that is JSON in its own
+    right -- a list, an object -- is parsed first.
+    """
+    found = _XML_PARAMETER.findall(failed_generation)
+    if not found:
+        return None
+
+    arguments: dict[str, Any] = {}
+    for name, raw in found:
+        value = raw.strip()
+        if value[:1] in "[{" or value in ("true", "false", "null"):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                pass
+        arguments[name] = value
+    return arguments
+
+
 def _recover_from_tool_use_failed(error: BaseException, schema: type[SchemaT]) -> SchemaT | None:
     """Pull a valid `schema` instance out of a Groq `tool_use_failed` error.
 
@@ -170,8 +214,14 @@ def _recover_from_tool_use_failed(error: BaseException, schema: type[SchemaT]) -
 
     try:
         arguments = json.loads(failed_generation).get("arguments")
+    except (ValueError, TypeError, AttributeError):
+        arguments = _arguments_in_a_models_own_dialect(failed_generation)
+    if arguments is None:
+        return None
+
+    try:
         return schema.model_validate(arguments)
-    except (ValueError, TypeError, AttributeError, ValidationError):
+    except (ValidationError, TypeError):
         return None
 
 

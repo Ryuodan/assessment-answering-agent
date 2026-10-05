@@ -22,6 +22,7 @@ import random
 import weakref
 
 from src.config import settings
+from src.formatting import without_reasoning
 from src.graph.state import order_evidence
 from src.llm import TRANSIENT, chat_llm
 from src.models import AnsweredQuestion, Language
@@ -120,7 +121,10 @@ async def rewrite(
         logger.exception("Could not rewrite the answer to %s", answered.question.id)
         return answered
 
-    text = (response.content or "").strip() if hasattr(response, "content") else ""
+    # A rewrite is the one path that puts a model's plain text straight into an
+    # answer, so it is where a reasoning model's thinking surfaced first: the
+    # Brief button answered with "<think>The user wants me to rewrite...".
+    text = without_reasoning(str(getattr(response, "content", "") or ""))
     if not text:
         return answered
 

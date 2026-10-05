@@ -33,6 +33,13 @@ _BOLD = re.compile(r"(?<!\w)(\*\*|__)(?=\S)(.+?)(?<=\S)\1(?!\w)", re.DOTALL)
 # the held-out set. Without it the brackets were stripped and the word "source"
 # was left standing in the sentence.
 _SOURCE_MARKER = re.compile(r"[【〔]\s*\d{1,2}\s*(?:†[^】〕]*)?[】〕]")
+
+# A reasoning model's thinking, which some providers return inside the message
+# rather than beside it. Groq's `reasoning_format` defaults to "raw", which
+# means exactly this -- so pointing the deployment at a reasoning model put
+# "<think>The user wants me to rewrite the answer..." where the answer goes.
+_REASONING = re.compile(r"<\s*(think|thinking|reasoning)\s*>.*?<\s*/\s*\1\s*>", re.DOTALL | re.IGNORECASE)
+_REASONING_OPENS = re.compile(r"<\s*(?:think|thinking|reasoning)\s*>", re.IGNORECASE)
 _BULLET = re.compile(r"^\s*[-*•]\s+(?P<text>.+)$")
 _NUMBERED = re.compile(r"^\s*(?P<marker>\d{1,3})[.)]\s+(?P<text>.+)$")
 _HEADING = re.compile(r"^\s*#{1,6}\s+(?P<text>.+?)\s*#*$")
@@ -101,6 +108,28 @@ def parse(text: str) -> list[Block]:
     return blocks
 
 
+def without_reasoning(text: str) -> str:
+    """The answer, with any thinking the model left in it taken out.
+
+    Reasoning models write their working into the message when the provider is
+    asked for it "raw", and Groq asks for raw unless told otherwise. What comes
+    back then is `<think>...</think>` followed by the answer -- or, when the
+    reply was cut short, an opening tag and nothing after it, in which case
+    there is no answer in the message at all and "" is the honest result: the
+    caller keeps what it already had rather than writing thinking into a file.
+
+    The right fix is to ask the provider for the reasoning separately, which
+    `llm.chat_llm` now does. This is the second lock: a provider that ignores
+    the setting, a gateway that drops it, or a model that emits the tags anyway
+    would otherwise put the model's working in front of a customer.
+    """
+    cleaned = _REASONING.sub("", text or "")
+    opened = _REASONING_OPENS.search(cleaned)
+    if opened:  # an unterminated block: everything after it is thinking
+        cleaned = cleaned[: opened.start()]
+    return cleaned.strip()
+
+
 def to_cell_text(text: str) -> str:
     """The answer as it should read inside a questionnaire's own cell.
 
@@ -112,7 +141,7 @@ def to_cell_text(text: str) -> str:
     holding four paragraphs it is most of what makes them readable.
     """
     lines: list[str] = []
-    for raw in strip_source_markers(text or "").splitlines():
+    for raw in strip_source_markers(without_reasoning(text)).splitlines():
         line = raw.rstrip()
         if not line.strip():
             if lines and lines[-1] != "":
