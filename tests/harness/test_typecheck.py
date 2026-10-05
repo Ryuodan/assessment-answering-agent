@@ -36,6 +36,12 @@ def test_a_fixed_error_must_be_removed_from_the_baseline():
     assert "poe types-baseline" in violation.fix
 
 
+def test_a_missing_module_points_at_the_environment_not_the_code():
+    missing = error(code="import-not-found", message='Cannot find implementation or library stub for module named "x"')
+    [violation] = judge([missing], Counter())
+    assert "uv sync" in violation.fix
+
+
 def test_line_numbers_inside_messages_do_not_break_matching():
     before = error(code="no-redef", message='Name "x" already defined on line 12')
     after = error(code="no-redef", message='Name "x" already defined on line 40')

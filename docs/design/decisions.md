@@ -92,3 +92,20 @@ reorganised (roadmap M4).
 - **Consequences:** the gate cannot be fooled by stale launchers;
   `tests/harness/test_tasks.py` holds the rule for poe tasks.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 001.
+
+## D-009: the development environment includes every optional extra
+
+- **Context:** a fresh clone with `uv sync` (no extras) failed `types`: mypy
+  could not find the Phoenix modules `src/config.py` imports when tracing is on,
+  while the original venv happened to have the `phoenix` extra installed. The
+  gate's verdict depended on what had been installed by hand, and one test
+  (needing `openpyxl`) had always been skipped.
+- **Decision:** the `dev` dependency group repeats the packages of the
+  `phoenix` and `reports` extras, so a plain `uv sync` builds the full
+  environment and the gate sees every import and runs every test. The extras
+  stay, for installs without the dev tools. A missing module in `types` now
+  says to sync the environment.
+- **Consequences:** the two lists must be kept in step (a comment says so);
+  the development environment carries the OpenTelemetry client libraries,
+  not the Phoenix server.
+- **Date:** 2026-10-05. **Status:** accepted. **Decided by:** Claude, within plan 001.

@@ -407,7 +407,7 @@ source .venv/Scripts/activate       # .venv/bin/activate on macOS and Linux
 To build the environment from scratch, or to add a package:
 
 ```bash
-uv sync --inexact                   # create .venv from uv.lock, dev tools included
+uv sync --inexact                   # create .venv from uv.lock: dev tools and every optional extra
 uv pip install <package>            # note: `uv pip`, and there is no `pip` inside .venv
 ```
 

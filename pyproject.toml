@@ -48,6 +48,13 @@ dev = [
     "ruff",
     "mypy>=1.15",
     "poethepoet>=0.34",
+    # The optional extras below, repeated so that a plain `uv sync` builds the
+    # environment the gate expects (D-009): without them mypy cannot see the
+    # Phoenix imports in src/config.py and one report test is skipped. Keep in
+    # step with [project.optional-dependencies].
+    "openpyxl>=3.1",
+    "arize-phoenix-otel>=0.6",
+    "openinference-instrumentation-langchain>=0.1.29",
 ]
 
 [project.optional-dependencies]

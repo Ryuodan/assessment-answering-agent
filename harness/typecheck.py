@@ -24,6 +24,12 @@ from harness.report import ROOT, Violation, finish
 BASELINE = ROOT / "harness" / "mypy-baseline.txt"
 _ERROR = re.compile(r"^(?P<path>[^:]+):(?P<line>\d+): error: (?P<message>.*?)(?:\s+\[(?P<code>[\w-]+)\])?$")
 _LINE_REFERENCE = re.compile(r"\bon line \d+\b")
+# Usually the environment, not the code: a fresh clone once failed here because
+# an optional extra was not installed (D-009).
+_MISSING_MODULE_FIX = (
+    "the module is not installed in this environment: run `uv sync --inexact` (the dev group carries every "
+    "optional extra); if it is a new dependency, add it to pyproject.toml and run `uv lock`"
+)
 
 
 @dataclass(frozen=True)
@@ -130,7 +136,9 @@ def judge(errors: list[TypeError_], baseline: Counter[str]) -> list[Violation]:
                 error.path,
                 error.line,
                 f"[{error.code}] {error.message}",
-                "fix the type error; the baseline is for errors that predate plan 001, never for new ones",
+                _MISSING_MODULE_FIX
+                if error.code == "import-not-found"
+                else "fix the type error; the baseline is for errors that predate plan 001, never for new ones",
             )
         )
     fixed = +allowance

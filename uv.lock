@@ -183,7 +183,10 @@ reports = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "arize-phoenix-otel" },
     { name = "mypy" },
+    { name = "openinference-instrumentation-langchain" },
+    { name = "openpyxl" },
     { name = "poethepoet" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -225,7 +228,10 @@ provides-extras = ["demo", "reports", "phoenix"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "arize-phoenix-otel", specifier = ">=0.6" },
     { name = "mypy", specifier = ">=1.15" },
+    { name = "openinference-instrumentation-langchain", specifier = ">=0.1.29" },
+    { name = "openpyxl", specifier = ">=3.1" },
     { name = "poethepoet", specifier = ">=0.34" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
