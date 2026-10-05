@@ -1,0 +1,16 @@
+# Roadmap
+
+Milestones in the order they are planned. Each names the plans that serve it;
+a plan number without a file has not been written yet.
+
+| Milestone | What it gives us | Plans | Status |
+|---|---|---|---|
+| M1 Foundations | `uv run poe check`, the docs layout and its check, `arch` v0, generated docs, characterization tests | [001](active/001-foundations.md) | in progress |
+| M2 Confidential eval data sealed | `eval/house_set.json` and `eval/answer_memory.json` encrypted in the repo, usable after an unlock with the key from `.env` | 002 | planned |
+| M3 Architecture and invariants | layers chosen for this domain, import rules and library ownership in `arch`, one error hierarchy, structured logs, validated boundaries | 003+ | planned |
+| M4 README reorganised | the README's design history moved into `docs/` (decisions, design notes, measurements) and the README cut to an introduction | not numbered | planned |
+| M5 Legible system | request IDs in logs and errors, diagnostic CLI commands, browser tests for the main flows | not numbered | planned |
+| M6 Trustworthy evaluation | dev and held-out splits, noise measured first, contamination test, item-by-item comparison (TD-014) | not numbered | planned |
+
+A garbage-collection round, as its own plan, follows each milestone or about
+40 commits, whichever comes first.

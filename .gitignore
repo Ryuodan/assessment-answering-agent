@@ -85,3 +85,7 @@ logs/
 
 # Knowledge-base snapshots taken before a re-index. Local safety copies only.
 chroma_db.backup*/
+
+# Reference articles kept beside the docs that cite them. Someone else's
+# published work: link to it, do not redistribute it (plan 001 decision).
+docs/harness/*.pdf
