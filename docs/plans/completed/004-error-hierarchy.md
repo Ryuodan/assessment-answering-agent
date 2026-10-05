@@ -1,6 +1,6 @@
 # Plan 004: One error hierarchy with stable codes
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -15,13 +15,13 @@ new errors from being invented outside the hierarchy.
 
 ## Acceptance criteria
 
-- [ ] Before any change, the error responses of the API's error paths (status and body) are pinned by a characterization test; afterwards their diff is reviewed, and every difference is one this plan intends: an added `code`, and the messages listed below made safe.
-- [ ] `src/errors.py` (foundation layer) defines `AppError` and one subclass per HTTP status in use (400, 401, 403, 404, 415, 422, 503); the existing domain errors derive from them with their own codes, keeping their current built-in bases so code that catches `ValueError` still does.
-- [ ] `src/api.py` has one handler for `AppError`; the wrappers `_guard`, `_tool`, `_atool`, `_preference` are gone, and `HTTPException` is no longer used. FastAPI's own errors (unknown route, validation) and the catch-all 500 also answer with a `code`.
-- [ ] No response includes the text of an internal exception: the document preview, extracted text and preference paths that do today are fixed.
-- [ ] ARCH-ERROR fails when a class in `src/` derives from a built-in exception without deriving from `AppError` (private classes excepted), and when `src/` uses `HTTPException`; tests with failing examples.
-- [ ] `docs/generated/errors.md` lists every error class with its code, status and meaning, generated from the code; codes are unique (tested).
-- [ ] Existing status codes are unchanged (the suite's status assertions still pass), TD-008 updated, `uv run poe check` passes.
+- [x] Before any change, the error responses of the API's error paths (status and body) are pinned by a characterization test; afterwards their diff is reviewed, and every difference is one this plan intends: an added `code`, and the messages listed below made safe.
+- [x] `src/errors.py` (foundation layer) defines `AppError` and one subclass per HTTP status in use (400, 401, 403, 404, 415, 422, 503); the existing domain errors derive from them with their own codes, keeping their current built-in bases so code that catches `ValueError` still does.
+- [x] `src/api.py` has one handler for `AppError`; the wrappers `_guard`, `_tool`, `_atool`, `_preference` are gone, and `HTTPException` is no longer used. FastAPI's own errors (unknown route, validation) and the catch-all 500 also answer with a `code`.
+- [x] No response includes the text of an internal exception: the document preview, extracted text and preference paths that do today are fixed.
+- [x] ARCH-ERROR fails when a class in `src/` derives from a built-in exception without deriving from `AppError` (private classes excepted), and when `src/` uses `HTTPException`; tests with failing examples.
+- [x] `docs/generated/errors.md` lists every error class with its code, status and meaning, generated from the code; codes are unique (tested).
+- [x] Existing status codes are unchanged (the suite's status assertions still pass), TD-008 updated, `uv run poe check` passes.
 
 ## Plan
 
@@ -45,6 +45,7 @@ new errors from being invented outside the hierarchy.
 - 2026-10-05: Step 6. ARCH-ERROR (`harness/error_rules.py`): one violation found, `DoclingError`, allow-listed against the new TD-027 (Docling diagnostics can reach a person when the local fallback is off). 7 rule tests, 7 hierarchy tests (`tests/test_errors.py`: unique class codes, one status per code, code format, built-in bases kept, the API's shape). `docs/generated/errors.md`: 17 classes and 23 codes named at raise sites, located by function rather than line so ordinary edits do not stale it.
 - 2026-10-05: mypy strict caught two mistakes in this plan's code: the moved error classes were imported back implicitly, which strict mode does not treat as part of a module's interface (`tools.ToolError` used from `agents/assistant.py`), now explicit `X as X` re-exports; and the catalogue typed classes as plain `type`. It also found 39 baseline errors gone, mostly with the deleted wrappers: baseline 324 -> 285.
 - 2026-10-05: The first full `check` after that failed `arch`: the explicit re-export lines, with a trailing comment, were long enough for the formatter to wrap, which grew `documents.py` and `identity.py` past their ceilings again. The comment went (the `X as X` form says it). `uv run poe check`: all tasks pass, 1727 passed.
+- 2026-10-05: All criteria met; plan moved to `completed/`. Open for the user: TD-026 (a questionnaire that is not yours answers 400). Remaining in TD-008: the 37 `except Exception` blocks.
 
 ## Decision log
 
