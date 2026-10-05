@@ -1,6 +1,6 @@
 # Plan 005: Structured logs and request IDs
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -16,13 +16,13 @@ remaining modules are allow-listed until converted.
 
 ## Acceptance criteria
 
-- [ ] `src/logs.py` (foundation) provides `get_logger(name)` whose calls take a dotted event name and keyword fields (`log.info("storage.files_removed", person=..., files=3)`), and configures output as `text` or `json` by a new `LOG_FORMAT` setting; records from other loggers still render.
-- [ ] Every request has an ID: a well-formed incoming `X-Request-ID` is kept, anything else is replaced; it is on every log record made while the request runs, in the response's `X-Request-ID` header, and in every error body (`{"detail", "code", "request_id"}`).
-- [ ] Each request is logged once (`http.request`: method, route template, status, milliseconds); never the raw path or the query string, which can carry file names and search text.
-- [ ] Configured secret values (`GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`, `ADMIN_PASSWORD`, `EVAL_DATA_KEY`) and key-shaped strings are replaced by `[redacted]` in every log line, from any logger (tested).
-- [ ] `src/api.py`, `src/storage.py`, `src/identity.py` and `src/config.py` log events only; the request middleware and the error handlers live in a new interfaces module, so `src/api.py` shrinks.
-- [ ] ARCH-LOG fails when a module uses `logging.getLogger` instead of `get_logger` (existing modules allow-listed, TD-028), and when an event name is not a dotted lower-case literal; tests with failing examples.
-- [ ] The error-response snapshots differ only by the added `request_id`; decision recorded; `uv run poe check` passes.
+- [x] `src/logs.py` (foundation) provides `get_logger(name)` whose calls take a dotted event name and keyword fields (`log.info("storage.files_removed", person=..., files=3)`), and configures output as `text` or `json` by a new `LOG_FORMAT` setting; records from other loggers still render.
+- [x] Every request has an ID: a well-formed incoming `X-Request-ID` is kept, anything else is replaced; it is on every log record made while the request runs, in the response's `X-Request-ID` header, and in every error body (`{"detail", "code", "request_id"}`).
+- [x] Each request is logged once (`http.request`: method, route template, status, milliseconds); never the raw path or the query string, which can carry file names and search text.
+- [x] Configured secret values (`GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`, `ADMIN_PASSWORD`, `EVAL_DATA_KEY`) and key-shaped strings are replaced by `[redacted]` in every log line, from any logger (tested).
+- [x] `src/api.py`, `src/storage.py`, `src/identity.py` and `src/config.py` log events only; the request middleware and the error handlers live in a new interfaces module, so `src/api.py` shrinks.
+- [x] ARCH-LOG fails when a module uses `logging.getLogger` instead of `get_logger` (existing modules allow-listed, TD-028), and when an event name is not a dotted lower-case literal; tests with failing examples.
+- [x] The error-response snapshots differ only by the added `request_id`; decision recorded; `uv run poe check` passes.
 
 ## Plan
 
@@ -43,6 +43,7 @@ remaining modules are allow-listed until converted.
 - 2026-10-05: Step 5. ARCH-LOG (`harness/log_rules.py`): 23 modules still make a standard-library logger (some never call it) and are allow-listed against TD-028; every event call in the converted modules passes. 8 rule tests.
 - 2026-10-05: Step 6. D-014; ARCHITECTURE.md and SECURITY.md sections; GP-09 updated, GP-22; TD-009 partly resolved; TD-028 corrected (23 modules, not 20); TD-031 found: uvicorn's own access log, started by `serve.sh` and `run.sh`, records raw paths and queries outside this handler (for the user).
 - 2026-10-05: The first full `check` failed 14 tests in `tests/harness/test_arch.py`: their clean tree made a standard-library logger, which ARCH-LOG now flags (1735 passed). The second time a new rule broke another rule's test tree (plan 003 was the first), found only after the four-minute suite each time. Two fixes: the tree uses `get_logger`, and the gate gained a `rules` task that runs the harness's own tests (about 11 s) before the full suite. Also traced the recurring stray newlines in my edit scripts to Git Bash collapsing doubled backslashes in heredocs; scripts with backslashes are now written as files (a note for future sessions, not the repository).
+- 2026-10-05: All criteria met; `uv run poe check` passes (1749 passed). Plan moved to `completed/`. For the user: TD-029, TD-030, TD-031.
 
 ## Decision log
 
