@@ -1,6 +1,6 @@
 # Plan 003: Layers and their enforcement
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -18,13 +18,13 @@ validated boundaries are later plans.
 
 ## Acceptance criteria
 
-- [ ] `harness/layers.toml` defines the layers in order and assigns every module in `src/` to exactly one; a module assigned to none fails (ARCH-LAYER, with the FIX naming the file to edit).
-- [ ] ARCH-LAYER fails when a module imports a module of a higher layer, whether at module level or inside a function, and when anything in `src/` imports `eval`, `scripts`, `harness` or `tests`.
-- [ ] ARCH-OWNER fails when a module imports an owned library (FastAPI, Groq, Chroma, SQLite, the document libraries, LangGraph, ...) from outside the layers that own it.
-- [ ] Every existing violation is on the allow-list with a TD item; an entry that no longer matches a violation fails (ARCH-ALLOW).
-- [ ] Each rule has a test with a failing example.
-- [ ] `docs/generated/layers.md` is generated from `harness/layers.toml` (layers, their modules, the libraries they own) and a test fails when it is stale; ARCHITECTURE.md explains the layers and why they are drawn there, and links to it.
-- [ ] The choice of layers is recorded as a decision; `uv run poe check` passes.
+- [x] `harness/layers.toml` defines the layers in order and assigns every module in `src/` to exactly one; a module assigned to none fails (ARCH-LAYER, with the FIX naming the file to edit).
+- [x] ARCH-LAYER fails when a module imports a module of a higher layer, whether at module level or inside a function, and when anything in `src/` imports `eval`, `scripts`, `harness` or `tests`.
+- [x] ARCH-OWNER fails when a module imports an owned library (FastAPI, Groq, Chroma, SQLite, the document libraries, LangGraph, ...) from outside the layers that own it.
+- [x] Every existing violation is on the allow-list with a TD item; an entry that no longer matches a violation fails (ARCH-ALLOW).
+- [x] Each rule has a test with a failing example.
+- [x] `docs/generated/layers.md` is generated from `harness/layers.toml` (layers, their modules, the libraries they own) and a test fails when it is stale; ARCHITECTURE.md explains the layers and why they are drawn there, and links to it.
+- [x] The choice of layers is recorded as a decision; `uv run poe check` passes.
 
 ## Plan
 
@@ -41,6 +41,7 @@ validated boundaries are later plans.
 - 2026-10-05: Step 3. ARCH-LAYER and ARCH-OWNER wired into `harness/arch.py` with 5 allow-list entries; stale entries fail as ARCH-ALLOW. 13 rule tests in `tests/harness/test_layers.py`. Two corrections on the way: the existing arch tests' trees have no layers file, so the rule now applies only where one exists (and a test requires it here); and `package.*` did not cover the package itself, which a test tree exposed.
 - 2026-10-05: Step 4. `docs/generated/layers.md` from `harness/layers.toml` and the allow-list (stale-checked by the existing generated-docs test, and required by the docs check). ARCHITECTURE.md rewritten around the layers, with the reasons marked as Claude's; D-012; TD-007, TD-009, TD-019 updated; GP-19 and GP-20; CLAUDE.md.
 - 2026-10-05: The first full `check` failed: 12 tests in `tests/harness/test_docs.py`, because adding `docs/generated/layers.md` to the required documents made their minimal tree incomplete (1698 passed, 12 failed). The fixture now builds its tree from `docs.REQUIRED`, so a new required document cannot break those tests again.
+- 2026-10-05: All criteria met; `uv run poe check` passes (1710 passed). Plan moved to `completed/`. Next in M3: the allow-listed violations, an error hierarchy with stable codes, structured logs, validated boundaries.
 
 ## Decision log
 
