@@ -182,3 +182,15 @@ or docs and has not been verified by running anything.
 - **What:** read 2026-10-05 (Claude, plan 004): `DoclingError` messages carry the converter's URL, HTTP status and raw response. With `DOCLING_FALLBACK_LOCAL=false`, `documents.load_text` wraps one into `UnsupportedDocumentError(f"Could not convert '<file>': {exc}")`, and ingestion reports `str(exc)` as the upload's error, which the page shows. `DoclingError` itself stays outside the AppError hierarchy as an internal diagnostic (allow-listed in ARCH-ERROR).
 - **Impact:** with the fallback off, a person can see internal host names and the converter's raw output.
 - **Fix:** keep the diagnostics in the log, show "Could not convert '<file>'." to the person, and make `DoclingError` an `Unavailable` with a safe message and its details in a separate attribute.
+
+## TD-028: Most modules still log prose sentences
+
+- **What:** measured 2026-10-05: 90 log calls in 24 modules of `src/`, each a %-formatted sentence with no event name. Plan 005 converts `api`, `storage`, `identity` and `config`; the others are allow-listed in ARCH-LOG.
+- **Impact:** their lines cannot be filtered by event or read as fields; they still carry the request ID, which the logging filter adds to every record.
+- **Fix:** convert a module whenever it is next changed (`get_logger`, an event name, keyword fields), then delete its allow-list entry.
+
+## TD-029: A generated team access code is written to the log
+
+- **What:** read 2026-10-05 (Claude): on an upgrade where a team has no access code, `identity.bootstrap` generates one and logs it once at WARNING, in plaintext, so that someone can read it off the log ("Setting it up, and upgrading into it" in the README).
+- **Impact:** a credential sits in `logs/server.log`, and in anything that collects logs, for as long as they are kept.
+- **Fix (needs a decision):** show it once some other way (the admin page already issues codes; or print it to the console only, not the log file), or accept it as the documented break-glass path. Not changed: it is how an upgrade avoids locking everyone out.

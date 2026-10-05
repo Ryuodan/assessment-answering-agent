@@ -7,7 +7,7 @@ a plan number without a file has not been written yet.
 |---|---|---|---|
 | M1 Foundations | `uv run poe check`, the docs layout and its check, `arch` v0, generated docs, characterization tests | [001](completed/001-foundations.md) | done 2026-10-05 |
 | M2 Confidential eval data sealed | `eval/house_set.json` and `eval/answer_memory.json` encrypted in the repo, usable after an unlock with the key from `.env` | [002](completed/002-seal-eval-data.md) | done 2026-10-05 |
-| M3 Architecture and invariants | layers chosen for this domain, import rules and library ownership in `arch`, one error hierarchy, structured logs, validated boundaries | [003](completed/003-layers.md), [004](completed/004-error-hierarchy.md) done; 005+ | in progress |
+| M3 Architecture and invariants | layers chosen for this domain, import rules and library ownership in `arch`, one error hierarchy, structured logs, validated boundaries | [003](completed/003-layers.md), [004](completed/004-error-hierarchy.md) done; [005](active/005-structured-logging.md); 006+ | in progress |
 | M4 README reorganised | the README's design history moved into `docs/` (decisions, design notes, measurements) and the README cut to an introduction | not numbered | planned |
 | M5 Legible system | request IDs in logs and errors, diagnostic CLI commands, browser tests for the main flows | not numbered | planned |
 | M6 Trustworthy evaluation | dev and held-out splits, noise measured first, contamination test, item-by-item comparison (TD-014) | not numbered | planned |
