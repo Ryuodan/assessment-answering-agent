@@ -1,0 +1,327 @@
+# mypy --strict errors that existed when type checking was adopted (plan 001).
+# Only ever shrinks: `uv run poe types-baseline` removes fixed entries and never adds.
+# Format: path: [error-code] message   (no line numbers; duplicates repeat)
+src/agents/assistant.py: [arg-type] Argument "language" to "revise" has incompatible type "str | None"; expected "Literal['ar', 'en'] | None"
+src/agents/assistant.py: [arg-type] Argument 1 to "__ior__" of "set" has incompatible type "set[str | None]"; expected "AbstractSet[str]"
+src/agents/assistant.py: [no-untyped-def] Function is missing a return type annotation
+src/agents/assistant.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "list"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "list"
+src/agents/assistant.py: [type-arg] Missing type arguments for generic type "list"
+src/agents/excel_agent.py: [arg-type] Argument "role" to "ColumnReading" has incompatible type "str"; expected "Literal['number', 'question', 'answer', 'status', 'evidence', 'theirs', 'context', 'ignore']"
+src/agents/excel_agent.py: [no-untyped-def] Function is missing a return type annotation
+src/agents/excel_agent.py: [type-arg] Missing type arguments for generic type "dict"
+src/agents/excel_agent.py: [type-arg] Missing type arguments for generic type "list"
+src/agents/excel_agent.py: [type-arg] Missing type arguments for generic type "list"
+src/agents/excel_agent.py: [type-arg] Missing type arguments for generic type "list"
+src/agents/excel_agent.py: [type-arg] Missing type arguments for generic type "set"
+src/answer_memory.py: [attr-defined] Module "src.store" does not explicitly export attribute "settings"
+src/answer_memory.py: [no-any-return] Returning Any from function declared to return "int"
+src/answer_memory.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/answer_memory.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/answer_memory.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/answer_memory.py: [return-value] Incompatible return value type (got "Entry | None", expected "Entry")
+src/answer_memory.py: [type-arg] Missing type arguments for generic type "dict"
+src/answer_memory.py: [type-arg] Missing type arguments for generic type "dict"
+src/answer_memory.py: [type-arg] Missing type arguments for generic type "list"
+src/api.py: [attr-defined] "object" has no attribute "email"
+src/api.py: [attr-defined] "object" has no attribute "email"
+src/api.py: [attr-defined] "object" has no attribute "email"
+src/api.py: [attr-defined] "object" has no attribute "role"
+src/api.py: [attr-defined] "object" has no attribute "role"
+src/api.py: [attr-defined] "object" has no attribute "role"
+src/api.py: [attr-defined] "object" has no attribute "team_id"
+src/api.py: [attr-defined] "object" has no attribute "team_id"
+src/api.py: [attr-defined] "object" has no attribute "team_id"
+src/api.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
+src/api.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
+src/api.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
+src/api.py: [no-untyped-call] Call to untyped function "_atool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_atool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_atool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_atool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_atool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_preference" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_preference" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_preference" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_preference" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_preference" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-call] Call to untyped function "_tool" in typed context
+src/api.py: [no-untyped-def] Function is missing a return type annotation
+src/api.py: [no-untyped-def] Function is missing a return type annotation
+src/api.py: [no-untyped-def] Function is missing a return type annotation
+src/api.py: [no-untyped-def] Function is missing a type annotation
+src/api.py: [no-untyped-def] Function is missing a type annotation
+src/api.py: [no-untyped-def] Function is missing a type annotation
+src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/api.py: [type-arg] Missing type arguments for generic type "dict"
+src/batches.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/batches.py: [type-arg] Missing type arguments for generic type "dict"
+src/chunking.py: [type-arg] Missing type arguments for generic type "dict"
+src/cli.py: [arg-type] Argument "language" to "answer_assessment" has incompatible type "str | None"; expected "Literal['ar', 'en'] | None"
+src/conversations.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/conversations.py: [type-arg] Missing type arguments for generic type "dict"
+src/docling_client.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
+src/docling_client.py: [type-arg] Missing type arguments for generic type "dict"
+src/docling_client.py: [type-arg] Missing type arguments for generic type "dict"
+src/docling_client.py: [type-arg] Missing type arguments for generic type "dict"
+src/docling_client.py: [type-arg] Missing type arguments for generic type "dict"
+src/docling_client.py: [type-arg] Missing type arguments for generic type "dict"
+src/documents.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/documents.py: [type-arg] Missing type arguments for generic type "list"
+src/embeddings.py: [call-arg] Unexpected keyword argument "api_key" for "OpenAIEmbeddings"
+src/embeddings.py: [call-arg] Unexpected keyword argument "base_url" for "OpenAIEmbeddings"
+src/events.py: [arg-type] Argument 1 to "int" has incompatible type "int | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"
+src/events.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a return type annotation
+src/export_docx.py: [no-untyped-def] Function is missing a return type annotation
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_pdf.py: [no-any-return] Returning Any from function declared to return "float"
+src/export_pdf.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_pdf.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_pdf.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_pdf.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "dict"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "dict"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "dict"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "dict"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "dict"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "dict"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "list"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "list"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "list"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "list"
+src/export_pdf.py: [type-arg] Missing type arguments for generic type "list"
+src/forms/__init__.py: [no-any-return] Returning Any from function declared to return "DetectedForm"
+src/forms/__init__.py: [no-any-return] Returning Any from function declared to return "DetectedForm"
+src/forms/__init__.py: [no-any-return] Returning Any from function declared to return "WriteReport"
+src/forms/__init__.py: [no-untyped-def] Function is missing a return type annotation
+src/forms/docx.py: [arg-type] Argument "language" to "FormQuestion" has incompatible type "str"; expected "Literal['ar', 'en']"
+src/forms/docx.py: [arg-type] Argument "language" to "FormQuestion" has incompatible type "str"; expected "Literal['ar', 'en']"
+src/forms/docx.py: [no-any-return] Returning Any from function declared to return "list[Paragraph]"
+src/forms/docx.py: [no-untyped-def] Function is missing a return type annotation
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/reading.py: [no-any-return] Returning Any from function declared to return "str"
+src/forms/reading.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/reading.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/reading.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/reading.py: [type-arg] Missing type arguments for generic type "list"
+src/forms/reading.py: [type-arg] Missing type arguments for generic type "list"
+src/forms/xlsx.py: [arg-type] Argument "language" to "FormQuestion" has incompatible type "str"; expected "Literal['ar', 'en']"
+src/forms/xlsx.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+src/forms/xlsx.py: [type-arg] Missing type arguments for generic type "list"
+src/forms/xlsx_package.py: [arg-type] Argument 1 to "int" has incompatible type "str | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"
+src/forms/xlsx_package.py: [arg-type] Argument 1 to "split_ref" has incompatible type "str | None"; expected "str"
+src/forms/xlsx_package.py: [assignment] Incompatible types in assignment (expression has type "Match[str] | None", variable has type "Element[str] | None")
+src/forms/xlsx_package.py: [attr-defined] "Element[str]" has no attribute "group"
+src/forms/xlsx_package.py: [no-any-return] Returning Any from function declared to return "bytes"
+src/forms/xlsx_package.py: [no-untyped-def] Function is missing a return type annotation
+src/forms/xlsx_package.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/forms/xlsx_package.py: [type-arg] Missing type arguments for generic type "list"
+src/forms/xlsx_package.py: [type-arg] Missing type arguments for generic type "list"
+src/graph/nodes.py: [assignment] Incompatible types in assignment (expression has type "AnswerReview | None", variable has type "AnswerReview")
+src/graph/nodes.py: [assignment] Incompatible types in assignment (expression has type "AnswerReview | None", variable has type "AnswerReview")
+src/graph/nodes.py: [assignment] Incompatible types in assignment (expression has type "DraftedAnswer | None", variable has type "DraftedAnswer")
+src/graph/nodes.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "Counter"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/nodes.py: [type-arg] Missing type arguments for generic type "tuple"
+src/graph/nodes.py: [union-attr] Item "None" of "DraftedAnswer | None" has no attribute "answer"
+src/graph/state.py: [no-untyped-def] Function is missing a return type annotation
+src/graph/state.py: [type-arg] Missing type arguments for generic type "tuple"
+src/graph/state.py: [type-arg] Missing type arguments for generic type "tuple"
+src/graph/state.py: [type-arg] Missing type arguments for generic type "tuple"
+src/graph/state.py: [type-arg] Missing type arguments for generic type "tuple"
+src/graph/workflow.py: [no-any-return] Returning Any from function declared to return "AnsweredQuestion"
+src/graph/workflow.py: [no-untyped-def] Function is missing a return type annotation
+src/graph/workflow.py: [no-untyped-def] Function is missing a return type annotation
+src/graph/workflow.py: [type-arg] Missing type arguments for generic type "dict"
+src/graph/workflow.py: [type-arg] Missing type arguments for generic type "dict"
+src/identity.py: [no-any-return] Returning Any from function declared to return "bool"
+src/identity.py: [no-any-return] Returning Any from function declared to return "bool"
+src/identity.py: [no-any-return] Returning Any from function declared to return "bool"
+src/identity.py: [no-any-return] Returning Any from function declared to return "int"
+src/identity.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/identity.py: [return-value] Incompatible return value type (got "User | None", expected "User")
+src/identity.py: [type-arg] Missing type arguments for generic type "dict"
+src/identity.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [attr-defined] "Callable[[str | None], KnowledgeStore]" has no attribute "cache_clear"
+src/knowledge.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
+src/knowledge.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
+src/knowledge.py: [no-any-return] Returning Any from function declared to return "str | None"
+src/knowledge.py: [no-any-return] Returning Any from function declared to return "str"
+src/knowledge.py: [no-any-return] Returning Any from function declared to return "tuple[LexicalIndex, dict[Any, Any]]"
+src/knowledge.py: [no-any-return] Returning Any from function declared to return "tuple[LexicalIndex, dict[Any, Any]]"
+src/knowledge.py: [no-untyped-def] Function is missing a return type annotation
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "dict"
+src/knowledge.py: [type-arg] Missing type arguments for generic type "tuple"
+src/knowledge.py: [union-attr] Item "None" of "list[Mapping[str, str | int | float | bool | SparseVector | list[str | int | float | bool] | None]] | None" has no attribute "__iter__" (not iterable)
+src/knowledge.py: [unreachable] Right operand of "or" is never evaluated
+src/lexical.py: [type-arg] Missing type arguments for generic type "dict"
+src/lexical.py: [type-arg] Missing type arguments for generic type "list"
+src/lexical.py: [type-arg] Missing type arguments for generic type "list"
+src/lexical.py: [type-arg] Missing type arguments for generic type "list"
+src/lexical.py: [var-annotated] Need type annotation for "best_rank" (hint: "best_rank: dict[<type>, <type>] = ...")
+src/llm.py: [misc] Cannot assign to a type
+src/llm.py: [no-any-return] Returning Any from function declared to return "SchemaT"
+src/llm.py: [no-any-return] Returning Any from function declared to return "SchemaT"
+src/llm.py: [type-arg] Missing type arguments for generic type "Runnable"
+src/models.py: [prop-decorator] Decorators on top of @property are not supported
+src/preferences.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/preferences.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/preferences.py: [type-arg] Missing type arguments for generic type "dict"
+src/progress.py: [type-arg] Missing type arguments for generic type "dict"
+src/progress.py: [type-arg] Missing type arguments for generic type "dict"
+src/prompts.py: [name-defined] Name "Evidence" is not defined
+src/relevance.py: [type-arg] Missing type arguments for generic type "tuple"
+src/rerank.py: [no-untyped-call] Call to untyped function "_model" in typed context
+src/rerank.py: [no-untyped-def] Function is missing a return type annotation
+src/rewrite.py: [no-untyped-call] Call to untyped function "_ask" in typed context
+src/rewrite.py: [no-untyped-def] Function is missing a type annotation
+src/rewrite.py: [type-arg] Missing type arguments for generic type "WeakKeyDictionary"
+src/runs.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/service.py: [arg-type] Argument "team_id" to "adopt_file" has incompatible type "str | None"; expected "str"
+src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
+src/service.py: [type-arg] Missing type arguments for generic type "dict"
+src/service.py: [type-arg] Missing type arguments for generic type "dict"
+src/service.py: [type-arg] Missing type arguments for generic type "dict"
+src/service.py: [type-arg] Missing type arguments for generic type "dict"
+src/service.py: [type-arg] Missing type arguments for generic type "dict"
+src/service.py: [type-arg] Missing type arguments for generic type "tuple"
+src/store.py: [no-any-return] Returning Any from function declared to return "Connection"
+src/tools.py: [arg-type] Argument 1 to "written_text" has incompatible type "AnsweredQuestion | None"; expected "AnsweredQuestion"
+src/tools.py: [arg-type] Argument 4 to "rewrite" has incompatible type "**dict[str, str]"; expected "Literal['ar', 'en'] | None"
+src/tools.py: [type-arg] Missing type arguments for generic type "dict"
+src/tools.py: [type-arg] Missing type arguments for generic type "dict"
+src/tools.py: [type-arg] Missing type arguments for generic type "dict"
+src/tools.py: [type-arg] Missing type arguments for generic type "dict"
+src/tools.py: [type-arg] Missing type arguments for generic type "dict"
+src/tools.py: [union-attr] Item "None" of "AnsweredQuestion | None" has no attribute "answer"

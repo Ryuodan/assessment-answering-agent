@@ -1,0 +1,5 @@
+# Mechanical commits that `git blame` should look through.
+# Use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Plan 001: ruff format the whole repository (syntax trees verified unchanged)
+4a7c3c6034af08a6a3e7b56c12297ad52b433cca
