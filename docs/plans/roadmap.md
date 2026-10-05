@@ -6,7 +6,7 @@ a plan number without a file has not been written yet.
 | Milestone | What it gives us | Plans | Status |
 |---|---|---|---|
 | M1 Foundations | `uv run poe check`, the docs layout and its check, `arch` v0, generated docs, characterization tests | [001](completed/001-foundations.md) | done 2026-10-05 |
-| M2 Confidential eval data sealed | `eval/house_set.json` and `eval/answer_memory.json` encrypted in the repo, usable after an unlock with the key from `.env` | 002 | planned |
+| M2 Confidential eval data sealed | `eval/house_set.json` and `eval/answer_memory.json` encrypted in the repo, usable after an unlock with the key from `.env` | [002](active/002-seal-eval-data.md) | in progress |
 | M3 Architecture and invariants | layers chosen for this domain, import rules and library ownership in `arch`, one error hierarchy, structured logs, validated boundaries | 003+ | planned |
 | M4 README reorganised | the README's design history moved into `docs/` (decisions, design notes, measurements) and the README cut to an introduction | not numbered | planned |
 | M5 Legible system | request IDs in logs and errors, diagnostic CLI commands, browser tests for the main flows | not numbered | planned |
