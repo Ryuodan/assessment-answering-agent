@@ -1059,7 +1059,7 @@ beside it.
 **A cell gets text, not Markdown.** The drafter writes `**bold**`, bullets and
 the occasional heading, which the answer cards and the exports render. A
 spreadsheet or Word cell shows them literally: 96 of the 1,687 answers stored
-against questionnaires carried bold markers, and a filled NMDC questionnaire
+against questionnaires carried bold markers, and a filled Fabrikam questionnaire
 went back with `**Identifiers** –` in a cell. The fill now writes
 `formatting.to_cell_text` -- emphasis removed, bullets as `•`, numbering kept, a
 blank line between paragraphs kept.

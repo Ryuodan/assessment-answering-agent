@@ -183,9 +183,9 @@ def test_a_file_a_colleague_is_still_working_on_counts_as_recent(indexed, limit)
     """Two people can open one file, from before uploads were kept per person.
     It belongs to whoever opened it first, and is in use while either is."""
     limit(1)
-    shared = shared_upload(ALICE, "Barq Review.xlsx", 1.5, days_old=400)
-    questionnaire(ALICE, "Barq Review.xlsx", 0, days_old=400, source=shared)
-    questionnaire(BOB, "Barq Review.xlsx", 0, days_old=400, touched_days_ago=1, source=shared)
+    shared = shared_upload(ALICE, "Contoso Review.xlsx", 1.5, days_old=400)
+    questionnaire(ALICE, "Contoso Review.xlsx", 0, days_old=400, source=shared)
+    questionnaire(BOB, "Contoso Review.xlsx", 0, days_old=400, touched_days_ago=1, source=shared)
 
     storage.enforce(ALICE, now=NOW)
 

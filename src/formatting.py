@@ -151,7 +151,7 @@ def to_cell_text(text: str) -> str:
     """The answer as it should read inside a questionnaire's own cell.
 
     A spreadsheet cell and a Word table cell show text, not Markdown, and the
-    drafter writes Markdown: the NMDC questionnaire went back to its customer
+    drafter writes Markdown: the Fabrikam questionnaire went back to its customer
     with "**Identifiers** –" in a cell, asterisks and all. Emphasis goes, bullets
     become a real bullet character, a heading becomes its words -- and unlike
     `to_plain_text` a blank line between paragraphs stays, because in a cell

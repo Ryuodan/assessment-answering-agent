@@ -985,7 +985,7 @@ def test_a_second_correction_does_not_credit_the_file_with_the_first(dropdown_ba
 
 def test_the_file_gets_the_answer_without_its_markdown(batch, user):
     """The drafter writes **bold** and bullet markers; a customer's cell shows them
-    literally. A filled NMDC questionnaire went back with "**Identifiers** –"."""
+    literally. A filled Fabrikam questionnaire went back with "**Identifiers** –"."""
     from src.forms.xlsx_package import Workbook
 
     question = batch.form.questions[0]

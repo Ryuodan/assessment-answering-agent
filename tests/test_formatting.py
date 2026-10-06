@@ -168,7 +168,7 @@ def test_plain_text_of_an_empty_answer_is_empty():
 # --- what goes into a questionnaire's cell -----------------------------------
 #
 # A spreadsheet cell and a Word table cell show text, not Markdown. Written as
-# the drafter wrote it, the NMDC questionnaire went back to its customer with
+# the drafter wrote it, the Fabrikam questionnaire went back to its customer with
 # "**Identifiers** –" in a cell, asterisks and all.
 
 

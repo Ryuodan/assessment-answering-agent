@@ -198,11 +198,13 @@ or docs and has not been verified by running anything.
 - **Decision** 2026-10-06, by the user: show it on the admin page and on the console.
 - **Resolved** 2026-10-06 (Claude): `src/access_codes.py` keeps the generated code in the server's memory only and lists it beside its team on the Access panel (administrators only) until a new code is issued; it writes it to the terminal device itself (`/dev/tty`, `CONOUT$` on Windows), which the `tee` in `serve.sh` does not capture; the log records `identity.access_code_generated` with where it was shown, never the code (`tests/test_access_codes.py`). The README's example of the old log line contained a code, `YEKS-...`; if that was a real one it has been in git since it was written and should be rotated on the Access panel.
 
-## TD-030: Real customer names in code, tests and the README
+## TD-030: Real customer names were in code, tests and the README
 
 - **What:** found 2026-10-05 (Claude, plan 005), counted without reading the passages: one customer's name appears in `src/static/chat.html` (1), `tests/test_private_work.py` (9) and `tests/test_storage.py` (3); another's in `README.md`, `src/formatting.py`, `tests/test_formatting.py` and `tests/test_tools.py` (1 each). Both are customers in the sealed house set.
 - **Impact:** the repository says who the customers are, which the sealing of the eval data (plan 002) was meant to keep out of git.
 - **Fix (needs a decision):** replace them with invented names (behaviour-neutral in tests and comments), and decide whether a check should refuse them; such a check would need the names without committing them, for example by comparing hashes or by reading the sealed data when it is unlocked.
+- **Decision** 2026-10-06, by the user: replace them.
+- **Resolved** 2026-10-06 (Claude): replaced by invented names (Contoso, Fabrikam) in the seven places; only string contents and comments changed, and the affected tests pass. Earlier commits still contain the names, as they contain the plaintext eval data (TD-013). No check was added: the user did not ask for one, and it would need the names in some form.
 
 ## TD-031: uvicorn's access log writes every raw path and query string (kept, by decision)
 

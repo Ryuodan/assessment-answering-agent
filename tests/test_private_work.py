@@ -68,7 +68,7 @@ def _open(client, tmp_path, name="vendor.xlsx"):
 
 
 def test_a_conversation_is_listed_only_for_the_person_who_had_it(team):
-    mine = assistant.start(a_person(ALICE), "Answer the Barq questionnaire")
+    mine = assistant.start(a_person(ALICE), "Answer the Contoso questionnaire")
     theirs = assistant.start(a_person(BOB), "What does our retention policy say?")
 
     alice, bob = as_person(ALICE), as_person(BOB)
@@ -78,7 +78,7 @@ def test_a_conversation_is_listed_only_for_the_person_who_had_it(team):
 
 
 def test_a_colleague_cannot_open_or_forget_your_conversation(team):
-    mine = assistant.start(a_person(ALICE), "Answer the Barq questionnaire")
+    mine = assistant.start(a_person(ALICE), "Answer the Contoso questionnaire")
     bob = as_person(BOB)
 
     assert bob.get(f"/api/chat/{mine.id}").status_code == 404
@@ -96,7 +96,7 @@ def test_a_colleague_cannot_open_or_forget_your_conversation(team):
 
 
 def test_forgetting_your_own_conversation_still_works(team):
-    mine = assistant.start(a_person(ALICE), "Answer the Barq questionnaire")
+    mine = assistant.start(a_person(ALICE), "Answer the Contoso questionnaire")
 
     assert as_person(ALICE).delete(f"/api/chat/{mine.id}").status_code == 200
     assert conversations.load(mine.id) is None
@@ -106,14 +106,14 @@ def test_the_history_says_when_it_was_and_which_file_it_was_about(team, tmp_path
     """The list gave a title the assistant wrote from the first sentence
     somebody typed, which for half of them is "answer these"."""
     alice = as_person(ALICE)
-    batch = _open(alice, tmp_path, "Barq 3rd Party Review.xlsx")
+    batch = _open(alice, tmp_path, "Contoso 3rd Party Review.xlsx")
     conversation = assistant.start(a_person(ALICE), "Answer these")
     conversation.batch_id = batch["id"]
     conversations.save(conversation)
 
     [listed] = alice.get("/api/chat").json()["conversations"]
 
-    assert listed["source_name"] == "Barq 3rd Party Review.xlsx"
+    assert listed["source_name"] == "Contoso 3rd Party Review.xlsx"
     assert listed["updated_at"] and listed["created_at"]
 
 
@@ -132,7 +132,7 @@ def test_a_questionnaire_and_its_answers_belong_to_whoever_uploaded_it(team, tmp
 def test_a_colleague_cannot_read_or_open_the_file_itself(team):
     from src import service
 
-    name = "Barq Privacy Questionnaire.pdf"
+    name = "Contoso Privacy Questionnaire.pdf"
     service.save_upload(name, b"%PDF-1.4 hers", settings.default_team, owner=ALICE)
     alice, bob = as_person(ALICE), as_person(BOB)
 
@@ -164,11 +164,11 @@ def test_a_questionnaire_from_before_the_split_is_still_only_its_owners(team, tm
 
 
 def test_an_upload_lands_in_the_uploaders_own_folder(team, tmp_path):
-    _open(as_person(ALICE), tmp_path, "Barq 3rd Party Review.xlsx")
+    _open(as_person(ALICE), tmp_path, "Contoso 3rd Party Review.xlsx")
 
     hers = settings.user_upload_dir(settings.default_team, ALICE)
-    assert [path.name for path in hers.iterdir()] == ["Barq 3rd Party Review.xlsx"]
-    assert not list(settings.upload_dir.glob("Barq*")), "not in the team's folder"
+    assert [path.name for path in hers.iterdir()] == ["Contoso 3rd Party Review.xlsx"]
+    assert not list(settings.upload_dir.glob("Contoso*")), "not in the team's folder"
 
 
 # --- answered runs ---------------------------------------------------------------------
