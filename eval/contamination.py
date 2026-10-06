@@ -97,11 +97,7 @@ def check(cases: list, memory_questions: list[str] | None = None, root: Path | N
     return leaks
 
 
-KNOWN: dict[str, str] = {
-    # The drafting prompt's example of stating a position as a fact is, nearly
-    # word for word, the team's answer to this question (found 2026-10-06, plan 013).
-    "HOUSE-096": "TD-033",
-}
+KNOWN: dict[str, str] = {}
 """Leaks found and recorded, each against a tech-debt item. A runner leaves these
 cases out and says so; any other leak stops it. Like every allow-list here, it
 only shrinks: an entry goes when its leak is fixed."""

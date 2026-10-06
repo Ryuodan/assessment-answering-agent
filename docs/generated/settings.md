@@ -49,6 +49,7 @@ source. The description is the comment above the field, the field's
 | `EMBEDDING_BASE_URL` | `str` | `"https://ds.t2.sa/text_embed/v1"` |  |
 | `EMBEDDING_MODEL` | `str` | `"bge-m3"` |  |
 | `EMBEDDING_API_KEY` | `str` | `"unused"` |  |
+| `EMBEDDING_TIMEOUT` | `float` | `300.0` | Seconds one embedding request may take before it is retried (twice) and then fails. Ingestion sends 64 chunks per request, so this bounds one batch, not a whole file. Without it the client waited for ever: a stalled host held a run for 53 minutes (TD-034, plan 017). |
 
 ## Document conversion (Docling)
 

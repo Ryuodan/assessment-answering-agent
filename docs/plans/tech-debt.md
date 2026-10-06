@@ -159,6 +159,8 @@ or docs and has not been verified by running anything.
 - **What:** read: the second half of the file is a commented-out `HuggingFaceEmbeddings` variant.
 - **Impact:** it reads as if local embeddings were supported (see TD-001).
 - **Fix:** delete it or turn it into a real, configured option; a product decision for the user.
+- **Decision** 2026-10-06, by the user: remove it, no need for it now.
+- **Resolved** 2026-10-06 (Claude, plan 017): the commented-out block is deleted from `src/embeddings.py`, with the README sentence that pointed to it and the `langchain_huggingface` ownership entry in `harness/layers.toml`, which nothing imports any more. `sentence-transformers` stays: the reranker uses it.
 
 ## TD-021: No test holds "server text is never markup on the page"
 
@@ -251,10 +253,18 @@ or docs and has not been verified by running anything.
 - **Impact:** for that one question, the drafter is shown the expected answer, so its score measures copying. Answers to other questions are unaffected, except for whatever the example teaches about style.
 - **For now:** HOUSE-096 is in `KNOWN` in `eval/contamination.py`, so every runner leaves it out of the score and says so. Any other leak stops a run.
 - **Fix (needs a decision):** replace the example with a sentence that is in no benchmark. This is a prompt change, so it changes answers in principle; the effect should be checked with `scripts/compare_runs.py` against a dev run. Recommended: replace it, then remove the `KNOWN` entry.
+- **Decision** 2026-10-06, by the user: replace it.
+- **Resolved** 2026-10-06 (Claude, plan 017): the example is now an invented sentence, "Removable media is blocked on company laptops". It was checked first, on normalised text, against every house-set question and answer, every answer-memory pair and the golden set: none contains it. The `KNOWN` entry is gone, so HOUSE-096 is scored again, and `poe eval-contamination` reports 0 leaks. Its effect on answers has not been measured: that needs a paid dev run, compared with `scripts/compare_runs.py --noise` against the plan 014 runs.
 
-## TD-034: An embedding request that stalls holds a question for up to 30 minutes
+## TD-034: An embedding request that stalls is never given up
 
-- **What:** measured 2026-10-06 (Claude, plan 014). During the second noise run, the measurement went silent at 07:38 local time with one connection open to the embedding host (`ds.t2.sa`) and no CPU in use. `src/embeddings.py` builds `OpenAIEmbeddings` with no `timeout`, so the OpenAI client's defaults apply: 600 seconds per attempt, with 2 retries. Only the interactive search (`service.search_knowledge`) bounds its embedding call (10 s).
-- **Impact:** if the embedding host stops answering mid-request, a question, and the person waiting on it, waits up to half an hour before the failure is contained. Answering anything else that needs that request waits as well.
+- **What:** measured 2026-10-06 (Claude, plan 014). During the second noise run, the measurement went silent at 07:38 local time with one connection open to the embedding host (`ds.t2.sa`) and no CPU in use. `src/embeddings.py` builds `OpenAIEmbeddings` with no `timeout`. This entry first said the OpenAI client's defaults would then apply (600 s, 2 retries). That was wrong: langchain passes `timeout=None` through, and the built client's timeout is `None`, so it waits for ever (checked 2026-10-06, plan 017). Only the interactive search (`service.search_knowledge`) bounds its embedding call (10 s).
+- **Impact:** if the embedding host stops answering mid-request, the question or the upload waiting on it never finishes, and neither does the person watching it.
 - **Fix (needs a decision):** an `EMBEDDING_TIMEOUT` setting (for example 30 s) passed to the client, so a stalled host fails the question fast, as the Docling client already does with `DOCLING_TIMEOUT`. This changes behaviour: a slow but working host would also be cut off.
+- **Decision** 2026-10-06, by the user: set a large timeout, because a large file being added to the knowledge base may take a long time; test it and choose a good limit.
+- **Resolved** 2026-10-06 (Claude, plan 017): `EMBEDDING_TIMEOUT`, default 300 s, applies to each request; the client's 2 retries stay. Ingestion sends 64 chunks per request, so the limit is per batch, and a large file is many batches, each with its own limit. Measured against the host that day, one request at a time, with synthetic text:
+  - a 64-chunk batch of 1,200-character chunks took 37 to 70 s;
+  - a one-line query took 0.26 to 34 s.
+
+  300 s is about four times the slowest batch. A stalled host now fails a request after about 15 minutes (three attempts) instead of never. `tests/test_embeddings_client.py` holds a local server that never replies: with the timeout the request fails in about 3 s; without it, the same test was still waiting when a 40 s limit killed it.
 

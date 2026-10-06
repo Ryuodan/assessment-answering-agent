@@ -123,6 +123,11 @@ class Settings(BaseSettings):
     embedding_base_url: str = "https://ds.t2.sa/text_embed/v1"
     embedding_model: str = "bge-m3"
     embedding_api_key: str = "unused"
+    # Seconds one embedding request may take before it is retried (twice) and then
+    # fails. Ingestion sends 64 chunks per request, so this bounds one batch, not a
+    # whole file. Without it the client waited for ever: a stalled host held a run
+    # for 53 minutes (TD-034, plan 017).
+    embedding_timeout: float = Field(default=300.0, gt=0)
 
     # --- Document conversion (Docling) -------------------------------------
     # Docling runs as a container on the testing server and converts PDF/DOCX

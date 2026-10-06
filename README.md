@@ -174,9 +174,7 @@ through them: [ARCHITECTURE.md](ARCHITECTURE.md).
 - **The embedding endpoint is a hard dependency at ingest time.** If
   `EMBEDDING_BASE_URL` is unreachable, indexing that file fails and is reported
   per file; answering fails per question and the rest of the run continues.
-  `src/embeddings.py` carries a commented local `HuggingFaceEmbeddings`
-  alternative for working offline — the vectors are compatible, since it is the
-  same BGE-M3 model.
+  There is no offline alternative.
 - **Answers are written back into Excel and Word questionnaires only.** `fill`
   writes the confirmed answers into a copy of an uploaded .xlsx, .xlsm or .docx
   questionnaire. A PDF questionnaire can be answered, and its answers exported

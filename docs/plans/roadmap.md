@@ -26,3 +26,4 @@ Work asked for directly, outside the milestones:
 | Plan | What | Status |
 |---|---|---|
 | [016](completed/016-chat-progress.md) | the chat page's answered count restarted during the preferences pass | done 2026-10-06 |
+| [017](completed/017-user-decisions.md) | the user's decisions on TD-020, TD-033 and TD-034 | done 2026-10-06 |

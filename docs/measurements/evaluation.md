@@ -133,7 +133,8 @@ looks for 10 consecutive words of a question or a reference answer anywhere
 in `src/`, and for a question that is, normalised, already a question in the
 answer memory. A leak stops the run unless it is recorded in `KNOWN` in
 `eval/contamination.py`, against a tech-debt item. A recorded leak's case is
-left out and the run says so. The first check found one: TD-033.
+left out and the run says so. The first check found one, TD-033; plan 017
+replaced the prompt's example, and the check has found none since.
 
 A question that failed to be answered, or whose judge failed, is an
 **infrastructure failure**, not an answer. It is left out of every number and
