@@ -369,7 +369,7 @@ async def search_knowledge(
                 dense = await asyncio.wait_for(
                     store.search(query, source_type, limit, expand=False), SEARCH_EMBED_TIMEOUT
                 )
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001 - search degrades to keyword results, it does not fail
                 # The embedding service is remote and occasionally slow to
                 # answer; a person at a search box should get the literal
                 # matches rather than a spinner or a stack trace.

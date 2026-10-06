@@ -818,15 +818,7 @@ def set_answer(user: User, batch_id: str, question_id: str, text: str, *, which:
             )
         return
 
-    answered = (
-        existing.model_copy(deep=True)
-        if existing
-        else AnsweredQuestion(
-            question=_as_question(question),
-            answer="",
-            confidence=0.0,
-        )
-    )
+    answered = _working_copy(existing, question)
     if which == "brief":
         answered.brief = text
     else:
@@ -884,15 +876,7 @@ def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = T
         return
 
     existing = batches.answers(batch.id).get(question_id)
-    answered = (
-        existing.model_copy(deep=True)
-        if existing
-        else AnsweredQuestion(
-            question=_as_question(question),
-            answer="",
-            confidence=0.0,
-        )
-    )
+    answered = _working_copy(existing, question)
     answered.answer = ""
     answered.needs_review = False
     answered.error = ""
@@ -1272,6 +1256,13 @@ async def search(
 ) -> dict:
     """Look something up in a team's indexed policies, without touching a batch."""
     return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id)
+
+
+def _working_copy(existing: AnsweredQuestion | None, question: FormQuestion) -> AnsweredQuestion:
+    """The stored answer to change, copied, or an empty one for a question never answered."""
+    if existing:
+        return existing.model_copy(deep=True)
+    return AnsweredQuestion(question=_as_question(question), answer="", confidence=0.0)
 
 
 def _as_question(question: FormQuestion) -> Question:

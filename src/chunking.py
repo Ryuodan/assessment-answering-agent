@@ -820,37 +820,22 @@ def _split_table(block: Block, budget: int) -> list[list[Block]]:
     rows = [piece for row in rows for piece in _hard_wrap(row, room_for_row)]
     room = max(budget - sum(len(line) + 1 for line in header), 200)
 
+    def piece(rows_here: list[str]) -> list[Block]:
+        # Every piece repeats the header and records the clauses its own rows cover.
+        clause = _table_clause_range(rows_here)[0] or block.clause
+        return [Block("table", header + rows_here, 0, clause, block.page)]
+
     pieces: list[list[Block]] = []
     current: list[str] = []
     used = 0
     for row in rows:
         if current and used + len(row) + 1 > room:
-            pieces.append(
-                [
-                    Block(
-                        "table",
-                        header + current,
-                        0,
-                        _table_clause_range(current)[0] or block.clause,
-                        block.page,
-                    )
-                ]
-            )
+            pieces.append(piece(current))
             current, used = [], 0
         current.append(row)
         used += len(row) + 1
     if current:
-        pieces.append(
-            [
-                Block(
-                    "table",
-                    header + current,
-                    0,
-                    _table_clause_range(current)[0] or block.clause,
-                    block.page,
-                )
-            ]
-        )
+        pieces.append(piece(current))
     return pieces or [[block]]
 
 

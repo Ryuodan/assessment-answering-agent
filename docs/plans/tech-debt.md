@@ -74,6 +74,7 @@ or docs and has not been verified by running anything.
 - **What:** found by name search, so approximate: never referenced: `batches.detail_of`, `documents.load_url_text`, `forms/docx._blocks`, `forms/reading.by_sheet`, `forms/xlsx._has_arabic`, `identity.team_members`, `models.QueryPlan`; referenced only by tests: `identity.is_allowed`.
 - **Impact:** dead code misleads readers about what the system does.
 - **Fix:** confirm each in the first garbage-collection round, then delete.
+- **Resolved** 2026-10-06 (Claude, plan 008): six deleted after reading each; `identity.is_allowed` kept, since its tests pin the allow-list semantics; `documents.load_url_text` is a question for the user (TD-032).
 
 ## TD-011: Tests loaded the developer's real `.env`
 
@@ -214,3 +215,9 @@ or docs and has not been verified by running anything.
 - **Impact:** customer file names and search text are kept in the server log.
 - **Fix (needs a decision):** start uvicorn with `--no-access-log` in both scripts, relying on `http.request`.
 - **Decision** 2026-10-06, by the user: no need to change it. Kept as it is; recorded here so the trade-off stays visible.
+
+## TD-032: URL ingestion exists but nothing reaches it
+
+- **What:** read 2026-10-06 (Claude, plan 008): `documents.load_url_text` asks Docling to fetch and convert a document by URL (`docling_client.convert_url`). No route, tool, script or test calls it; every document enters as an uploaded file.
+- **Impact:** about 40 lines that read as a feature the product does not offer. If it were wired up without care, the server's Docling would fetch whatever URL a person gave it.
+- **Fix (needs a decision):** delete both functions, or keep them for a planned "add a policy from a link" feature and say so in `documents.py`. Recommended: delete; the git history keeps them.

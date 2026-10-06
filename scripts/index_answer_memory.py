@@ -27,11 +27,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from langchain_core.documents import Document  # noqa: E402
+from langchain_core.documents import Document
 
-from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
-from src.knowledge import get_store  # noqa: E402
-from src.models import SourceType  # noqa: E402
+from src.config import PROJECT_ROOT, configure_logging
+from src.knowledge import get_store
+from src.models import SourceType
 
 MEMORY = PROJECT_ROOT / "eval" / "answer_memory.json"
 SOURCE_NAME = "Answer memory — the security team's own answers"
@@ -103,7 +103,7 @@ def main() -> int:
         print("\nNothing written. Pass --apply.")
         return 0
 
-    indexed = store._replace_source(SOURCE_NAME, build(rows))  # noqa: SLF001
+    indexed = store._replace_source(SOURCE_NAME, build(rows))  # noqa: SLF001 - an operator's re-index, not app code
     print(f"\nIndexed {indexed} remembered answers.")
     print("counts by type:", store.counts_by_type())
     return 0

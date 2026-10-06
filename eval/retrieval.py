@@ -342,7 +342,7 @@ async def build_plans(targets: list[Target], concurrency: int = 4) -> dict[str, 
             try:
                 planned = await nodes.plan({"question": question, "language": question.language})
                 return target.test_id, list(planned.get("search_queries") or [target.question])
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - one failed plan must not end the measurement
                 logger.exception("Planning failed for %s", target.test_id)
                 return target.test_id, [target.question]
 

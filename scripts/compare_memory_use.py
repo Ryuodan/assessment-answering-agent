@@ -36,17 +36,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src.config import PROJECT_ROOT, configure_logging, settings  # noqa: E402
-from src import llm  # noqa: E402
-from src import prompts  # noqa: E402
-from eval.house import (  # noqa: E402
+from src.config import PROJECT_ROOT, configure_logging, settings
+from src import llm
+from src import prompts
+from eval.house import (
     form_score,
     judge_agreement,
     load_house_set,
     summarise,
     HouseResult,
 )
-from scripts.run_house_eval import stratified  # noqa: E402
+from scripts.run_house_eval import stratified
 
 RESULTS = PROJECT_ROOT / "eval" / "results"
 

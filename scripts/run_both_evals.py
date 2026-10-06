@@ -41,12 +41,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
-from src import llm  # noqa: E402
-from src.models import AssessmentResult  # noqa: E402
+from src.config import PROJECT_ROOT, configure_logging
+from src import llm
+from src.models import AssessmentResult
 
-from eval.dataset import align, load_golden_set  # noqa: E402
-from eval.house import (  # noqa: E402
+from eval.dataset import align, load_golden_set
+from eval.house import (
     HouseResult,
     format_summary,
     judge_agreement,
@@ -54,8 +54,8 @@ from eval.house import (  # noqa: E402
     register_score,
     summarise,
 )
-from eval.judge import judge_all  # noqa: E402
-from eval.report import build_report  # noqa: E402
+from eval.judge import judge_all
+from eval.report import build_report
 
 RESULTS = PROJECT_ROOT / "eval" / "results"
 NOISE = 2.0

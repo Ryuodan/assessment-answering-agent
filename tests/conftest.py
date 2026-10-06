@@ -31,13 +31,13 @@ for _name in [name for name in os.environ if name.lower() in _SETTING_NAMES]:
 # exporting fixtures to their collector.
 os.environ["PHOENIX_TRACING"] = "false"
 
-import pytest  # noqa: E402
+import pytest
 
-from src import access_codes, answer_memory, credentials, store  # noqa: E402
-from src.chunking import chunk_document  # noqa: E402
-from src.config import PROJECT_ROOT, settings  # noqa: E402
-from src.knowledge import KnowledgeStore  # noqa: E402
-from src.models import SourceType  # noqa: E402
+from src import access_codes, answer_memory, credentials, store
+from src.chunking import chunk_document
+from src.config import PROJECT_ROOT, settings
+from src.knowledge import KnowledgeStore
+from src.models import SourceType
 
 
 def paths_inside_project(config: object) -> list[str]:

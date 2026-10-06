@@ -1357,7 +1357,7 @@ half a new file.
 
 ### Answering one
 
-`src/tools` is every operation the interface performs and the agent will later
+`src/tools.py` is every operation the interface performs and the agent will later
 call, as plain functions taking a user and returning data -- no request, no
 response. Building them first means they can be tested with fixed inputs before
 anything non-deterministic is choosing between them.
@@ -1396,7 +1396,7 @@ Both followed the instruction. The injected version cited a third fewer sources
 annual review and a sign-off, where the rewrite kept the original's caveat that
 *the sources do not require an annual sign-off*. Told to be brief, a drafter
 drops hedges; a rewriter has the finished sentence in front of it and does not.
-So injection was removed outright and `src/rewrite` does the wording: one call
+So injection was removed outright and `src/rewrite.py` does the wording: one call
 over the answer and the sources it was already built from, no retrieval and no
 review loop, at about a fifth of the cost. The facts, the evidence and the
 citations come through untouched, because none of them changed.

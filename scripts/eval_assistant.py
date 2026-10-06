@@ -58,7 +58,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-print = functools.partial(print, flush=True)  # noqa: A001
+print = functools.partial(print, flush=True)  # noqa: A001 - flush each line, so a slow run reads as alive
 
 # Half the cases are in Arabic, and a Windows console defaults to a codepage
 # that cannot encode it -- so `--verbose`, the one flag you reach for to find
@@ -68,10 +68,10 @@ print = functools.partial(print, flush=True)  # noqa: A001
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src import batches, conversations, identity, llm, tools  # noqa: E402
-from src.agents import assistant  # noqa: E402
-from src.conversations import Conversation  # noqa: E402
-from tests import forms_fixtures as shapes  # noqa: E402
+from src import batches, conversations, identity, llm, tools
+from src.agents import assistant
+from src.conversations import Conversation
+from tests import forms_fixtures as shapes
 
 _ARABIC = re.compile(r"[؀-ۿ]")
 

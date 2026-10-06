@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 2045
+max_lines = 2036
 debt = "TD-006"
 
 [[size]]
@@ -14,17 +14,17 @@ debt = "TD-006"
 
 [[size]]
 path = "src/tools.py"
-max_lines = 1496
+max_lines = 1487
 debt = "TD-006"
 
 [[size]]
 path = "src/chunking.py"
-max_lines = 1109
+max_lines = 1094
 debt = "TD-006"
 
 [[size]]
 path = "src/forms/xlsx.py"
-max_lines = 939
+max_lines = 935
 debt = "TD-006"
 
 [[size]]
@@ -54,7 +54,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/identity.py"
-max_lines = 622
+max_lines = 615
 debt = "TD-006"
 
 [[size]]
@@ -64,7 +64,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/forms/docx.py"
-max_lines = 504
+max_lines = 492
 debt = "TD-006"
 
 [[size]]
@@ -79,7 +79,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/models.py"
-max_lines = 430
+max_lines = 421
 debt = "TD-006"
 
 [[size]]

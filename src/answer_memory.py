@@ -674,7 +674,7 @@ def unindex_entry(entry_id: str, team_id: str | None = None) -> None:
         from src.knowledge import get_store
 
         get_store(_team(team_id)).remove_entry(entry_id)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - removing from the index must not fail the removal itself
         logger.exception("Could not remove memory entry %s from the index", entry_id)
 
 

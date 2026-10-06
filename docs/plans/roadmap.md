@@ -14,3 +14,7 @@ a plan number without a file has not been written yet.
 
 A garbage-collection round, as its own plan, follows each milestone or about
 40 commits, whichever comes first.
+
+| Cleanup round | After | Plan | Status |
+|---|---|---|---|
+| 1 | M3 | [008](completed/008-gc-round-1.md) | done 2026-10-06 |

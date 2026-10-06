@@ -171,7 +171,6 @@ src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for on
 src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
-src/forms/docx.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/forms/reading.py: [no-any-return] Returning Any from function declared to return "str"
 src/forms/reading.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/forms/reading.py: [no-untyped-def] Function is missing a type annotation for one or more parameters

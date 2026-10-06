@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.formatting import without_reasoning  # noqa: E402
+from src.formatting import without_reasoning
 
 # Each table, the column holding the JSON, and the fields in it worth cleaning.
 STORES = [

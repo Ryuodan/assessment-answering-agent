@@ -360,15 +360,6 @@ class ExtractedQAPairs(BaseModel):
     pairs: list[ExtractedQAPair] = Field(default_factory=list)
 
 
-class QueryPlan(BaseModel):
-    """Searches to run for one question, before any answer exists."""
-
-    queries: list[str] = Field(
-        default_factory=list,
-        description="2-4 short search queries, one per distinct thing the question asks",
-    )
-
-
 class DraftedAnswer(BaseModel):
     """The model's proposed answer to a single question."""
 

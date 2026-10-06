@@ -610,7 +610,7 @@ def test_padding_is_all_that_a_compacted_table_loses():
         "| كارثي            | فشل كارثي في الخدمات   | فوري     |",
         "| Critical (حرج)   | Gross threat -- image  | 2 hours  |",
     ]
-    squash = lambda rows: re.sub(r"\s+", "", "".join(rows))  # noqa: E731
+    squash = lambda rows: re.sub(r"\s+", "", "".join(rows))  # noqa: E731 - a one-line helper, local to this test
 
     body_raw = [r for r in raw if "---" not in r]
     body_new = [r for r in compact_table(raw) if set(r) - set("| -")]
@@ -784,7 +784,7 @@ def test_nothing_a_document_says_is_lost_to_the_filter():
     )
     chunks = chunk_document(doc, source_name="p.pdf", chunk_size=1800)
 
-    words = lambda t: set(re.findall(r"[^\W_]+", t.lower()))  # noqa: E731
+    words = lambda t: set(re.findall(r"[^\W_]+", t.lower()))  # noqa: E731 - a one-line helper, local to this test
     # Measured against the document minus its figure placeholders: those are
     # stripped deliberately, and they are the one thing in the source that is
     # not something the document says.

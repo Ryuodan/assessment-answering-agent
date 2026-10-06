@@ -39,7 +39,7 @@ try:  # pragma: no cover - depends on the installed groq client version
     from groq import InternalServerError as GroqServerError
     from groq import RateLimitError as GroqRateLimitError
 except ImportError:  # pragma: no cover
-    GroqBadRequestError = GroqRateLimitError = GroqConnectionError = GroqServerError = None  # type: ignore[assignment]
+    GroqBadRequestError = GroqRateLimitError = GroqConnectionError = GroqServerError = None  # type: ignore[assignment]  # only without groq, which langchain-groq requires
 
 logger = logging.getLogger(__name__)
 

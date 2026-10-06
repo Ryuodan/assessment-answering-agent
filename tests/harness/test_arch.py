@@ -249,3 +249,17 @@ def test_raw_json_decoding_fails_where_data_arrives(tree):
 def test_a_named_exemption_may_decode_its_own_data(tree):
     write(tree, "src/store.py", "import json\n\nX = json.loads('{}')\n")
     assert [r for r in rules(tree) if r[0] == "ARCH-JSON"] == []
+
+
+def test_lowering_ceilings_only_ever_lowers(tree):
+    write(tree, "src/shrunk.py", lines(450))
+    write(tree, "src/grown.py", lines(520))
+    allowlist = allow(
+        tree,
+        '[[size]]\npath = "src/shrunk.py"\nmax_lines = 500\ndebt = "TD-001"\n\n'
+        '[[size]]\npath = "src/grown.py"\nmax_lines = 500\ndebt = "TD-001"\n',
+    )
+    assert arch.lower_ceilings(tree, allowlist) == ["src/shrunk.py: 500 -> 450"]
+    text = allowlist.read_text(encoding="utf-8")
+    assert 'path = "src/shrunk.py"\nmax_lines = 450' in text
+    assert 'path = "src/grown.py"\nmax_lines = 500' in text, "a module that grew is a violation, not a new ceiling"

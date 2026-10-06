@@ -17,7 +17,7 @@ from src import batches, conversations, preferences, tools
 from src.agents import assistant
 from src.api import app
 from tests import forms_fixtures as shapes
-from tests.test_assistant import _graph, answers_yes, scripted, user  # noqa: F401
+from tests.test_assistant import _graph, answers_yes, scripted, user  # noqa: F401 - pytest fixtures, used by name
 
 
 def _turn(n: int, *, tools_used: int = 2) -> list:

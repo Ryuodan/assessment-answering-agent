@@ -1542,6 +1542,27 @@ def _persist_run(user: User, result: AssessmentResult) -> None:
         logger.exception("run.save_failed", run_id=result.run_id, effect="the answers were still returned")
 
 
+async def _save_assessment(file: UploadFile, user: User) -> Path:
+    """An uploaded assessment, checked for its type and kept as the person's own."""
+    _check_suffix(file.filename or "")
+    return service.save_upload(file.filename or "assessment", await file.read(), user.team_id, owner=user.email)
+
+
+def _export_options(
+    result: AssessmentResult, include_flagged: bool, include_citations: bool, include_reasoning: bool
+) -> ExportOptions:
+    """The export's options, refusing an export that would hold no answer."""
+    options = ExportOptions(
+        include_flagged=include_flagged, include_citations=include_citations, include_reasoning=include_reasoning
+    )
+    if not selected_answers(result, options):
+        raise Unprocessable(
+            "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
+            code="nothing_to_export",
+        )
+    return options
+
+
 @app.post("/api/assessments/answer")
 async def answer_assessment(
     file: UploadFile = File(...),
@@ -1558,13 +1579,7 @@ async def answer_assessment(
     is still open — answering a long assessment is minutes of silence, and the
     identifier has to be known before the work starts to be of any use.
     """
-    _check_suffix(file.filename or "")
-    path = service.save_upload(
-        file.filename or "assessment",
-        await file.read(),
-        user.team_id,
-        owner=user.email,
-    )
+    path = await _save_assessment(file, user)
 
     result = await service.answer_assessment(
         path,
@@ -1619,13 +1634,7 @@ async def extract_assessment(
     likely to need a human eye: a numbered list can lose an item to a page
     break, and a row of guidance can read as a question.
     """
-    _check_suffix(file.filename or "")
-    path = service.save_upload(
-        file.filename or "assessment",
-        await file.read(),
-        user.team_id,
-        owner=user.email,
-    )
+    path = await _save_assessment(file, user)
 
     language, questions = await service.extract_assessment_questions(path)
     if not questions:
@@ -1762,16 +1771,7 @@ def export_pdf(
     what goes back to an assessor should not silently include drafts the system
     itself was unsure of.
     """
-    options = ExportOptions(
-        include_flagged=include_flagged,
-        include_citations=include_citations,
-        include_reasoning=include_reasoning,
-    )
-    if not selected_answers(result, options):
-        raise Unprocessable(
-            "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
-            code="nothing_to_export",
-        )
+    options = _export_options(result, include_flagged, include_citations, include_reasoning)
 
     content = render_pdf(result, options)
 
@@ -1798,16 +1798,7 @@ def export_docx(
     Word rather than by us, which makes this the better format for an Arabic
     questionnaire.
     """
-    options = ExportOptions(
-        include_flagged=include_flagged,
-        include_citations=include_citations,
-        include_reasoning=include_reasoning,
-    )
-    if not selected_answers(result, options):
-        raise Unprocessable(
-            "No answer met the confidence threshold. Enable 'answers flagged for review' to export drafts.",
-            code="nothing_to_export",
-        )
+    options = _export_options(result, include_flagged, include_citations, include_reasoning)
 
     content = render_docx(result, options)
     filename = f"{Path(result.source_name).stem or 'assessment'}.answers.docx"

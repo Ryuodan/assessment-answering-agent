@@ -32,9 +32,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
-from src.embeddings import get_embeddings  # noqa: E402
-from src.memory import SAME_QUESTION, disagree, verdict_of  # noqa: E402
+from src.config import PROJECT_ROOT, configure_logging
+from src.embeddings import get_embeddings
+from src.memory import SAME_QUESTION, disagree, verdict_of
 
 MEMORY = PROJECT_ROOT / "eval" / "answer_memory.json"
 

@@ -127,10 +127,6 @@ def _label(heading: str) -> str:
     return " ".join(first.split("(")[0].split()).lower()
 
 
-def _has_arabic(text: str) -> bool:
-    return bool(_ARABIC.search(text))
-
-
 def _language(text: str) -> str:
     """Which language a question is in.
 

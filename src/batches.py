@@ -242,12 +242,6 @@ word, and the same person wants both in different weeks.
 """
 
 
-def detail_of(batch_id: str) -> str:
-    conn = store.connect()
-    row = conn.execute("SELECT detail FROM form_batches WHERE batch_id = ?", (batch_id,)).fetchone()
-    return (row["detail"] if row else "full") or "full"
-
-
 def set_detail(batch_id: str, detail: str) -> None:
     if detail not in DETAIL_LEVELS:
         raise ValueError(f"detail must be one of {DETAIL_LEVELS}, not {detail!r}")

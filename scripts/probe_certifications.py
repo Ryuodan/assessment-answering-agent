@@ -26,9 +26,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src.config import PROJECT_ROOT, configure_logging  # noqa: E402
-from src import llm  # noqa: E402
-from eval.house import HouseCase, judge_agreement  # noqa: E402
+from src.config import PROJECT_ROOT, configure_logging
+from src import llm
+from eval.house import HouseCase, judge_agreement
 
 MENTIONS = re.compile(r"iso\s*/?\s*(iec)?\s*27001|soc\s*2|pci\s*dss|certif", re.I)
 

@@ -597,7 +597,34 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
     )
 
 
-def main() -> int:
+def lower_ceilings(root: Path = ROOT, allowlist: Path | None = None) -> list[str]:
+    """Set each allow-listed module's ceiling to its current length, where that is lower.
+
+    Never raises one: a module that grew is a violation to fix, not a number to edit.
+    """
+    path = allowlist or root / "harness" / "arch-allowlist.toml"
+    text = path.read_text(encoding="utf-8")
+    changed: list[str] = []
+    for module, (ceiling, _debt) in Allowlist.load(path).size.items():
+        file = root / module
+        if not file.exists():
+            continue
+        lines = counted_lines(module, file.read_text(encoding="utf-8"))
+        if lines < ceiling:
+            pattern = re.compile(rf'(path = "{re.escape(module)}"\nmax_lines = ){ceiling}\b')
+            text, count = pattern.subn(rf"\g<1>{lines}", text)
+            if count:
+                changed.append(f"{module}: {ceiling} -> {lines}")
+    path.write_text(text, encoding="utf-8")
+    return changed
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if args == ["--lower-ceilings"]:
+        changed = lower_ceilings()
+        print("\n".join(changed) or "no ceiling could be lowered")
+        return 0
     return finish("arch", check())
 
 

@@ -31,8 +31,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src import forms  # noqa: E402
-from src.forms.model import Role  # noqa: E402
+from src import forms
+from src.forms.model import Role
 
 ANSWER = "Yes. An approved policy is in place and reviewed annually."
 ARABIC = "\u0646\u0639\u0645\u060c \u062a\u0648\u062c\u062f \u0633\u064a\u0627\u0633\u0629 \u0645\u0639\u062a\u0645\u062f\u0629 \u0648\u0645\u0631\u0627\u062c\u0639\u0629 \u0633\u0646\u0648\u064a\u0627\u064b."

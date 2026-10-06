@@ -19,6 +19,7 @@ uv run poe types-baseline                       # drop fixed errors from the myp
 uv run poe gen                                  # regenerate docs/generated/
 uv run poe snapshots                            # re-record characterization snapshots; review the diff
 uv run poe cov                                  # line coverage per module (measured, not gated)
+uv run poe gc | grades | arch-lower             # cleanup round: candidates, grades per layer, lower size ceilings
 uv run poe eval-unlock | eval-seal | eval-status # sealed eval data (needs EVAL_DATA_KEY in .env)
 uv run python -m pytest tests/test_x.py -x      # one test file
 uv run python -m uvicorn src.api:app --reload   # the app on :8000
@@ -36,6 +37,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | Why things are the way they are | [decisions.md](docs/design/decisions.md), [boundaries.md](docs/design/boundaries.md); design history in [README.md](README.md) |
 | Current work | [docs/plans/active/](docs/plans/README.md), [roadmap](docs/plans/roadmap.md) |
 | Known problems | [tech-debt.md](docs/plans/tech-debt.md) |
+| Quality per layer, round by round | [quality/grades.md](docs/quality/grades.md) |
 | The rules and what enforces each | [golden-principles.md](docs/harness/golden-principles.md), [PRINCIPLES.md](docs/harness/PRINCIPLES.md) |
 | Plan template and rules | [docs/plans/README.md](docs/plans/README.md) |
 | API contract, settings, error codes (generated) | [openapi.json](docs/generated/openapi.json), [settings.md](docs/generated/settings.md), [errors.md](docs/generated/errors.md) |

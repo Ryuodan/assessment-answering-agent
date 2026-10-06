@@ -496,13 +496,6 @@ def purge_expired_sessions() -> int:
     return cursor.rowcount
 
 
-def team_members(team_id: str) -> list[str]:
-    """Addresses on one team, oldest first."""
-    conn = store.connect()
-    rows = conn.execute("SELECT email FROM users WHERE team_id = ? ORDER BY created_at", (team_id,)).fetchall()
-    return [row["email"] for row in rows]
-
-
 # ---------------------------------------------------------------------------
 # Startup
 # ---------------------------------------------------------------------------

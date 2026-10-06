@@ -25,9 +25,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src import answer_memory  # noqa: E402
-from src.config import configure_logging  # noqa: E402
-from src import llm  # noqa: E402
+from src import answer_memory
+from src.config import configure_logging
+from src import llm
 
 
 async def main_async(args) -> int:

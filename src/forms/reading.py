@@ -45,7 +45,7 @@ from pathlib import Path
 from langchain_core.callbacks import get_usage_metadata_callback
 
 from src import forms
-from src.forms.model import DetectedForm, Part
+from src.forms.model import DetectedForm
 
 STRATEGIES = ("rules", "assisted", "agent", "hybrid", "guarded")
 
@@ -272,7 +272,3 @@ def disagreements(readings: dict[str, Reading]) -> list[str]:
         if len(set(row.get(s, 0) for s in readings)) > 1:
             lines.append(f"{name}: " + ", ".join(f"{s} {row.get(s, 0)}" for s in readings))
     return lines
-
-
-def by_sheet(form: DetectedForm) -> dict[str, Part]:
-    return {part.name: part for part in form.parts}

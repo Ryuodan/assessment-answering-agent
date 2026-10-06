@@ -25,8 +25,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src.config import configure_logging  # noqa: E402
-from src.knowledge import get_store  # noqa: E402
+from src.config import configure_logging
+from src.knowledge import get_store
 
 # Saudi national law, regulator guidance, and other people's frameworks. These
 # say what we are required to do; they are not evidence that we do it.

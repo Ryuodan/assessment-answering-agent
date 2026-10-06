@@ -45,7 +45,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `memory_entry_not_found` | 404 | `NotFound` | `src.api.edit_memory_entry`, `src.api.remove_memory_entry`, `src.api.resolve_memory_conflict`, `src.api.restore_memory_entry` |
 | `no_files` | 400 | `Invalid` | `src.api._ingest_files` |
 | `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment` |
-| `nothing_to_export` | 422 | `Unprocessable` | `src.api.export_docx`, `src.api.export_pdf` |
+| `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |
 | `password_from_environment` | 400 | `Invalid` | `src.api.admin_set_password` |
 | `preview_failed` | 422 | `Unprocessable` | `src.api.preview_document` |
 | `run_not_found` | 404 | `NotFound` | `src.api.get_run` |

@@ -45,13 +45,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # twenty minutes and most of it is the agent. Redirected to a file, buffered
 # output shows nothing at all until the end, and somebody watching cannot tell
 # a slow run from a stuck one.
-print = functools.partial(print, flush=True)  # noqa: A001
+print = functools.partial(print, flush=True)  # noqa: A001 - flush each line, so a slow run reads as alive
 
-from src import forms  # noqa: E402
-from src.forms import reading as reading_module  # noqa: E402
-from src.forms.reading import Reading, disagreements, read  # noqa: E402
-from src.forms.model import Role  # noqa: E402
-from scripts.check_forms import _answers, _parts  # noqa: E402
+from src import forms
+from src.forms import reading as reading_module
+from src.forms.reading import Reading, disagreements, read
+from src.forms.model import Role
+from scripts.check_forms import _answers, _parts
 
 
 def _write_back(path: Path, form, destination: Path, strategy: str) -> str:

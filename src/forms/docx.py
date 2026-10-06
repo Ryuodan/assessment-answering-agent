@@ -30,7 +30,6 @@ from pathlib import Path
 
 from docx import Document
 from docx.oxml.ns import qn
-from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from src.forms.model import DetectedForm, Finding, FormQuestion, Part, Role, Target, WriteReport
@@ -58,17 +57,6 @@ def _language(text: str) -> str:
 
 def _is_rtl(text: str) -> bool:
     return _language(text) == "ar"
-
-
-def _blocks(document) -> list[tuple[str, object]]:
-    """Paragraphs and tables in the order they appear, which python-docx hides."""
-    out: list[tuple[str, object]] = []
-    for child in document.element.body.iterchildren():
-        if child.tag == qn("w:p"):
-            out.append(("p", Paragraph(child, document)))
-        elif child.tag == qn("w:tbl"):
-            out.append(("tbl", Table(child, document)))
-    return out
 
 
 def _paragraph_index(document) -> list[Paragraph]:
