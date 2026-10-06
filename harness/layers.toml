@@ -47,6 +47,7 @@ modules = [
 name = "records"
 about = "What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits."
 modules = [
+    "src.access_codes",
     "src.identity",
     "src.events",
     "src.runs",

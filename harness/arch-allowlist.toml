@@ -54,7 +54,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/identity.py"
-max_lines = 625
+max_lines = 622
 debt = "TD-006"
 
 [[size]]

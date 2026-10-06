@@ -21,7 +21,7 @@ os.environ["PHOENIX_TRACING"] = "false"
 
 import pytest  # noqa: E402
 
-from src import answer_memory, credentials, store  # noqa: E402
+from src import access_codes, answer_memory, credentials, store  # noqa: E402
 from src.chunking import chunk_document  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.knowledge import KnowledgeStore  # noqa: E402
@@ -73,6 +73,19 @@ def isolated_storage(tmp_path, monkeypatch):
     yield
     store.reset_connection()
     answer_memory.forget_sync()
+
+
+@pytest.fixture(autouse=True)
+def no_console(monkeypatch):
+    """Generated access codes reach no real terminal, and none outlives its test (TD-029).
+
+    `identity.bootstrap` runs in many tests; without this each would write a code
+    to the developer's console and leave it in memory for the next test.
+    """
+    shown: list[str] = []
+    monkeypatch.setattr(access_codes, "_to_console", lambda text: shown.append(text) or True)
+    monkeypatch.setattr(access_codes, "_waiting", {})
+    return shown
 
 
 @pytest.fixture(autouse=True)

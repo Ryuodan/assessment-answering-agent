@@ -31,7 +31,7 @@ from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 
 from src.logs import get_logger
-from src import credentials, store
+from src import access_codes, credentials, store
 from src.config import settings
 from src.errors import AccessDenied as AccessDenied, NotAllowed as NotAllowed
 
@@ -115,6 +115,7 @@ def set_access_code(team_id: str, code: str | None = None) -> str:
         (credentials.hash_secret(credentials.normalise_code(code)), store.utcnow(), team_id),
     )
     conn.commit()
+    access_codes.forget(team_id)
     return code
 
 
@@ -146,6 +147,7 @@ def list_teams() -> list[dict]:
             "code_set_at": row["code_set_at"],
             "has_code": bool(row["has_code"]),
             "members": row["members"],
+            "generated_code": access_codes.waiting(row["id"]),  # TD-029: admins only
         }
         for row in rows
     ]
@@ -588,13 +590,8 @@ def bootstrap() -> None:
         _remove_the_stand_in()
 
     if sign_in_required() and not team_has_code(settings.default_team):
-        code = set_access_code(settings.default_team)
-        logger.warning(
-            "identity.access_code_generated",
-            team=settings.default_team,
-            code=code,  # deliberately logged once; see TD-029
-            action="give it to the team, or replace it on the admin page",
-        )
+        shown_on = access_codes.announce(settings.default_team, set_access_code(settings.default_team))
+        logger.warning("identity.access_code_generated", team=settings.default_team, shown_on=shown_on)
 
 
 def _remove_the_stand_in() -> None:

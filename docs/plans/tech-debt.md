@@ -190,11 +190,13 @@ or docs and has not been verified by running anything.
 - **Impact:** their lines cannot be filtered by event or read as fields; they still carry the request ID, which the logging filter adds to every record.
 - **Fix:** convert a module whenever it is next changed (`get_logger`, an event name, keyword fields), then delete its allow-list entry.
 
-## TD-029: A generated team access code is written to the log
+## TD-029: A generated team access code was written to the log
 
 - **What:** read 2026-10-05 (Claude): on an upgrade where a team has no access code, `identity.bootstrap` generates one and logs it once at WARNING, in plaintext, so that someone can read it off the log ("Setting it up, and upgrading into it" in the README).
 - **Impact:** a credential sits in `logs/server.log`, and in anything that collects logs, for as long as they are kept.
 - **Fix (needs a decision):** show it once some other way (the admin page already issues codes; or print it to the console only, not the log file), or accept it as the documented break-glass path. Not changed: it is how an upgrade avoids locking everyone out.
+- **Decision** 2026-10-06, by the user: show it on the admin page and on the console.
+- **Resolved** 2026-10-06 (Claude): `src/access_codes.py` keeps the generated code in the server's memory only and lists it beside its team on the Access panel (administrators only) until a new code is issued; it writes it to the terminal device itself (`/dev/tty`, `CONOUT$` on Windows), which the `tee` in `serve.sh` does not capture; the log records `identity.access_code_generated` with where it was shown, never the code (`tests/test_access_codes.py`). The README's example of the old log line contained a code, `YEKS-...`; if that was a real one it has been in git since it was written and should be rotated on the Access panel.
 
 ## TD-030: Real customer names in code, tests and the README
 
@@ -202,8 +204,9 @@ or docs and has not been verified by running anything.
 - **Impact:** the repository says who the customers are, which the sealing of the eval data (plan 002) was meant to keep out of git.
 - **Fix (needs a decision):** replace them with invented names (behaviour-neutral in tests and comments), and decide whether a check should refuse them; such a check would need the names without committing them, for example by comparing hashes or by reading the sealed data when it is unlocked.
 
-## TD-031: uvicorn's access log writes every raw path and query string
+## TD-031: uvicorn's access log writes every raw path and query string (kept, by decision)
 
 - **What:** read 2026-10-05 (Claude): `serve.sh` and `run.sh` start uvicorn with its default access log, which writes `GET /api/documents/uploaded/uploaded/<file name>/file` and `GET /api/search?q=<search text>` lines to `logs/server.log` through uvicorn's own handler, so neither the redaction nor the route-template rule of `src/logs.py` applies. Since plan 005, `http.request` records every request without those details.
 - **Impact:** customer file names and search text are kept in the server log.
 - **Fix (needs a decision):** start uvicorn with `--no-access-log` in both scripts, relying on `http.request`.
+- **Decision** 2026-10-06, by the user: no need to change it. Kept as it is; recorded here so the trade-off stays visible.

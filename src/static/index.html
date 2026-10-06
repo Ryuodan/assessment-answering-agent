@@ -1041,6 +1041,17 @@
     code.innerHTML = team.has_code
       ? `<span class="adm-tag on">set</span> <span class="adm-note">${escapeText(team.code_set_at.slice(0, 10))}</span>`
       : `<span class="adm-tag off">not set</span>`;
+    if (team.generated_code) {
+      // Generated at startup and never logged (TD-029): shown here until a new code is issued.
+      const waiting = document.createElement("div");
+      waiting.className = "adm-note";
+      waiting.textContent = "Generated at startup: ";
+      const value = document.createElement("b");
+      value.className = "adm-generated";
+      value.textContent = team.generated_code;
+      waiting.append(value, " - give it to the team, or issue a new code.");
+      code.append(waiting);
+    }
 
     const actions = document.createElement("td");
     actions.className = "adm-actions";

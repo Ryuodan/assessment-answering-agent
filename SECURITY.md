@@ -49,9 +49,10 @@ Every log line goes through one handler (`src/logs.py`) that replaces the
 values of `GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`,
 `ADMIN_PASSWORD` and `EVAL_DATA_KEY`, and anything shaped like an API key, with
 `[redacted]`. The per-request line records the route template, never the raw
-path or query string. Two exceptions remain, both for a decision: a generated
-team access code is logged once on upgrade (TD-029), and uvicorn's own access
-log, which bypasses this handler, records raw paths and queries (TD-031).
+path or query string. A team access code generated on upgrade is shown on the
+console and the Access panel and never logged (TD-029). One exception is kept by
+decision: uvicorn's own access log, which bypasses this handler, records raw
+paths and queries (TD-031).
 
 ## Access model, in one paragraph
 

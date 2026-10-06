@@ -2397,11 +2397,14 @@ needs the operator again.
 Upgrading an installation that predates this is the case worth knowing about.
 Its users survive the migration as members, which means sign-in is already
 required — but no team has an access code yet, so on its own that would lock
-everybody out. Startup notices and issues one, printing it to the log **once**:
+everybody out. Startup notices and issues one, and shows it in two places, never
+in the log (TD-029): on the **console** the server was started from (written to
+the terminal itself, so `serve.sh`'s `tee` into `logs/server.log` does not catch
+it), and on the **Access panel**, beside its team, until an administrator issues
+a new code. The log only says that one was generated and where it was shown:
 
 ```
-WARNING src.identity: No access code was set for team 'cybersecurity', so one
-was generated: YEKS-BZBT-VRBM-5J4X
+WARNING  src.identity identity.access_code_generated team=cybersecurity shown_on="access panel, console"
 ```
 
 Nobody is promoted to administrator automatically, because guessing which of

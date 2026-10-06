@@ -23,7 +23,7 @@ Everything that talks to something outside the process: model providers, the emb
 
 What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits.
 
-- **Modules:** `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.preferences`, `src.runs`, `src.storage`
+- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.preferences`, `src.runs`, `src.storage`
 
 ## 4. answering
 
