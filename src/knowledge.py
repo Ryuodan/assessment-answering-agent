@@ -21,9 +21,7 @@ whole point of keeping the history.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
-import re
 import threading
 from contextlib import contextmanager
 
@@ -36,58 +34,9 @@ from src.embeddings import get_embeddings
 from src.lexical import LexicalIndex, parse_search_query, reciprocal_rank_fusion
 from src.models import Evidence, ExtractedQAPair, SourceType
 from src.chunking import chunk_document, fold_digits
+from src.vector_names import collection_for as collection_for, cosine_from_relevance as cosine_from_relevance
 
 logger = logging.getLogger(__name__)
-
-_SQRT2 = 2.0**0.5
-
-
-def cosine_from_relevance(relevance: float, space: str) -> float:
-    """Recover the cosine similarity from LangChain's relevance figure.
-
-    The number LangChain hands back is not the similarity it appears to be,
-    and the discrepancy is large enough to mislead a reader badly. Chroma's
-    `l2` space returns the *squared* euclidean distance, while LangChain's
-    `_euclidean_relevance_score_fn` computes `1 - distance / sqrt(2)` on the
-    assumption that the distance is an unsquared norm. For the unit-length
-    vectors BGE-M3 produces, the squared distance is `2 - 2 * cos`, so what
-    comes out is
-
-        reported = 1 - (2 - 2 cos) / sqrt(2) = sqrt(2) * cos - (sqrt(2) - 1)
-
-    — an affine squash of the cosine. Ranking is unaffected, because the
-    transform is strictly increasing, and no code in this project ever
-    compared a score against a fixed threshold. What it did affect was every
-    human reading the number: a chunk matching at cosine 0.72 was displayed as
-    0.60, which reads like a poor match rather than a good one. It also dips
-    below zero past cosine 0.293, and `order_evidence` seeds its group maximum
-    at 0.0, so a negative score would silently collapse into a tie.
-
-    Only the `l2` case needs undoing. A collection created with `cosine` or
-    `ip` is already reported as a similarity, and converting again would be a
-    second bug on top of the first — hence the space is passed in rather than
-    assumed.
-    """
-    if space != "l2":
-        return relevance
-    return 1.0 - (1.0 - relevance) * _SQRT2 / 2.0
-
-
-def collection_for(team_id: str) -> str:
-    """The Chroma collection a team's knowledge lives in.
-
-    The default team keeps the collection that existed before teams had their
-    own, so the corpus already indexed is still its corpus. Any other team gets
-    a name derived from its id: readable where the id allows, and always within
-    Chroma's rules (3-63 characters, letters, digits, dot, dash and underscore,
-    starting and ending with a letter or digit), with a hash so two ids that
-    tidy to the same letters cannot share a collection.
-    """
-    if team_id == settings.default_team:
-        return settings.collection_name
-    slug = re.sub(r"[^a-z0-9]+", "-", team_id.lower()).strip("-")[:24] or "team"
-    digest = hashlib.sha256(team_id.encode("utf-8")).hexdigest()[:10]
-    return f"{settings.collection_name[:20].rstrip('-_.')}-{slug}-{digest}"
 
 
 class KnowledgeStore:
@@ -99,12 +48,13 @@ class KnowledgeStore:
     team_id: str | None = None
     """Whose store this is. None, for a store a test built by hand, means the default team."""
 
-    def __init__(self, team_id: str | None = None) -> None:
+    def __init__(self, team_id: str | None = None, product_id: str = "") -> None:
         settings.ensure_directories()
         self._reset_caches()
         self.team_id = team_id or settings.default_team
+        self.product_id = product_id  # '' is the team's shared knowledge base (plan 021)
         self._store = Chroma(
-            collection_name=collection_for(self.team_id),
+            collection_name=collection_for(self.team_id, product_id),
             embedding_function=get_embeddings(),
             persist_directory=str(settings.chroma_dir),
         )
@@ -426,6 +376,7 @@ class KnowledgeStore:
         wanted: list[tuple[SourceType, int]],
         *,
         expand: bool = True,
+        vector: list[float] | None = None,
     ) -> dict[SourceType, list[Evidence]]:
         """Search several source types against a single embedding of `query`.
 
@@ -447,7 +398,7 @@ class KnowledgeStore:
         if not wanted or not query.strip():
             return {}
 
-        vector = await self._embed_query(query)
+        vector = vector or await self._embed_query(query)  # given, when another store already embedded it
         # The by-vector call returns raw distances -- lower is nearer -- while
         # the by-string call LangChain would otherwise use converts them to
         # relevance, higher is nearer. Applying the same conversion here keeps
@@ -797,7 +748,7 @@ _store_lock = threading.Lock()
 _stores: dict[str, KnowledgeStore] = {}
 
 
-def get_store(team_id: str | None = None) -> KnowledgeStore:
+def get_store(team_id: str | None = None, *, product_id: str = "") -> KnowledgeStore:
     """A team's store, built exactly once per team.
 
     Built under a lock. Construction is not safe to race: Chroma's process-wide
@@ -812,10 +763,20 @@ def get_store(team_id: str | None = None) -> KnowledgeStore:
     """
     team = team_id or settings.default_team
     with _store_lock:
-        store = _stores.get(team)
+        store = _stores.get(f"{team}/{product_id}")
         if store is None:
-            store = _stores[team] = KnowledgeStore(team)
+            store = _stores[f"{team}/{product_id}"] = KnowledgeStore(team, product_id)
         return store
+
+
+def drop_store(team_id: str, product_id: str) -> None:
+    """Delete a product's collection, and forget its store (plan 021). Never the shared one."""
+    if not product_id:
+        raise ValueError("drop_store deletes a product's collection, never a team's shared one.")
+    store = get_store(team_id, product_id=product_id)
+    with _store_lock:
+        _stores.pop(f"{team_id}/{product_id}", None)
+    store._store.delete_collection()
 
 
 def _forget_stores() -> None:
@@ -823,5 +784,5 @@ def _forget_stores() -> None:
         _stores.clear()
 
 
-# Callers reset the store between tests; keep the name they already use.
-get_store.cache_clear = _forget_stores
+# Callers reset the store between tests (setattr: a function has no such attribute).
+setattr(get_store, "cache_clear", _forget_stores)

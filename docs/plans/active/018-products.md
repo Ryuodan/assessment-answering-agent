@@ -138,7 +138,7 @@ Each step is its own plan.
    - seeding from `SEED_PRODUCTS`;
    - a Products page: list, add, edit, and delete behind the coloured warning and a typed "confirm";
    - tests, including browser tests for adding and deleting.
-3. **Plan 021, product knowledge bases:**
+3. **[Plan 021](../completed/021-product-knowledge-bases.md), product knowledge bases:**
    - give each product its own collection;
    - choose the upload target (shared or a product), and list or remove documents per scope;
    - write `src/scoped_knowledge.py`, which merges shared and product search, dense and lexical;
@@ -181,6 +181,10 @@ which do not exist yet.
 - 2026-10-06: Plan 019 done: `api.py` 2036 -> 1862 lines, `store.py` 475 -> 132, and the contract byte-identical.
 
 - 2026-10-06: Plan 020 done. It added the products, the team lead role, the Products page and the delete confirmation; `api.py` went from 1862 to 1811 lines and `identity.py` from 615 to 612.
+
+- 2026-10-06: Plan 021 smaller than first sketched: carrying the product into answering moves to plan 023, where a questionnaire gets its product, so 021 is the knowledge bases and the search alone.
+
+- 2026-10-06: Plan 021 done: product knowledge bases, the selector on both pages, and the knowledge routes moved out of `api.py` (1811 -> 1700 lines).
 
 ## Decision log
 

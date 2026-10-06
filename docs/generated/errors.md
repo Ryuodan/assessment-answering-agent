@@ -37,17 +37,17 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 |---|---|---|---|
 | `admin_required` | 403 | `Forbidden` | `src.routes.auth.current_admin` |
 | `assistant_unconfigured` | 503 | `Unavailable` | `src.api.say_to_assistant`, `src.api.say_with_a_file` |
-| `authority_invalid` | 400 | `Invalid` | `src.api.upload_guidelines` |
+| `authority_invalid` | 400 | `Invalid` | `src.routes.knowledge.upload_guidelines` |
 | `confirmation_required` | 400 | `Invalid` | `src.products.delete` |
 | `conversation_not_found` | 404 | `NotFound` | `src.api._conversation` |
 | `document_not_found` | 404 | `NotFound` | `src.api._resolve_document` |
 | `document_path_invalid` | 400 | `Invalid` | `src.api._resolve_document` |
-| `document_type_unsupported` | 415 | `UnsupportedFile` | `src.api._check_suffix` |
+| `document_type_unsupported` | 415 | `UnsupportedFile` | `src.routes.knowledge.check_suffix` |
 | `extraction_failed` | 422 | `Unprocessable` | `src.api.view_extracted_text` |
 | `filled_file_missing` | 404 | `NotFound` | `src.api.download_filled_questionnaire` |
 | `last_administrator` | 400 | `Invalid` | `src.routes.admin._refuse_last_admin` |
 | `memory_entry_not_found` | 404 | `NotFound` | `src.api.edit_memory_entry`, `src.api.remove_memory_entry`, `src.api.resolve_memory_conflict`, `src.api.restore_memory_entry` |
-| `no_files` | 400 | `Invalid` | `src.api._ingest_files` |
+| `no_files` | 400 | `Invalid` | `src.routes.knowledge._ingest_files` |
 | `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment` |
 | `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |
 | `other_team` | 403 | `Forbidden` | `src.routes.products._team` |
@@ -61,7 +61,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `run_not_in_progress` | 404 | `NotFound` | `src.api.assessment_progress` |
 | `search_mode_unknown` | 422 | `Unprocessable` | `src.api.search_knowledge` |
 | `skill_not_found` | 404 | `NotFound` | `src.api.copy_skill`, `src.api.edit_skill`, `src.api.remove_skill` |
-| `source_not_found` | 404 | `NotFound` | `src.api.remove_source` |
+| `source_not_found` | 404 | `NotFound` | `src.routes.knowledge.remove_source` |
 | `team_not_found` | 404 | `NotFound` | `src.routes.admin.admin_rotate_code`, `src.routes.products._team` |
 | `user_not_found` | 404 | `NotFound` | `src.routes.admin.admin_set_password` |
 

@@ -38,6 +38,8 @@ modules = [
     "src.migrations",
     "src.diagnostics",
     "src.knowledge",
+    "src.scoped_knowledge",
+    "src.vector_names",
     "src.lexical",
     "src.rerank",
     "src.organisation",

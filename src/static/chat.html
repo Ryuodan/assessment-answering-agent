@@ -526,6 +526,14 @@
     <p class="status" style="margin-bottom:12px">Every answer is written from these and cites
        them. Managed here rather than through the assistant: this is the corpus, not a task.</p>
 
+    <!-- Which knowledge base the drawer works on (plan 021): the shared one, or a
+         product's, used beside it for that product's questionnaires. -->
+    <label class="kb-scope" for="kbScope" style="display:block;margin-bottom:10px">
+      <strong>Knowledge base</strong>
+      <select id="kbScope" style="display:block;width:100%;margin-top:4px">
+        <option value="">Shared, for every product</option>
+      </select>
+    </label>
     <label class="drop">
       <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
       <strong>Policies and standards</strong>Drop PDF or DOCX here, or click to choose
@@ -1638,7 +1646,7 @@
     $("kb").classList.toggle("open", open);
     $("scrim").classList.toggle("open", open);
     $("kb").setAttribute("aria-hidden", String(!open));
-    if (open) loadSources();
+    if (open) { loadKbScopes(); loadSources(); }
   }
   $("openKb").onclick = () => openDrawer(true);
   $("closeKb").onclick = () => openDrawer(false);
@@ -1647,10 +1655,27 @@
     if (event.key === "Escape") openDrawer(false);
   });
 
+  // --- which knowledge base: shared, or a product's (plan 021) ---------------
+  function kbScope() { return $("kbScope").value; }
+  function kbScopeQuery(prefix) {
+    return kbScope() ? prefix + "product=" + encodeURIComponent(kbScope()) : "";
+  }
+  async function loadKbScopes() {
+    try {
+      const listed = await request("/api/products");
+      const select = $("kbScope");
+      const chosen = select.value;
+      select.replaceChildren(new Option("Shared, for every product", ""));
+      listed.products.forEach((product) => select.append(new Option(product.name, product.id)));
+      if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+    } catch (error) { /* no products: the shared knowledge base is all there is */ }
+  }
+  $("kbScope").onchange = () => loadSources();
+
   async function loadSources() {
     const host = $("sources");
     try {
-      const data = await request("/api/knowledge");
+      const data = await request("/api/knowledge" + kbScopeQuery("?"));
       host.replaceChildren();
       if (!data.sources.length) {
         host.className = "status";
@@ -1688,7 +1713,8 @@
         remove.onclick = async () => {
           if (!confirm("Remove " + source.name + " from the knowledge base?")) return;
           try {
-            await request("/api/knowledge/sources/" + encodeURIComponent(source.name), { method: "DELETE" });
+            await request("/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
+              { method: "DELETE" });
           } catch (error) {
             $("kbStatus").textContent = error.message;
             $("kbStatus").className = "status error";
@@ -1716,6 +1742,7 @@
       // ours by definition.
       const whose = document.querySelector('input[name="kbAuthority"]:checked');
       if (whose && url.endsWith("/guidelines")) body.append("authority", whose.value);
+      if (url.endsWith("/guidelines") && kbScope()) body.append("product", kbScope());
       try {
         const data = await request(url, { method: "POST", body });
         // The route returns the list itself. Reading `.results` off it found

@@ -31,7 +31,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
 
-- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.store`, `src.forms.*`
+- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.vector_names`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
 | Module | What it is |
@@ -56,7 +56,9 @@ Everything that talks to something outside the process: model providers, the emb
 | `src/migrations.py` | The SQLite schema, as an ordered list of migrations. Applied by `src.store`. |
 | `src/organisation.py` | Who this system is answering on behalf of. |
 | `src/rerank.py` | Cross-encoder reranking of retrieved evidence. |
+| `src/scoped_knowledge.py` | A team's knowledge base, shared or for one product (plan 021). |
 | `src/store.py` | SQLite storage for identity, the event log, and answered runs. |
+| `src/vector_names.py` | What the vector store calls things, and how it scores them. |
 
 ## 3. records
 
@@ -125,6 +127,7 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/__init__.py` | HTTP routes grouped by area, included by `src/api.py` (plan 019, TD-006). |
 | `src/routes/admin.py` | The Access panel's routes: people, teams and access codes. Administrators only. |
 | `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
+| `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021). |
 | `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |
 | `src/routes/products.py` | Products: everyone on a team may list them; its leads and administrators change them (plan 020). |
 | `src/web.py` | What every HTTP request shares: its ID, its log line, and how errors answer. |

@@ -19,7 +19,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from src import events, store
+from src import events, scoped_knowledge, store
 from src.config import settings
 from src.errors import Invalid, ProductNameTaken, ProductNotFound
 from src.identity import User
@@ -178,12 +178,13 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Product:
 
     The page warns that the product's documents and remembered answers go with
     it; the word is checked here too, so no other caller can delete one without
-    the same confirmation. What a product holds is deleted by the plans that
-    give it something to hold (021, 022).
+    the same confirmation. Its knowledge base goes first (plan 021), so a
+    failure there leaves the product whole rather than half-deleted.
     """
     if confirm.strip().casefold() != CONFIRM_WORD:
         raise Invalid(f'Type "{CONFIRM_WORD}" to delete a product.', code="confirmation_required")
     product = get(team_id, product_id)
+    scoped_knowledge.drop_product(team_id, product_id)
     conn = store.connect()
     conn.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
     conn.commit()

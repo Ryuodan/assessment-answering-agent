@@ -82,10 +82,10 @@ Errors: [errors.md](errors.md).
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/api/knowledge` | What is currently indexed for the caller's team. |
-| `DELETE` | `/api/knowledge` | Remove every policy document. The answer memory is left as it is. |
+| `GET` | `/api/knowledge` | What is currently indexed for the caller's team, shared or for one `product`. |
+| `DELETE` | `/api/knowledge` | Remove every policy document, shared or a `product`'s. The answer memory is left as it is. |
 | `POST` | `/api/knowledge/guidelines` | Index policy and guideline documents. |
-| `DELETE` | `/api/knowledge/sources/{source_name}` | Remove one indexed policy document. |
+| `DELETE` | `/api/knowledge/sources/{source_name}` | Remove one indexed policy document, from the shared knowledge base or a `product`'s. |
 
 ## `/api/memory`
 

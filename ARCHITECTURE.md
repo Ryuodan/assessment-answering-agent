@@ -124,6 +124,16 @@ own beside the team's shared ones (plans 021 to 023, design in
 administrator). `SEED_PRODUCTS` adds the first products once, recorded in the
 `seeds` table.
 
+A product's knowledge base is a Chroma collection of its own
+(`vector_names.collection_for(team, product)`), beside the team's shared one,
+which is untouched. `src/scoped_knowledge.py` chooses between them:
+`own_store` is where an upload or a removal goes, and `store_for` is what
+answering for a scope searches. For General that is the shared store itself;
+for a product it is a `ScopedStore`, which embeds the query once and lists
+the product's hits before the shared ones. The knowledge routes
+(`src/routes/knowledge.py`) take an optional `product`. Deleting a product
+drops its collection.
+
 ## How a request flows
 
 **Indexing a policy.** `POST /api/knowledge/guidelines` saves the upload

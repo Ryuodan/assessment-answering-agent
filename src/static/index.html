@@ -567,6 +567,15 @@
     </div>
     <p class="step-hint">Everything the agent answers from: your policies here, and the answers the team has already given in the answer memory.</p>
 
+    <!-- Which knowledge base this step works on (plan 021): the shared one, used
+         for every questionnaire, or one product's, used beside it for that
+         product's questionnaires. Upload, list, remove and clear follow it. -->
+    <div class="row kb-scope">
+      <label for="kbScope"><strong>Knowledge base</strong></label>
+      <select id="kbScope"><option value="">Shared, for every product</option></select>
+      <span class="hint" id="kbScopeHint">Used for every questionnaire.</span>
+    </div>
+
     <div class="split">
       <div class="panel">
         <h3>Guidelines</h3>
@@ -1607,6 +1616,7 @@
       // Only the guidelines upload asks: a previous answer is ours by definition.
       const whose = document.querySelector('input[name="guidelineAuthority"]:checked');
       if (whose && endpoint.endsWith("/guidelines")) form.append("authority", whose.value);
+      if (endpoint.endsWith("/guidelines") && kbScope()) form.append("product", kbScope());
 
       try {
         const results = await request(endpoint, { method: "POST", body: form });
@@ -1643,7 +1653,7 @@
 
   async function loadKnowledge() {
     try {
-      const stats = await request("/api/knowledge");
+      const stats = await request("/api/knowledge" + kbScopeQuery("?"));
       $("kbSummary").innerHTML = stats.total_chunks
         ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
           "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
@@ -1688,7 +1698,8 @@
         remove.className = "quiet danger";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          await request("/api/knowledge/sources/" + encodeURIComponent(source.name), { method: "DELETE" });
+          await request("/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
+            { method: "DELETE" });
           loadKnowledge();
         };
 
@@ -3369,10 +3380,39 @@
   };
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
-    if (!confirm("Remove every policy document from the knowledge base?\n\nThe answer memory is not affected.")) return;
-    await request("/api/knowledge", { method: "DELETE" });
+    const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
+    if (!confirm("Remove every policy document from " + which + "?\n\nThe answer memory is not affected.")) return;
+    await request("/api/knowledge" + kbScopeQuery("?"), { method: "DELETE" });
     loadKnowledge();
   };
+
+  // --- which knowledge base: shared, or a product's (plan 021) -------------
+
+  function kbScope() { return $("kbScope").value; }
+  function kbScopeName() {
+    const option = $("kbScope").selectedOptions[0];
+    return option ? option.textContent : "";
+  }
+  function kbScopeQuery(prefix) {
+    return kbScope() ? prefix + "product=" + encodeURIComponent(kbScope()) : "";
+  }
+  async function loadKbScopes() {
+    try {
+      const listed = await request("/api/products");
+      const select = $("kbScope");
+      const chosen = select.value;
+      select.replaceChildren(new Option("Shared, for every product", ""));
+      listed.products.forEach((product) => select.append(new Option(product.name, product.id)));
+      if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+    } catch (error) { /* no products: the shared knowledge base is all there is */ }
+  }
+  $("kbScope").onchange = () => {
+    $("kbScopeHint").textContent = kbScope()
+      ? "Used only for " + kbScopeName() + "'s questionnaires, beside the shared one."
+      : "Used for every questionnaire.";
+    loadKnowledge();
+  };
+  loadKbScopes();
 
   $("exportJson").onclick = () =>
     download(result.source_name + ".answers.json", JSON.stringify(result, null, 2), "application/json");

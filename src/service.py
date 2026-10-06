@@ -22,6 +22,8 @@ from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs, extract_questions
 from src.graph import answer_one_question, assessment_graph, failed_answer
 from src.knowledge import get_store
+from src.scoped_knowledge import clear_knowledge as clear_knowledge, delete_source as delete_source
+from src.scoped_knowledge import knowledge_stats as knowledge_stats, own_store
 from src.lexical import reciprocal_rank_fusion
 from src.models import (
     AnsweredQuestion,
@@ -46,6 +48,7 @@ async def ingest(
     source_type: SourceType,
     authority: str = "ours",
     team_id: str | None = None,
+    product_id: str = "",
 ) -> IngestResult:
     """Index one uploaded file as either a guideline or a previously answered assessment.
 
@@ -57,7 +60,7 @@ async def ingest(
     report which one was unreadable and index the other nine.
     """
     path = Path(path)
-    store = get_store(team_id)
+    store = own_store(team_id, product_id)  # the shared knowledge base, or a product's (plan 021)
 
     try:
         content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -316,11 +319,6 @@ def run_progress(run_id: str) -> dict | None:
     return progress.snapshot(run_id)
 
 
-def knowledge_stats(team_id: str | None = None) -> dict:
-    """Counts and indexed file names, for the UI's knowledge panel."""
-    return get_store(team_id).stats()
-
-
 # A person waiting at a search box will not wait a minute for a remote
 # embedding host that is not answering. The literal search needs no network.
 SEARCH_EMBED_TIMEOUT = 10.0
@@ -414,34 +412,6 @@ async def search_knowledge(
         # so rather than implying the corpus holds nothing.
         "degraded": bool(degraded),
     }
-
-
-def delete_source(source_name: str, team_id: str | None = None) -> None:
-    """Remove one previously uploaded policy document from the knowledge base.
-
-    Only documents. Previous answers are indexed too, but they belong to the
-    answer memory, where each has a row -- who approved it, what it replaced --
-    that a delete by source name would orphan by the hundred.
-    """
-    kind = get_store(team_id).source_type_of(source_name)
-    if kind == SourceType.PRIOR_ANSWER.value:
-        raise NotADocument("Previous answers are part of the answer memory. Manage them on the Answer memory page.")
-    if not kind:
-        # Said, rather than reported as deleted: a name that was never indexed,
-        # or already removed by somebody else, is not something this removed.
-        raise KeyError(source_name)
-    get_store(team_id).delete_source(source_name)
-
-
-def clear_knowledge(team_id: str | None = None) -> None:
-    """Remove every policy document, and leave the answer memory standing.
-
-    It used to drop the whole collection, which took the memory's 698 vectors
-    with it and left their rows on the memory page -- listed, and never
-    retrieved again. Clearing the corpus and forgetting what the team has said
-    are different decisions, made in different places.
-    """
-    get_store(team_id).delete_type(SourceType.GUIDELINE)
 
 
 def save_upload(

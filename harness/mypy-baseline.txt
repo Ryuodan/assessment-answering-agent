@@ -41,10 +41,6 @@ src/api.py: [no-untyped-def] Function is missing a return type annotation
 src/api.py: [no-untyped-def] Function is missing a return type annotation
 src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
-src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
-src/api.py: [type-arg] Missing type arguments for generic type "dict"
-src/api.py: [type-arg] Missing type arguments for generic type "dict"
-src/api.py: [type-arg] Missing type arguments for generic type "dict"
 src/api.py: [type-arg] Missing type arguments for generic type "dict"
 src/api.py: [type-arg] Missing type arguments for generic type "dict"
 src/api.py: [type-arg] Missing type arguments for generic type "dict"
@@ -211,7 +207,6 @@ src/identity.py: [no-untyped-def] Function is missing a type annotation for one 
 src/identity.py: [return-value] Incompatible return value type (got "User | None", expected "User")
 src/identity.py: [type-arg] Missing type arguments for generic type "dict"
 src/identity.py: [type-arg] Missing type arguments for generic type "dict"
-src/knowledge.py: [attr-defined] "Callable[[str | None], KnowledgeStore]" has no attribute "cache_clear"
 src/knowledge.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
 src/knowledge.py: [no-any-return] Returning Any from function declared to return "dict[Any, Any]"
 src/knowledge.py: [no-any-return] Returning Any from function declared to return "str | None"
@@ -258,7 +253,6 @@ src/service.py: [arg-type] Argument "team_id" to "adopt_file" has incompatible t
 src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
-src/service.py: [type-arg] Missing type arguments for generic type "dict"
 src/service.py: [type-arg] Missing type arguments for generic type "dict"
 src/service.py: [type-arg] Missing type arguments for generic type "dict"
 src/service.py: [type-arg] Missing type arguments for generic type "dict"
