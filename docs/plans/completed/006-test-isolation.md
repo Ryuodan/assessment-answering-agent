@@ -1,6 +1,6 @@
 # Plan 006: Tests never touch real configuration or data
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -16,11 +16,11 @@ modules building paths under the project root themselves.
 
 ## Acceptance criteria
 
-- [ ] `src/config.py` reads the env file named by `ASSESSMENT_ANSWER_ENV_FILE` (default: the project's `.env`; empty: none); `tests/conftest.py` sets it empty and removes any shell variable named like a setting before anything imports `src.config`.
-- [ ] The organisation profile's location is a setting (`ORGANISATION_PATH`), used by `src/organisation.py`, redirected by `isolated_storage` like the other paths.
-- [ ] Every test fails if, after `isolated_storage`, any `Path` setting still points inside the project; tested by showing the guard catches an unredirected path.
-- [ ] ARCH-PATH fails when a module in `src/` other than `src/config.py` uses `PROJECT_ROOT`; tests with failing examples.
-- [ ] The suite passes; TD-011 and TD-023 resolved; GP-13 names its enforcement; `uv run poe check` passes.
+- [x] `src/config.py` reads the env file named by `ASSESSMENT_ANSWER_ENV_FILE` (default: the project's `.env`; empty: none); `tests/conftest.py` sets it empty and removes any shell variable named like a setting before anything imports `src.config`.
+- [x] The organisation profile's location is a setting (`ORGANISATION_PATH`), used by `src/organisation.py`, redirected by `isolated_storage` like the other paths.
+- [x] Every test fails if, after `isolated_storage`, any `Path` setting still points inside the project; tested by showing the guard catches an unredirected path.
+- [x] ARCH-PATH fails when a module in `src/` other than `src/config.py` uses `PROJECT_ROOT`; tests with failing examples.
+- [x] The suite passes; TD-011 and TD-023 resolved; GP-13 names its enforcement; `uv run poe check` passes.
 
 ## Plan
 
@@ -34,6 +34,7 @@ modules building paths under the project root themselves.
 
 - 2026-10-06: Plan written; the user asked to finish M3 and then the other milestones. Survey: `PROJECT_ROOT` is used outside `src/config.py` only by `src/organisation.py`; no shell variable on this machine names a setting today.
 - 2026-10-06: Steps 2 to 4. `_env_file()` in `src/config.py`; `tests/conftest.py` empties it and removes shell variables named like a setting (names read from the syntax tree, before `src` is imported). `ORGANISATION_PATH` setting; `src/organisation.py` reads it, and its one log call became an event as it was touched (one module off the ARCH-LOG list). The guard: `isolated_storage` fails a test if any path setting still points into the project. ARCH-PATH with 2 tests; 6 isolation tests, among them one asserting every setting equals its declared default during a test and one showing the guard catches a forgotten path.
+- 2026-10-06: `uv run poe check` passes (1761 passed); all criteria met; moved to `completed/`.
 
 ## Decision log
 
