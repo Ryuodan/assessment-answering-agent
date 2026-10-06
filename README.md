@@ -132,7 +132,8 @@ generated from `src/config.py`, the only place settings are read.
 ## Tests
 
 ```bash
-uv run poe check                            # the gate: format, lint, types, architecture, docs, the offline suite
+uv run python -m playwright install chromium  # once per machine: the gate's browser tests need it
+uv run poe check                            # the gate: format, lint, types, architecture, docs, the offline suite, the browser tests
 uv run python -m pytest -m live_ai          # opt-in: real Groq and embedding calls, costs tokens
 uv run python -m scripts.selfcheck          # checks the wiring, not just the units
 ```

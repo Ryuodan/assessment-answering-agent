@@ -24,6 +24,7 @@ GATE: list[tuple[str, str]] = [
     ("docs", "each DOCS-* line above has its own FIX"),
     ("rules", "a check's own test failed: read it before trusting that check's verdict"),
     ("test", "read the first failure above; rerun one with `uv run python -m pytest path::name -x`"),
+    ("browser", "read the first failure above; if Chromium is missing: `uv run python -m playwright install chromium`"),
 ]
 
 

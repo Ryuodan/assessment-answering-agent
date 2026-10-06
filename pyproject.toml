@@ -50,6 +50,9 @@ dev = [
     "poethepoet>=0.34",
     # eval/vault.py: sealing the confidential eval data (plan 002).
     "cryptography>=42",
+    # tests/browser/: the pages in headless Chromium (plan 011). The browser
+    # itself is a separate download: `uv run python -m playwright install chromium`.
+    "playwright>=1.45",
     # The optional extras below, repeated so that a plain `uv sync` builds the
     # environment the gate expects (D-009): without them mypy cannot see the
     # Phoenix imports in src/config.py and one report test is skipped. Keep in
@@ -84,11 +87,13 @@ packages = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-# Live tests are excluded by default; `pytest -m live_ai` overrides this.
-addopts = "-ra -m 'not live_ai'"
+# Live and browser tests are excluded by default; `pytest -m live_ai` or
+# `-m browser` overrides this (`uv run poe browser` runs the browser ones).
+addopts = "-ra -m 'not live_ai and not browser'"
 asyncio_mode = "auto"
 markers = [
     "live_ai: opt-in tests that call Groq or the embedding endpoint",
+    "browser: the pages in headless Chromium (tests/browser/); needs `playwright install chromium` once",
 ]
 
 [tool.ruff]
@@ -154,7 +159,8 @@ arch-lower = { cmd = "python -m harness.arch --lower-ceilings", help = "Lower si
 docs = { cmd = "python -m harness.docs", help = "Docs exist, links resolve, nothing orphaned, plans well-formed" }
 gen = { cmd = "python -m harness.gen", help = "Regenerate docs/generated/ (never edit those by hand)" }
 rules = { cmd = "python -m pytest tests/harness -q", help = "The checks' own tests, fast, before the full suite" }
-test = { cmd = "python -m pytest -q", help = "Offline test suite (live_ai tests excluded)" }
+test = { cmd = "python -m pytest -q", help = "Offline test suite (live_ai and browser tests excluded)" }
+browser = { cmd = "python -m pytest tests/browser -q -m browser", help = "The main flows in headless Chromium (plan 011)" }
 snapshots = { cmd = "python -m pytest tests/characterization -q", env = { UPDATE_SNAPSHOTS = "1" }, help = "Re-record characterization snapshots (then review git diff)" }
 cov = { cmd = "python -m pytest -q --cov=src --cov=harness --cov-report=term --cov-report=json:.coverage.json", help = "Line coverage per module (measured, not gated); also feeds grades" }
 gc = { cmd = "python -m harness.gc", help = "Cleanup-round candidates: unused, duplicated, oversized, stale (not a gate)" }

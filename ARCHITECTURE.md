@@ -98,6 +98,11 @@ service. Each failure prints a FIX line (`src/diagnostics.py`, plan 010).
 preferences pages, and the shared answer card (`cards.js`, `cards.css`). They
 talk to `src/api.py` over HTTP only.
 
+`tests/browser/` drives them in headless Chromium (Playwright, plan 011): the
+app runs in a thread of the test process, so the suite's fixtures (temporary
+storage, faked model calls) apply to it, and a page that raises a JavaScript
+error fails its test. `uv run poe browser` runs them; the gate includes them.
+
 ## How a request flows
 
 **Indexing a policy.** `POST /api/knowledge/guidelines` saves the upload

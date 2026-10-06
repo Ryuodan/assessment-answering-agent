@@ -147,6 +147,7 @@ or docs and has not been verified by running anything.
 - **What:** the README ("Facing a network") says status lines are written as text and that "a test uploads exactly such a name". Searching `tests/` (2026-10-05, Claude) found markup payloads only in `tests/test_document_library.py` (the Word preview) and `tests/test_hostile_input.py` (a search query that must not cause a 500); nothing checks how the pages render a file name or an error.
 - **Impact:** a regression to `innerHTML` in a page would pass the suite.
 - **Fix:** a browser test (M5) that uploads a file named as markup and asserts it is shown as text; until then, a review rule.
+- **Resolved** 2026-10-06 (Claude, plan 011): `tests/browser/test_workbench.py::test_a_file_name_is_shown_as_text_never_as_markup` uploads `<img src=x onerror=...>.txt` and checks the refusal shows the name as text, creates no element and runs no script. Checked against the regression it exists for: with `setStatus` switched to inserting HTML, it fails.
 
 ## TD-022: The PDF export reads `WINDIR` directly
 

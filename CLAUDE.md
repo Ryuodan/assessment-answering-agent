@@ -12,8 +12,9 @@ This file is a map. Detail lives in the documents it links to.
 
 ```bash
 uv sync --inexact                               # environment from uv.lock: dev tools and every optional extra (D-009)
-uv run poe check                                # THE gate: fmt, lint, types, arch, docs, rules, test
-uv run poe fmt | lint | types | arch | docs | test   # one task
+uv run poe check                                # THE gate: fmt, lint, types, arch, docs, rules, test, browser
+uv run poe fmt | lint | types | arch | docs | test | browser   # one task
+uv run python -m playwright install chromium   # once per machine, for the browser task
 uv run poe format                               # apply formatting
 uv run poe types-baseline                       # drop fixed errors from the mypy baseline
 uv run poe gen                                  # regenerate docs/generated/
