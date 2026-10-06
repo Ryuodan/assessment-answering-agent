@@ -22,6 +22,8 @@ router = APIRouter()
 
 
 class SayRequest(BaseModel):
+    """One message to the assistant, in a conversation or starting one."""
+
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: str = Field(default="", max_length=64)
 
@@ -43,8 +45,9 @@ class SayRequest(BaseModel):
 
 
 class ChooseChatProductRequest(BaseModel):
+    """The product a conversation is for: a product's id, or "" for General."""
+
     product: str = Field(default="", max_length=64)
-    """A product's id, or "" for General."""
 
 
 def _conversation(conversation_id: str, user: User) -> Conversation:
@@ -79,6 +82,7 @@ def _turn_response(turn: assistant.Turn, conversation: Conversation, user: User)
 
 @router.get("/api/chat")
 def list_conversations(user: User = Depends(current_user), limit: int = 30) -> dict[str, Any]:
+    """The caller's own conversations, most recently used first, each with its product."""
     return {
         "conversations": conversations.recent(
             user.team_id,
@@ -227,6 +231,7 @@ def choose_chat_product(
 
 @router.delete("/api/chat/{conversation_id}")
 def forget_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
+    """Delete one of the caller's conversations. Its questionnaire and the answers in it stay."""
     _conversation(conversation_id, user)
     conversations.delete(conversation_id, actor_email=user.email)
     return {"deleted": conversation_id}

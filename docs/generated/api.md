@@ -19,13 +19,13 @@ Errors: [errors.md](errors.md).
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/api/admin/overview` | Admin Overview |
-| `POST` | `/api/admin/users` | Admin Add User |
-| `PATCH` | `/api/admin/users/{email}` | Admin Update User |
-| `DELETE` | `/api/admin/users/{email}` | Admin Remove User |
+| `GET` | `/api/admin/overview` | Everyone, every team, and who is asking, for the Access panel. |
+| `POST` | `/api/admin/users` | Add someone to a team, or change the team and role of someone already here. |
+| `PATCH` | `/api/admin/users/{email}` | Change someone's team or role, or stop them signing in. The last administrator cannot be demoted or disabled. |
+| `DELETE` | `/api/admin/users/{email}` | Remove someone and end their sessions; what they did stays in the history. Not the last administrator. |
 | `POST` | `/api/admin/users/{email}/password` | Give an admin their own password, or clear it back to the team code. |
-| `POST` | `/api/admin/teams` | Admin Add Team |
-| `DELETE` | `/api/admin/teams/{team_id}` | Admin Remove Team |
+| `POST` | `/api/admin/teams` | Create a team. A team that already exists is left as it is. |
+| `DELETE` | `/api/admin/teams/{team_id}` | Remove a team with nobody on it. One that still has members is refused. |
 | `POST` | `/api/admin/teams/{team_id}/access-code` | Issue a new access code. The plaintext is returned exactly once. |
 
 ## `/api/products`
@@ -151,11 +151,11 @@ Errors: [errors.md](errors.md).
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/api/chat` | List Conversations |
+| `GET` | `/api/chat` | The caller's own conversations, most recently used first, each with its product. |
 | `POST` | `/api/chat` | One exchange with the assistant. |
 | `POST` | `/api/chat/upload` | A message with a questionnaire attached. |
 | `GET` | `/api/chat/{conversation_id}` | One conversation, as a transcript plus whatever answers it has produced. |
-| `DELETE` | `/api/chat/{conversation_id}` | Forget Conversation |
+| `DELETE` | `/api/chat/{conversation_id}` | Delete one of the caller's conversations. Its questionnaire and the answers in it stay. |
 | `POST` | `/api/chat/{conversation_id}/product` | Answer this conversation, and its questionnaire, for another product or General (plan 023). |
 
 ## `/health`

@@ -14,6 +14,65 @@ A grade is a measurement, not a target. The words under each table say what
 the letter stands for and where the gap is, so the next round can check
 whether it closed.
 
+## Round 4: 2026-10-06, after M7 (plan 025)
+
+Measured on the working tree of plan 025: 1,861 tests passed and none failed.
+The 13 browser tests are not part of the coverage run. Statement coverage of
+`src/` and `harness/` together is 92% (round 2: 91%). The docstring column
+includes the docstrings this round added.
+
+| Layer | Modules | Lines | Coverage | Over 400 | Suppressions | Duplicated blocks | Docstrings |
+|---|---|---|---|---|---|---|---|
+| foundation | 13 | 3616 | A (98.7%) | B (1) | A (0) | A (0) | A (95%) |
+| integrations | 23 | 7059 | A (91.3%) | D (6) | D (9) | C (2) | A (97%) |
+| records | 12 | 3814 | A (95.8%) | C (3) | C (7) | A (0) | B (89%) |
+| answering | 10 | 2166 | B (87.7%) | C (2) | C (4) | A (0) | A (100%) |
+| operations | 6 | 4087 | A (92.9%) | C (3) | C (6) | A (0) | A (100%) |
+| interfaces | 11 | 2789 | A (93.6%) | B (1) | B (3) | A (0) | B (80%) |
+
+M7 (plans 019 to 024) added products. To make room it moved code out of the
+largest modules, so most of what changed is where code lives:
+
+- **foundation.** It gained `roles` and `schemas`, the model-output schemas
+  moved out of `models.py`. `models.py` (329 lines) is under the limit now,
+  which leaves `chunking.py` as the one module over 400. Over 400 went from C
+  to B.
+- **integrations.** It gained `migrations`, `scoped_knowledge` and
+  `vector_names`. `store.py` went from 475 to 132 lines when the migrations
+  left it, so six modules are over 400 instead of seven; still D. Coverage
+  went from 90.6% to 91.3%.
+- **records.** It gained `products` and `memory_sweep`. Coverage went from
+  95.1% to 95.8%, and docstrings from 87% to 89%. The same three modules are
+  over 400; `answer_memory.py` is smaller, 836 lines.
+- **answering.** Unchanged apart from retrieval asking for the product's
+  store.
+- **operations.** It gained `search`, `selection` and
+  `agents/assistant_prompt`. All three of the layer's large modules are still
+  over 400, but smaller than at round 1:
+  - `assistant.py` went from 1,742 to 1,524 lines;
+  - `tools.py` from 1,487 to 1,376;
+  - `service.py` from 741 to 614.
+- **interfaces.** It gained `src/routes/`, eight modules. They took the
+  assistant, Access panel, sign-in, knowledge, memory and products routes out
+  of `api.py`, which went from 2,036 to 1,296 lines.
+
+  Docstrings went from D (59%) to B (80%). This round documented the 27 public
+  names in `src/routes/`, `cli.py` and `web.py` that had none, among them the
+  six Access panel routes and two chat routes from round 1's list. `api.py`
+  itself still has 27 without one: 11 routes, 15 request models and
+  `lifespan`. It is at its size ceiling, and the formatter adds a blank line
+  after a class docstring, so they wait for its next split.
+
+`poe gc` found the round 1 candidates and nothing new: 4 TEST-ONLY and 2
+DUPLICATE, all decided in plan 008. OVERSIZE went from 18 to 16, with
+`store.py` and `models.py` now under the limit.
+
+The gaps that remain, in order of size:
+
+- the oversized modules (TD-006);
+- `api.py`'s undocumented names;
+- `extraction.py` (44%) and `docling_client.py` (62%) coverage.
+
 ## Round 3: 2026-10-06, after M6 (plan 015)
 
 M6 changed `eval/`, `scripts/` and tests, not `src/`. The only change to

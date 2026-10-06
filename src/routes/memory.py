@@ -113,6 +113,8 @@ def list_memory_conflicts(product: str = "", user: User = Depends(current_user))
 
 
 class MemoryEntryRequest(BaseModel):
+    """An answer taught by hand: its question, answer and section, and which memory (`product`, Shared when empty)."""
+
     question: str = Field(min_length=1, max_length=4000)
     answer: str = Field(min_length=1, max_length=20000)
     section: str = Field(default="", max_length=400)
@@ -145,6 +147,8 @@ def add_memory_entry(
 
 
 class MemoryEditRequest(BaseModel):
+    """A correction to a remembered answer. Each field left out stays as it is."""
+
     question: str | None = Field(default=None, max_length=4000)
     answer: str | None = Field(default=None, max_length=20000)
 
@@ -220,6 +224,8 @@ def restore_memory_entry(entry_id: str, user: User = Depends(current_user)) -> d
 
 
 class MoveRequest(BaseModel):
+    """Where an entry goes: a product's id, or "" for the shared memory."""
+
     product: str = Field(default="", max_length=64)
 
 
@@ -243,6 +249,8 @@ def move_memory_entry(
 
 
 class ResolveConflictRequest(BaseModel):
+    """Two disagreeing entries, and which stands: this one, the other, or both."""
+
     entry_id: str = Field(min_length=1, max_length=400)
     other_id: str = Field(min_length=1, max_length=400)
     resolution: str = Field(pattern="^(keep_this|keep_other|keep_both)$")

@@ -119,7 +119,7 @@ A team's products (plan 020, milestone M7) are rows in `products`, managed
 by `src/products.py` and served by `src/routes/products.py` and the
 `/products` page. Each has a knowledge base and an answer memory of its
 own beside the team's shared ones (plans 021 to 023, design in
-[plan 018](docs/plans/active/018-products.md)). Roles are in `src/roles.py`:
+[plan 018](docs/plans/completed/018-products.md)). Roles are in `src/roles.py`:
 `manages_products` says who may change a team's products (its leads, and any
 administrator). `SEED_PRODUCTS` adds the first products once, recorded in the
 `seeds` table.

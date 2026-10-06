@@ -31,6 +31,7 @@ def _scope(user: User, product: str) -> dict[str, str]:
 
 
 def check_suffix(filename: str) -> None:
+    """Refuse a file the knowledge base cannot read, judged by its suffix (`document_type_unsupported`)."""
     if Path(filename).suffix.lower() not in SUPPORTED_SUFFIXES:
         raise UnsupportedFile(
             f"'{filename}' is not supported. Upload {' or '.join(SUPPORTED_SUFFIXES)}.",

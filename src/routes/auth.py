@@ -32,6 +32,7 @@ def current_user(request: Request) -> User:
 
 
 def user_payload(user: User) -> dict[str, Any]:
+    """Who is signed in, as the pages read it, and whether this deployment asks anyone to sign in."""
     return {
         "email": user.email,
         "team": user.team_id,

@@ -24,12 +24,16 @@ router = APIRouter()
 # Lengths are checked by `src.products`, which says what the limit is; these
 # bounds only stop a body large enough to be a mistake.
 class ProductRequest(BaseModel):
+    """A new product: its name, and optionally a colour and a description."""
+
     name: str = Field(max_length=200)
     color: str = Field(default="", max_length=20)
     description: str = Field(default="", max_length=1000)
 
 
 class ProductChange(BaseModel):
+    """What to change about a product. Each field left out stays as it is."""
+
     name: str | None = Field(default=None, max_length=200)
     color: str | None = Field(default=None, max_length=20)
     description: str | None = Field(default=None, max_length=1000)
@@ -96,4 +100,5 @@ def delete_product(
 
 @router.get("/products", include_in_schema=False)
 def products_page() -> HTMLResponse:
+    """The Products page."""
     return page("products.html")

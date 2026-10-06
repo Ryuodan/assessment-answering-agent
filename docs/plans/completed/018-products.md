@@ -1,6 +1,6 @@
 # Plan 018: Products, each with its own knowledge and memory (milestone M7)
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -105,20 +105,20 @@ Each is listed with Claude's recommendation; none is built until it is decided.
 
 For the milestone as a whole; each step's plan has its own.
 
-- [ ] Products can be listed, added, edited (name, colour, description) and deleted. Names are unique per team regardless of case. Every refusal is an `AppError` with a code (`product_not_found`, `product_name_taken`). The five defaults exist on first start.
-- [ ] A document can be added to, listed in and removed from the shared knowledge base or a product's.
-- [ ] Answering for a product uses shared plus product evidence, and each piece of evidence says which it is. Answering for General is unchanged: the pipeline's characterization snapshots stay as they are.
-- [ ] The answer memory holds shared and per-product entries. Approval, teaching by hand, supersession and the disagreement sweep all respect the scope.
-- [ ] Every questionnaire and chat has a product (General by default), chosen before or after upload, shown as a coloured chip or badge, and changeable.
-- [ ] Deleting a product follows decision 5, and a test shows nothing of it is left in Chroma or SQLite.
-- [ ] Browser tests cover the main path:
+- [x] Products can be listed, added, edited (name, colour, description) and deleted. Names are unique per team regardless of case. Every refusal is an `AppError` with a code (`product_not_found`, `product_name_taken`). The five defaults exist on first start.
+- [x] A document can be added to, listed in and removed from the shared knowledge base or a product's.
+- [x] Answering for a product uses shared plus product evidence, and each piece of evidence says which it is. Answering for General is unchanged. The prompts and answers in the pipeline's characterization snapshots are as they were; the one difference is an empty `product_id` on each piece of evidence ([plan 023](../completed/023-questionnaires-carry-a-product.md)'s decision log).
+- [x] The answer memory holds shared and per-product entries. Approval, teaching by hand, supersession and the disagreement sweep all respect the scope.
+- [x] Every questionnaire and chat has a product (General by default), chosen before or after upload, shown as a coloured chip or badge, and changeable.
+- [x] Deleting a product follows decision 5, and a test shows nothing of it is left in Chroma or SQLite.
+- [x] Browser tests cover the main path:
   - create a product;
   - choose it beside the chat box;
   - upload a questionnaire under it;
   - see the badge;
   - switch the knowledge-base panel to it.
-- [ ] `api.py`, `store.py`, `knowledge.py`, `tools.py` and `answer_memory.py` are no longer than they are today. ARCHITECTURE.md describes scopes, and D-016 records the design.
-- [ ] `uv run poe check` passes after every plan.
+- [x] `api.py`, `store.py`, `knowledge.py`, `tools.py` and `answer_memory.py` are no longer than they are today. ARCHITECTURE.md describes scopes, and D-016 records the design.
+- [x] `uv run poe check` passes after every plan.
 
 ## Plan
 
@@ -168,7 +168,7 @@ Each step is its own plan.
    - the workbench selector;
    - the badges in lists;
    - browser tests for the main path.
-7. **Plan 025, cleanup round 4,** after M7.
+7. **[Plan 025](../completed/025-gc-round-4.md), cleanup round 4,** after M7.
 
 Evaluation stays on General, the shared scope, so plans 013 and 014 still
 apply. A product-level evaluation needs product questionnaires and answers,
@@ -198,6 +198,17 @@ which do not exist yet.
   - five moves made room, and the files they came from shrank: `api.py` 1440 -> 1296 lines, `tools.py` 1487 -> 1376, `service.py` 711 -> 614, `assistant.py` 1742 -> 1524, `models.py` 421 -> 329.
 
 - 2026-10-06: Plan 024 done: the chip beside the chat box, the workbench's Product selector, the badges in the lists and on a product's sources, and browser tests for the main path.
+
+- 2026-10-06: Plan 025, cleanup round 4, done. The milestone's criteria are met:
+  - the products and their management: plan 020;
+  - the knowledge bases: plan 021;
+  - the answer memories: plan 022;
+  - answering, approval and the assistant: plan 023;
+  - the choice on the pages: plan 024.
+
+  The deletion cascade is shown by the tests of plans 020 to 023. Between them, they find no row, collection or entry of a deleted product left, and its questionnaires and chats back on General.
+
+  Product-level evaluation waits for product data, as planned. M7 done.
 
 ## Decision log
 

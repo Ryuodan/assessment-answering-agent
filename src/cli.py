@@ -120,6 +120,7 @@ def _inspect_request(request_id: str, log: str | None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """The command line's arguments: one subcommand per job."""
     parser = argparse.ArgumentParser(
         prog="assessment-answer", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -180,6 +181,7 @@ def _use_utf8_console() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run one command; returns the exit status."""
     _use_utf8_console()
     configure_logging()
     args = build_parser().parse_args(argv)

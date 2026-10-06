@@ -88,6 +88,7 @@
     "/api/admin/overview": {
       "get": {
         "summary": "Admin Overview",
+        "description": "Everyone, every team, and who is asking, for the Access panel.",
         "operationId": "admin_overview_api_admin_overview_get",
         "responses": {
           "200": {
@@ -108,6 +109,7 @@
     "/api/admin/users": {
       "post": {
         "summary": "Admin Add User",
+        "description": "Add someone to a team, or change the team and role of someone already here.",
         "operationId": "admin_add_user_api_admin_users_post",
         "requestBody": {
           "content": {
@@ -148,6 +150,7 @@
     "/api/admin/users/{email}": {
       "patch": {
         "summary": "Admin Update User",
+        "description": "Change someone's team or role, or stop them signing in. The last administrator cannot be demoted or disabled.",
         "operationId": "admin_update_user_api_admin_users__email__patch",
         "parameters": [
           {
@@ -197,6 +200,7 @@
       },
       "delete": {
         "summary": "Admin Remove User",
+        "description": "Remove someone and end their sessions; what they did stays in the history. Not the last administrator.",
         "operationId": "admin_remove_user_api_admin_users__email__delete",
         "parameters": [
           {
@@ -290,6 +294,7 @@
     "/api/admin/teams": {
       "post": {
         "summary": "Admin Add Team",
+        "description": "Create a team. A team that already exists is left as it is.",
         "operationId": "admin_add_team_api_admin_teams_post",
         "requestBody": {
           "content": {
@@ -330,6 +335,7 @@
     "/api/admin/teams/{team_id}": {
       "delete": {
         "summary": "Admin Remove Team",
+        "description": "Remove a team with nobody on it. One that still has members is refused.",
         "operationId": "admin_remove_team_api_admin_teams__team_id__delete",
         "parameters": [
           {
@@ -3259,6 +3265,7 @@
     "/api/chat": {
       "get": {
         "summary": "List Conversations",
+        "description": "The caller's own conversations, most recently used first, each with its product.",
         "operationId": "list_conversations_api_chat_get",
         "parameters": [
           {
@@ -3421,6 +3428,7 @@
       },
       "delete": {
         "summary": "Forget Conversation",
+        "description": "Delete one of the caller's conversations. Its questionnaire and the answers in it stay.",
         "operationId": "forget_conversation_api_chat__conversation_id__delete",
         "parameters": [
           {
@@ -3565,7 +3573,8 @@
         "required": [
           "email"
         ],
-        "title": "AddUserRequest"
+        "title": "AddUserRequest",
+        "description": "Someone to add, or to move: their address, team and role."
       },
       "AnswerBatchRequest": {
         "properties": {
@@ -4119,7 +4128,8 @@
           }
         },
         "type": "object",
-        "title": "ChooseChatProductRequest"
+        "title": "ChooseChatProductRequest",
+        "description": "The product a conversation is for: a product's id, or \"\" for General."
       },
       "ChooseProductRequest": {
         "properties": {
@@ -4577,7 +4587,8 @@
           }
         },
         "type": "object",
-        "title": "MemoryEditRequest"
+        "title": "MemoryEditRequest",
+        "description": "A correction to a remembered answer. Each field left out stays as it is."
       },
       "MemoryEntryRequest": {
         "properties": {
@@ -4611,7 +4622,8 @@
           "question",
           "answer"
         ],
-        "title": "MemoryEntryRequest"
+        "title": "MemoryEntryRequest",
+        "description": "An answer taught by hand: its question, answer and section, and which memory (`product`, Shared when empty)."
       },
       "MoveRequest": {
         "properties": {
@@ -4623,7 +4635,8 @@
           }
         },
         "type": "object",
-        "title": "MoveRequest"
+        "title": "MoveRequest",
+        "description": "Where an entry goes: a product's id, or \"\" for the shared memory."
       },
       "PasswordRequest": {
         "properties": {
@@ -4641,7 +4654,8 @@
           }
         },
         "type": "object",
-        "title": "PasswordRequest"
+        "title": "PasswordRequest",
+        "description": "An administrator's own password, or none to go back to the team's access code."
       },
       "PreferLengthRequest": {
         "properties": {
@@ -4782,7 +4796,8 @@
           }
         },
         "type": "object",
-        "title": "ProductChange"
+        "title": "ProductChange",
+        "description": "What to change about a product. Each field left out stays as it is."
       },
       "ProductRequest": {
         "properties": {
@@ -4808,7 +4823,8 @@
         "required": [
           "name"
         ],
-        "title": "ProductRequest"
+        "title": "ProductRequest",
+        "description": "A new product: its name, and optionally a colour and a description."
       },
       "Question": {
         "properties": {
@@ -5001,7 +5017,8 @@
           "other_id",
           "resolution"
         ],
-        "title": "ResolveConflictRequest"
+        "title": "ResolveConflictRequest",
+        "description": "Two disagreeing entries, and which stands: this one, the other, or both."
       },
       "RestoreDraftRequest": {
         "properties": {
@@ -5119,7 +5136,8 @@
         "required": [
           "message"
         ],
-        "title": "SayRequest"
+        "title": "SayRequest",
+        "description": "One message to the assistant, in a conversation or starting one."
       },
       "ScopeRequest": {
         "properties": {
@@ -5301,7 +5319,8 @@
         "required": [
           "id"
         ],
-        "title": "TeamRequest"
+        "title": "TeamRequest",
+        "description": "A new team: its id, which names a directory and a knowledge base, and a display name."
       },
       "TryStyleRequest": {
         "properties": {
@@ -5371,7 +5390,8 @@
           }
         },
         "type": "object",
-        "title": "UpdateUserRequest"
+        "title": "UpdateUserRequest",
+        "description": "What to change about someone. Each field left out stays as it is."
       },
       "ValidationError": {
         "properties": {

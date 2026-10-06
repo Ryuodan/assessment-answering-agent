@@ -50,6 +50,16 @@ or docs and has not been verified by running anything.
 - **Fix:** allow-listed in ARCH-SIZE at their current length so they cannot grow; split them one at a time, behind characterization tests, in later plans.
 - **Update** 2026-10-05: after the format commit `4a7c3c6` the count is 19 (`src/graph/nodes.py` went from 399 to 406 lines through formatting alone); the current ceilings are in `harness/arch-allowlist.toml`. Since D-010 (plan 002) `src/config.py` is measured without its Settings class (142 lines) and has left the list: 18 remain.
 - **Update** 2026-10-06 (plan 019): `src/store.py` went from 475 to 132 lines, because the migrations moved to `src/migrations.py`, and has left the list: 17 remain. `src/api.py` went from 2036 to 1862, because the sign-in dependencies and the Access panel's routes moved to `src/routes/`. The OpenAPI contract is byte-identical.
+- **Update** 2026-10-06 (plans 020 to 024, measured in plan 025): 16 remain. Each plan that needed room moved a cohesive part out first, behind the existing tests, with the contract compared before and after.
+  - `models.py` went from 421 to 329 lines (the model-output schemas, to `src/schemas.py`) and has left the list.
+  - `api.py` 1862 -> 1296: knowledge, memory and chat routes to `src/routes/`.
+  - `agents/assistant.py` 1742 -> 1524: its prompt, to `agents/assistant_prompt.py`.
+  - `tools.py` 1487 -> 1376: question selection, to `src/selection.py`.
+  - `service.py` 711 -> 614: policy search, to `src/search.py`.
+  - `answer_memory.py` 918 -> 836: the disagreement sweep, to `src/memory_sweep.py`.
+  - `graph/nodes.py` 406 -> 402.
+
+  The ceilings in `harness/arch-allowlist.toml` were lowered to match, each at the end of its plan.
 
 ## TD-007: Import cycles and upward imports
 
@@ -128,6 +138,13 @@ or docs and has not been verified by running anything.
 - **Impact:** UI regressions are found by people.
 - **Fix:** browser automation tests for the main flows (Phase 4 plan).
 - **Partly resolved** 2026-10-06 (plan 011): `tests/browser/` drives the workbench in headless Chromium. It covers sign-in, a refused code, the Access panel, reading, answering and the answer cards, and a markup file name; the gate runs it. The assistant (`chat.html`), the memory and preferences pages are still exercised only as served files.
+- **Update** 2026-10-06 (plans 016 to 024): 13 browser tests now.
+  - The assistant page: its progress bubble (plan 016); its knowledge-base selector (plan 021); its product chip, history badges and product changes (plan 024).
+  - The memory page: its selector and moving an answer (plan 022).
+  - The Products page: adding, and deleting behind the typed confirmation (plan 020).
+  - The workbench: its Product selector and the product badges (plan 024).
+
+  Still exercised only as a served file: the preferences page.
 
 ## TD-017: The test suite takes 3.5 to 4 minutes, and nobody knows why
 
@@ -140,6 +157,7 @@ or docs and has not been verified by running anything.
   - the characterization error snapshots, 3.5 s.
 
   The other ~270 s is spread across the remaining ~1,780 tests at about 0.15 s each, which points to per-test setup (the autouse fixtures) rather than to slow tests. Fixed in this round: the staleness tests build the documents once per module, and their file now takes 9.1 s instead of about 19 s. Not done: profiling the autouse fixtures, and `pytest-xdist`. That fixture shares process-wide settings, so running in parallel needs care.
+- **Measured** 2026-10-06 (plan 025), from the gate runs of plans 023 to 025: 1,861 tests in 355 to 415 s, about 0.2 s each. M7 added 58 tests, and the time per test rose too. The cause is still unprofiled.
 
 ## TD-018: Undefined name in a type annotation
 
@@ -218,6 +236,7 @@ or docs and has not been verified by running anything.
 - **What:** measured 2026-10-05: 90 log calls in 24 modules of `src/`, each a %-formatted sentence with no event name. Plan 005 converted `api`, `storage`, `identity` and `config` (22 calls); 23 modules that make a standard-library logger (some never call it) are allow-listed in ARCH-LOG.
 - **Impact:** their lines cannot be filtered by event or read as fields; they still carry the request ID, which the logging filter adds to every record.
 - **Fix:** convert a module whenever it is next changed (`get_logger`, an event name, keyword fields), then delete its allow-list entry.
+- **Update** 2026-10-06 (plans 019 to 024): 21 modules are allow-listed. The modules M7 created log events: `products`, the routers, `memory_sweep` and `search`. The three prose lines that moved into the last two with the sweep and the search were converted on the way, as ARCH-LOG requires of a new module.
 
 ## TD-029: A generated team access code was written to the log
 

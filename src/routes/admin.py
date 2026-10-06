@@ -34,28 +34,37 @@ TEAM_ID = r"^[a-z0-9][a-z0-9._-]*$"
 
 
 class AddUserRequest(BaseModel):
+    """Someone to add, or to move: their address, team and role."""
+
     email: str = Field(min_length=3, max_length=254)
     team: str | None = Field(default=None, max_length=64, pattern=TEAM_ID)
     role: str = identity.MEMBER
 
 
 class UpdateUserRequest(BaseModel):
+    """What to change about someone. Each field left out stays as it is."""
+
     team: str | None = Field(default=None, max_length=64, pattern=TEAM_ID)
     role: str | None = None
     disabled: bool | None = None
 
 
 class PasswordRequest(BaseModel):
+    """An administrator's own password, or none to go back to the team's access code."""
+
     password: str | None = Field(default=None, max_length=200)
 
 
 class TeamRequest(BaseModel):
+    """A new team: its id, which names a directory and a knowledge base, and a display name."""
+
     id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
     name: str = Field(default="", max_length=120)
 
 
 @router.get("/api/admin/overview")
 def admin_overview(admin: User = Depends(current_admin)) -> dict[str, Any]:
+    """Everyone, every team, and who is asking, for the Access panel."""
     return {
         "users": identity.list_users(),
         "teams": identity.list_teams(),
@@ -66,6 +75,7 @@ def admin_overview(admin: User = Depends(current_admin)) -> dict[str, Any]:
 
 @router.post("/api/admin/users")
 def admin_add_user(body: AddUserRequest, admin: User = Depends(current_admin)) -> dict[str, Any]:
+    """Add someone to a team, or change the team and role of someone already here."""
     user = identity.add_user(body.email, team_id=body.team, role=body.role, added_by=admin.email)
     events.record(
         admin,
@@ -80,6 +90,7 @@ def admin_add_user(body: AddUserRequest, admin: User = Depends(current_admin)) -
 
 @router.patch("/api/admin/users/{email}")
 def admin_update_user(email: str, body: UpdateUserRequest, admin: User = Depends(current_admin)) -> dict[str, Any]:
+    """Change someone's team or role, or stop them signing in. The last administrator cannot be demoted or disabled."""
     address = identity.normalise(email)
     if (body.role is not None and body.role != identity.ADMIN) or body.disabled:
         _refuse_last_admin(address)
@@ -98,6 +109,7 @@ def admin_update_user(email: str, body: UpdateUserRequest, admin: User = Depends
 
 @router.delete("/api/admin/users/{email}")
 def admin_remove_user(email: str, admin: User = Depends(current_admin)) -> dict[str, Any]:
+    """Remove someone and end their sessions; what they did stays in the history. Not the last administrator."""
     address = identity.normalise(email)
     _refuse_last_admin(address)
     identity.remove_user(address)
@@ -142,6 +154,7 @@ def admin_set_password(email: str, body: PasswordRequest, admin: User = Depends(
 
 @router.post("/api/admin/teams")
 def admin_add_team(body: TeamRequest, admin: User = Depends(current_admin)) -> dict[str, Any]:
+    """Create a team. A team that already exists is left as it is."""
     identity.ensure_team(body.id, name=body.name)
     events.record(admin, events.TEAM_ADDED, subject_type="team", subject_id=body.id, name=body.name)
     return {"team": body.id}
@@ -149,6 +162,7 @@ def admin_add_team(body: TeamRequest, admin: User = Depends(current_admin)) -> d
 
 @router.delete("/api/admin/teams/{team_id}")
 def admin_remove_team(team_id: str, admin: User = Depends(current_admin)) -> dict[str, Any]:
+    """Remove a team with nobody on it. One that still has members is refused."""
     identity.delete_team(team_id)
     events.record(admin, events.TEAM_REMOVED, subject_type="team", subject_id=team_id)
     return {"removed": team_id}

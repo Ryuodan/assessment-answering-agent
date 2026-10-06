@@ -42,6 +42,7 @@ log = logs.get_logger(__name__)
 
 
 def install(app: FastAPI) -> None:
+    """Give an application the request-ID middleware and the handlers that turn errors into responses."""
     app.add_middleware(RequestContext)
     app.add_exception_handler(AppError, _app_error)
     app.add_exception_handler(StarletteHTTPException, _framework_error)
@@ -50,6 +51,7 @@ def install(app: FastAPI) -> None:
 
 
 def request_id_of(request: Request) -> str:
+    """The ID of the request being handled, as the logs and the error responses carry it."""
     return str(getattr(request.state, "request_id", "")) or logs.current_request_id()
 
 
