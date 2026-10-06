@@ -19,13 +19,8 @@ from pydantic import BaseModel
 from src.config import settings
 from src.documents import windows
 from src.llm import structured_llm
-from src.models import (
-    ExtractedQAPair,
-    ExtractedQAPairs,
-    ExtractedQuestions,
-    Language,
-    Question,
-)
+from src.models import Language, Question
+from src.schemas import ExtractedQAPair, ExtractedQAPairs, ExtractedQuestions
 from src.prompts import (
     QA_EXTRACTION_SYSTEM,
     QA_EXTRACTION_USER,

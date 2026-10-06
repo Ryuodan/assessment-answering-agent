@@ -47,7 +47,7 @@ Errors: [errors.md](errors.md).
 
 | Method | Path | What it does |
 |---|---|---|
-| `POST` | `/api/forms` | Read an uploaded questionnaire and report what can be answered in it. |
+| `POST` | `/api/forms` | Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it. |
 | `GET` | `/api/forms` | List Questionnaires |
 | `GET` | `/api/forms/{batch_id}` | Get Questionnaire |
 | `POST` | `/api/forms/{batch_id}/answer` | Answer a selection. Long: a large questionnaire is minutes of work. |
@@ -58,6 +58,7 @@ Errors: [errors.md](errors.md).
 | `POST` | `/api/forms/{batch_id}/columns` | Move a sheet's answers to a different column, or stop writing one. |
 | `PATCH` | `/api/forms/{batch_id}/questions` | Set questions aside, bring them back, or correct their wording. |
 | `POST` | `/api/forms/{batch_id}/detail` | Switch a questionnaire between full and brief answers. |
+| `POST` | `/api/forms/{batch_id}/product` | Answer a questionnaire for another product, or General, from now on (plan 023). |
 | `POST` | `/api/forms/{batch_id}/answers/length` | Write this one answer full or brief, whatever the rest of the file does. |
 | `POST` | `/api/forms/{batch_id}/approve` | Release one answer for writing, with the reviewer's name on it. |
 | `POST` | `/api/forms/{batch_id}/fill` | Write the confirmed answers into a copy of the original, and report the rest. |
@@ -155,6 +156,7 @@ Errors: [errors.md](errors.md).
 | `POST` | `/api/chat/upload` | A message with a questionnaire attached. |
 | `GET` | `/api/chat/{conversation_id}` | One conversation, as a transcript plus whatever answers it has produced. |
 | `DELETE` | `/api/chat/{conversation_id}` | Forget Conversation |
+| `POST` | `/api/chat/{conversation_id}/product` | Answer this conversation, and its questionnaire, for another product or General (plan 023). |
 
 ## `/health`
 

@@ -315,6 +315,13 @@ MIGRATIONS: list[str] = [
     ALTER TABLE memory_entries ADD COLUMN product_id TEXT NOT NULL DEFAULT '';
     CREATE INDEX memory_entries_team_product ON memory_entries(team_id, product_id);
     """,
+    # 13 -- which product a questionnaire and a chat are for (plan 023): '' is
+    # General, answered from the shared knowledge base and memory alone. Every
+    # questionnaire and chat from before is General, which is what it was.
+    """
+    ALTER TABLE form_batches ADD COLUMN product_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN product_id TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

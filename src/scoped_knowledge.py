@@ -41,6 +41,7 @@ class ScopedStore:
     """
 
     def __init__(self, team_id: str | None, product_id: str) -> None:
+        self.product_id = product_id
         self.shared = knowledge.get_store(team_id)
         self.product = knowledge.get_store(team_id, product_id=product_id)
 
@@ -53,7 +54,7 @@ class ScopedStore:
     async def search_types(
         self, query: str, wanted: list[tuple[SourceType, int]], *, expand: bool = True
     ) -> dict[SourceType, list[Evidence]]:
-        """The product's hits, then the shared ones, for each source type asked for."""
+        """The product's hits, labelled with its id, then the shared ones, for each source type asked for."""
         wanted = [(source_type, k) for source_type, k in wanted if k > 0]
         if not wanted or not query.strip():
             return {}
@@ -62,6 +63,8 @@ class ScopedStore:
             self.product.search_types(query, wanted, expand=expand, vector=vector),
             self.shared.search_types(query, wanted, expand=expand, vector=vector),
         )
+        for item in (item for items in own.values() for item in items):
+            item.product_id = self.product_id
         return {source_type: own.get(source_type, []) + shared.get(source_type, []) for source_type, _ in wanted}
 
 

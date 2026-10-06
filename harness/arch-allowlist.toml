@@ -4,17 +4,17 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 1440
+max_lines = 1296
 debt = "TD-006"
 
 [[size]]
 path = "src/agents/assistant.py"
-max_lines = 1742
+max_lines = 1524
 debt = "TD-006"
 
 [[size]]
 path = "src/tools.py"
-max_lines = 1487
+max_lines = 1376
 debt = "TD-006"
 
 [[size]]
@@ -44,7 +44,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/service.py"
-max_lines = 711
+max_lines = 614
 debt = "TD-006"
 
 [[size]]
@@ -73,18 +73,13 @@ max_lines = 495
 debt = "TD-006"
 
 [[size]]
-path = "src/models.py"
-max_lines = 421
-debt = "TD-006"
-
-[[size]]
 path = "src/documents.py"
 max_lines = 404
 debt = "TD-006"
 
 [[size]]
 path = "src/graph/nodes.py"
-max_lines = 406
+max_lines = 402
 debt = "TD-006"
 
 [[env]]

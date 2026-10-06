@@ -50,15 +50,15 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 
 | Path | What it is |
 |---|---|
-| `src/api.py`, `src/routes/`, `src/cli.py` | entry points: HTTP (70 operations, 5 pages; routes grouped by area move into `src/routes/`) and command line |
-| `src/tools.py`, `src/service.py` | operations shared by the UI and the assistant; ingestion, answering, documents |
+| `src/api.py`, `src/routes/`, `src/cli.py` | entry points: HTTP (77 operations, 6 pages; routes grouped by area move into `src/routes/`) and command line |
+| `src/tools.py`, `selection.py`, `service.py`, `search.py` | operations shared by the UI and the assistant; ingestion, answering, documents, search |
 | `src/agents/` | the chat assistant; the Excel-reading agent |
 | `src/graph/` | the answering pipeline: plan, retrieve, rerank, draft, review, finalize |
 | `src/knowledge.py`, `chunking.py`, `documents.py`, `embeddings.py` | the knowledge base: conversion, chunks, vectors |
 | `src/answer_memory.py`, `memory.py` | approved answers, reused and checked for conflicts |
 | `src/forms/` | reading customer questionnaires, writing answers back |
 | `src/store.py`, `migrations.py`, `identity.py`, `roles.py`, `products.py`, `batches.py`, `runs.py`, `conversations.py` | SQLite and its schema, users, roles, teams and their products, saved work |
-| `src/config.py`, `models.py`, `llm.py`, `prompts.py` | settings, data models, the model client, every prompt |
+| `src/config.py`, `models.py`, `schemas.py`, `llm.py`, `prompts.py` | settings, data models, what a model call returns, the model client, the pipeline's prompts |
 | `src/static/` | the browser pages |
 | `harness/` | the checks behind `poe` (not application code) |
 | `eval/`, `scripts/` | evaluation (house set and answer memory sealed in `eval/sealed/`); operational scripts (some write the real index) |

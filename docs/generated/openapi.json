@@ -672,7 +672,7 @@
     "/api/forms": {
       "post": {
         "summary": "Open Questionnaire",
-        "description": "Read an uploaded questionnaire and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.",
+        "description": "Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.",
         "operationId": "open_questionnaire_api_forms_post",
         "requestBody": {
           "required": true,
@@ -1176,6 +1176,58 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Choose Answer Length Api Forms  Batch Id  Detail Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{batch_id}/product": {
+      "post": {
+        "summary": "Choose Questionnaire Product",
+        "description": "Answer a questionnaire for another product, or General, from now on (plan 023).\n\nThe answers already written stay; answering again is a separate request.",
+        "operationId": "choose_questionnaire_product_api_forms__batch_id__product_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseProductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Choose Questionnaire Product Api Forms  Batch Id  Product Post"
                 }
               }
             }
@@ -2591,7 +2643,7 @@
     "/api/search": {
       "get": {
         "summary": "Search Knowledge",
-        "description": "Search the indexed corpus directly.\n\nSeparate from answering: this is for a person checking what the corpus\nactually says, so it returns the chunks that matched rather than an answer\nwritten from them.",
+        "description": "Search the indexed corpus directly.\n\nSeparate from answering: this is for a person checking what the corpus\nactually says, so it returns the chunks that matched rather than an answer\nwritten from them. With a `product`, its knowledge base is searched too.",
         "operationId": "search_knowledge_api_search_get",
         "parameters": [
           {
@@ -2632,6 +2684,16 @@
               "type": "string",
               "default": "",
               "title": "Source"
+            }
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Product"
             }
           }
         ],
@@ -2857,7 +2919,7 @@
     "/api/assessments/answer": {
       "post": {
         "summary": "Answer Assessment",
-        "description": "Answer a new assessment.\n\n`language` forces the output language (\"ar\" or \"en\"); omit it to answer each\nquestion in the language it was asked.\n\n`run_id` is chosen by the caller so it can watch the run while this request\nis still open — answering a long assessment is minutes of silence, and the\nidentifier has to be known before the work starts to be of any use.",
+        "description": "Answer a new assessment.\n\n`language` forces the output language (\"ar\" or \"en\"); omit it to answer each\nquestion in the language it was asked.\n\n`run_id` is chosen by the caller so it can watch the run while this request\nis still open — answering a long assessment is minutes of silence, and the\nidentifier has to be known before the work starts to be of any use.\n\n`product` answers it from that product's knowledge base beside the shared one.",
         "operationId": "answer_assessment_api_assessments_answer_post",
         "requestBody": {
           "content": {
@@ -3278,7 +3340,7 @@
     "/api/chat/upload": {
       "post": {
         "summary": "Say With A File",
-        "description": "A message with a questionnaire attached.\n\nSeparate from the plain message route because it is multipart, not because\nit does anything different: the file is saved, the assistant is told it is\nthere, and it decides to open it like any other operation.",
+        "description": "A message with a questionnaire attached.\n\nSeparate from the plain message route because it is multipart, not because\nit does anything different: the file is saved, the assistant is told it is\nthere, and it decides to open it like any other operation. `product` is a new\nconversation's, as on the plain message route.",
         "operationId": "say_with_a_file_api_chat_upload_post",
         "requestBody": {
           "content": {
@@ -3380,6 +3442,58 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Forget Conversation Api Chat  Conversation Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/{conversation_id}/product": {
+      "post": {
+        "summary": "Choose Chat Product",
+        "description": "Answer this conversation, and its questionnaire, for another product or General (plan 023).\n\nAnswers already written stay; anything answered afterwards uses the new one.",
+        "operationId": "choose_chat_product_api_chat__conversation_id__product_post",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseChatProductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Choose Chat Product Api Chat  Conversation Id  Product Post"
                 }
               }
             }
@@ -3508,6 +3622,12 @@
             "type": "string",
             "title": "Source Name",
             "default": "questions"
+          },
+          "product": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Product",
+            "default": ""
           }
         },
         "type": "object",
@@ -3882,6 +4002,11 @@
               }
             ],
             "title": "Run Id"
+          },
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "default": ""
           }
         },
         "type": "object",
@@ -3910,6 +4035,11 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "File"
+          },
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "default": ""
           }
         },
         "type": "object",
@@ -3939,6 +4069,11 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "File"
+          },
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "default": ""
           }
         },
         "type": "object",
@@ -3973,6 +4108,30 @@
           "files"
         ],
         "title": "Body_upload_guidelines_api_knowledge_guidelines_post"
+      },
+      "ChooseChatProductRequest": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Product",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ChooseChatProductRequest"
+      },
+      "ChooseProductRequest": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Product",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ChooseProductRequest"
       },
       "ColumnRoleRequest": {
         "properties": {
@@ -4056,6 +4215,11 @@
             "type": "string",
             "title": "Authority",
             "default": "ours"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id",
+            "default": ""
           },
           "doc_id": {
             "type": "string",
@@ -4189,6 +4353,11 @@
             "type": "string",
             "title": "Authority",
             "default": "ours"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id",
+            "default": ""
           },
           "doc_id": {
             "type": "string",
@@ -4937,6 +5106,12 @@
             "type": "string",
             "maxLength": 64,
             "title": "Run Id",
+            "default": ""
+          },
+          "product": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Product",
             "default": ""
           }
         },

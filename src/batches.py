@@ -40,6 +40,13 @@ class Batch:
     updated_at: str
     detail: str = "full"
     """Which length of answer this questionnaire is filled in with."""
+    product_id: str = ""
+    """The product it is answered for, or "" for General (plan 023).
+
+    A product's questionnaire is answered from that product's knowledge base
+    and answer memory beside the shared ones, and what a person approves in it
+    is remembered for that product.
+    """
 
     @property
     def exists(self) -> bool:
@@ -51,8 +58,8 @@ class Batch:
         return self.source_path.exists()
 
 
-def create(user: User, source: Path, form: DetectedForm) -> Batch:
-    """Record a newly uploaded questionnaire. Returns the batch."""
+def create(user: User, source: Path, form: DetectedForm, product_id: str = "") -> Batch:
+    """Record a newly uploaded questionnaire, for a product or General (""). Returns the batch."""
     batch_id = uuid.uuid4().hex[:12]
     now = store.utcnow()
     conn = store.connect()
@@ -60,8 +67,8 @@ def create(user: User, source: Path, form: DetectedForm) -> Batch:
         """
         INSERT INTO form_batches
             (batch_id, team_id, actor_email, source_name, source_path, format,
-             detected, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             detected, created_at, updated_at, product_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             batch_id,
@@ -73,6 +80,7 @@ def create(user: User, source: Path, form: DetectedForm) -> Batch:
             form.model_dump_json(),
             now,
             now,
+            product_id,
         ),
     )
     conn.commit()
@@ -85,6 +93,7 @@ def create(user: User, source: Path, form: DetectedForm) -> Batch:
         form=form,
         created_at=now,
         updated_at=now,
+        product_id=product_id,
     )
 
 
@@ -99,6 +108,7 @@ def _row_to_batch(row) -> Batch:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         detail=(row["detail"] if "detail" in row.keys() else "full") or "full",
+        product_id=row["product_id"],
     )
 
 
@@ -161,7 +171,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
     conn = store.connect()
     sql = """
         SELECT b.batch_id, b.source_name, b.format, b.actor_email, b.created_at,
-               b.updated_at, COUNT(a.question_id) AS answered
+               b.updated_at, b.product_id, COUNT(a.question_id) AS answered
         FROM form_batches b
         LEFT JOIN batch_answers a ON a.batch_id = b.batch_id
         WHERE b.team_id = ?
@@ -184,6 +194,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "answered": row["answered"],
+            "product_id": row["product_id"],
         }
         for row in rows
     ]
@@ -250,6 +261,21 @@ def set_detail(batch_id: str, detail: str) -> None:
         conn.execute(
             "UPDATE form_batches SET detail = ?, updated_at = ? WHERE batch_id = ?",
             (detail, store.utcnow(), batch_id),
+        )
+
+
+def set_product(batch_id: str, product_id: str) -> None:
+    """Answer this questionnaire for another product, or for General ("").
+
+    The answers already written stay as they are (plan 018, decision 8): they
+    were right for what was asked then, and answering again is a separate,
+    explicit act.
+    """
+    conn = store.connect()
+    with conn:
+        conn.execute(
+            "UPDATE form_batches SET product_id = ?, updated_at = ? WHERE batch_id = ?",
+            (product_id, store.utcnow(), batch_id),
         )
 
 

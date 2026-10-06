@@ -27,11 +27,8 @@ def client():
 
 
 @pytest.fixture
-def corpus(memory_index, monkeypatch):
-    """The fake index, reached the way the knowledge routes reach it."""
-    from src import knowledge
-
-    monkeypatch.setattr("src.service.get_store", knowledge.get_store)
+def corpus(memory_index):
+    """The fake index, which the knowledge routes reach through `knowledge.get_store`."""
     return memory_index
 
 

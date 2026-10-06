@@ -180,6 +180,10 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Product:
     it; the word is checked here too, so no other caller can delete one without
     the same confirmation. Its knowledge base goes first (plan 021), so a
     failure there leaves the product whole rather than half-deleted.
+
+    Questionnaires and chats that were for it become General and keep their
+    answers (plan 018, decision 5): those were written and reviewed, and the
+    product going does not make them wrong.
     """
     if confirm.strip().casefold() != CONFIRM_WORD:
         raise Invalid(f'Type "{CONFIRM_WORD}" to delete a product.', code="confirmation_required")
@@ -187,10 +191,20 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Product:
     scoped_knowledge.drop_product(team_id, product_id)
     answer_memory.forget_product(team_id, product_id)  # its remembered answers (plan 022)
     conn = store.connect()
+    for table in ("form_batches", "conversations"):  # plan 023
+        conn.execute(f"UPDATE {table} SET product_id = '' WHERE team_id = ? AND product_id = ?", (team_id, product_id))
     conn.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
     conn.commit()
     events.record(actor, events.PRODUCT_DELETED, subject_type="product", subject_id=product_id, name=product.name)
     return product
+
+
+def chosen(team_id: str, product_id: str) -> str:
+    """The product a caller asked for, checked: "" for General, or one of this team's products.
+
+    Another team's product, or one that was deleted, is `product_not_found`.
+    """
+    return get(team_id, product_id).id if product_id else ""
 
 
 def seed() -> list[Product]:

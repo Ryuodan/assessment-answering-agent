@@ -19,13 +19,8 @@ from src.llm import chat_llm, structured_llm
 from src.rerank import rerank
 from src.formatting import strip_source_markers
 from src.verification import assess, evidence_for, explain_confidence
-from src.models import (
-    AnsweredQuestion,
-    AnswerReview,
-    DraftedAnswer,
-    Evidence,
-    SourceType,
-)
+from src.models import AnsweredQuestion, Evidence, SourceType
+from src.schemas import AnswerReview, DraftedAnswer
 from src.relevance import filter_evidence
 from src.prompts import (
     ANSWER_SYSTEM,
@@ -157,9 +152,10 @@ async def retrieve(state: QuestionState) -> dict:
     drafting prompt reads sources in order. The merge is left to the state
     reducer, which already de-duplicates by chunk and keeps the best score.
     """
-    from src.knowledge import get_store
+    from src.scoped_knowledge import store_for
 
-    store = get_store(state.get("team_id") or None)
+    # The shared knowledge base, or a product's beside it (plan 023).
+    store = store_for(state.get("team_id") or None, state.get("product_id", ""))
     queries = state.get("search_queries") or [state["question"].text]
 
     # A collection holding nothing still costs a full embedding round trip per

@@ -10,7 +10,7 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.roles`, `src.verification`
+- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
 
 | Module | What it is |
 |---|---|
@@ -25,6 +25,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 | `src/progress.py` | How far along a run is, for anything watching it. |
 | `src/prompts.py` | All prompts, in one place. |
 | `src/roles.py` | The roles a person can have, and what each may do beyond answering. |
+| `src/schemas.py` | What a structured model call is asked to produce. |
 | `src/verification.py` | Checks applied to a drafted answer before it is returned. |
 
 ## 2. integrations
@@ -105,12 +106,15 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 
 The use cases the web interface, the command line and the chat assistant share.
 
-- **Modules:** `src.agents.assistant`, `src.service`, `src.tools`
+- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.search`, `src.selection`, `src.service`, `src.tools`
 - **Owns:** `langchain`
 
 | Module | What it is |
 |---|---|
 | `src/agents/assistant.py` | The assistant: one conversation, over everything the system can do. |
+| `src/agents/assistant_prompt.py` | What the assistant is told: who it works for, what its tools do, and how to speak. |
+| `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
+| `src/selection.py` | Which questions an operation applies to, and when an answer counts as settled. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |
 | `src/tools.py` | The operations the interface performs, and the agent will later call. |
 
@@ -128,6 +132,7 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/__init__.py` | HTTP routes grouped by area, included by `src/api.py` (plan 019, TD-006). |
 | `src/routes/admin.py` | The Access panel's routes: people, teams and access codes. Administrators only. |
 | `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
+| `src/routes/chat.py` | The assistant's routes: conversations, and one exchange at a time. |
 | `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021). |
 | `src/routes/memory.py` | The answer memory's routes: the shared memory, or a product's (plan 022). |
 | `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |

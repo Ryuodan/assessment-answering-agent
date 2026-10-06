@@ -9,7 +9,7 @@ JSON outside three named exemptions.
 
 | Boundary | Where it arrives | Parsed into | Gaps |
 |---|---|---|---|
-| HTTP request bodies | `src/api.py` | 30 pydantic request models, covering the 30 JSON bodies of the 70 operations; FastAPI answers a mismatch with 422 `validation_failed` | none |
+| HTTP request bodies | `src/api.py`, `src/routes/` | 33 pydantic request models, covering the 35 JSON bodies of the 77 operations; FastAPI answers a mismatch with 422 `validation_failed` | none |
 | HTTP query, path and form parameters | `src/api.py` | typed by FastAPI from the signatures | three are checked by hand (`mode` on search, `authority` on upload, the upload's suffix), kept so their errors keep their own codes (`search_mode_unknown`, `authority_invalid`, `document_type_unsupported`), which the error snapshots pin |
 | Uploaded files (5 multipart routes) | `src/service.py`, `src/documents.py`, `src/forms/` | questionnaires into `DetectedForm`; policies into text and `Chunk`s; an unreadable file is `FormatError` or `UnsupportedDocumentError` (422) | the file libraries themselves (pdfplumber, python-docx, the stdlib zip reader) are trusted to parse; hostile files are tested in `tests/test_forms_hostile.py` |
 | Configuration | `src/config.py` | `Settings` (pydantic-settings): types, ranges, patterns, and `Literal` vocabularies for `DETECTION_STRATEGY`, `GROQ_REASONING_FORMAT`, `LOG_LEVEL`, `DOCLING_IMAGE_EXPORT_MODE`; an invalid value stops startup naming the setting | free-text settings (model names, URLs, project names) are not checked beyond being strings |

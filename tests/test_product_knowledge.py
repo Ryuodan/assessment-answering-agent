@@ -33,7 +33,6 @@ def stores(monkeypatch):
         return made[key]
 
     monkeypatch.setattr("src.knowledge.get_store", get_store)
-    monkeypatch.setattr("src.service.get_store", get_store)
     return made
 
 

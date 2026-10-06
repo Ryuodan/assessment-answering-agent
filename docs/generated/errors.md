@@ -36,10 +36,10 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | Code | Status | Raised as | Where |
 |---|---|---|---|
 | `admin_required` | 403 | `Forbidden` | `src.routes.auth.current_admin` |
-| `assistant_unconfigured` | 503 | `Unavailable` | `src.api.say_to_assistant`, `src.api.say_with_a_file` |
+| `assistant_unconfigured` | 503 | `Unavailable` | `src.routes.chat.say_to_assistant`, `src.routes.chat.say_with_a_file` |
 | `authority_invalid` | 400 | `Invalid` | `src.routes.knowledge.upload_guidelines` |
 | `confirmation_required` | 400 | `Invalid` | `src.products.delete` |
-| `conversation_not_found` | 404 | `NotFound` | `src.api._conversation` |
+| `conversation_not_found` | 404 | `NotFound` | `src.routes.chat._conversation` |
 | `document_not_found` | 404 | `NotFound` | `src.api._resolve_document` |
 | `document_path_invalid` | 400 | `Invalid` | `src.api._resolve_document` |
 | `document_type_unsupported` | 415 | `UnsupportedFile` | `src.routes.knowledge.check_suffix` |

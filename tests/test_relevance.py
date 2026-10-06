@@ -13,7 +13,8 @@ import pytest
 
 from src import relevance
 from src.config import settings
-from src.models import Evidence, RelevanceVerdict, RelevanceVerdicts, SourceType
+from src.models import Evidence, SourceType
+from src.schemas import RelevanceVerdict, RelevanceVerdicts
 
 
 def chunk(n: int, unit: str = "", name: str = "policy.pdf") -> Evidence:

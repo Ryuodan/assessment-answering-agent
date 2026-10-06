@@ -28,11 +28,11 @@ from contextlib import contextmanager
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
-from src import answer_memory
+from src import answer_memory, schemas
 from src.config import settings
 from src.embeddings import get_embeddings
 from src.lexical import LexicalIndex, parse_search_query, reciprocal_rank_fusion
-from src.models import Evidence, ExtractedQAPair, SourceType
+from src.models import Evidence, SourceType
 from src.chunking import chunk_document, fold_digits
 from src.vector_names import collection_for as collection_for, cosine_from_relevance as cosine_from_relevance
 
@@ -122,7 +122,7 @@ class KnowledgeStore:
         ]
         return self._replace_source(source_name, documents)
 
-    def add_prior_answers(self, source_name: str, pairs: list[ExtractedQAPair], content_hash: str = "") -> int:
+    def add_prior_answers(self, source_name: str, pairs: list[schemas.ExtractedQAPair], content_hash: str = "") -> int:
         """Index question/answer pairs from a completed assessment.
 
         Each pair carries the id it is known by in the answer memory, which is

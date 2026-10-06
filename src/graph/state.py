@@ -10,7 +10,8 @@ import operator
 from typing import Annotated, TypedDict
 
 from src.config import settings
-from src.models import AnsweredQuestion, AnswerReview, DraftedAnswer, Language, Question, Evidence, SourceType
+from src.models import AnsweredQuestion, Language, Question, Evidence, SourceType
+from src.schemas import AnswerReview, DraftedAnswer
 
 
 def merge_evidence(left: list[Evidence], right: list[Evidence]) -> list[Evidence]:
@@ -223,6 +224,9 @@ class QuestionState(TypedDict, total=False):
     team_id: str
     """Whose knowledge base answers it. Retrieval never reaches another team's."""
 
+    product_id: str
+    """The product it is answered for, beside the shared knowledge base; "" or absent for General."""
+
     search_queries: list[str]
     """Queries for the current retrieval round.
 
@@ -262,6 +266,9 @@ class AssessmentState(TypedDict, total=False):
 
     team_id: str
     """Whose knowledge base every question in the document is answered from."""
+
+    product_id: str
+    """The product every question is answered for (plan 023); "" or absent for General."""
 
     language: Language | None
     """Caller's forced output language. None means each answer follows its own question.

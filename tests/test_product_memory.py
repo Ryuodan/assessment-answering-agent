@@ -46,7 +46,6 @@ def stores(monkeypatch):
         return candidates
 
     monkeypatch.setattr("src.knowledge.get_store", get_store)
-    monkeypatch.setattr("src.service.get_store", get_store)
     monkeypatch.setattr("src.knowledge.KnowledgeStore.search", search)
     monkeypatch.setattr(memory_sweep, "_close_questions", everyone)
     monkeypatch.setattr(memory_sweep, "_same_question", everyone)

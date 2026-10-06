@@ -11,7 +11,8 @@ import pytest
 from src.config import settings
 from src.graph import nodes
 from src.graph.workflow import _answer_question, _fan_out
-from src.models import AnsweredQuestion, AnswerReview, DraftedAnswer, Evidence, Question, SourceType
+from src.models import AnsweredQuestion, Evidence, Question, SourceType
+from src.schemas import AnswerReview, DraftedAnswer
 from src.tools import ready_to_write
 
 

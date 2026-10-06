@@ -95,6 +95,7 @@ async def answer_one_question(
     *,
     run_id: str = "",
     team_id: str | None = None,
+    product_id: str = "",
 ) -> AnsweredQuestion:
     """Answer a single question through the inner graph.
 
@@ -111,6 +112,7 @@ async def answer_one_question(
             "question": question,
             "language": language,
             "team_id": team_id or "",
+            "product_id": product_id,
             "search_queries": [question.text],
             "attempt": 0,
             "evidence": [],
@@ -181,6 +183,7 @@ def _fan_out(state: AssessmentState) -> list[Send] | str:
                 "language": forced_language or question.language,
                 "run_id": state.get("run_id", ""),
                 "team_id": state.get("team_id", ""),
+                "product_id": state.get("product_id", ""),
                 "search_queries": [question.text],
                 "attempt": 0,
                 "evidence": [],

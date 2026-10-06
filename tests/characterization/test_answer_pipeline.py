@@ -21,7 +21,8 @@ from langchain_core.messages import AIMessage
 
 from src import knowledge, organisation, service
 from src.graph import nodes
-from src.models import AnswerReview, DraftedAnswer, Question
+from src.models import Question
+from src.schemas import AnswerReview, DraftedAnswer
 from tests.conftest import build_store
 
 POLICY = """# Access Control Policy

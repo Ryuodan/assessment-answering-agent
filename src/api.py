@@ -9,6 +9,7 @@ import asyncio
 import unicodedata
 import uuid
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 from contextlib import asynccontextmanager, suppress
@@ -22,7 +23,6 @@ from src import web
 from src.logs import get_logger
 from src import (
     batches,
-    conversations,
     events,
     forms,
     identity,
@@ -37,10 +37,10 @@ from src import (
     store,
     tools,
 )
-from src.agents import assistant
 from src.routes import admin as admin_routes
 from src.routes import knowledge as knowledge_routes
 from src.routes import memory as memory_routes
+from src.routes import chat as chat_routes
 from src.routes.memory import scan_memory as _scan_memory
 from src.routes.knowledge import check_suffix
 from src.routes import products as product_routes
@@ -51,7 +51,6 @@ from src.config import configure_logging, settings
 from src.errors import (
     Invalid,
     NotFound,
-    Unavailable,
     Unprocessable,
 )
 from src.extraction import detect_question_language
@@ -263,8 +262,10 @@ class SetAnswerRequest(BaseModel):
 
 
 @app.post("/api/forms")
-async def open_questionnaire(file: UploadFile = File(...), user: User = Depends(current_user)) -> dict:
-    """Read an uploaded questionnaire and report what can be answered in it.
+async def open_questionnaire(
+    file: UploadFile = File(...), product: str = Form(""), user: User = Depends(current_user)
+) -> dict:
+    """Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.
 
     Nothing is answered here. The point of the separation is that a person sees
     which sheets were used, which were skipped and why, and what each column was
@@ -280,11 +281,12 @@ async def open_questionnaire(file: UploadFile = File(...), user: User = Depends(
             f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
             f"Supported: {', '.join(forms.SUPPORTED)}."
         )
+    product_id = products.chosen(user.team_id, product)  # before the file is kept
     path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
     # In a thread: reading a workbook is a CPU-bound XML parse, and under the
     # assisted and agent strategies it is also a network call. Either way it is
     # not something to do on the event loop of a server answering other people.
-    batch = await run_in_threadpool(lambda: tools.open_form(user, path))
+    batch = await run_in_threadpool(lambda: tools.open_form(user, path, product_id=product_id))
     return tools.inspect(user, batch.id)
 
 
@@ -409,6 +411,23 @@ async def choose_answer_length(batch_id: str, request: DetailRequest, user: User
     tools.set_detail(user, batch_id, request.detail)
     if request.detail == "brief":
         await tools.make_brief(user, batch_id)
+    return tools.inspect(user, batch_id)
+
+
+class ChooseProductRequest(BaseModel):
+    product: str = Field(default="", max_length=64)
+    """A product's id, or "" for General."""
+
+
+@app.post("/api/forms/{batch_id}/product")
+def choose_questionnaire_product(
+    batch_id: str, request: ChooseProductRequest, user: User = Depends(current_user)
+) -> dict[str, Any]:
+    """Answer a questionnaire for another product, or General, from now on (plan 023).
+
+    The answers already written stay; answering again is a separate request.
+    """
+    tools.set_product(user, batch_id, request.product)
     return tools.inspect(user, batch_id)
 
 
@@ -834,14 +853,16 @@ async def search_knowledge(
     mode: str = "hybrid",
     limit: int = 20,
     source: str = "",
+    product: str = "",
     user: User = Depends(current_user),
 ) -> dict:
     """Search the indexed corpus directly.
 
     Separate from answering: this is for a person checking what the corpus
     actually says, so it returns the chunks that matched rather than an answer
-    written from them.
+    written from them. With a `product`, its knowledge base is searched too.
     """
+    scope = {"product_id": products.chosen(user.team_id, product)} if product else {}
     if mode not in ("semantic", "keyword", "hybrid"):
         raise Unprocessable(f"unknown search mode '{mode}'", code="search_mode_unknown")
     return await service.search_knowledge(
@@ -850,6 +871,7 @@ async def search_knowledge(
         limit=limit,
         source_name=source,
         team_id=user.team_id,
+        **scope,
     )
 
 
@@ -972,6 +994,7 @@ async def answer_assessment(
     file: UploadFile = File(...),
     language: Language | None = Form(default=None),
     run_id: str | None = Form(default=None),
+    product: str = Form(default=""),
     user: User = Depends(current_user),
 ) -> AssessmentResult:
     """Answer a new assessment.
@@ -982,7 +1005,10 @@ async def answer_assessment(
     `run_id` is chosen by the caller so it can watch the run while this request
     is still open — answering a long assessment is minutes of silence, and the
     identifier has to be known before the work starts to be of any use.
+
+    `product` answers it from that product's knowledge base beside the shared one.
     """
+    scope = {"product_id": products.chosen(user.team_id, product)} if product else {}
     path = await _save_assessment(file, user)
 
     result = await service.answer_assessment(
@@ -990,6 +1016,7 @@ async def answer_assessment(
         language=language,
         run_id=run_id,
         team_id=user.team_id,
+        **scope,
     )
     if not result.answers:
         raise Unprocessable(f"No questions could be extracted from '{result.source_name}'.", code="no_questions_found")
@@ -1024,6 +1051,8 @@ class AnswerQuestionsRequest(BaseModel):
     language: Language | None = None
     run_id: str | None = None
     source_name: str = "questions"
+    product: str = Field(default="", max_length=64)
+    """A product's id to answer them for, beside the shared knowledge base; "" for General."""
 
 
 @app.post("/api/assessments/extract")
@@ -1071,11 +1100,13 @@ async def answer_question_list(request: AnswerQuestionsRequest, user: User = Dep
         for index, item in enumerate(request.questions)
     ]
 
+    scope = {"product_id": products.chosen(user.team_id, request.product)} if request.product else {}
     answers = await service.answer_questions(
         questions,
         language=request.language,
         run_id=request.run_id,
         team_id=user.team_id,
+        **scope,
     )
     # Every answer somebody drafts gets their house style, however it was asked
     # for -- a typed question in the workbench as much as a spreadsheet row.
@@ -1217,182 +1248,7 @@ def export_docx(
 # The assistant
 # ---------------------------------------------------------------------------
 
-
-class SayRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=8000)
-    conversation_id: str = Field(default="", max_length=64)
-
-    run_id: str = Field(default="", max_length=64)
-    """A name the caller picked for this turn, so it can watch it happen.
-
-    Minted by the page rather than here, because a first turn -- the slow one,
-    where a file is read and answered -- has no conversation and no batch yet
-    to be named after. `/api/assessments/progress/{run_id}` reports on it.
-    """
-
-
-def _conversation(conversation_id: str, user: User):
-    conversation = conversations.load(
-        conversation_id,
-        team_id=user.team_id,
-        actor_email=user.email,
-    )
-    if conversation is None:
-        raise NotFound("That conversation no longer exists.", code="conversation_not_found")
-    return conversation
-
-
-def _turn_response(turn, conversation, user: User) -> dict:
-    return {
-        "reply": turn.reply,
-        "conversation_id": conversation.id,
-        "title": conversation.title,
-        "batch_id": turn.batch_id,
-        "steps": turn.steps,
-        "sources": turn.sources,
-        "refreshed": turn.refreshed,
-        "stopped_early": turn.stopped_early,
-        "seconds": round(turn.seconds, 1),
-        "tokens": turn.input_tokens + turn.output_tokens,
-        "at": store.utcnow(),
-        "changed": turn.refreshed,
-        "answers": assistant.answers_for(user, conversation) if turn.refreshed else None,
-    }
-
-
-@app.get("/api/chat")
-def list_conversations(user: User = Depends(current_user), limit: int = 30) -> dict:
-    return {
-        "conversations": conversations.recent(
-            user.team_id,
-            actor_email=user.email,
-            limit=limit,
-        )
-    }
-
-
-@app.post("/api/chat")
-async def say_to_assistant(request: SayRequest, user: User = Depends(current_user)) -> dict:
-    """One exchange with the assistant.
-
-    Long: a message can mean "answer 183 questions", which is minutes of work.
-    The conversation is saved by the assistant itself before this returns, so a
-    request that times out at a proxy has still recorded what it did.
-    """
-    if not assistant.configured():
-        raise Unavailable("No model is configured for the assistant.", code="assistant_unconfigured")
-    conversation = (
-        _conversation(request.conversation_id, user)
-        if request.conversation_id
-        else assistant.start(user, request.message)
-    )
-    turn = await assistant.say(
-        user,
-        conversation,
-        request.message,
-        run_id=request.run_id,
-    )
-    return _turn_response(turn, conversation, user)
-
-
-@app.post("/api/chat/upload")
-async def say_with_a_file(
-    message: str = Form(""),
-    conversation_id: str = Form(""),
-    run_id: str = Form(""),
-    file: UploadFile = File(...),
-    user: User = Depends(current_user),
-) -> dict:
-    """A message with a questionnaire attached.
-
-    Separate from the plain message route because it is multipart, not because
-    it does anything different: the file is saved, the assistant is told it is
-    there, and it decides to open it like any other operation.
-    """
-    if not assistant.configured():
-        raise Unavailable("No model is configured for the assistant.", code="assistant_unconfigured")
-    name = file.filename or "questionnaire"
-    if Path(name).suffix.lower() not in forms.SUPPORTED:
-        raise forms.UnsupportedForm(
-            f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
-            f"Supported: {', '.join(forms.SUPPORTED)}."
-        )
-    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
-    conversation = (
-        _conversation(conversation_id, user) if conversation_id else assistant.start(user, message or f"Read {name}")
-    )
-    turn = await assistant.say(
-        user,
-        conversation,
-        message or f"Read {name} and tell me what is in it.",
-        upload=path,
-        run_id=run_id,
-    )
-    return _turn_response(turn, conversation, user)
-
-
-@app.get("/api/chat/{conversation_id}")
-def get_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict:
-    """One conversation, as a transcript plus whatever answers it has produced.
-
-    The stored messages are LangChain's, tool calls included, because the agent
-    resumes from them. What comes back here is the readable half of that -- who
-    said what -- because a person scrolling their own conversation has no use
-    for a serialised tool call.
-    """
-    conversation = _conversation(conversation_id, user)
-    transcript = []
-    for message in conversation.messages:
-        kind = getattr(message, "type", "")
-        if kind == "human":
-            # Their own words, without the note that told the agent a file had
-            # arrived -- that is not something anybody said. The file itself is
-            # shown, beside the words, because it is what they were about.
-            kept = message.additional_kwargs or {}
-            transcript.append(
-                {
-                    "role": "you",
-                    "text": assistant.spoken(str(message.content)),
-                    "file": assistant.uploaded_name(message),
-                    "at": kept.get("at", ""),
-                }
-            )
-        elif kind == "ai" and not getattr(message, "tool_calls", None):
-            text = message.content
-            if isinstance(text, list):
-                text = "".join(b.get("text", "") for b in text if isinstance(b, dict))
-            if str(text).strip():
-                # What the turn did, stored on the reply itself when it was made.
-                drawn = (message.additional_kwargs or {}).get(assistant.UI_KEY) or {}
-                steps = drawn.get("steps", [])
-                transcript.append(
-                    {
-                        "role": "assistant",
-                        "text": str(text).strip(),
-                        "steps": steps,
-                        "sources": drawn.get("sources", []),
-                        "at": drawn.get("at", ""),
-                        # Recorded since replies learned to offer the answers; read
-                        # off the steps for the ones stored before that.
-                        "changed": drawn.get(
-                            "changed", any(step.split("(", 1)[0] in assistant.CHANGES_ANSWERS for step in steps)
-                        ),
-                    }
-                )
-    return {
-        "id": conversation.id,
-        "title": conversation.title,
-        "batch_id": conversation.batch_id,
-        "messages": transcript,
-        "answers": assistant.answers_for(user, conversation),
-    }
-
-
-@app.delete("/api/chat/{conversation_id}")
-def forget_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict:
-    _conversation(conversation_id, user)
-    conversations.delete(conversation_id, actor_email=user.email)
-    return {"deleted": conversation_id}
+app.include_router(chat_routes.router)  # the assistant, src/routes/chat.py
 
 
 # ---------------------------------------------------------------------------

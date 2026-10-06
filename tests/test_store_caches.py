@@ -196,7 +196,7 @@ def test_prior_answers_are_held_to_the_same_rule(store):
     """Both ingestion paths chunk the same way, so neither may be a back door."""
     from src.chunking import has_substance
 
-    from src.models import ExtractedQAPair
+    from src.schemas import ExtractedQAPair
 
     store.add_prior_answers(
         "filled.pdf",

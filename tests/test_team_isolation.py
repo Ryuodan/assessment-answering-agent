@@ -57,7 +57,6 @@ def stores(monkeypatch):
         return made[team]
 
     monkeypatch.setattr("src.knowledge.get_store", get_store)
-    monkeypatch.setattr("src.service.get_store", get_store)
     monkeypatch.setattr("src.graph.nodes.get_store", get_store, raising=False)
     return get_store
 

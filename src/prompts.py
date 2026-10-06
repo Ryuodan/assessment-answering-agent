@@ -186,6 +186,17 @@ def format_question_block(
     return "\n".join(lines)
 
 
+PRODUCT_SOURCES_NOTE = (
+    "Sources marked FOR THIS PRODUCT were written for the product this questionnaire is about; "
+    "the others are the organisation's shared material. Where the two disagree, the product's "
+    "source applies: it is how this product differs, not a contradiction to report."
+)
+"""Put above the sources when some are a product's own (plan 018, decision 2; plan 023).
+
+Never shown otherwise, so a General questionnaire's prompt is exactly what it was.
+"""
+
+
 def format_sources_block(sources: list["Evidence"]) -> str:
     """Render retrieved evidence as a numbered, locator-labelled block."""
     if not sources:
@@ -202,12 +213,16 @@ def format_sources_block(sources: list["Evidence"]) -> str:
             label = "EXTERNAL REQUIREMENT (not our document)"
         else:
             label = "OUR POLICY"
+        if getattr(item, "product_id", ""):
+            label += ", FOR THIS PRODUCT"
         header = f"[{index}] {label} \u2014 {item.locator}"
         if item.heading:
             header += f"  ({item.heading})"
         if item.is_fragment:
             header += f"  [part {item.part} of {item.parts}]"
         blocks.append(f"{header}\n{item.snippet}")
+    if any(getattr(item, "product_id", "") for item in sources):
+        blocks.insert(0, PRODUCT_SOURCES_NOTE)
     return "\n\n".join(blocks)
 
 

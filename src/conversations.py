@@ -48,6 +48,8 @@ class Conversation:
     messages: list[BaseMessage] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    product_id: str = ""
+    """The product this chat is for, or "" for General (plan 023). Its questionnaire's too."""
 
 
 def title_from(text: str) -> str:
@@ -64,8 +66,8 @@ def title_from(text: str) -> str:
     return (cut[:space] if space > TITLE_LENGTH - 20 else cut).rstrip(" ,.;:") + "…"
 
 
-def create(user: User, first_message: str = "") -> Conversation:
-    """Start a conversation. Returns it."""
+def create(user: User, first_message: str = "", product_id: str = "") -> Conversation:
+    """Start a conversation, for a product or General (""). Returns it."""
     conversation_id = uuid.uuid4().hex[:12]
     now = store.utcnow()
     conversation = Conversation(
@@ -76,16 +78,17 @@ def create(user: User, first_message: str = "") -> Conversation:
         batch_id="",
         created_at=now,
         updated_at=now,
+        product_id=product_id,
     )
     conn = store.connect()
     conn.execute(
         """
         INSERT INTO conversations
             (conversation_id, team_id, actor_email, title, batch_id, messages,
-             created_at, updated_at)
-        VALUES (?, ?, ?, ?, NULL, '[]', ?, ?)
+             created_at, updated_at, product_id)
+        VALUES (?, ?, ?, ?, NULL, '[]', ?, ?, ?)
         """,
-        (conversation_id, user.team_id, user.email, conversation.title, now, now),
+        (conversation_id, user.team_id, user.email, conversation.title, now, now, product_id),
     )
     conn.commit()
     return conversation
@@ -109,6 +112,7 @@ def _row_to_conversation(row) -> Conversation:
         messages=messages,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        product_id=row["product_id"],
     )
 
 
@@ -140,18 +144,19 @@ def load(
 
 
 def save(conversation: Conversation) -> None:
-    """Write back the messages, the title and the current questionnaire."""
+    """Write back the messages, the title, the current questionnaire and the product."""
     conn = store.connect()
     conn.execute(
         """
         UPDATE conversations
-           SET messages = ?, title = ?, batch_id = ?, updated_at = ?
+           SET messages = ?, title = ?, batch_id = ?, product_id = ?, updated_at = ?
          WHERE conversation_id = ?
         """,
         (
             json.dumps(messages_to_dict(conversation.messages), ensure_ascii=False),
             conversation.title,
             conversation.batch_id or None,
+            conversation.product_id,
             store.utcnow(),
             conversation.id,
         ),
@@ -170,7 +175,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> 
     """
     conn = store.connect()
     sql = """
-        SELECT conversation_id, title, batch_id, actor_email, created_at, updated_at,
+        SELECT conversation_id, title, batch_id, actor_email, created_at, updated_at, product_id,
                (SELECT source_name FROM form_batches b
                  WHERE b.batch_id = c.batch_id) AS source_name
           FROM conversations c
@@ -192,6 +197,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> 
             "actor_email": row["actor_email"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "product_id": row["product_id"],
         }
         for row in rows
     ]

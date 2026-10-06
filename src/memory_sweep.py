@@ -27,7 +27,7 @@ async def _same_question(question: str, candidates: list[Entry]) -> list[Entry]:
     if not candidates:
         return []
     from src.llm import structured_llm, tool_use_failed
-    from src.models import SameQuestions
+    from src.schemas import SameQuestions
     from src.prompts import SAME_QUESTION_SYSTEM, SAME_QUESTION_USER
 
     listed = "\n".join(f"{n}. {candidate.question}" for n, candidate in enumerate(candidates, start=1))

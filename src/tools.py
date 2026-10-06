@@ -18,7 +18,8 @@ with fixed inputs, before anything non-deterministic is choosing between them.
 **Scope** is what makes a selection expressible: "all of them", "the ones still
 blank", "the sheet called Data Privacy", "anything mentioning encryption". The
 agent's whole job is turning a sentence into a `Scope` and an instruction, so it
-lives here rather than in the agent.
+lives beside the operations rather than in the agent: in `src/selection.py`,
+re-exported here.
 """
 
 from __future__ import annotations
@@ -26,11 +27,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import asyncio
 
 from src.config import settings
-from src import answer_memory, batches, events, preferences, progress, rewrite, service
+from src import answer_memory, batches, events, preferences, products, progress, rewrite, service
 from src.formatting import to_cell_text
 from src.batches import Batch
 from src.forms import status as status_map
@@ -38,171 +40,19 @@ from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role,
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
 from src.errors import QuestionnaireNotFound, ToolError as ToolError
+from src.selection import (
+    APPROVED as APPROVED,
+    BLANKED as BLANKED,
+    HAND as HAND,
+    Scope as Scope,
+    _has_answer,
+    _settled,
+    confirmed_by_a_person as confirmed_by_a_person,
+    ready_to_write as ready_to_write,
+    written_by_a_person as written_by_a_person,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Choosing which questions to act on
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Scope:
-    """Which questions an operation applies to.
-
-    Every field narrows; they combine with AND. The default selects everything,
-    which is what "answer this questionnaire" means.
-    """
-
-    ids: tuple[str, ...] = ()
-    """Specific questions. Empty means no restriction by id."""
-
-    part: str = ""
-    """A sheet name, or the section a question sits under."""
-
-    matching: str = ""
-    """Free text, matched against the question and its section."""
-
-    unanswered_only: bool = False
-    """Narrow to questions with no answer yet -- "finish the rest", "what is left".
-
-    A way of *naming* a subset, not a safety belt: `answer` refuses to overwrite
-    an existing answer whether or not this is set. It still earns its place,
-    because "list what is left" and "answer what is left" are things people ask
-    and the count has to come out right.
-
-    "Already answered" means either -- an answer this system wrote, or one the
-    file arrived with. Counting only our own was the whole of that intention
-    missed.
-    """
-
-    def select(self, form: DetectedForm, answered: dict[str, AnsweredQuestion]) -> list[FormQuestion]:
-        chosen = []
-        needle = self.matching.strip().casefold()
-        for question in form.questions:
-            if self.ids and question.id not in self.ids:
-                continue
-            if self.part and self.part.casefold() not in (
-                question.location.casefold() + " " + question.section.casefold()
-            ):
-                continue
-            if needle and needle not in (question.text + " " + question.section).casefold():
-                continue
-            if self.unanswered_only and _settled(answered.get(question.id), question):
-                continue
-            if not question.writable:
-                continue
-            chosen.append(question)
-        return chosen
-
-    def describe(self) -> str:
-        """What this scope selects, for an event log a person reads."""
-        parts = []
-        if self.ids:
-            parts.append(f"{len(self.ids)} chosen question(s)")
-        if self.part:
-            parts.append(f"in {self.part!r}")
-        if self.matching:
-            parts.append(f"mentioning {self.matching!r}")
-        if self.unanswered_only:
-            parts.append("not yet answered")
-        return ", ".join(parts) or "all questions"
-
-
-def _has_answer(answered: AnsweredQuestion | None) -> bool:
-    return bool(answered and answered.answer.strip() and not answered.error)
-
-
-BLANKED = "left blank on purpose"
-"""Why an answer is empty, when somebody emptied it deliberately.
-
-Recorded rather than inferred. An empty answer and a question nobody has
-answered yet look identical from the outside, and they are opposite states: one
-is a decision and the other is work outstanding.
-"""
-
-
-HAND = "written by hand"
-"""What `confidence_reason` says when a person typed the answer themselves.
-
-The durable mark is `AnsweredQuestion.by_hand`; this is the sentence shown
-beside the score, and the reading of it that answers written before that field
-existed still rely on.
-"""
-
-
-APPROVED = "approved by a reviewer"
-"""Recorded in `confidence_reason` when a person accepted an answer as it stands.
-
-Editing an answer already marks it a person's work -- `edited_by` carries their
-name. Approving is the other half of that: the answer is right as written, and
-saying so should not require pretending to change it.
-"""
-
-
-def confirmed_by_a_person(answered: AnsweredQuestion | None, edited_by: str = "") -> bool:
-    """Whether a person has put their name to this answer."""
-    if answered is None:
-        return False
-    return bool(edited_by) or answered.by_hand or answered.confidence_reason in (APPROVED, HAND)
-
-
-def written_by_a_person(answered: AnsweredQuestion | None) -> bool:
-    """Whether the words are somebody's own, rather than the model's.
-
-    A narrower question than `confirmed_by_a_person`, and the two are often
-    confused: reading an answer and agreeing with it is not the same act as
-    writing it, and only one of them tells us anything the system did not
-    already believe.
-
-    The `confidence_reason` reading is for answers stored before `by_hand`
-    existed, which are still sitting in open batches.
-    """
-    if answered is None:
-        return False
-    return answered.by_hand or answered.confidence_reason == HAND
-
-
-def ready_to_write(
-    answered: AnsweredQuestion | None, edited_by: str = "", *, threshold: float | None = None
-) -> tuple[bool, str]:
-    """Whether an answer may go into the file, and why not when it may not.
-
-    The reason is returned rather than logged because it is what the interface
-    shows the person: "held back" with no cause is a wall, and the whole point
-    of holding an answer back is that somebody should look at it.
-    """
-    if answered is None or not answered.answer.strip():
-        return False, ""
-    if confirmed_by_a_person(answered, edited_by):
-        return True, ""
-
-    floor = settings.review_confidence_threshold if threshold is None else threshold
-    if answered.error:
-        return False, "it could not be answered"
-    if answered.needs_review:
-        reasons = "; ".join(answered.review_reasons) or (answered.confidence_reason or "the reviewer flagged it")
-        return False, f"flagged for review -- {reasons}"
-    if answered.confidence < floor:
-        return False, (
-            f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed to write without a person looking"
-        )
-    return True, ""
-
-
-def _settled(answered: AnsweredQuestion | None, question: FormQuestion) -> bool:
-    """Whether a question is done with, however it got that way.
-
-    Three ways, and `unanswered_only` has to respect all of them or it offers
-    work that is finished: this system answered it, the file arrived with an
-    answer in it, or somebody decided it should be left blank. The last is the
-    one that catches people out -- an empty answer and an unanswered question
-    look identical, and they are opposite states.
-    """
-    if answered is not None and answered.confidence_reason == BLANKED:
-        return True
-    return _has_answer(answered) or question.is_answered
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +131,7 @@ class Filled:
 # ---------------------------------------------------------------------------
 
 
-def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
+def open_form(user: User, path: Path, *, strategy: str | None = None, product_id: str = "") -> Batch:
     """Read an uploaded questionnaire and record it as a batch.
 
     `strategy` is one of `forms.reading.STRATEGIES` and decides how hard to
@@ -292,13 +142,18 @@ def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
 
     Detection failures reach the caller as `forms.FormatError`, which already
     carries a message safe to show whoever uploaded the file.
+
+    `product_id` is the product it is answered for, "" for General (plan 023);
+    another team's is `product_not_found`, before the file is read.
     """
     from src.forms import reading
+
+    product_id = products.chosen(user.team_id, product_id)
 
     chosen = strategy or settings.detection_strategy
     result = reading.read(path, chosen)
     form = result.form
-    batch = batches.create(user, path, form)
+    batch = batches.create(user, path, form, product_id)
     # Whoever opens it decides how long its answers start out. Only the opening
     # default: a teammate who picks the file up later sees the length it already
     # has, because changing it under somebody else's work is not a preference.
@@ -318,8 +173,30 @@ def open_form(user: User, path: Path, *, strategy: str | None = None) -> Batch:
         seconds=round(result.seconds, 2),
         tokens=result.tokens,
         detail=batch.detail,
+        **({"product_id": product_id} if product_id else {}),
     )
     return batch
+
+
+def set_product(user: User, batch_id: str, product_id: str) -> Batch:
+    """Answer a questionnaire for a product, or for General (""), from now on.
+
+    The answers already written stay as they are (plan 018, decision 8);
+    answering again is a separate, explicit act. Another team's product is
+    `product_not_found`.
+    """
+    batch = _require(user, batch_id)
+    product_id = products.chosen(user.team_id, product_id)
+    if product_id != batch.product_id:
+        batches.set_product(batch.id, product_id)
+        events.record(
+            user,
+            events.PRODUCT_CHOSEN,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            product_id=product_id,
+        )
+    return _require(user, batch_id)
 
 
 def _require(user: User, batch_id: str) -> Batch:
@@ -409,6 +286,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
         "source_name": batch.source_name,
         "format": batch.form.format,
         "detail": batch.detail,
+        "product_id": batch.product_id,
         "file_present": batch.exists,
         "created_at": batch.created_at,
         "updated_at": batch.updated_at,
@@ -501,10 +379,13 @@ async def answer(
     if not chosen:
         return outcome
 
+    # The questionnaire's product, from its knowledge base beside the shared one.
+    scope_of_answers: dict[str, Any] = {"product_id": batch.product_id} if batch.product_id else {}
     results = await service.answer_questions(
         [_as_question(question) for question in chosen],
         run_id=run_id or batch.id,
         team_id=user.team_id,
+        **scope_of_answers,
     )
     # Preferences are applied here, after drafting and review, and never
     # handed to `service`: see `src.preferences` for why the drafter must not
@@ -1064,6 +945,11 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
         return ""
 
     question = next(q for q in batch.form.questions if q.id == question_id)
+    # Remembered in the questionnaire's memory: its product's, or the shared one
+    # for General (plan 023). Approved before the product changed, it moves.
+    previous = answer_memory.get(entry_id, user.team_id)
+    if previous is not None and previous.product_id != batch.product_id:
+        answer_memory.remove(entry_id, user.team_id)
     answer_memory.record(
         question.text,
         # What went into the cell, not the longest thing on the record. A
@@ -1079,6 +965,7 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
         origin="approved",
         approved_by=user.email,
         team_id=user.team_id,
+        product_id=batch.product_id,
     )
     events.record(
         user,
@@ -1253,9 +1140,11 @@ async def search(
     limit: int = 8,
     *,
     team_id: str | None = None,
+    product_id: str = "",
 ) -> dict:
-    """Look something up in a team's indexed policies, without touching a batch."""
-    return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id)
+    """Look something up in a team's indexed policies, and a product's beside them, without touching a batch."""
+    scope = {"product_id": product_id} if product_id else {}
+    return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id, **scope)
 
 
 def _working_copy(existing: AnsweredQuestion | None, question: FormQuestion) -> AnsweredQuestion:

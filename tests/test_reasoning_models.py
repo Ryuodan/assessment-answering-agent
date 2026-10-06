@@ -284,7 +284,7 @@ def groq_refusal(monkeypatch):
 
 
 def test_a_tool_call_written_as_xml_is_recovered(groq_refusal):
-    from src.models import AnswerReview
+    from src.schemas import AnswerReview
 
     recovered = llm._recover_from_tool_use_failed(Refused(XML_CALL), AnswerReview)
 
@@ -298,7 +298,7 @@ def test_the_json_shape_still_recovers(groq_refusal):
     """The dialect this existed for first: valid arguments under a wrong name."""
     import json
 
-    from src.models import AnswerReview
+    from src.schemas import AnswerReview
 
     payload = json.dumps(
         {
@@ -317,7 +317,7 @@ def test_the_json_shape_still_recovers(groq_refusal):
 
 
 def test_a_list_argument_survives_the_dialect(groq_refusal):
-    from src.models import DraftedAnswer
+    from src.schemas import DraftedAnswer
 
     call = (
         "<function=DraftedAnswer>\n<parameter=answer>\nYes.\n</parameter>\n"
@@ -332,7 +332,7 @@ def test_a_list_argument_survives_the_dialect(groq_refusal):
 
 def test_nonsense_is_not_recovered_into_an_answer(groq_refusal):
     """Recovery must not invent a result: an unusable payload has to re-raise."""
-    from src.models import AnswerReview
+    from src.schemas import AnswerReview
 
     assert llm._recover_from_tool_use_failed(Refused("I could not decide."), AnswerReview) is None
     assert (

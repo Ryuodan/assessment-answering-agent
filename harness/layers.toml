@@ -17,6 +17,7 @@ modules = [
     "src.errors",
     "src.logs",
     "src.models",
+    "src.schemas",
     "src.formatting",
     "src.prompts",
     "src.credentials",
@@ -84,8 +85,11 @@ name = "operations"
 about = "The use cases the web interface, the command line and the chat assistant share."
 modules = [
     "src.service",
+    "src.search",
+    "src.selection",
     "src.tools",
     "src.agents.assistant",
+    "src.agents.assistant_prompt",
 ]
 
 [[layer]]

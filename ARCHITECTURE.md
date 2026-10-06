@@ -14,11 +14,11 @@ any layer below it, never above, including from inside a function.
 
 | Layer | What it holds | Examples |
 |---|---|---|
-| 1. foundation | settings, domain types, prompts, pure text rules; reads configuration and nothing else | `config`, `models`, `prompts`, `formatting`, `chunking`, `verification` |
+| 1. foundation | settings, domain types, prompts, pure text rules; reads configuration and nothing else | `config`, `models`, `schemas`, `prompts`, `formatting`, `chunking`, `verification` |
 | 2. integrations | everything that talks to something outside the process: the model provider, the embedding host, Docling, SQLite, Chroma, and the customer's PDF, Word and Excel files | `llm`, `embeddings`, `documents`, `store`, `knowledge`, `export_pdf`, `forms/` |
 | 3. records | what the system remembers about people and their work | `identity`, `events`, `runs`, `batches`, `conversations`, `answer_memory`, `storage` |
 | 4. answering | turning a question into a grounded answer | `graph/`, `extraction`, `relevance`, `rewrite`, `forms/reading.py`, `agents/excel_agent.py` |
-| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `tools`, `agents/assistant.py` |
+| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `search`, `selection`, `tools`, `agents/assistant.py` |
 | 6. interfaces | how people and programs reach the system | `api`, `cli` |
 
 Why these lines (Claude's reasoning, recorded as D-012):
@@ -117,7 +117,7 @@ migrations are in `src/migrations.py`, applied by `src/store.py`.
 
 A team's products (plan 020, milestone M7) are rows in `products`, managed
 by `src/products.py` and served by `src/routes/products.py` and the
-`/products` page. Each will get a knowledge base and an answer memory of its
+`/products` page. Each has a knowledge base and an answer memory of its
 own beside the team's shared ones (plans 021 to 023, design in
 [plan 018](docs/plans/active/018-products.md)). Roles are in `src/roles.py`:
 `manages_products` says who may change a team's products (its leads, and any
@@ -142,6 +142,29 @@ entry's own memory, so supersession and conflicts never cross memories.
 (`src/routes/memory.py`) read and teach one memory at a time, Shared by
 default. Deleting a product forgets its entries.
 
+A questionnaire and a chat are each for a product or General
+(`form_batches.product_id`, `conversations.product_id`; `''` is General).
+`products.chosen` checks that a product asked for is the caller's team's.
+
+- **Answering.** `tools.open_form` takes the product, and `tools.set_product`
+  changes it, keeping the answers already written. The questionnaire's product
+  goes through `service.answer_questions`, or the whole-document flow, into the
+  graph's state. There `retrieve` asks `scoped_knowledge.store_for` for it.
+- **The drafter.** Evidence from the product's knowledge base carries its
+  `product_id`. When any does, `prompts.format_sources_block` marks it FOR THIS
+  PRODUCT and says it takes precedence over the shared material. A General
+  questionnaire's prompt is unchanged.
+- **Approval.** A hand-written answer is remembered in the questionnaire's
+  memory.
+- **The chat.** A chat's product is its questionnaire's too:
+  - `assistant.choose_product` sets both, from `POST /api/chat/{id}/product`;
+  - an upload in the chat takes it;
+  - `search_policies` searches the product's knowledge base beside the shared
+    one;
+  - the prompt names the product (`agents/assistant_prompt.py`).
+- **Deletion.** Deleting a product returns its questionnaires and chats to
+  General, with their answers.
+
 ## How a request flows
 
 **Indexing a policy.** `POST /api/knowledge/guidelines` saves the upload
@@ -153,7 +176,7 @@ question/answer pairs, `knowledge.add_prior_answers`, and
 `answer_memory.adopt_file`.
 
 **Answering a questionnaire.** `POST /api/forms` saves the file and calls
-`tools.open_form`, which reads it (`forms.reading`, by default the guarded
+`tools.open_form`, for a `product` or General. That reads it (`forms.reading`, by default the guarded
 agent strategy) into a `Batch` of questions with write targets; nothing is
 answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 `service.answer_questions`, which runs the LangGraph pipeline once per question
@@ -163,14 +186,15 @@ citations. Answers are saved on the batch (`batches.save_answers`) and an event
 is recorded. `POST /api/forms/{id}/fill` writes the ready answers into a copy
 of the customer's own file (`forms.xlsx` / `forms.docx`).
 
-**Talking to the assistant.** `POST /api/chat` loads or starts a
-`Conversation` and calls `assistant.say`, which runs a tool-calling agent whose
+**Talking to the assistant.** `POST /api/chat` (`src/routes/chat.py`) loads a
+`Conversation`, or starts one for the `product` sent, and calls
+`assistant.say`. That runs a tool-calling agent whose
 tools are thin wrappers over `tools` (open a form, answer, revise, fill, search,
 ...), then stores the turn.
 
-**Every request** is authenticated by `api.current_user` (a session cookie, or
+**Every request** is authenticated by `routes.auth.current_user` (a session cookie, or
 open local mode when no users exist); administrator routes add
-`api.current_admin`. Unhandled errors become a generic 500 with the detail in
+`routes.auth.current_admin`. Unhandled errors become a generic 500 with the detail in
 the log.
 
 ## External services

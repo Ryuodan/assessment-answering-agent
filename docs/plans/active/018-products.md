@@ -28,7 +28,7 @@ The product data (files and answers) arrives later. Everything here works,
 and is tested, with empty products.
 
 This plan is the milestone's design and sequence. Each step below becomes its
-own plan (019 to 024) with its own acceptance criteria, checked off and
+own plan (019 to 025) with its own acceptance criteria, checked off and
 committed one at a time.
 
 ## How it fits what exists
@@ -157,15 +157,18 @@ Each step is its own plan.
    - add a scope switch to the memory page;
    - deleting a product deletes its entries;
    - move the memory routes out of `api.py`.
-5. **Plan 023, choosing the product:**
+5. **[Plan 023](../completed/023-questionnaires-carry-a-product.md), questionnaires and chats carry a product.** The backend and the API:
    - migration 13, `form_batches.product_id` and `conversations.product_id`;
    - choose the product at upload or later;
    - carry the scope through `tools`, `service` and the graph to retrieval;
-   - the chat chip beside the chat box, the workbench selector and the badges in lists;
    - tell the assistant the conversation's product;
-   - the drafter's precedence rule (decision 2);
-   - write browser tests for the main path.
-6. **Plan 024, cleanup round 4,** after M7.
+   - the drafter's precedence rule (decision 2).
+6. **Plan 024, choosing the product on the pages:**
+   - the chat chip beside the chat box;
+   - the workbench selector;
+   - the badges in lists;
+   - browser tests for the main path.
+7. **Plan 025, cleanup round 4,** after M7.
 
 Evaluation stays on General, the shared scope, so plans 013 and 014 still
 apply. A product-level evaluation needs product questionnaires and answers,
@@ -187,6 +190,12 @@ which do not exist yet.
 - 2026-10-06: Plan 021 done: product knowledge bases, the selector on both pages, and the knowledge routes moved out of `api.py` (1811 -> 1700 lines).
 
 - 2026-10-06: Plan 022 done. It added product answer memories, the scoped sweep and moving; the sweep moved to `src/memory_sweep.py`; `api.py` went from 1700 to 1440 lines and `answer_memory.py` from 918 to 836.
+
+- 2026-10-06: Plan 023 split from the pages. The backend, the API and the moves that made room for them were one plan's worth on their own, so the chip, the selector and the badges are plan 024, and cleanup round 4 becomes plan 025.
+
+- 2026-10-06: Plan 023 done:
+  - questionnaires and chats carry a product, and answering, approval, search and the assistant use it;
+  - five moves made room, and the files they came from shrank: `api.py` 1440 -> 1296 lines, `tools.py` 1487 -> 1376, `service.py` 711 -> 614, `assistant.py` 1742 -> 1524, `models.py` 421 -> 329.
 
 ## Decision log
 

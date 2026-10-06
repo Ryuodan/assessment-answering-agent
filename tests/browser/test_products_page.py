@@ -5,14 +5,35 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from src import identity, products, roles
+from src import identity, knowledge, products, roles
 from src.config import settings
+from tests.conftest import FakeVectorStore, bare_store
 
 pytestmark = pytest.mark.browser
 
 CODE = "BROWSER-TEST-CODE"
 LEAD = "lead@example.test"
 MEMBER = "member@example.test"
+
+
+@pytest.fixture(autouse=True)
+def stores(monkeypatch) -> None:
+    """A fake index per (team, product), so deleting one never waits on Chroma.
+
+    It used to reach a real collection in the test's directory, and a cold
+    Chroma start once took 5.1 s of the page's 5 s wait for the dialog to close
+    (plan 023).
+    """
+    made: dict[tuple[str, str], knowledge.KnowledgeStore] = {}
+
+    def get_store(team_id=None, *, product_id=""):
+        key = (team_id or settings.default_team, product_id)
+        if key not in made:
+            made[key] = bare_store(FakeVectorStore([]))
+            made[key]._store.delete_collection = lambda key=key: made.pop(key, None)
+        return made[key]
+
+    monkeypatch.setattr("src.knowledge.get_store", get_store)
 
 
 @pytest.fixture

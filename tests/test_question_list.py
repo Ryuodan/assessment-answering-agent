@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src import service
+from src import knowledge, service
 from src.api import _detect_language, app
 from src.models import AnsweredQuestion, Question
 
@@ -289,8 +289,8 @@ async def test_a_questionnaire_filed_as_a_guideline_is_warned_about(monkeypatch,
         return 3
 
     monkeypatch.setattr(service, "extracted_document_text", lambda path: _async(QUESTIONNAIRE))
-    monkeypatch.setattr(service.get_store(), "add_guideline", fake_add)
-    monkeypatch.setattr(service.get_store(), "source_with_hash", lambda *a, **k: None)
+    monkeypatch.setattr(knowledge.get_store(), "add_guideline", fake_add)
+    monkeypatch.setattr(knowledge.get_store(), "source_with_hash", lambda *a, **k: None)
 
     path = tmp_path / "completed.pdf"
     path.write_bytes(b"stub")
@@ -306,8 +306,8 @@ async def test_a_questionnaire_filed_as_a_guideline_is_warned_about(monkeypatch,
 async def test_a_real_policy_raises_no_warning(monkeypatch, tmp_path):
     """The threshold must clear every one of the 80 indexed policies."""
     monkeypatch.setattr(service, "extracted_document_text", lambda path: _async(POLICY))
-    monkeypatch.setattr(service.get_store(), "add_guideline", lambda *a, **k: 2)
-    monkeypatch.setattr(service.get_store(), "source_with_hash", lambda *a, **k: None)
+    monkeypatch.setattr(knowledge.get_store(), "add_guideline", lambda *a, **k: 2)
+    monkeypatch.setattr(knowledge.get_store(), "source_with_hash", lambda *a, **k: None)
 
     path = tmp_path / "policy.pdf"
     path.write_bytes(b"stub")

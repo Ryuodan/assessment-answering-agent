@@ -33,7 +33,8 @@ import logging
 
 from src.config import settings
 from src.llm import structured_llm
-from src.models import Evidence, RelevanceVerdicts
+from src.models import Evidence
+from src.schemas import RelevanceVerdicts
 from src.prompts import RELEVANCE_SYSTEM, RELEVANCE_USER
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,8 @@ import pytest
 
 from src.config import settings
 from src.knowledge import cosine_from_relevance
-from src.models import Evidence, ExtractedQAPair, SourceType
+from src.models import Evidence, SourceType
+from src.schemas import ExtractedQAPair
 from tests.conftest import bare_store, build_store
 
 
