@@ -520,7 +520,7 @@ async def answer(
     if batch.detail == "brief":
         fresh = tuple(result.question.id for result in results if _has_answer(result))
         if fresh:
-            await make_brief(user, batch.id, Scope(ids=fresh))
+            await make_brief(user, batch.id, Scope(ids=fresh), run_id=run_id)
 
     outcome.answered = sum(1 for r in results if not r.error)
     outcome.failed = sum(1 for r in results if r.error)
@@ -716,7 +716,7 @@ async def revise(
     # Derived again only where somebody is going to read the brief form.
     shown_brief = tuple(r.question.id for r in changed if length_of(r, batch.detail) == "brief")
     if shown_brief:
-        await make_brief(user, batch.id, Scope(ids=shown_brief))
+        await make_brief(user, batch.id, Scope(ids=shown_brief), run_id=run_id)
 
     outcome.answered = len(changed)
     outcome.failed = len(results) - len(changed)
@@ -931,7 +931,7 @@ def prefer_length(user: User, batch_id: str, question_id: str, prefer: str) -> N
     batches.save_answers(batch.id, [answered], edited_by=batches.edited_by(batch.id).get(question_id, ""))
 
 
-async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> Outcome:
+async def make_brief(user: User, batch_id: str, scope: Scope | None = None, run_id: str = "") -> Outcome:
     """Derive the brief form of every answer in scope that does not have one.
 
     Not a re-answer and not a general rewording: one fixed instruction through
@@ -952,8 +952,8 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> O
     if not chosen:
         return outcome
 
-    progress.start(batch.id, stage="shortening")
-    progress.set_total(batch.id, len(chosen))
+    progress.start(run_id or batch.id, stage="shortening")
+    progress.set_total(run_id or batch.id, len(chosen))
     try:
 
         async def one(question: FormQuestion) -> AnsweredQuestion:
@@ -963,12 +963,12 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None) -> O
             except Exception:  # noqa: BLE001 - one failure is one long answer, not a failed run
                 logger.exception("Could not shorten %s", question.id)
             finally:
-                progress.advance(batch.id)
+                progress.advance(run_id or batch.id)
             return answered
 
         results = list(await asyncio.gather(*(one(q) for q in chosen)))
     finally:
-        progress.finish(batch.id)
+        progress.finish(run_id or batch.id)
 
     # Saved under whoever had put their name to each answer. One save for all of
     # them recorded every answer as edited by nobody, which erased the name of

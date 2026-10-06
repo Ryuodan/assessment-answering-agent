@@ -20,3 +20,9 @@ A garbage-collection round, as its own plan, follows each milestone or about
 | 1 | M3 | [008](completed/008-gc-round-1.md) | done 2026-10-06 |
 | 2 | M4, M5 | [012](completed/012-gc-round-2.md) | done 2026-10-06 |
 | 3 | M6 | [015](completed/015-gc-round-3.md) | done 2026-10-06 |
+
+Work asked for directly, outside the milestones:
+
+| Plan | What | Status |
+|---|---|---|
+| [016](completed/016-chat-progress.md) | the chat page's answered count restarted during the preferences pass | done 2026-10-06 |

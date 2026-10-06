@@ -90,14 +90,26 @@ def note(run_id: str | None, stage: str) -> None:
         run.updated_at = time.monotonic()
 
 
+# Stages that are counted and say what they count. Every other stage --
+# "extracting", or a sentence the assistant wrote -- becomes "answering" once
+# there is a total, because answering is what has one.
+COUNTED = ("answering", "rewriting", "styling", "shortening")
+
+
 def set_total(run_id: str | None, total: int) -> None:
-    """Record how many questions were found, once extraction has run."""
+    """Record how many items the run has, once that is known.
+
+    It used to set the stage to "answering" whatever the run was doing, so a
+    rewording or a house-style pass read "Answered 0 of 12" just after the
+    answers had been counted to the end: the bar seemed to start again (plan 016).
+    """
     if not run_id:
         return
     with _LOCK:
         run = _RUNS.setdefault(run_id, Run())
         run.total = total
-        run.stage = "answering"
+        if run.stage not in COUNTED:
+            run.stage = "answering"
         run.updated_at = time.monotonic()
 
 
