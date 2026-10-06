@@ -1,6 +1,6 @@
 # Plan 018: Products, each with its own knowledge and memory (milestone M7)
 
-**Status:** active (awaiting the user's decisions; no code written yet)
+**Status:** active
 
 ## Goal
 
@@ -28,7 +28,7 @@ The product data (files and answers) arrives later. Everything here works,
 and is tested, with empty products.
 
 This plan is the milestone's design and sequence. Each step below becomes its
-own plan (019 onwards) with its own acceptance criteria, checked off and
+own plan (019 to 024) with its own acceptance criteria, checked off and
 committed one at a time.
 
 ## How it fits what exists
@@ -124,16 +124,21 @@ For the milestone as a whole; each step's plan has its own.
 
 Each step is its own plan.
 
-1. **Plan 019, products as records:**
-   - move the migrations to `src/migrations.py`, behind the upgrade tests;
-   - add migration 11, the `products` table;
-   - write `src/products.py`, with create, edit, delete, list and validation;
-   - add a router `src/routes/products.py`, administrator-only for writes;
-   - add new errors;
-   - seed from `SEED_PRODUCTS`;
-   - add a Products section to the Access panel;
-   - write tests, including a browser test that adds a product.
-2. **Plan 020, product knowledge bases:**
+1. **[Plan 019](../completed/019-room-for-products.md), room for products.** Moves only; behaviour unchanged:
+   - the sign-in dependencies and the admin routes out of `api.py` into `src/routes/`;
+   - the migrations out of `store.py` into `src/migrations.py`.
+
+   The generated API contract must come out byte-identical, and the upgrade and error snapshots must pass.
+2. **Plan 020, products and the team lead:**
+   - the `lead` role ("Team lead"), with the role constants in `src/roles.py`;
+   - migration 11, the `products` table;
+   - `src/products.py`: create, edit, delete, list and validation;
+   - `src/routes/products.py`: anyone on the team lists; the team's leads and administrators manage;
+   - a `Conflict` (409) error for a taken name;
+   - seeding from `SEED_PRODUCTS`;
+   - a Products page: list, add, edit, and delete behind the coloured warning and a typed "confirm";
+   - tests, including browser tests for adding and deleting.
+3. **Plan 021, product knowledge bases:**
    - give each product its own collection;
    - choose the upload target (shared or a product), and list or remove documents per scope;
    - write `src/scoped_knowledge.py`, which merges shared and product search, dense and lexical;
@@ -142,7 +147,7 @@ Each step is its own plan.
    - deleting a product drops its collection;
    - move the knowledge routes into `src/routes/knowledge.py`;
    - write tests that General's snapshots are unchanged.
-3. **Plan 021, product answer memories:**
+4. **Plan 022, product answer memories:**
    - migration 12, `memory_entries.product_id`;
    - index entries in their product's collection;
    - route approvals by the questionnaire's product;
@@ -152,7 +157,7 @@ Each step is its own plan.
    - add a scope switch to the memory page;
    - deleting a product deletes its entries;
    - move the memory routes out of `api.py`.
-4. **Plan 022, choosing the product:**
+5. **Plan 023, choosing the product:**
    - migration 13, `form_batches.product_id` and `conversations.product_id`;
    - choose the product at upload or later;
    - carry the scope through `tools`, `service` and the graph to retrieval;
@@ -160,7 +165,7 @@ Each step is its own plan.
    - tell the assistant the conversation's product;
    - the drafter's precedence rule (decision 2);
    - write browser tests for the main path.
-5. **Plan 023, cleanup round 4,** after M7.
+6. **Plan 024, cleanup round 4,** after M7.
 
 Evaluation stays on General, the shared scope, so plans 013 and 014 still
 apply. A product-level evaluation needs product questionnaires and answers,
@@ -169,5 +174,14 @@ which do not exist yet.
 ## Progress log
 
 - 2026-10-06: Plan drafted from a reading of the code. It waits for the user's decisions 1-8 before plan 019 starts.
+- 2026-10-06: The user decided (below). Two changes to the sequence follow from it:
+  - Plan 019 becomes a pure refactor that makes room. `api.py`, `store.py` and `identity.py` are at their size ceilings, and products, the new role and their routes cannot be added without first moving code out.
+  - Product management gets its own page, not a section of the Access panel. Team leads are not administrators, and the Access panel is for administrators only.
+
+- 2026-10-06: Plan 019 done: `api.py` 2036 -> 1862 lines, `store.py` 475 -> 132, and the contract byte-identical.
 
 ## Decision log
+
+- 2026-10-06, by the user: go with the recommendations for decisions 1, 2, 3, 6, 7 and 8. Two are changed:
+  - **Decision 4.** A new role in the team manages that team's products; administrators can too. Named `lead`, shown as "Team lead" (Claude's choice of name, as the user asked).
+  - **Decision 5.** Deleting a product shows a clear confirmation, with a coloured warning that its documents and remembered answers will be deleted. The person must type "confirm" to go ahead. Claude adds a server-side check that the request carries that word, so the API cannot delete a product without the same confirmation.

@@ -32,7 +32,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 
 | Code | Status | Raised as | Where |
 |---|---|---|---|
-| `admin_required` | 403 | `Forbidden` | `src.api.current_admin` |
+| `admin_required` | 403 | `Forbidden` | `src.routes.auth.current_admin` |
 | `assistant_unconfigured` | 503 | `Unavailable` | `src.api.say_to_assistant`, `src.api.say_with_a_file` |
 | `authority_invalid` | 400 | `Invalid` | `src.api.upload_guidelines` |
 | `conversation_not_found` | 404 | `NotFound` | `src.api._conversation` |
@@ -41,20 +41,20 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `document_type_unsupported` | 415 | `UnsupportedFile` | `src.api._check_suffix` |
 | `extraction_failed` | 422 | `Unprocessable` | `src.api.view_extracted_text` |
 | `filled_file_missing` | 404 | `NotFound` | `src.api.download_filled_questionnaire` |
-| `last_administrator` | 400 | `Invalid` | `src.api._refuse_last_admin` |
+| `last_administrator` | 400 | `Invalid` | `src.routes.admin._refuse_last_admin` |
 | `memory_entry_not_found` | 404 | `NotFound` | `src.api.edit_memory_entry`, `src.api.remove_memory_entry`, `src.api.resolve_memory_conflict`, `src.api.restore_memory_entry` |
 | `no_files` | 400 | `Invalid` | `src.api._ingest_files` |
 | `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment` |
 | `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |
-| `password_from_environment` | 400 | `Invalid` | `src.api.admin_set_password` |
+| `password_from_environment` | 400 | `Invalid` | `src.routes.admin.admin_set_password` |
 | `preview_failed` | 422 | `Unprocessable` | `src.api.preview_document` |
 | `run_not_found` | 404 | `NotFound` | `src.api.get_run` |
 | `run_not_in_progress` | 404 | `NotFound` | `src.api.assessment_progress` |
 | `search_mode_unknown` | 422 | `Unprocessable` | `src.api.search_knowledge` |
 | `skill_not_found` | 404 | `NotFound` | `src.api.copy_skill`, `src.api.edit_skill`, `src.api.remove_skill` |
 | `source_not_found` | 404 | `NotFound` | `src.api.remove_source` |
-| `team_not_found` | 404 | `NotFound` | `src.api.admin_rotate_code` |
-| `user_not_found` | 404 | `NotFound` | `src.api.admin_set_password` |
+| `team_not_found` | 404 | `NotFound` | `src.routes.admin.admin_rotate_code` |
+| `user_not_found` | 404 | `NotFound` | `src.routes.admin.admin_set_password` |
 
 ## From the framework
 

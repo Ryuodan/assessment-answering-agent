@@ -34,6 +34,7 @@ modules = [
     "src.docling_client",
     "src.documents",
     "src.store",
+    "src.migrations",
     "src.diagnostics",
     "src.knowledge",
     "src.lexical",
@@ -89,6 +90,7 @@ modules = [
     "src.api",
     "src.cli",
     "src.web",
+    "src.routes.*",
 ]
 
 # Which layers (or, for a single owner, which module) may import each IO or

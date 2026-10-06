@@ -30,7 +30,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
 
-- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.organisation`, `src.rerank`, `src.store`, `src.forms.*`
+- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.store`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
 | Module | What it is |
@@ -52,6 +52,7 @@ Everything that talks to something outside the process: model providers, the emb
 | `src/knowledge.py` | The knowledge base: guidelines and previously answered assessments. |
 | `src/lexical.py` | Lexical (BM25) retrieval, fused with the dense search. |
 | `src/llm.py` | Groq chat-model factory. |
+| `src/migrations.py` | The SQLite schema, as an ordered list of migrations. Applied by `src.store`. |
 | `src/organisation.py` | Who this system is answering on behalf of. |
 | `src/rerank.py` | Cross-encoder reranking of retrieved evidence. |
 | `src/store.py` | SQLite storage for identity, the event log, and answered runs. |
@@ -112,13 +113,16 @@ The use cases the web interface, the command line and the chat assistant share.
 
 How people and programs reach the system: the HTTP API with its pages, and the command line.
 
-- **Modules:** `src.api`, `src.cli`, `src.web`
+- **Modules:** `src.api`, `src.cli`, `src.web`, `src.routes.*`
 - **Owns:** `fastapi`, `starlette`, `uvicorn`
 
 | Module | What it is |
 |---|---|
 | `src/api.py` | FastAPI application: REST endpoints plus the single-page frontend. |
 | `src/cli.py` | Command-line interface. |
+| `src/routes/__init__.py` | HTTP routes grouped by area, included by `src/api.py` (plan 019, TD-006). |
+| `src/routes/admin.py` | The Access panel's routes: people, teams and access codes. Administrators only. |
+| `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
 | `src/web.py` | What every HTTP request shares: its ID, its log line, and how errors answer. |
 
 ## Owned by one module

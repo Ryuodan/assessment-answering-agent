@@ -50,14 +50,14 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 
 | Path | What it is |
 |---|---|
-| `src/api.py`, `src/cli.py` | entry points: HTTP (70 operations, 5 pages) and command line |
+| `src/api.py`, `src/routes/`, `src/cli.py` | entry points: HTTP (70 operations, 5 pages; routes grouped by area move into `src/routes/`) and command line |
 | `src/tools.py`, `src/service.py` | operations shared by the UI and the assistant; ingestion, answering, documents |
 | `src/agents/` | the chat assistant; the Excel-reading agent |
 | `src/graph/` | the answering pipeline: plan, retrieve, rerank, draft, review, finalize |
 | `src/knowledge.py`, `chunking.py`, `documents.py`, `embeddings.py` | the knowledge base: conversion, chunks, vectors |
 | `src/answer_memory.py`, `memory.py` | approved answers, reused and checked for conflicts |
 | `src/forms/` | reading customer questionnaires, writing answers back |
-| `src/store.py`, `identity.py`, `batches.py`, `runs.py`, `conversations.py` | SQLite, users and teams, saved work |
+| `src/store.py`, `migrations.py`, `identity.py`, `batches.py`, `runs.py`, `conversations.py` | SQLite and its schema, users and teams, saved work |
 | `src/config.py`, `models.py`, `llm.py`, `prompts.py` | settings, data models, the model client, every prompt |
 | `src/static/` | the browser pages |
 | `harness/` | the checks behind `poe` (not application code) |

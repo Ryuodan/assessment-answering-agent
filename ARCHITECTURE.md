@@ -103,6 +103,16 @@ app runs in a thread of the test process, so the suite's fixtures (temporary
 storage, faked model calls) apply to it, and a page that raises a JavaScript
 error fails its test. `uv run poe browser` runs them; the gate includes them.
 
+## Where the routes live
+
+`src/api.py` builds the app and still defines most routes. Routes grouped by
+area are moving into `src/routes/` as they change (plan 019, TD-006):
+`routes/auth.py` holds the dependencies every route uses (`current_user`,
+`current_admin`), and `routes/admin.py` the Access panel's routes. A router is
+included where its routes used to be defined, so the routes are registered,
+and the OpenAPI contract is ordered, as before. The SQLite schema's
+migrations are in `src/migrations.py`, applied by `src/store.py`.
+
 ## How a request flows
 
 **Indexing a policy.** `POST /api/knowledge/guidelines` saves the upload

@@ -49,6 +49,7 @@ or docs and has not been verified by running anything.
 - **Impact:** a module that does many things is hard to change safely and hard to read into an agent's context.
 - **Fix:** allow-listed in ARCH-SIZE at their current length so they cannot grow; split them one at a time, behind characterization tests, in later plans.
 - **Update** 2026-10-05: after the format commit `4a7c3c6` the count is 19 (`src/graph/nodes.py` went from 399 to 406 lines through formatting alone); the current ceilings are in `harness/arch-allowlist.toml`. Since D-010 (plan 002) `src/config.py` is measured without its Settings class (142 lines) and has left the list: 18 remain.
+- **Update** 2026-10-06 (plan 019): `src/store.py` went from 475 to 132 lines, because the migrations moved to `src/migrations.py`, and has left the list: 17 remain. `src/api.py` went from 2036 to 1862, because the sign-in dependencies and the Access panel's routes moved to `src/routes/`. The OpenAPI contract is byte-identical.
 
 ## TD-007: Import cycles and upward imports
 

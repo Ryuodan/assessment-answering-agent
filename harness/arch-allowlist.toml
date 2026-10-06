@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 2036
+max_lines = 1862
 debt = "TD-006"
 
 [[size]]
@@ -70,11 +70,6 @@ debt = "TD-006"
 [[size]]
 path = "src/preferences.py"
 max_lines = 495
-debt = "TD-006"
-
-[[size]]
-path = "src/store.py"
-max_lines = 475
 debt = "TD-006"
 
 [[size]]
