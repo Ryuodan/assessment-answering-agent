@@ -258,7 +258,6 @@ src/preferences.py: [no-untyped-def] Function is missing a type annotation for o
 src/preferences.py: [type-arg] Missing type arguments for generic type "dict"
 src/progress.py: [type-arg] Missing type arguments for generic type "dict"
 src/progress.py: [type-arg] Missing type arguments for generic type "dict"
-src/prompts.py: [name-defined] Name "Evidence" is not defined
 src/relevance.py: [type-arg] Missing type arguments for generic type "tuple"
 src/rerank.py: [no-untyped-call] Call to untyped function "_model" in typed context
 src/rerank.py: [no-untyped-def] Function is missing a return type annotation

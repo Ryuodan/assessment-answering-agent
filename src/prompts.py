@@ -8,6 +8,11 @@ the model how to handle Arabic content.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.models import Evidence
+
 LANGUAGE_NAMES = {"ar": "Arabic", "en": "English"}
 
 # ---------------------------------------------------------------------------

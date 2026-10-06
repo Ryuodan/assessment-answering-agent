@@ -126,18 +126,26 @@ or docs and has not been verified by running anything.
 - **What:** read: `src/static/index.html` (3412 lines, inline script), `chat.html`, `memory.html`, `preferences.html` and `cards.js` are tested only as served files (`tests/test_pages.py` checks asset fingerprints); nothing exercises their behaviour.
 - **Impact:** UI regressions are found by people.
 - **Fix:** browser automation tests for the main flows (Phase 4 plan).
+- **Partly resolved** 2026-10-06 (plan 011): `tests/browser/` drives the workbench in headless Chromium. It covers sign-in, a refused code, the Access panel, reading, answering and the answer cards, and a markup file name; the gate runs it. The assistant (`chat.html`), the memory and preferences pages are still exercised only as served files.
 
 ## TD-017: The test suite takes 3.5 to 4 minutes, and nobody knows why
 
 - **What:** measured: 242 s and 214 s for 1570 tests. The slowest test takes 7.4 s and the slowest fifteen about 22 s together, so the time is spread across all tests (about 0.13 s each). Not profiled.
 - **Impact:** `check` is slow, so it is run less often.
 - **Fix:** profile setup and import time (the autouse fixtures rebuild the database per test); consider `pytest-xdist`.
+- **Measured** 2026-10-06 (Claude, plan 015), with `--durations=25`: 1,803 tests in 319 s, on a machine that was also running another project's evaluation, so treat it as an upper bound. The 25 slowest phases add up to about 50 s:
+  - a hostile-workbook test, 9.4 s;
+  - the five generated-document staleness tests, about 3.5 s each, because each one rebuilt all five documents;
+  - the characterization error snapshots, 3.5 s.
+
+  The other ~270 s is spread across the remaining ~1,780 tests at about 0.15 s each, which points to per-test setup (the autouse fixtures) rather than to slow tests. Fixed in this round: the staleness tests build the documents once per module, and their file now takes 9.1 s instead of about 19 s. Not done: profiling the autouse fixtures, and `pytest-xdist`. That fixture shares process-wide settings, so running in parallel needs care.
 
 ## TD-018: Undefined name in a type annotation
 
 - **What:** measured with ruff F821: `src/prompts.py:184` annotates `list["Evidence"]` without importing `Evidence`. Harmless at runtime (`from __future__ import annotations`), but the annotation refers to nothing.
 - **Impact:** wrong for type checkers and readers.
 - **Fix:** import `Evidence` under `TYPE_CHECKING`. Part of the mypy baseline until fixed.
+- **Resolved** 2026-10-06 (Claude, plan 015): imported under `TYPE_CHECKING`; mypy baseline 284 -> 283.
 
 ## TD-019: Third-party libraries used from several modules
 

@@ -14,6 +14,31 @@ A grade is a measurement, not a target. The words under each table say what
 the letter stands for and where the gap is, so the next round can check
 whether it closed.
 
+## Round 3: 2026-10-06, after M6 (plan 015)
+
+M6 changed `eval/`, `scripts/` and tests, not `src/`. The only change to
+`src/` since round 2 is the `TYPE_CHECKING` import in `src/prompts.py`
+(TD-018). Coverage was therefore not re-measured: the coverage column is
+round 2's run, and the other columns are measured on the current tree.
+
+| Layer | Modules | Lines | Coverage | Over 400 | Suppressions | Duplicated blocks | Docstrings |
+|---|---|---|---|---|---|---|---|
+| foundation | 11 | 3517 | A (98.7%) | C (2) | A (0) | A (0) | A (95%) |
+| integrations | 20 | 6920 | A (90.6%) | D (7) | D (9) | C (2) | A (97%) |
+| records | 10 | 3467 | A (95.1%) | C (3) | C (7) | A (0) | B (87%) |
+| answering | 10 | 2164 | B (87.5%) | C (2) | C (4) | A (0) | A (100%) |
+| operations | 3 | 3970 | A (92.8%) | C (3) | C (6) | A (0) | A (100%) |
+| interfaces | 3 | 2387 | A (91.4%) | B (1) | B (3) | A (0) | D (60%) |
+
+No grade moved. The gaps written under round 1 stand, in order of size:
+
+- the oversized modules of operations and integrations (TD-006);
+- the 17 undocumented routes in `api.py`;
+- `extraction.py` and `docling_client.py` coverage.
+
+None of them can be closed by cleanup alone: each is a split or a test-writing
+plan.
+
 ## Round 2: 2026-10-06, after M4 and M5 (plan 012)
 
 Measured on the working tree of plan 012: 1,792 tests passed and none failed;
