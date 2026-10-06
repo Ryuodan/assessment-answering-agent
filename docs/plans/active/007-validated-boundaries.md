@@ -34,6 +34,10 @@ inventory of every boundary, and finishes milestone M3.
 ## Progress log
 
 - 2026-10-06: Plan written. Survey: request bodies are pydantic models; stored questionnaires, answers and runs are read back with `model_validate_json`; model output goes through `structured_llm` schemas; JSON is decoded raw in five places (`conversations`, `docling_client`, `llm` twice, `organisation`, `store`). The deployment's `.env` uses valid values for the four vocabulary settings (`placeholder`, `INFO`, `guarded`; reasoning format unset), checked by reading only those keys.
+- 2026-10-06: Step 2. The four settings are `Literal` types; `LOG_LEVEL` upper-cased before the check (`info` worked before). Each refuses a bad value naming itself; mypy unchanged.
+- 2026-10-06: Step 3. `Organisation` is a pydantic model (`extra="ignore"`), read with `model_validate_json`; the broad `except Exception` became `(OSError, ValidationError)` with a warning event. Docling: `_Task`, `_Result` and a generic `_parse` (a first version narrowed types with `assert isinstance`, replaced by a type variable because asserts vanish under `-O`). Running the old `docling_client.py` against the new test showed the gap was real: a reply whose `document` is a string raised `AttributeError`, which the fallback does not catch. Both modules' logging became events as they were touched (two more modules off the ARCH-LOG list: 21 remain). 16 boundary tests; the snapshots are unchanged.
+- 2026-10-06: Step 4. ARCH-JSON first flagged `src/llm.py` twice (a provider's failed tool call, decoded and then validated against the schema); it became the third named exemption, with that reason. 2 rule tests.
+- 2026-10-06: Step 5. `docs/design/boundaries.md` (11 boundaries, gaps named), D-015, GP-23, ARCHITECTURE.md and CLAUDE.md links.
 
 ## Decision log
 

@@ -146,9 +146,6 @@ debt = "TD-028"
 path = "src/conversations.py"
 debt = "TD-028"
 
-[[log]]
-path = "src/docling_client.py"
-debt = "TD-028"
 
 [[log]]
 path = "src/documents.py"

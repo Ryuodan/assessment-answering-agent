@@ -236,3 +236,16 @@ def test_a_path_built_from_project_root_outside_config_fails(tree):
 def test_config_may_use_project_root(tree):
     write(tree, "src/config.py", CONFIG + "\nPROJECT_ROOT = None\nX = PROJECT_ROOT\n")
     assert [r for r in rules(tree) if r[0] == "ARCH-PATH"] == []
+
+
+# --- data from outside is parsed into models (plan 007) -----------------------
+
+
+def test_raw_json_decoding_fails_where_data_arrives(tree):
+    write(tree, "src/reader.py", "import json\n\n\ndef read(text):\n    return json.loads(text)['a']\n")
+    assert [r for r in rules(tree) if r[0] == "ARCH-JSON"] == [("ARCH-JSON", "src/reader.py", 5)]
+
+
+def test_a_named_exemption_may_decode_its_own_data(tree):
+    write(tree, "src/store.py", "import json\n\nX = json.loads('{}')\n")
+    assert [r for r in rules(tree) if r[0] == "ARCH-JSON"] == []

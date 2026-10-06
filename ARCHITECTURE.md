@@ -65,6 +65,14 @@ an internal exception goes to the log, never to the response. Every class and
 code: [docs/generated/errors.md](docs/generated/errors.md). ARCH-ERROR keeps
 new exceptions inside the hierarchy.
 
+## Boundaries
+
+Data from outside becomes a typed, validated model where it arrives: request
+bodies, settings, the organisation profile, Docling's responses, model output,
+records read back from SQLite. The inventory, with the gaps that remain, is
+[docs/design/boundaries.md](docs/design/boundaries.md); ARCH-JSON stops new raw
+JSON decoding.
+
 ## Logs and request IDs
 
 Application code logs events, not sentences (D-014): `logger = get_logger(__name__)`,

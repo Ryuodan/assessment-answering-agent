@@ -11,6 +11,8 @@ Rules (each violation prints rule, file:line and a FIX line):
     ARCH-ENV     the environment is read outside src/config.py
     ARCH-PATH    a module other than src/config.py builds a path from PROJECT_ROOT:
                  data locations are settings, so tests can redirect them (plan 006)
+    ARCH-JSON    raw `json.loads` in src/ outside the named exemptions: parse into a
+                 model with `Model.model_validate_json` where the data arrives (plan 007)
     ARCH-ENVEX   a Settings field is missing from .env.example, or .env.example
                  lists something that is not a setting
     ARCH-SECRET  a tracked file contains something shaped like a credential
@@ -45,6 +47,12 @@ from harness.report import ROOT, Violation, finish
 MAX_LINES = 400
 PRINT_ALLOWED = {"src/cli.py"}
 ENV_OWNER = "src/config.py"
+# Where raw JSON decoding is right, and why (ARCH-JSON).
+JSON_EXEMPT = {
+    "src/store.py": "decodes its own payload columns; callers read them back into models",
+    "src/conversations.py": "LangChain's own message format, rebuilt by messages_from_dict",
+    "src/llm.py": "decodes a provider's failed tool call, then validates it against the answer schema",
+}
 # Declaration lists that ARCH-SIZE does not count (D-010): one field and its doc
 # comment per setting is data, not logic, and adding a setting is that module's job.
 SIZE_EXEMPT_CLASSES = {ENV_OWNER: "Settings"}
@@ -259,6 +267,34 @@ def check_paths(root: Path) -> list[Violation]:
             for node in ast.walk(tree)
             if (isinstance(node, ast.Name) and node.id == "PROJECT_ROOT")
             or (isinstance(node, ast.alias) and node.name == "PROJECT_ROOT")
+        ]
+    return violations
+
+
+def check_json(root: Path) -> list[Violation]:
+    """ARCH-JSON: data from outside is parsed into a model, not decoded and indexed."""
+    violations: list[Violation] = []
+    for module in python_modules(root):
+        path = rel_to(module, root)
+        if path in JSON_EXEMPT:
+            continue
+        tree = ast.parse(module.read_text(encoding="utf-8"), filename=path)
+        violations += [
+            Violation(
+                "ARCH-JSON",
+                path,
+                node.lineno,
+                "decodes raw JSON",
+                "parse it where it arrives: a pydantic model with `Model.model_validate_json(text)` (or "
+                "`model_validate` for an already-decoded body); add an exemption in harness/arch.py only for "
+                "data the application wrote itself, with the reason",
+            )
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in ("loads", "load")
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "json"
         ]
     return violations
 
@@ -550,6 +586,7 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
         check_size(root, allow)
         + check_print_and_env(root, allow)
         + check_paths(root)
+        + check_json(root)
         + check_env_example(root)
         + check_secrets(root)
         + check_allowlist_debts(root, allow)

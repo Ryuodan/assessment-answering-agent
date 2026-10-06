@@ -21,16 +21,17 @@ convert.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.config import settings
+from src.logs import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 FILE_ENDPOINT = "/v1/convert/file"
 FILE_ASYNC_ENDPOINT = "/v1/convert/file/async"
@@ -88,9 +89,44 @@ async def convert_file(path: Path, *, do_ocr: bool | None = None) -> str:
     return _markdown(payload, path.name)
 
 
+class _Task(BaseModel):
+    """What Docling says about an asynchronous conversion (plan 007: parsed, not indexed)."""
+
+    model_config = ConfigDict(extra="ignore")
+    task_id: str = ""
+    task_status: str = ""
+    task_meta: object = None
+
+
+class _Document(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    md_content: str | None = None
+
+
+class _Result(BaseModel):
+    """A finished conversion: its status, the Markdown, and any errors."""
+
+    model_config = ConfigDict(extra="ignore")
+    status: str | None = None
+    document: _Document | None = None
+    errors: list[object] = Field(default_factory=list)
+
+
+_Response = TypeVar("_Response", _Task, _Result)
+
+
+def _parse(model: type[_Response], payload: object, what: str) -> _Response:
+    """Docling's JSON as a model; a response of another shape is a DoclingError."""
+    try:
+        return model.model_validate(payload if payload is not None else {})
+    except ValidationError as error:
+        raise DoclingError(f"Docling returned an unexpected {what}: {error.errors()[0]['msg']}") from error
+
+
 async def _await_task(submitted: dict, name: str) -> dict:
     """Poll an async conversion to completion and return its result payload."""
-    task_id = submitted.get("task_id")
+    task = _parse(_Task, submitted, "task")
+    task_id = task.task_id
     if not task_id:
         raise DoclingError(f"Docling accepted '{name}' without returning a task id: {submitted}")
 
@@ -98,7 +134,7 @@ async def _await_task(submitted: dict, name: str) -> dict:
     delay = _POLL_INITIAL_SECONDS
 
     while True:
-        status = str((submitted or {}).get("task_status") or "").lower()
+        status = task.task_status.lower()
         if status in _TERMINAL_STATUSES:
             break
         if time.monotonic() > deadline:
@@ -109,10 +145,10 @@ async def _await_task(submitted: dict, name: str) -> dict:
 
         await asyncio.sleep(delay)
         delay = min(delay * 1.5, _POLL_MAX_SECONDS)
-        submitted = await _get(f"/v1/status/poll/{task_id}")
+        task = _parse(_Task, await _get(f"/v1/status/poll/{task_id}"), "task status")
 
     if status == "failure":
-        raise DoclingError(f"Docling failed to convert '{name}': {submitted.get('task_meta') or submitted}")
+        raise DoclingError(f"Docling failed to convert '{name}': {task.task_meta or task.model_dump()}")
 
     return await _get(f"/v1/result/{task_id}")
 
@@ -152,17 +188,16 @@ async def _request(method: str, endpoint: str, **kwargs: Any) -> dict:
 
 def _markdown(payload: dict, name: str) -> str:
     """Pull `md_content` out of a conversion response, insisting it is usable."""
-    status = str(payload.get("status") or "unknown").lower()
-    document = payload.get("document") or {}
-    markdown = document.get("md_content") or ""
+    result = _parse(_Result, payload, "conversion result")
+    status = (result.status or "unknown").lower()
+    markdown = (result.document.md_content if result.document else None) or ""
 
     if status not in _OK_STATUSES or not markdown.strip():
-        errors = payload.get("errors") or []
-        detail = f" — {errors}" if errors else ""
+        detail = f" — {result.errors}" if result.errors else ""
         raise DoclingError(f"Docling could not convert '{name}' (status={status}){detail}")
 
     if status == "partial_success":
-        logger.warning("Docling partially converted %s: %s", name, payload.get("errors"))
+        logger.warning("docling.partial_conversion", document=name, errors=len(result.errors))
 
     return number_pages(markdown)
 

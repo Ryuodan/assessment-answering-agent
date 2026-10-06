@@ -211,3 +211,22 @@ reorganised (roadmap M4).
   context to log under the same ID.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user chose
   this plan; the design is Claude's.
+
+## D-015: data is parsed into models where it enters
+
+- **Context:** the survey for plan 007 found most boundaries already parsed
+  into pydantic models; four were not: vocabulary settings typed as free
+  strings, the organisation profile read into a dataclass without checks,
+  Docling's responses used as raw dicts, and no rule against new raw decoding.
+- **Decision:** `Literal` types for the four vocabulary settings (an invalid
+  value stops startup naming the setting); the organisation profile and
+  Docling's task and result responses become pydantic models; ARCH-JSON fails on
+  `json.loads` in `src/` except in `store`, `conversations` and `llm`, each with
+  its reason written beside the exemption. `docs/design/boundaries.md` keeps the
+  inventory.
+- **Consequences:** a misconfigured deployment fails at startup instead of when
+  a questionnaire is opened; a misshapen Docling reply is a `DoclingError` and
+  the local fallback applies, where before it could be an `AttributeError` that
+  escaped it (shown by running the old code against the new test). HTTP
+  parameters checked by hand keep their own error codes.
+- **Date:** 2026-10-06. **Status:** accepted. **Decided by:** Claude, within plan 007; the user asked for M3 to be finished.

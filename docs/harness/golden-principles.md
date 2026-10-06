@@ -29,3 +29,4 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-20 | An IO or framework library is imported only by the layer that owns it. | `arch` ARCH-OWNER |
 | GP-21 | Errors are `AppError`s with a stable code and a message safe to show; internal exception text goes to the log, never into a response. | `arch` ARCH-ERROR; `tests/test_errors.py`; review for message content |
 | GP-22 | Application code logs events (`get_logger`, a dotted event name, keyword fields), and a request's ID is on its log lines, its response header and its error body. | `arch` ARCH-LOG; `tests/test_web.py` |
+| GP-23 | Data from outside is parsed into a validated model where it arrives; nothing decodes raw JSON except the named exemptions. | `arch` ARCH-JSON; `Literal` settings and `tests/test_boundaries.py`; `docs/design/boundaries.md` for the rest |

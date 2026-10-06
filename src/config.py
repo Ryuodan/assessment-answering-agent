@@ -13,6 +13,8 @@ import os
 import re
 from pathlib import Path
 
+from typing import Literal
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -50,7 +52,7 @@ class Settings(BaseSettings):
     # --- LLM (Groq) --------------------------------------------------------
     groq_api_key: str = ""
     groq_chat_model: str = "openai/gpt-oss-120b"
-    groq_reasoning_format: str = Field(
+    groq_reasoning_format: Literal["parsed", "hidden", "raw", ""] = Field(
         default="parsed",
         description="Groq's reasoning_format: parsed, hidden, raw, or '' to send nothing",
     )
@@ -130,7 +132,7 @@ class Settings(BaseSettings):
     # Turn OCR on automatically for a PDF with no usable text layer, so a
     # scanned upload is still read without making OCR everyone's default.
     docling_ocr_auto: bool = True
-    docling_image_export_mode: str = "placeholder"
+    docling_image_export_mode: Literal["placeholder", "embedded", "referenced"] = "placeholder"
     # Docling emits Markdown with no page information at all, so a citation
     # could name a clause but never a page. Given a placeholder it inserts one
     # between pages, which `docling_client` then rewrites into the numbered
@@ -163,7 +165,7 @@ class Settings(BaseSettings):
     # had, it quietly dropped a whole sheet. Running both and taking the better
     # reading per sheet costs one deterministic pass on top of the agent, which
     # is milliseconds and nothing.
-    detection_strategy: str = "guarded"
+    detection_strategy: Literal["rules", "assisted", "agent", "hybrid", "guarded"] = "guarded"
 
     # A sheet the rules cannot read is offered to a model, which proposes a
     # layout the ordinary reader then extracts from -- see `forms.llm_layout`.
@@ -339,7 +341,7 @@ class Settings(BaseSettings):
 
     incomplete_list_confidence_cap: float = Field(default=0.5, ge=0.0, le=1.0)
 
-    log_level: str = "INFO"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     # How log lines are written: "text" for a person at a terminal, "json" for
     # one object per line where a log collector reads them (src/logs.py).
     log_format: str = Field(default="text", pattern="^(text|json)$")
@@ -394,6 +396,12 @@ class Settings(BaseSettings):
         it.
         """
         return frozenset(part.strip().casefold() for part in self.allowed_emails.split(",") if part.strip())
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _log_level_in_any_case(cls, value: object) -> object:
+        """`LOG_LEVEL=info` worked before the vocabulary was enforced, so case is not an error."""
+        return value.upper() if isinstance(value, str) else value
 
     @field_validator("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path", "organisation_path")
     @classmethod

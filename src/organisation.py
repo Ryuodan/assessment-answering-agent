@@ -24,8 +24,9 @@ as true, so it holds what somebody is willing to stand behind and nothing else.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.config import settings
 from src.logs import get_logger
@@ -33,9 +34,16 @@ from src.logs import get_logger
 logger = get_logger(__name__)
 
 
-@dataclass
-class Organisation:
-    """The facts about ourselves that every answer may rely on."""
+class Organisation(BaseModel):
+    """The facts about ourselves that every answer may rely on.
+
+    Read from `settings.organisation_path` and validated as it is read (plan
+    007): a field of the wrong type makes the whole file unusable, and the
+    built-in profile is used instead, rather than a list of certifications
+    arriving as a string and being read one letter at a time.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     legal_name: str = "Business Research and Development"
     short_name: str = "T2"
@@ -43,7 +51,7 @@ class Organisation:
     country: str = "Saudi Arabia"
     locations: str = "Riyadh, Saudi Arabia"
 
-    certifications: list[str] = field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
     """Certifications actually held. Empty means *unknown*, never *none*.
 
     That distinction was learned the expensive way. This field was first
@@ -117,10 +125,9 @@ def load(path: Path | str | None = None) -> Organisation:
     if not path.exists():
         return Organisation()
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return Organisation(**{key: value for key, value in data.items() if key in Organisation.__dataclass_fields__})
-    except Exception:  # noqa: BLE001 - a bad profile falls back, it does not stop a run
-        logger.exception("organisation.profile_unreadable", path=str(path), effect="using the built-in profile")
+        return Organisation.model_validate_json(path.read_bytes())
+    except (OSError, ValidationError) as error:
+        logger.warning("organisation.profile_unreadable", path=str(path), reason=str(error).splitlines()[0])
         return Organisation()
 
 
@@ -128,19 +135,4 @@ def save(profile: Organisation, path: Path | str | None = None) -> None:
     """Write the profile, so it can be corrected without a deploy."""
     path = Path(path or settings.organisation_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "legal_name": profile.legal_name,
-                "short_name": profile.short_name,
-                "sector": profile.sector,
-                "country": profile.country,
-                "locations": profile.locations,
-                "certifications": profile.certifications,
-                "notes": profile.notes,
-            },
-            ensure_ascii=False,
-            indent=1,
-        ),
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(profile.model_dump(), ensure_ascii=False, indent=1), encoding="utf-8")

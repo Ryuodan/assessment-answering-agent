@@ -33,7 +33,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | What the product is | [docs/project/DESCRIPTION.md](docs/project/DESCRIPTION.md), [overview](docs/project/overview.md) |
 | How the code is layered, how a request flows | [ARCHITECTURE.md](ARCHITECTURE.md), [layers.md](docs/generated/layers.md) |
 | Secrets, sensitive data, access model | [SECURITY.md](SECURITY.md) |
-| Why things are the way they are | [decisions.md](docs/design/decisions.md); design history in [README.md](README.md) |
+| Why things are the way they are | [decisions.md](docs/design/decisions.md), [boundaries.md](docs/design/boundaries.md); design history in [README.md](README.md) |
 | Current work | [docs/plans/active/](docs/plans/README.md), [roadmap](docs/plans/roadmap.md) |
 | Known problems | [tech-debt.md](docs/plans/tech-debt.md) |
 | The rules and what enforces each | [golden-principles.md](docs/harness/golden-principles.md), [PRINCIPLES.md](docs/harness/PRINCIPLES.md) |

@@ -14,7 +14,7 @@ source. The description is the comment above the field, the field's
 |---|---|---|---|
 | `GROQ_API_KEY` | `str` | `""` |  |
 | `GROQ_CHAT_MODEL` | `str` | `"openai/gpt-oss-120b"` |  |
-| `GROQ_REASONING_FORMAT` | `str` | `"parsed"` | Groq's reasoning_format: parsed, hidden, raw, or '' to send nothing |
+| `GROQ_REASONING_FORMAT` | `Literal["parsed", "hidden", "raw", ""]` | `"parsed"` | Groq's reasoning_format: parsed, hidden, raw, or '' to send nothing |
 | `GROQ_BASE_URL` | `str \| None` | `"https://api.me-central-1.groqcloud.com"` | ME-Central-1 regional endpoint. Host root only — the groq client appends `/openai/v1` to it. Set to "" to fall back to the global api.groq.com. |
 | `LLM_TEMPERATURE` | `float` | `0.0` |  |
 | `EVAL_JUDGE_MODEL` | `str` | `"openai/gpt-oss-120b"` | Grading model for eval/. Deliberately not the drafting model: a system should not mark its own homework. |
@@ -59,7 +59,7 @@ source. The description is the comment above the field, the field's
 | `DOCLING_CONVERSION_TIMEOUT` | `float` | `2400.0` | Total budget for one document's conversion, across all the polls it takes. A 161-page standard runs well past the 300s cap the Docling server puts on synchronous requests, which is why conversion is submitted asynchronously. |
 | `DOCLING_DO_OCR` | `bool` | `False` | Force OCR on every document. Off by default: on a born-digital PDF it costs ~2.3x and adds only whatever text sits inside the logos, while table structure comes from a separate model that runs regardless. |
 | `DOCLING_OCR_AUTO` | `bool` | `True` | Turn OCR on automatically for a PDF with no usable text layer, so a scanned upload is still read without making OCR everyone's default. |
-| `DOCLING_IMAGE_EXPORT_MODE` | `str` | `"placeholder"` |  |
+| `DOCLING_IMAGE_EXPORT_MODE` | `Literal["placeholder", "embedded", "referenced"]` | `"placeholder"` |  |
 | `DOCLING_PAGE_BREAK_PLACEHOLDER` | `str` | `"<!-- docling-page-break -->"` | Docling emits Markdown with no page information at all, so a citation could name a clause but never a page. Given a placeholder it inserts one between pages, which `docling_client` then rewrites into the numbered markers the chunker already understands. Something that cannot occur in a policy: it is matched literally. |
 | `DOCLING_HEADING_HIERARCHY` | `bool` | `True` | Build a real heading hierarchy from bookmarks, numbering and styles. Off in Docling by default, and the consequence is severe here: 85 of 86 documents came back with every heading at one level, which leaves the chunker a flat list where it expects a tree. A chapter with no sub-levels cannot be divided by its own subsections, which is how this corpus ended up with units of 40, 100 and 113 parts. See src/chunking.py. |
 | `DOCLING_FALLBACK_LOCAL` | `bool` | `True` | When Docling is unreachable, fall back to the local loaders rather than failing the upload. Set false to make a broken Docling loud instead. |
@@ -68,7 +68,7 @@ source. The description is the comment above the field, the field's
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `DETECTION_STRATEGY` | `str` | `"guarded"` | How hard to work at understanding an uploaded questionnaire: 'rules', 'assisted', 'agent', 'hybrid' or 'guarded'. Described, measured and compared in `src.forms.reading`. 'guarded' by default -- the agent, floored by the rules. Measured over six questionnaires in shapes nobody had written a rule for, the agent read 292 of 292 against the rules' 272; measured over the nineteen we already had, it quietly dropped a whole sheet. Running both and taking the better reading per sheet costs one deterministic pass on top of the agent, which is milliseconds and nothing. |
+| `DETECTION_STRATEGY` | `Literal["rules", "assisted", "agent", "hybrid", "guarded"]` | `"guarded"` | How hard to work at understanding an uploaded questionnaire: 'rules', 'assisted', 'agent', 'hybrid' or 'guarded'. Described, measured and compared in `src.forms.reading`. 'guarded' by default -- the agent, floored by the rules. Measured over six questionnaires in shapes nobody had written a rule for, the agent read 292 of 292 against the rules' 272; measured over the nineteen we already had, it quietly dropped a whole sheet. Running both and taking the better reading per sheet costs one deterministic pass on top of the agent, which is milliseconds and nothing. |
 | `DETECTION_ASSIST` | `bool` | `False` | A sheet the rules cannot read is offered to a model, which proposes a layout the ordinary reader then extracts from -- see `forms.llm_layout`. Off by default: the rules read every sample workbook we have, so this costs a call per unreadable sheet for files we have not seen yet. The 'assisted' strategy turns it on for one reading without changing this. |
 | `DETECTION_ASSIST_COVERAGE` | `float` | `0.25` | A sheet where the rules found questions on fewer than this share of the rows below the header is also offered, because "7 questions on a sheet of 133 rows" is a wrong column rather than a short questionnaire. The model's reading is taken only if it finds more, so assistance can add questions but never remove them. |
 | `DETECTION_ASSIST_MIN_ROWS` | `int` | `20` |  |
@@ -121,7 +121,7 @@ source. The description is the comment above the field, the field's
 | `QUERY_AGREEMENT_WEIGHT` | `float` | `0.15` | How much a chunk gains for each extra search that independently returned it. Query expansion runs several deliberately overlapping searches per question, so agreement between them is a relevance signal that costs nothing extra to collect. A chunk found by 3 of 4 searches is scored `1 + 2 * weight` times its similarity. 0 disables it; with query expansion off it has no effect either way. See graph/state.py. |
 | `EXTRACTION_WINDOW` | `int` | `2000` |  |
 | `INCOMPLETE_LIST_CONFIDENCE_CAP` | `float` | `0.5` |  |
-| `LOG_LEVEL` | `str` | `"INFO"` |  |
+| `LOG_LEVEL` | `Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]` | `"INFO"` |  |
 | `LOG_FORMAT` | `str` | `"text"` | How log lines are written: "text" for a person at a terminal, "json" for one object per line where a log collector reads them (src/logs.py). |
 
 ## Identity and history (Phase 0)
