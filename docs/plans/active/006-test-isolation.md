@@ -33,6 +33,7 @@ modules building paths under the project root themselves.
 ## Progress log
 
 - 2026-10-06: Plan written; the user asked to finish M3 and then the other milestones. Survey: `PROJECT_ROOT` is used outside `src/config.py` only by `src/organisation.py`; no shell variable on this machine names a setting today.
+- 2026-10-06: Steps 2 to 4. `_env_file()` in `src/config.py`; `tests/conftest.py` empties it and removes shell variables named like a setting (names read from the syntax tree, before `src` is imported). `ORGANISATION_PATH` setting; `src/organisation.py` reads it, and its one log call became an event as it was touched (one module off the ARCH-LOG list). The guard: `isolated_storage` fails a test if any path setting still points into the project. ARCH-PATH with 2 tests; 6 isolation tests, among them one asserting every setting equals its declared default during a test and one showing the guard catches a forgotten path.
 
 ## Decision log
 

@@ -198,9 +198,6 @@ debt = "TD-028"
 path = "src/memory.py"
 debt = "TD-028"
 
-[[log]]
-path = "src/organisation.py"
-debt = "TD-028"
 
 [[log]]
 path = "src/relevance.py"

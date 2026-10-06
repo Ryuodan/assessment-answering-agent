@@ -19,7 +19,7 @@ The philosophy behind them is in [PRINCIPLES.md](PRINCIPLES.md).
 | GP-10 | Every doc is reachable from `CLAUDE.md`, and every link resolves. | `docs` DOCS-LINK, DOCS-ANCHOR, DOCS-ORPHAN |
 | GP-11 | Every plan has the required sections and a status matching its folder. | `docs` DOCS-PLAN |
 | GP-12 | Generated docs are produced by `uv run poe gen`, never edited by hand, never stale. | `test` (`tests/harness/test_generated.py`) |
-| GP-13 | Tests never touch the real database, index, uploads or `.env`. | partly `tests/conftest.py` (`isolated_storage`); review for the rest (TD-011) |
+| GP-13 | Tests never touch the real database, index, uploads or `.env`. | `tests/conftest.py`: settings from defaults only, every path setting redirected and checked (`isolated_storage`); `arch` ARCH-PATH; `tests/test_isolation.py` |
 | GP-14 | Behaviour changes only behind tests: refactors are preceded by characterization tests, and a suspected bug is recorded in tech-debt.md, not fixed silently. | partly `test` (`tests/characterization/`: questionnaire reading and filling, the answering pipeline with its prompts, fixture chunking, exports); review for paths not yet pinned |
 | GP-15 | Tools run as `python -m <tool>`, never through `.venv` launchers. | `test` (`tests/harness/test_tasks.py`) |
 | GP-16 | Customer data never enters git in plaintext. | `arch` ARCH-SEALED for the sealed eval sets; `.gitignore` and review for everything else |

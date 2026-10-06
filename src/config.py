@@ -23,11 +23,25 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 logger = get_logger(__name__)
 
 
+def _env_file() -> Path | None:
+    """The env file settings are read from, besides the environment itself.
+
+    `ASSESSMENT_ANSWER_ENV_FILE` names it; set but empty means none. Unset, it is
+    the project's `.env`. The test suite sets it empty, so a developer's `.env`
+    cannot change what the tests see (TD-011, tests/conftest.py). It is not a
+    setting itself, being what decides where the settings come from.
+    """
+    named = os.environ.get("ASSESSMENT_ANSWER_ENV_FILE")
+    if named is None:
+        return PROJECT_ROOT / ".env"
+    return Path(named) if named.strip() else None
+
+
 class Settings(BaseSettings):
     """Runtime configuration, populated from environment variables / `.env`."""
 
     model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env",
+        env_file=_env_file(),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -336,6 +350,9 @@ class Settings(BaseSettings):
     # that it is always there: no second process to start, no connection string
     # to get wrong, and a single file to copy when someone wants a backup.
     db_path: Path = PROJECT_ROOT / "data" / "app.db"
+    # Who this deployment answers on behalf of (src/organisation.py): a JSON file
+    # an administrator edits; when it is missing, the built-in profile is used.
+    organisation_path: Path = PROJECT_ROOT / "data" / "organisation.json"
 
     # Members to create on a FIRST run only, comma-separated. Access is
     # administered on the admin page once the system is running -- this exists
@@ -378,7 +395,7 @@ class Settings(BaseSettings):
         """
         return frozenset(part.strip().casefold() for part in self.allowed_emails.split(",") if part.strip())
 
-    @field_validator("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path")
+    @field_validator("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path", "organisation_path")
     @classmethod
     def _anchor_to_project(cls, value: Path) -> Path:
         """Resolve a relative path against the project, not the process's cwd.

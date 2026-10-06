@@ -10,6 +10,18 @@ contract broke, not that a mock drifted from reality.
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from harness.arch import settings_fields
+
+# Settings come from their declared defaults and nothing else (TD-011): no
+# `.env`, and no shell variable that names a setting. Done before anything
+# imports `src.config`, which builds the settings once, at import. The names are
+# read from the syntax tree of `src/config.py`, so nothing of `src` is imported yet.
+os.environ["ASSESSMENT_ANSWER_ENV_FILE"] = ""
+_SETTING_NAMES = settings_fields(Path(__file__).resolve().parent.parent / "src" / "config.py")
+for _name in [name for name in os.environ if name.lower() in _SETTING_NAMES]:
+    del os.environ[_name]
 
 # Before `src.config` is imported, which is where tracing is switched on and,
 # for Phoenix, where LangChain is patched to emit spans. The fixture below can
@@ -23,9 +35,19 @@ import pytest  # noqa: E402
 
 from src import access_codes, answer_memory, credentials, store  # noqa: E402
 from src.chunking import chunk_document  # noqa: E402
-from src.config import settings  # noqa: E402
+from src.config import PROJECT_ROOT, settings  # noqa: E402
 from src.knowledge import KnowledgeStore  # noqa: E402
 from src.models import SourceType  # noqa: E402
+
+
+def paths_inside_project(config: object) -> list[str]:
+    """Names of path settings that point at or below the project directory."""
+    root = PROJECT_ROOT.resolve()
+    return sorted(
+        name
+        for name, value in vars(config).items()
+        if isinstance(value, Path) and (value.resolve() == root or root in value.resolve().parents)
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +90,15 @@ def isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "admin_email", "")
     monkeypatch.setattr(settings, "admin_password", "")
     monkeypatch.setattr(settings, "detection_strategy", "rules")
+    # The organisation profile was read from data/organisation.json by every test
+    # that drafted an answer or opened the preferences page (TD-023).
+    monkeypatch.setattr(settings, "organisation_path", tmp_path / "organisation.json")
+    unredirected = paths_inside_project(settings)
+    if unredirected:
+        pytest.fail(
+            f"settings still pointing into the project during a test: {', '.join(unredirected)}\n"
+            "  FIX: redirect each to tmp_path in `isolated_storage` (tests/conftest.py); tests never touch real data"
+        )
     store.reset_connection()
     answer_memory.forget_sync()
     yield

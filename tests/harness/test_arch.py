@@ -220,3 +220,19 @@ def test_a_sealed_file_the_manifest_does_not_list_fails(tree):
 def test_no_manifest_means_nothing_is_sealed(tree):
     write(tree, "eval/set.json", "[]")
     assert sealed_rules(tree, indexed={"eval/set.json"}) == []
+
+
+# --- data locations come from settings (plan 006) ----------------------------
+
+
+def test_a_path_built_from_project_root_outside_config_fails(tree):
+    write(tree, "src/profile.py", 'from src.config import PROJECT_ROOT\n\nPROFILE = PROJECT_ROOT / "data" / "p.json"\n')
+    assert [r for r in rules(tree) if r[0] == "ARCH-PATH"] == [
+        ("ARCH-PATH", "src/profile.py", 1),
+        ("ARCH-PATH", "src/profile.py", 3),
+    ]
+
+
+def test_config_may_use_project_root(tree):
+    write(tree, "src/config.py", CONFIG + "\nPROJECT_ROOT = None\nX = PROJECT_ROOT\n")
+    assert [r for r in rules(tree) if r[0] == "ARCH-PATH"] == []

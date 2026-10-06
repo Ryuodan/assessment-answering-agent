@@ -24,15 +24,13 @@ as true, so it holds what somebody is willing to stand behind and nothing else.
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from src.config import PROJECT_ROOT
+from src.config import settings
+from src.logs import get_logger
 
-logger = logging.getLogger(__name__)
-
-PROFILE_PATH = PROJECT_ROOT / "data" / "organisation.json"
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -107,27 +105,28 @@ it is the thing that turned Yes into No on five of ten measured contradictions.
 """
 
 
-def load(path: Path | str = PROFILE_PATH) -> Organisation:
+def load(path: Path | str | None = None) -> Organisation:
     """The profile on disk, or the defaults when there is none.
 
     A missing or unreadable file is not an error worth failing a run over -- the
     defaults describe the organisation this system was built for, and a broken
-    profile should degrade to them rather than stop anybody answering.
+    profile should degrade to them rather than stop anybody answering. The file
+    is `settings.organisation_path` unless one is named.
     """
-    path = Path(path)
+    path = Path(path or settings.organisation_path)
     if not path.exists():
         return Organisation()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return Organisation(**{key: value for key, value in data.items() if key in Organisation.__dataclass_fields__})
     except Exception:  # noqa: BLE001 - a bad profile falls back, it does not stop a run
-        logger.exception("Could not read %s; using the built-in profile", path)
+        logger.exception("organisation.profile_unreadable", path=str(path), effect="using the built-in profile")
         return Organisation()
 
 
-def save(profile: Organisation, path: Path | str = PROFILE_PATH) -> None:
+def save(profile: Organisation, path: Path | str | None = None) -> None:
     """Write the profile, so it can be corrected without a deploy."""
-    path = Path(path)
+    path = Path(path or settings.organisation_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(

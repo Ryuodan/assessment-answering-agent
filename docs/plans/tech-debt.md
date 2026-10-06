@@ -75,11 +75,12 @@ or docs and has not been verified by running anything.
 - **Impact:** dead code misleads readers about what the system does.
 - **Fix:** confirm each in the first garbage-collection round, then delete.
 
-## TD-011: Tests load the developer's real `.env`
+## TD-011: Tests loaded the developer's real `.env`
 
 - **What:** read: `src.config.settings` is built from `.env` at import. The autouse fixtures in `tests/conftest.py` pin storage paths, the allow-list, admin credentials, the reading strategy, tracing and hybrid search, but the other settings (model names, evidence budgets, thresholds, ...) come from whatever `.env` the developer has.
 - **Impact:** a test can pass on one machine and fail on another; tests read real configuration, which the harness forbids.
 - **Fix:** build test settings from defaults only (no `.env`), then let tests override explicitly.
+- **Resolved** 2026-10-06 (plan 006): `tests/conftest.py` sets `ASSESSMENT_ANSWER_ENV_FILE` empty and removes shell variables named like a setting before `src.config` is imported; `tests/test_isolation.py` asserts every setting is its declared default during a test.
 
 ## TD-012: Scripts write to the real Chroma index
 
@@ -149,11 +150,12 @@ or docs and has not been verified by running anything.
 - **Impact:** small: the one environment read outside the settings module (allow-listed in ARCH-ENV), and a deployment without one of the three fonts cannot configure another.
 - **Fix:** a `pdf_font_path` setting with the OS candidates as the fallback.
 
-## TD-023: The organisation profile is read from a hard-coded path, in tests too
+## TD-023: The organisation profile was read from a hard-coded path, in tests too
 
 - **What:** read: `src/organisation.py` loads `PROJECT_ROOT / "data" / "organisation.json"` (`PROFILE_PATH`, bound as a default argument), not a setting. `graph.nodes.draft` and `GET /api/preferences` call `organisation.load()`, and `tests/conftest.py` does not redirect it, so tests that reach either read the developer's real profile (found 2026-10-05 while writing characterization tests, Claude).
 - **Impact:** test results can depend on a file in `data/`; the profile cannot be relocated with the rest of the data.
 - **Fix:** an `organisation_path` setting under the data directory, redirected by the `isolated_storage` fixture.
+- **Resolved** 2026-10-06 (plan 006): `ORGANISATION_PATH` is a setting, redirected per test; a guard fails any test in which a path setting still points into the project, and ARCH-PATH stops modules other than `src/config.py` building paths from `PROJECT_ROOT`.
 
 ## TD-024: A bracketed source number in a draft reached the customer's cell
 

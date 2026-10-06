@@ -9,6 +9,8 @@ Rules (each violation prints rule, file:line and a FIX line):
                  The Settings class in src/config.py is not counted (D-010)
     ARCH-PRINT   `print` in src/ outside src/cli.py: use logging
     ARCH-ENV     the environment is read outside src/config.py
+    ARCH-PATH    a module other than src/config.py builds a path from PROJECT_ROOT:
+                 data locations are settings, so tests can redirect them (plan 006)
     ARCH-ENVEX   a Settings field is missing from .env.example, or .env.example
                  lists something that is not a setting
     ARCH-SECRET  a tracked file contains something shaped like a credential
@@ -234,6 +236,30 @@ def check_print_and_env(root: Path, allow: Allowlist) -> list[Violation]:
                     f"delete the [[{kind}]] entry for {path}, and mark {entries[path]} resolved if nothing else remains",
                 )
             )
+    return violations
+
+
+def check_paths(root: Path) -> list[Violation]:
+    """ARCH-PATH: only src/config.py knows where the project's files are."""
+    violations: list[Violation] = []
+    for module in python_modules(root):
+        path = rel_to(module, root)
+        if path == ENV_OWNER:
+            continue
+        tree = ast.parse(module.read_text(encoding="utf-8"), filename=path)
+        violations += [
+            Violation(
+                "ARCH-PATH",
+                path,
+                node.lineno,
+                "builds a location from PROJECT_ROOT outside src/config.py",
+                "add a Path setting in src/config.py (and .env.example), use `settings.<name>`, and redirect it "
+                "in tests/conftest.py's isolated_storage",
+            )
+            for node in ast.walk(tree)
+            if (isinstance(node, ast.Name) and node.id == "PROJECT_ROOT")
+            or (isinstance(node, ast.alias) and node.name == "PROJECT_ROOT")
+        ]
     return violations
 
 
@@ -523,6 +549,7 @@ def check(root: Path = ROOT, allowlist: Path | None = None) -> list[Violation]:
     return (
         check_size(root, allow)
         + check_print_and_env(root, allow)
+        + check_paths(root)
         + check_env_example(root)
         + check_secrets(root)
         + check_allowlist_debts(root, allow)
