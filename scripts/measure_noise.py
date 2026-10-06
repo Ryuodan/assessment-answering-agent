@@ -2,6 +2,7 @@
 
     python -m scripts.measure_noise --repeats 3            # the dev split (never the final one), three identical runs
     python -m scripts.measure_noise --repeats 3 --label baseline
+    python -m scripts.measure_noise --label baseline --summarise eval/results/noise_a_1.json eval/results/noise_b_1.json
 
 Run the same split with the same settings several times and see how far the
 numbers wander. That spread is the noise. A difference between two versions
@@ -82,8 +83,12 @@ async def main_async(args: argparse.Namespace) -> int:
         print(f"  agreement {s['agreement']:.1f}%  form {s['form']:.1f}%  failures {s['failures']}  -> {out.name}")
         runs.append(run)
 
+    return _report(runs, args.label)
+
+
+def _report(runs: list[dict], label: str) -> int:
     summary = noise(runs)
-    path = RESULTS / f"noise_{args.label}.json"
+    path = RESULTS / f"noise_{label}.json"
     path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(
         f"\nagreement over {summary['runs']} runs: {summary['agreement']} "
@@ -103,7 +108,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--label", default="dev")
+    parser.add_argument(
+        "--summarise",
+        nargs="+",
+        type=Path,
+        default=None,
+        metavar="RUN",
+        help="no new runs: the noise summary of run files already written (noise_<label>_<n>.json)",
+    )
     args = parser.parse_args()
+    if args.summarise:
+        return _report([json.loads(path.read_text(encoding="utf-8")) for path in args.summarise], args.label)
     configure_logging()
     return llm.run(main_async(args))
 

@@ -149,6 +149,49 @@ Given the noise file from `scripts/measure_noise.py`, it reports a move on a
 case that already varied between identical runs as within noise. The noise
 itself is measured in plan 014.
 
+## Run-to-run noise on the house set
+
+*Measured 2026-10-06 by plan 014.*
+
+The dev split was run twice, with identical code, settings, corpus and
+memory, using `scripts/measure_noise.py`. 81 cases were run; HOUSE-096 was
+left out (TD-033). A third run hung on the embedding host and was stopped
+(TD-034). That leaves two runs, not three: enough for a range and for the
+cases that moved, but only a rough standard deviation.
+
+| Run | Scored | Failures (answering) | Agreement | Form | Contradicts | Held back |
+|---|---|---|---|---|---|---|
+| 1 | 79 | 2 | 83.5% | 96.2% | 11 | 32 |
+| 2 | 77 | 4 | 87.0% | 97.8% | 8 | 28 |
+
+On the 75 cases both runs scored, so that the different failures do not
+count, agreement was **82.7% and 86.7%: four points apart with nothing
+changed**. 12 of those 75 cases scored differently between the two runs.
+Seven of them moved by 5 points, the full width of the scale. In 7 cases the
+judge said "contradicts the team" in one run and not in the other. Every
+failure was a Groq tokens-per-minute limit, and no question failed in both
+runs.
+
+What this means for reading a change on the dev split:
+
+- **Two single runs that differ by less than about 5 points of agreement
+  (`smallest_real_difference`: 4.9) show nothing.** That is twice the
+  standard deviation of two runs, and the gap measured with the cases held
+  fixed was 4.0. A real improvement smaller than that needs repeated runs of
+  both versions, compared case by case.
+- **The number of "contradicts" verdicts is not stable either.** It was 11
+  and 8 between identical runs. A change in it of a few cases is not
+  evidence about safety.
+- **Use `scripts/compare_runs.py --noise eval/results/noise_baseline.json`.**
+  The noise file lists the 12 cases that moved on their own, and their moves
+  are reported as within noise.
+
+Where the noise comes from was not separated here. The drafter runs at
+temperature 0.2 (`src/graph/nodes.py`) and the judge at 0. The facts set's
+judge alone moved 3.8 points over four gradings of one file (above), so the
+judge is likely part of it. Re-judging one run's answers several times would
+separate the two for a fraction of a run's cost.
+
 ## The two measurements that matter
 
 ```bash

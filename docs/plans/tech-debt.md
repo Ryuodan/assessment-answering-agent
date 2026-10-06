@@ -111,6 +111,8 @@ or docs and has not been verified by running anything.
   - `scripts/compare_runs.py` compares two runs case by case.
   - `scripts/measure_noise.py` measures noise (plan 014).
 
+  - Noise measured on the dev split (plan 014): two identical runs, 4.0 points of agreement apart on the same 75 cases; the smallest difference worth calling a change is about 5 points.
+
   Not resolved: all five questionnaires were tuned against before the split existed, so `final` is held out from 2026-10-06 on, not unseen. A clean final split needs questionnaires nobody has scored against yet, which only the team can supply.
 
 ## TD-015: Organisation- and machine-specific defaults in the code
@@ -237,8 +239,14 @@ or docs and has not been verified by running anything.
 
 ## TD-033: A team reference answer is the drafting prompt's style example
 
-- **What:** found 2026-10-06 (Claude, plan 013) by the contamination check. `src/prompts.py`, in the drafting rules ("Write the position as a fact about us: ..."), gives as its example a sentence that is, for 10 of its 11 words, the security team's own answer to house-set question HOUSE-096, which is in the final split. The line was added in commit f76ceab (2026-09-10), and the same rule cites a measurement "on the held-out questionnaires".
+- **What:** found 2026-10-06 (Claude, plan 013) by the contamination check. `src/prompts.py`, in the drafting rules ("Write the position as a fact about us: ..."), gives as its example a sentence that is, for 10 of its 11 words, the security team's own answer to house-set question HOUSE-096, which is in the dev split (first recorded as final; corrected in plan 014). The line was added in commit f76ceab (2026-09-10), and the same rule cites a measurement "on the held-out questionnaires".
 - **Impact:** for that one question, the drafter is shown the expected answer, so its score measures copying. Answers to other questions are unaffected, except for whatever the example teaches about style.
 - **For now:** HOUSE-096 is in `KNOWN` in `eval/contamination.py`, so every runner leaves it out of the score and says so. Any other leak stops a run.
 - **Fix (needs a decision):** replace the example with a sentence that is in no benchmark. This is a prompt change, so it changes answers in principle; the effect should be checked with `scripts/compare_runs.py` against a dev run. Recommended: replace it, then remove the `KNOWN` entry.
+
+## TD-034: An embedding request that stalls holds a question for up to 30 minutes
+
+- **What:** measured 2026-10-06 (Claude, plan 014). During the second noise run, the measurement went silent at 07:38 local time with one connection open to the embedding host (`ds.t2.sa`) and no CPU in use. `src/embeddings.py` builds `OpenAIEmbeddings` with no `timeout`, so the OpenAI client's defaults apply: 600 seconds per attempt, with 2 retries. Only the interactive search (`service.search_knowledge`) bounds its embedding call (10 s).
+- **Impact:** if the embedding host stops answering mid-request, a question, and the person waiting on it, waits up to half an hour before the failure is contained. Answering anything else that needs that request waits as well.
+- **Fix (needs a decision):** an `EMBEDDING_TIMEOUT` setting (for example 30 s) passed to the client, so a stalled host fails the question fast, as the Docling client already does with `DOCLING_TIMEOUT`. This changes behaviour: a slow but working host would also be cut off.
 

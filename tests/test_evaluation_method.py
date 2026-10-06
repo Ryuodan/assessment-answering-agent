@@ -149,3 +149,17 @@ def test_a_known_leak_is_left_out_and_a_new_one_stops_the_run(monkeypatch: pytes
 
     monkeypatch.setitem(contamination.KNOWN, "H-1", "TD-999")
     assert [c.test_id for c in contamination.screen(cases, root=tmp_path)] == ["H-2"]
+
+
+def test_noise_reports_spread_and_the_cases_that_moved_on_their_own() -> None:
+    from scripts import measure_noise
+
+    def run(agreement: float, scores: dict[str, int | None]) -> dict:
+        cases = [row(t, s, "" if s is not None else "answering: rate limited") for t, s in scores.items()]
+        return {"summary": {"agreement": agreement, "form": 96.0, "failures": {"answering": 0}}, "cases": cases}
+
+    summary = measure_noise.noise([run(83.5, {"a": 5, "b": 0, "c": 5}), run(87.0, {"a": 5, "b": 5, "c": None})])
+    assert summary["agreement_range"] == 3.5
+    assert summary["smallest_real_difference"] == round(2 * summary["agreement_stdev"], 1)
+    assert summary["unstable"] == ["b"], "a failed case is not evidence of instability"
+    assert summary["stable"] == 2
