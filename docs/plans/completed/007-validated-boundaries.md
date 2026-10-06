@@ -1,6 +1,6 @@
 # Plan 007: Validated boundaries
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -16,12 +16,12 @@ inventory of every boundary, and finishes milestone M3.
 
 ## Acceptance criteria
 
-- [ ] `DETECTION_STRATEGY`, `GROQ_REASONING_FORMAT`, `LOG_LEVEL` and `DOCLING_IMAGE_EXPORT_MODE` are `Literal` types; an invalid value fails at startup naming the setting; `LOG_LEVEL` still accepts lower case; the strategy vocabulary matches `forms.reading.STRATEGIES` (tested).
-- [ ] The organisation profile is a pydantic model read with `model_validate_json`; a malformed file still falls back to the built-in profile, logged as an event; nothing else about the profile changes (tests).
-- [ ] Docling's task and result responses are parsed into models; a response of the wrong shape is a `DoclingError`, so the local fallback still applies (tests).
-- [ ] ARCH-JSON fails on `json.loads` in `src/` outside the named exemptions, each with its reason; tests with failing examples.
-- [ ] `docs/design/boundaries.md` lists every boundary, what it is parsed into, and where a gap remains; ARCHITECTURE.md links it.
-- [ ] `uv run poe check` passes; the roadmap marks M3 done.
+- [x] `DETECTION_STRATEGY`, `GROQ_REASONING_FORMAT`, `LOG_LEVEL` and `DOCLING_IMAGE_EXPORT_MODE` are `Literal` types; an invalid value fails at startup naming the setting; `LOG_LEVEL` still accepts lower case; the strategy vocabulary matches `forms.reading.STRATEGIES` (tested).
+- [x] The organisation profile is a pydantic model read with `model_validate_json`; a malformed file still falls back to the built-in profile, logged as an event; nothing else about the profile changes (tests).
+- [x] Docling's task and result responses are parsed into models; a response of the wrong shape is a `DoclingError`, so the local fallback still applies (tests).
+- [x] ARCH-JSON fails on `json.loads` in `src/` outside the named exemptions, each with its reason; tests with failing examples.
+- [x] `docs/design/boundaries.md` lists every boundary, what it is parsed into, and where a gap remains; ARCHITECTURE.md links it.
+- [x] `uv run poe check` passes; the roadmap marks M3 done.
 
 ## Plan
 
@@ -38,6 +38,7 @@ inventory of every boundary, and finishes milestone M3.
 - 2026-10-06: Step 3. `Organisation` is a pydantic model (`extra="ignore"`), read with `model_validate_json`; the broad `except Exception` became `(OSError, ValidationError)` with a warning event. Docling: `_Task`, `_Result` and a generic `_parse` (a first version narrowed types with `assert isinstance`, replaced by a type variable because asserts vanish under `-O`). Running the old `docling_client.py` against the new test showed the gap was real: a reply whose `document` is a string raised `AttributeError`, which the fallback does not catch. Both modules' logging became events as they were touched (two more modules off the ARCH-LOG list: 21 remain). 16 boundary tests; the snapshots are unchanged.
 - 2026-10-06: Step 4. ARCH-JSON first flagged `src/llm.py` twice (a provider's failed tool call, decoded and then validated against the schema); it became the third named exemption, with that reason. 2 rule tests.
 - 2026-10-06: Step 5. `docs/design/boundaries.md` (11 boundaries, gaps named), D-015, GP-23, ARCHITECTURE.md and CLAUDE.md links.
+- 2026-10-06: `uv run poe check` passes (1779 passed); all criteria met; moved to `completed/`. Milestone M3 done.
 
 ## Decision log
 
