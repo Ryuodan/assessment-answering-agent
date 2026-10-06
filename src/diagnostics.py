@@ -51,6 +51,7 @@ def _mb(size: int) -> str:
 
 
 def interpreter() -> Check:
+    """Whether this is the project's own .venv; another interpreter imports the wrong packages."""
     venv = config.project_venv()
     inside = Path(sys.prefix).resolve() == venv.resolve()
     if inside:
@@ -64,6 +65,7 @@ def interpreter() -> Check:
 
 
 def env_file() -> Check:
+    """Which env file the settings came from, and whether it exists."""
     path = config.env_file_in_use()
     if path is None:
         return Check("config.env_file", WARN, "no .env is read (ASSESSMENT_ANSWER_ENV_FILE is empty)")
@@ -75,6 +77,7 @@ def env_file() -> Check:
 
 
 def secrets() -> list[Check]:
+    """Whether the keys the system needs are set. Never their values."""
     groq = bool(settings.groq_api_key)
     return [
         Check(
@@ -92,6 +95,7 @@ def secrets() -> list[Check]:
 
 
 def storage() -> list[Check]:
+    """Each storage path: present, writable, and how much it holds."""
     out: list[Check] = []
     for field in ("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path", "organisation_path"):
         path: Path = getattr(settings, field)
@@ -106,6 +110,7 @@ def storage() -> list[Check]:
 
 
 def database() -> Check:
+    """The database's schema version and what it holds, read without opening it for writing."""
     path = settings.db_path
     if not path.exists():
         return Check("database", WARN, f"{path} does not exist yet; it is created on first start")

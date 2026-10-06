@@ -18,3 +18,4 @@ A garbage-collection round, as its own plan, follows each milestone or about
 | Cleanup round | After | Plan | Status |
 |---|---|---|---|
 | 1 | M3 | [008](completed/008-gc-round-1.md) | done 2026-10-06 |
+| 2 | M4, M5 | [012](completed/012-gc-round-2.md) | done 2026-10-06 |

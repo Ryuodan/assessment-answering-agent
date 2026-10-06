@@ -2,7 +2,7 @@
 
 What this system holds, where, who can reach it, and the rules for working in
 this repository. The design reasoning behind sign-in and isolation is in the
-README sections [Signing in, and what gets remembered](docs/design/access.md#signing-in-and-what-gets-remembered)
+design notes [Signing in, and what gets remembered](docs/design/access.md#signing-in-and-what-gets-remembered)
 and [Facing a network](docs/design/access.md#facing-a-network).
 
 ## What is sensitive

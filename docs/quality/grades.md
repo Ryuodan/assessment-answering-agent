@@ -14,6 +14,41 @@ A grade is a measurement, not a target. The words under each table say what
 the letter stands for and where the gap is, so the next round can check
 whether it closed.
 
+## Round 2: 2026-10-06, after M4 and M5 (plan 012)
+
+Measured on the working tree of plan 012: 1,792 tests passed and none failed;
+the five browser tests are not part of the coverage run. Statement coverage
+of `src/` and `harness/` together is 91% (round 1: 89%).
+
+| Layer | Modules | Lines | Coverage | Over 400 | Suppressions | Duplicated blocks | Docstrings |
+|---|---|---|---|---|---|---|---|
+| foundation | 11 | 3512 | A (98.7%) | C (2) | A (0) | A (0) | A (95%) |
+| integrations | 20 | 6920 | A (90.6%) | D (7) | D (9) | C (2) | A (97%) |
+| records | 10 | 3467 | A (95.1%) | C (3) | C (7) | A (0) | B (87%) |
+| answering | 10 | 2164 | B (87.5%) | C (2) | C (4) | A (0) | A (100%) |
+| operations | 3 | 3970 | A (92.8%) | C (3) | C (6) | A (0) | A (100%) |
+| interfaces | 3 | 2387 | A (91.4%) | B (1) | B (3) | A (0) | D (60%) |
+
+What changed since round 1:
+
+- **interfaces.** Coverage went from B (86.4%) to A (91.4%), because
+  `cli.py` went from 0% to 66% with the `doctor` and `inspect` tests
+  (plan 010). Docstrings are still D: the 17 route functions in `api.py`,
+  which wait for that module to be split.
+- **integrations.** Gained one module, `diagnostics.py`. It arrived without
+  docstrings on five of its public functions, which took the layer from 96%
+  to 91%. They were added in this round, and the layer is now at 97%. Its
+  coverage is 83%; the untested lines are the network probe paths that need a
+  live service.
+- **Everything else** is as in round 1. M4 changed documents and M5 added
+  tests, so neither moved the size, suppression or duplication counts. The
+  gaps written under round 1 stand.
+
+`poe gc` found the same candidates as at the end of round 1 and nothing new.
+The round fixed three places where wording still pointed at the README for
+text that plan 009 had moved: `SECURITY.md`, `docs/project/overview.md`, and
+a comment in `scripts/dev_server.py`.
+
 ## Round 1: 2026-10-06, after M3 (plan 008)
 
 Measured on the working tree of plan 008: 1,779 tests passed. The one failure

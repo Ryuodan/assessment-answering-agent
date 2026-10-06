@@ -7,7 +7,7 @@ The deployment's own database has real users in it, and a database with users in
 it requires a session — which is right, and makes clicking through the interface
 to check something a matter of finding an access code first. This starts the
 same application over a scratch database with no users, so it runs in the
-local-user mode the README calls open mode: every action is attributed to
+local-user ("open") mode of docs/design/access.md: every action is attributed to
 `local@localhost` and nothing asks you to sign in.
 
 The knowledge base is **shared with the deployment**, deliberately: an empty

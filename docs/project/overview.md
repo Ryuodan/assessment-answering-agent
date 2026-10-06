@@ -54,7 +54,8 @@ method and the history of measurements; TD-014 in
 
 ## Where the history is
 
-The README is the project's design history: why each part works the way it
-does, with the measurements that decided it. It is being reorganised into
-`docs/` (roadmap milestone M4). Until then, read it by section rather than
-end to end; its headings are a good index.
+The design history (why each part works the way it does, and the
+measurements that decided it) was the README's body until plan 009 moved it
+into `docs/design/`, `docs/operations/` and `docs/measurements/`. The
+README's [Read more](../../README.md#read-more) table maps each topic to its
+document.
