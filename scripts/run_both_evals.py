@@ -32,7 +32,6 @@ across four repeats of an unchanged system (79.0, 75.2, 77.6, 77.1).
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import sys
 import uuid
@@ -46,14 +45,9 @@ from src import llm
 from src.models import AssessmentResult
 
 from eval.dataset import align, load_golden_set
-from eval.house import (
-    HouseResult,
-    format_summary,
-    judge_agreement,
-    load_house_set,
-    register_score,
-    summarise,
-)
+from eval import contamination
+from eval.house import case_rows, format_summary, load_house_set, load_memory_set, run_cases, summarise
+from eval.splits import final_runs, record_final_run, select
 from eval.judge import judge_all
 from eval.report import build_report
 
@@ -67,26 +61,8 @@ spread of 3.8. Half of that is the smallest drop worth calling a regression.
 
 
 async def run_house(cases, label: str) -> dict:
-    from src import service
-
-    print(f"\n[house] answering {len(cases)} question(s) the team has already answered…")
-    answers = await service.answer_questions([c.as_question(i) for i, c in enumerate(cases)])
-    results = []
-    for case, produced in zip(cases, answers):
-        score, shape = register_score(case, produced.answer)
-        results.append(
-            HouseResult(
-                case=case,
-                answer=produced.answer,
-                register=score,
-                shape=shape,
-                confidence=produced.confidence,
-                needs_review=produced.needs_review,
-            )
-        )
-    print("[house] judging against the team's own answers…")
-    for result, verdict in zip(results, await asyncio.gather(*(judge_agreement(r.case, r.answer) for r in results))):
-        result.agreement = verdict
+    print(f"\n[house] answering and judging {len(cases)} question(s) the team has already answered…")
+    results = await run_cases(cases)
     return {"summary": summarise(results), "results": results}
 
 
@@ -165,7 +141,10 @@ def format_verdict(house: dict, facts: dict, previous: dict | None, floor: float
 
 
 async def main_async(args) -> int:
-    cases = load_house_set()
+    cases = select(load_house_set(), args.split)
+    cases = contamination.screen(cases, [m.question for m in load_memory_set()])
+    if cases is None:
+        return 1
     if not args.all:
         from scripts.run_house_eval import stratified
 
@@ -195,6 +174,9 @@ async def main_async(args) -> int:
     print(format_verdict(house, facts, previous, args.floor))
     _write(out, args.label, house, facts)
     print(f"\n  written to {out}")
+    if args.split == "final":
+        record_final_run(args.label, args.reason, house["summary"])
+        print(f"  the final split has now been looked at {final_runs()} time(s) (eval/final_runs.jsonl)")
     return 0
 
 
@@ -206,26 +188,7 @@ def _write(out: Path, label: str, house: dict, facts: dict) -> None:
         "summary": house["summary"],
         "facts_score": facts.get("summary", {}).get("accuracy_pct"),
         "facts_summary": facts.get("summary"),
-        "cases": [
-            {
-                "test_id": r.case.test_id,
-                "file": r.case.file,
-                "question": r.case.question,
-                "reference": r.case.answer,
-                "answer": r.answer,
-                "form": round(r.register, 3),
-                "words": r.shape.words,
-                "opens_with_verdict": r.shape.opens_with_verdict,
-                "cites_a_clause": r.shape.cites_a_clause,
-                "hedges": r.shape.hedges,
-                "verdict": r.agreement.verdict if r.agreement else "",
-                "agreement_score": r.agreement.score if r.agreement else 0,
-                "note": r.agreement.note if r.agreement else "",
-                "confidence": r.confidence,
-                "needs_review": r.needs_review,
-            }
-            for r in house["results"]
-        ],
+        "cases": case_rows(house["results"]),
     }
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
 
@@ -240,7 +203,13 @@ def main() -> int:
     parser.add_argument("--compare", type=Path, default=None, help="a previous both_*.json")
     parser.add_argument("--floor", type=float, default=NOISE)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--split", choices=["dev", "final", "all"], default="dev", help="of the house set (eval/splits.py)"
+    )
+    parser.add_argument("--reason", default="", help="why the final split is being looked at (required for it)")
     args = parser.parse_args()
+    if args.split == "final" and not args.reason.strip():
+        parser.error("--split final needs --reason: every look at it is recorded (eval/final_runs.jsonl)")
     configure_logging()
     return llm.run(main_async(args))
 

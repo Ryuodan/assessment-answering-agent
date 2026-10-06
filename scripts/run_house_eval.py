@@ -3,6 +3,14 @@
     python -m scripts.run_house_eval --all
     python -m scripts.run_house_eval --set in-memory --sample 300
     python -m scripts.run_house_eval --sample 30 --out eval/results/house_baseline.json
+    python -m scripts.run_house_eval --all --split final --reason "confirming plan NNN"
+
+The house set (`--set held-out`) is split by questionnaire into `dev`, to tune
+against, and `final`, to confirm a change (eval/splits.py, plan 013). `--split`
+defaults to dev; every final run needs a reason and is recorded. Before
+anything is spent, the cases are checked for contamination
+(eval/contamination.py), and a case whose answering or judging failed is
+counted apart from the scores.
 
 `eval/run_eval.py` grades the facts set: is the answer right and complete.
 This grades the team's own answers: would they have written it. Two numbers
@@ -34,7 +42,6 @@ questionnaire rather than the first two.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import random
 import sys
@@ -46,16 +53,18 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src.config import PROJECT_ROOT, configure_logging
 from src import llm
+from eval import contamination
 from eval.house import (
-    HouseResult,
+    answer_cases,
+    case_rows,
     format_summary,
-    judge_agreement,
+    judge_cases,
     load_house_set,
     load_memory_set,
     nearest_in_memory,
-    register_score,
     summarise,
 )
+from eval.splits import final_runs, record_final_run, select
 
 RESULTS = PROJECT_ROOT / "eval" / "results"
 
@@ -96,22 +105,7 @@ def _write_raw(out: Path, label: str, results) -> None:
             {
                 "label": label,
                 "graded": False,
-                "cases": [
-                    {
-                        "test_id": r.case.test_id,
-                        "file": r.case.file,
-                        "question": r.case.question,
-                        "reference": r.case.answer,
-                        "answer": r.answer,
-                        "form": round(r.register, 3),
-                        "words": r.shape.words,
-                        "confidence": r.confidence,
-                        "needs_review": r.needs_review,
-                        "twin": r.twin,
-                        "found_own_answer": r.found_own_answer,
-                    }
-                    for r in results
-                ],
+                "cases": case_rows(results),
             },
             ensure_ascii=False,
             indent=1,
@@ -120,49 +114,20 @@ def _write_raw(out: Path, label: str, results) -> None:
     )
 
 
-def _own_entry_cited(case, produced, by_question: dict[str, str]) -> bool:
-    """Did the answer cite the memory entry for *this* question?
-
-    Matched on the question text rather than on an id, because the entry ids
-    were assigned by the import and the evaluation rows carry the
-    questionnaire's own numbering.
-    """
-    from src.models import SourceType
-
-    wanted = by_question.get(case.question.strip())
-    if not wanted:
-        return False
-    return any(item.source_type is SourceType.PRIOR_ANSWER and item.entry_id == wanted for item in produced.evidence)
-
-
-async def answer_and_score(cases, label: str, out: Path | None, memory_cases=None) -> None:
-    from src import answer_memory, service
+async def answer_and_score(cases, label: str, out: Path | None, memory_cases=None) -> dict:
+    from src import answer_memory
 
     # Computed before the answering, so a long run cannot lose it, and cheap:
     # one embedding pass over the questions on each side.
     print("Measuring how close the memory already is to each question…")
     twins = await nearest_in_memory(cases, memory_cases or [])
 
+    # Matched on the question text rather than on an id: the entry ids were
+    # assigned by the import, and the evaluation rows carry the questionnaire's own numbering.
     by_question = {entry.question.strip(): entry.entry_id for entry in answer_memory.entries(limit=100_000)}
 
     print(f"Answering {len(cases)} question(s) the team has already answered…")
-    answers = await service.answer_questions([c.as_question(i) for i, c in enumerate(cases)])
-
-    results = []
-    for case, produced, twin in zip(cases, answers, twins):
-        score, shape = register_score(case, produced.answer)
-        results.append(
-            HouseResult(
-                case=case,
-                answer=produced.answer,
-                register=score,
-                shape=shape,
-                confidence=produced.confidence,
-                needs_review=produced.needs_review,
-                twin=twin,
-                found_own_answer=_own_entry_cited(case, produced, by_question),
-            )
-        )
+    results = await answer_cases(cases, twins, by_question)
 
     # Written before the judging, not after. Answering is the minutes and the
     # money; judging is neither. The first run of this harness lost thirty
@@ -173,9 +138,7 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
         print(f"  answers saved to {out} (before judging, so a judge failure costs nothing)")
 
     print("Judging agreement against the team's own answers…")
-    verdicts = await asyncio.gather(*(judge_agreement(r.case, r.answer) for r in results))
-    for result, verdict in zip(results, verdicts):
-        result.agreement = verdict
+    await judge_cases(results)
 
     summary = summarise(results)
     print()
@@ -204,28 +167,7 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
                 {
                     "label": label,
                     "summary": summary,
-                    "cases": [
-                        {
-                            "test_id": r.case.test_id,
-                            "file": r.case.file,
-                            "question": r.case.question,
-                            "reference": r.case.answer,
-                            "answer": r.answer,
-                            "form": round(r.register, 3),
-                            "words": r.shape.words,
-                            "opens_with_verdict": r.shape.opens_with_verdict,
-                            "cites_a_clause": r.shape.cites_a_clause,
-                            "hedges": r.shape.hedges,
-                            "verdict": r.agreement.verdict if r.agreement else "",
-                            "agreement_score": r.agreement.score if r.agreement else 0,
-                            "note": r.agreement.note if r.agreement else "",
-                            "confidence": r.confidence,
-                            "needs_review": r.needs_review,
-                            "twin": r.twin,
-                            "found_own_answer": r.found_own_answer,
-                        }
-                        for r in results
-                    ],
+                    "cases": case_rows(results),
                 },
                 ensure_ascii=False,
                 indent=1,
@@ -233,6 +175,7 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
             encoding="utf-8",
         )
         print(f"\n  written to {out}")
+    return summary
 
 
 def main() -> int:
@@ -249,11 +192,23 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--label", default="current")
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--split",
+        choices=["dev", "final", "all"],
+        default="dev",
+        help="of the house set: dev to tune against (default), final to confirm a change (eval/splits.py)",
+    )
+    parser.add_argument("--reason", default="", help="why the final split is being looked at (required for it)")
     args = parser.parse_args()
+    if args.split == "final" and not args.reason.strip():
+        parser.error("--split final needs --reason: every look at it is recorded (eval/final_runs.jsonl)")
 
     configure_logging()
     load, description = SETS[args.which]
     cases = load()
+    if args.which == "held-out":
+        cases = select(cases, args.split)
+        description += f"; the {args.split} split"
     chosen = cases if args.all else stratified(cases, args.sample, args.seed)
     # The memory's questions are the comparison set either way: for the
     # held-out run they say how much the memory already knows about each
@@ -266,7 +221,15 @@ def main() -> int:
     )
     if args.which == "in-memory":
         print("  Reproduction, not generalisation: every answer is already in the corpus.")
-    llm.run(answer_and_score(chosen, args.label, args.out, memory_cases))
+    # The memory set is the memory, so only the house set is checked against it.
+    remembered = [m.question for m in memory_cases] if args.which == "held-out" else None
+    chosen = contamination.screen(chosen, remembered)
+    if chosen is None:
+        return 1
+    summary = llm.run(answer_and_score(chosen, args.label, args.out, memory_cases))
+    if args.which == "held-out" and args.split == "final":
+        record_final_run(args.label, args.reason, summary)
+        print(f"\n  the final split has now been looked at {final_runs()} time(s) (eval/final_runs.jsonl)")
     return 0
 
 

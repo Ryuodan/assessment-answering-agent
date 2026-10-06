@@ -10,7 +10,7 @@ a plan number without a file has not been written yet.
 | M3 Architecture and invariants | layers chosen for this domain, import rules and library ownership in `arch`, one error hierarchy, structured logs, validated boundaries | [003](completed/003-layers.md), [004](completed/004-error-hierarchy.md), [005](completed/005-structured-logging.md), [006](completed/006-test-isolation.md), [007](completed/007-validated-boundaries.md) | done 2026-10-06 |
 | M4 README reorganised | the README's design history moved into `docs/` (decisions, design notes, measurements) and the README cut to an introduction | [009](completed/009-readme-reorganised.md) | done 2026-10-06 |
 | M5 Legible system | request IDs in logs and errors, diagnostic CLI commands, browser tests for the main flows | request IDs: [005](completed/005-structured-logging.md); [010](completed/010-diagnostics-cli.md), [011](completed/011-browser-tests.md) | done 2026-10-06 |
-| M6 Trustworthy evaluation | dev and held-out splits, noise measured first, contamination test, item-by-item comparison (TD-014) | not numbered | planned |
+| M6 Trustworthy evaluation | dev and held-out splits, noise measured first, contamination test, item-by-item comparison (TD-014) | [013](completed/013-evaluation-method.md), 014 | active |
 
 A garbage-collection round, as its own plan, follows each milestone or about
 40 commits, whichever comes first.

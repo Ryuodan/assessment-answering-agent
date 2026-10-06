@@ -108,6 +108,47 @@ number to move, the facts set is a floor that must not fall. A change that
 improves one while dropping the other has traded correctness for brevity, and
 the runner says so rather than leaving it to be discovered later.
 
+## Dev and final, failures, and comparing runs
+
+*Added 2026-10-06 by plan 013, after the text above was written.*
+
+The 135 held-out pairs are now split once more, by questionnaire. Three of the
+five questionnaires (82 cases) are `dev`, to tune against. The other two (53)
+are `final`, to confirm a change. `eval/splits.json` names them by a hash of
+their file names. Every run of the final split needs `--reason`, and is
+appended to `eval/final_runs.jsonl`, so how often it has been looked at is
+on record. All five were tuned against before this split existed, so `final`
+is held out from that day on, not unseen (TD-014).
+
+```bash
+python -m scripts.run_house_eval --all                                        # the dev split
+python -m scripts.run_house_eval --all --split final --reason "confirming X"  # recorded
+python -m scripts.compare_runs eval/results/a.json eval/results/b.json --noise eval/results/noise_baseline.json
+python -m scripts.measure_noise --repeats 3 --label baseline                   # real model calls
+uv run poe eval-contamination
+```
+
+Before any model call, each runner checks the cases for **contamination**. It
+looks for 10 consecutive words of a question or a reference answer anywhere
+in `src/`, and for a question that is, normalised, already a question in the
+answer memory. A leak stops the run unless it is recorded in `KNOWN` in
+`eval/contamination.py`, against a tech-debt item. A recorded leak's case is
+left out and the run says so. The first check found one: TD-033.
+
+A question that failed to be answered, or whose judge failed, is an
+**infrastructure failure**, not an answer. It is left out of every number and
+counted on its own line. Before this plan, a failed answer was judged as
+"(no answer)" and scored as a refusal, and a failed judge was filed as
+`unanswerable`. A run with more than 5% failures is marked NOT COMPARABLE:
+rate limits do not fail questions at random, so the cases that remain are a
+different sample.
+
+**Comparing two runs.** `scripts/compare_runs.py` compares runs case by case
+and lists which cases got better, which got worse, and which stayed the same.
+Given the noise file from `scripts/measure_noise.py`, it reports a move on a
+case that already varied between identical runs as within noise. The noise
+itself is measured in plan 014.
+
 ## The two measurements that matter
 
 ```bash

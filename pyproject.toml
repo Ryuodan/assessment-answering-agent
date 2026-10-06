@@ -168,3 +168,4 @@ grades = { cmd = "python -m harness.grades", help = "Quality grades per layer fo
 eval-status = { cmd = "python -m eval.vault status", help = "Sealed eval data: what is sealed, unlocked, changed" }
 eval-unlock = { cmd = "python -m eval.vault unlock", help = "Decrypt eval/sealed/ into eval/ (needs EVAL_DATA_KEY)" }
 eval-seal = { cmd = "python -m eval.vault seal", help = "Re-encrypt the eval plaintexts that changed" }
+eval-contamination = { cmd = "python -m eval.contamination", help = "No house-set item in src/ or in the answer memory (needs eval-unlock)" }

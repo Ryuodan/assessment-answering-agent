@@ -104,6 +104,14 @@ or docs and has not been verified by running anything.
 - **What:** read from the README, not verified by running anything: decisions such as "What moved it" and prompt changes were made after runs on the house set, which the README calls held out; there is no separate tuning split; no test checks that benchmark items stay out of prompts; run-to-run noise is measured in places (paired judge passes) but not as a standing procedure.
 - **Impact:** reported scores may overstate how the system does on an unseen questionnaire.
 - **Fix:** an evaluation plan: dev and held-out splits, noise measured first, contamination test, item-by-item comparison against the last kept version.
+- **Partly resolved** 2026-10-06 (Claude, plan 013), measured where noted:
+  - The house set is split by questionnaire into `dev` (82 cases) and `final` (53). Every final run needs a reason and is recorded in `eval/final_runs.jsonl`.
+  - Both runners check contamination before spending anything. This found one leak (TD-033).
+  - Infrastructure failures are counted apart from scores.
+  - `scripts/compare_runs.py` compares two runs case by case.
+  - `scripts/measure_noise.py` measures noise (plan 014).
+
+  Not resolved: all five questionnaires were tuned against before the split existed, so `final` is held out from 2026-10-06 on, not unseen. A clean final split needs questionnaires nobody has scored against yet, which only the team can supply.
 
 ## TD-015: Organisation- and machine-specific defaults in the code
 
@@ -226,3 +234,11 @@ or docs and has not been verified by running anything.
 - **What:** read 2026-10-06 (Claude, plan 008): `documents.load_url_text` asks Docling to fetch and convert a document by URL (`docling_client.convert_url`). No route, tool, script or test calls it; every document enters as an uploaded file.
 - **Impact:** about 40 lines that read as a feature the product does not offer. If it were wired up without care, the server's Docling would fetch whatever URL a person gave it.
 - **Fix (needs a decision):** delete both functions, or keep them for a planned "add a policy from a link" feature and say so in `documents.py`. Recommended: delete; the git history keeps them.
+
+## TD-033: A team reference answer is the drafting prompt's style example
+
+- **What:** found 2026-10-06 (Claude, plan 013) by the contamination check. `src/prompts.py`, in the drafting rules ("Write the position as a fact about us: ..."), gives as its example a sentence that is, for 10 of its 11 words, the security team's own answer to house-set question HOUSE-096, which is in the final split. The line was added in commit f76ceab (2026-09-10), and the same rule cites a measurement "on the held-out questionnaires".
+- **Impact:** for that one question, the drafter is shown the expected answer, so its score measures copying. Answers to other questions are unaffected, except for whatever the example teaches about style.
+- **For now:** HOUSE-096 is in `KNOWN` in `eval/contamination.py`, so every runner leaves it out of the score and says so. Any other leak stops a run.
+- **Fix (needs a decision):** replace the example with a sentence that is in no benchmark. This is a prompt change, so it changes answers in principle; the effect should be checked with `scripts/compare_runs.py` against a dev run. Recommended: replace it, then remove the `KNOWN` entry.
+

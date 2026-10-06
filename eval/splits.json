@@ -1,0 +1,5 @@
+{
+  "about": "House-set questionnaires by sha256(file name)[:12]; see eval/splits.py. dev: tune against it. final: confirm a change, with a reason, every look recorded in eval/final_runs.jsonl. Chosen 2026-10-06 (plan 013) by case count: dev 82 cases, final 53. All five were tuned against before this split existed (TD-014).",
+  "dev": ["2b0a7bd04b92", "a563769f5ccd", "2b984e9def14"],
+  "final": ["2743f7688c4f", "e3d74a145f15"]
+}

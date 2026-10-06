@@ -427,9 +427,11 @@ CANDIDATE (what the system produced)
 {candidate}"""
 
 
-async def judge_agreement(case: HouseCase, answer: str) -> Agreement:
+async def judge_agreement(case: HouseCase, answer: str) -> Agreement | None:
     """Compare one answer with the team's. Contained: a judge that fails is a
-    missing grade, not a lost run.
+    missing grade (None), not a lost run -- and not a verdict either. It used to
+    come back as `unanswerable`, which silently moved an infrastructure failure
+    into the count of cases whose reference is not an answer (plan 013).
 
     The answering half of this harness costs a model call per question and
     several minutes; the judging half costs a fraction of that. Letting one
@@ -456,7 +458,7 @@ async def judge_agreement(case: HouseCase, answer: str) -> Agreement:
         )
     except Exception as failed:  # noqa: BLE001 - one ungraded case is not a failed run
         logger.warning("Judge failed on %s: %s", case.test_id, failed)
-        return Agreement(verdict="unanswerable", score=3, note=f"not graded: {failed}"[:200])
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +479,11 @@ class HouseResult:
     twin: float = 0.0
     """How close the nearest question in the answer memory is. See `NEAR_TWIN`."""
 
+    failure: str = ""
+    """Why this case has no score, when the reason is the machinery rather than
+    the answer: `answering: <error>` or `judging: failed`. Such a case is left
+    out of every score and counted on its own line (plan 013)."""
+
     found_own_answer: bool = False
     """Whether the answer cited the memory entry for this very question.
 
@@ -486,8 +493,98 @@ class HouseResult:
     """
 
 
+COMPARABLE_FAILURES = 0.05
+"""Above this share of infrastructure failures a run is not compared with another:
+which cases failed is not random (rate limits hit the longest answers), so the
+cases left are a different sample."""
+
+
+async def run_cases(
+    cases: list[HouseCase], twins: list[float] | None = None, own_entries: dict[str, str] | None = None
+) -> list[HouseResult]:
+    """Answer every case, judge the ones that were answered, and mark what failed.
+
+    The one place both runners (`scripts.run_house_eval`, `scripts.run_both_evals`)
+    and the noise measurement (`scripts.measure_noise`) get their results from.
+    A runner that saves the answers before judging calls the two halves itself.
+    """
+    results = await answer_cases(cases, twins, own_entries)
+    await judge_cases(results)
+    return results
+
+
+async def answer_cases(
+    cases: list[HouseCase], twins: list[float] | None = None, own_entries: dict[str, str] | None = None
+) -> list[HouseResult]:
+    """The system's answer to every case; a question that failed is marked, not scored."""
+    from src import service
+    from src.models import SourceType
+
+    answers = await service.answer_questions([c.as_question(i) for i, c in enumerate(cases)])
+    results = []
+    for index, (case, produced) in enumerate(zip(cases, answers)):
+        score, shape = register_score(case, produced.answer)
+        wanted = (own_entries or {}).get(case.question.strip())
+        results.append(
+            HouseResult(
+                case=case,
+                answer=produced.answer,
+                register=score,
+                shape=shape,
+                confidence=produced.confidence,
+                needs_review=produced.needs_review,
+                twin=twins[index] if twins else 0.0,
+                failure=f"answering: {produced.error}"[:200] if produced.error else "",
+                found_own_answer=bool(wanted)
+                and any(
+                    item.source_type is SourceType.PRIOR_ANSWER and item.entry_id == wanted
+                    for item in produced.evidence
+                ),
+            )
+        )
+    return results
+
+
+async def judge_cases(results: list[HouseResult]) -> None:
+    """Judge every answered case against the team's answer; a judge that fails is marked."""
+    to_judge = [r for r in results if not r.failure]
+    for result, verdict in zip(to_judge, await asyncio.gather(*(judge_agreement(r.case, r.answer) for r in to_judge))):
+        result.agreement = verdict
+        if verdict is None:
+            result.failure = "judging: failed"
+
+
+def case_rows(results: list[HouseResult]) -> list[dict]:
+    """One JSON object per case, as every runner writes them."""
+    return [
+        {
+            "test_id": r.case.test_id,
+            "file": r.case.file,
+            "question": r.case.question,
+            "reference": r.case.answer,
+            "answer": r.answer,
+            "form": round(r.register, 3),
+            "words": r.shape.words,
+            "opens_with_verdict": r.shape.opens_with_verdict,
+            "cites_a_clause": r.shape.cites_a_clause,
+            "hedges": r.shape.hedges,
+            "verdict": r.agreement.verdict if r.agreement else "",
+            "agreement_score": r.agreement.score if r.agreement else None,
+            "note": r.agreement.note if r.agreement else "",
+            "failure": r.failure,
+            "confidence": r.confidence,
+            "needs_review": r.needs_review,
+            "twin": r.twin,
+            "found_own_answer": r.found_own_answer,
+        }
+        for r in results
+    ]
+
+
 def summarise(results: list[HouseResult]) -> dict:
-    graded = [r for r in results if not (r.agreement and r.agreement.verdict == "unanswerable")]
+    failed = [r for r in results if r.failure]
+    scored = [r for r in results if not r.failure]
+    graded = [r for r in scored if not (r.agreement and r.agreement.verdict == "unanswerable")]
     verdicts: dict[str, int] = {}
     for r in graded:
         if r.agreement:
@@ -498,7 +595,12 @@ def summarise(results: list[HouseResult]) -> dict:
     return {
         "cases": len(results),
         "graded": len(graded),
-        "excluded": len(results) - len(graded),
+        "excluded": len(scored) - len(graded),
+        "failures": {
+            "answering": sum(1 for r in failed if r.failure.startswith("answering")),
+            "judging": sum(1 for r in failed if r.failure.startswith("judging")),
+        },
+        "comparable": len(failed) <= COMPARABLE_FAILURES * len(results),
         "form": round(100 * statistics.mean([r.register for r in graded]), 1) if graded else 0.0,
         "agreement": round(100 * statistics.mean([r.agreement.score for r in graded if r.agreement]) / 5, 1)
         if any(r.agreement for r in graded)
@@ -548,6 +650,21 @@ def _split(results: list[HouseResult], keep) -> dict:
     }
 
 
+def _failure_lines(summary: dict) -> list[str]:
+    failures = summary.get("failures") or {}
+    if not any(failures.values()):
+        return []
+    lines = [
+        f"  infrastructure failures, left out of every number below: "
+        f"{failures.get('answering', 0)} answering, {failures.get('judging', 0)} judging"
+    ]
+    if not summary.get("comparable", True):
+        lines.append(
+            f"  ** NOT COMPARABLE ** more than {COMPARABLE_FAILURES:.0%} of cases failed; rerun before comparing"
+        )
+    return lines
+
+
 def format_summary(label: str, summary: dict) -> str:
     lines = [
         "=" * 74,
@@ -555,6 +672,7 @@ def format_summary(label: str, summary: dict) -> str:
         "=" * 74,
         f"  {summary['graded']} cases graded"
         + (f" ({summary['excluded']} excluded as unanswerable)" if summary["excluded"] else ""),
+        *_failure_lines(summary),
         "",
         f"  agreement with the team's answer   {summary['agreement']:5.1f}%",
         f"  form (verdict first, no hedging)   {summary['form']:5.1f}%",
