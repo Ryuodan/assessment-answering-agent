@@ -254,26 +254,6 @@ async def load_text(path: str | Path) -> str:
     return text
 
 
-async def load_url_text(url: str) -> str:
-    """Extract the text of a document Docling fetches by URL.
-
-    Requires Docling — there is no local fallback for a remote source.
-    """
-    if not settings.docling_enabled:
-        raise UnsupportedDocumentError("DOCLING_BASE_URL is not set, so URLs cannot be converted.")
-
-    try:
-        text = (await docling_client.convert_url(url)).strip()
-    except DoclingError as exc:
-        raise UnsupportedDocumentError(f"Could not convert '{url}': {exc}") from exc
-
-    if not text:
-        raise UnsupportedDocumentError(f"No text found at '{url}'.")
-
-    logger.info("Loaded %s (%d characters)", url, len(text))
-    return text
-
-
 def load_text_local(path: str | Path) -> str:
     """Extract text without Docling, using pdfplumber / python-docx."""
     path = Path(path)

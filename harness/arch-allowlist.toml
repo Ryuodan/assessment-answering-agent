@@ -84,7 +84,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/documents.py"
-max_lines = 424
+max_lines = 404
 debt = "TD-006"
 
 [[size]]

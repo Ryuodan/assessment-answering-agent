@@ -10,7 +10,6 @@ Conversion of a local file is submitted asynchronously and polled:
     POST /v1/convert/file/async   multipart upload, returns a task id
     GET  /v1/status/poll/{id}     task state
     GET  /v1/result/{id}          the converted document
-    POST /v1/convert/source       JSON body naming a remote URL (synchronous)
 
 The synchronous file endpoint is deliberately unused. docling-serve caps it at
 `DOCLING_SERVE_MAX_SYNC_WAIT` seconds — 300 by default — and answers HTTP 504
@@ -35,7 +34,6 @@ logger = get_logger(__name__)
 
 FILE_ENDPOINT = "/v1/convert/file"
 FILE_ASYNC_ENDPOINT = "/v1/convert/file/async"
-SOURCE_ENDPOINT = "/v1/convert/source"
 
 # Async task states that mean the job is no longer moving.
 _TERMINAL_STATUSES = {"success", "partial_success", "failure"}
@@ -50,17 +48,6 @@ _OK_STATUSES = {"success", "partial_success"}
 
 class DoclingError(RuntimeError):
     """Docling was unreachable, errored, or returned no Markdown."""
-
-
-def _conversion_options() -> dict[str, Any]:
-    """The options block shared by both endpoints (JSON-shaped)."""
-    return {
-        "to_formats": ["md"],
-        "image_export_mode": settings.docling_image_export_mode,
-        "do_ocr": settings.docling_do_ocr,
-        "do_pdf_heading_hierarchy": settings.docling_heading_hierarchy,
-        "md_page_break_placeholder": settings.docling_page_break_placeholder,
-    }
 
 
 async def convert_file(path: Path, *, do_ocr: bool | None = None) -> str:
@@ -151,13 +138,6 @@ async def _await_task(submitted: dict, name: str) -> dict:
         raise DoclingError(f"Docling failed to convert '{name}': {task.task_meta or task.model_dump()}")
 
     return await _get(f"/v1/result/{task_id}")
-
-
-async def convert_url(url: str) -> str:
-    """Convert a document Docling fetches itself, by URL."""
-    body = {"sources": [{"kind": "http", "url": url}], "options": _conversion_options()}
-    payload = await _post(SOURCE_ENDPOINT, json=body)
-    return _markdown(payload, url)
 
 
 async def _get(endpoint: str) -> dict:

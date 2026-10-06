@@ -246,6 +246,8 @@ or docs and has not been verified by running anything.
 - **What:** read 2026-10-06 (Claude, plan 008): `documents.load_url_text` asks Docling to fetch and convert a document by URL (`docling_client.convert_url`). No route, tool, script or test calls it; every document enters as an uploaded file.
 - **Impact:** about 40 lines that read as a feature the product does not offer. If it were wired up without care, the server's Docling would fetch whatever URL a person gave it.
 - **Fix (needs a decision):** delete both functions, or keep them for a planned "add a policy from a link" feature and say so in `documents.py`. Recommended: delete; the git history keeps them.
+- **Decision** 2026-10-06, by the user: remove it. File uploads to the knowledge base were never affected; they read the saved file (`service.ingest` -> `documents.load_text`).
+- **Resolved** 2026-10-06 (Claude): `documents.load_url_text`, `docling_client.convert_url`, its endpoint constant and `_conversion_options`, which only it used (found by `poe gc` after the first deletion), are deleted (40 lines); `documents.py`'s size ceiling was lowered from 424 to 404.
 
 ## TD-033: A team reference answer is the drafting prompt's style example
 
