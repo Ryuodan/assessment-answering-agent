@@ -83,8 +83,14 @@ key-shaped strings from every line. `src/web.py` assigns the ID (or keeps a
 well-formed `X-Request-ID` from a proxy), returns it in the `X-Request-ID`
 header and in every error body, and logs each request once as `http.request`
 with its route template. To follow a failure: take `request_id` from the error
-the person saw and search the log for it. Modules not yet converted
+the person saw and run `python -m src.cli inspect request <id>`, which prints
+that request's lines from `SERVER_LOG_PATH`. Modules not yet converted
 (TD-028) still log prose, but their lines carry the ID too.
+
+`python -m src.cli doctor` checks an installation without changing it: the
+interpreter, the env file, whether the secrets are set (never their values),
+storage and the database, and with `--network` one request to each remote
+service. Each failure prints a FIX line (`src/diagnostics.py`, plan 010).
 
 ## The browser
 

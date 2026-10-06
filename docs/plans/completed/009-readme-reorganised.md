@@ -74,7 +74,7 @@ This is D-006, decided by the user.
   - Commands use `uv run python -m` (D-008), and the Tests section runs the gate.
   - TD-025: the evaluation document says 135, re-measured on the unlocked file (135 cases, 5 questionnaires; only counts were read).
 - 2026-10-06: `poe gc` reported three stale paths, all inside plan records: the alternative not taken here, and the README's old spellings quoted in plan 008. Plans are records of the tree as it was, so `gc` no longer reads them for stale paths.
-- 2026-10-06: `uv run poe check` passes (1,782 tests). Plan complete; milestone M4 done.
+- 2026-10-06: `uv run poe check` passes (1,783 tests). Plan complete; milestone M4 done.
 
 ## Decision log
 

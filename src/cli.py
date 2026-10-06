@@ -4,15 +4,18 @@ python -m src.cli guidelines  policies/*.pdf
 python -m src.cli answers     completed/2025-vendor-assessment.docx
 python -m src.cli answer      new-assessment.docx --language ar --out filled.json
 python -m src.cli stats
+python -m src.cli doctor [--network] [--json]
+python -m src.cli inspect request <request-id>
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from src import answer_memory, llm, service
+from src import answer_memory, diagnostics, llm, service
 from src.config import configure_logging, settings
 from src.models import SourceType
 
@@ -84,6 +87,38 @@ def _stats(team: str) -> int:
     return 0
 
 
+def _doctor(network: bool, as_json: bool) -> int:
+    checks = diagnostics.doctor(with_network=network)
+    for check in checks:
+        if as_json:
+            print(json.dumps(check.as_dict(), ensure_ascii=False))
+            continue
+        print(f"{check.status.upper():5} {check.name:30} {check.detail}")
+        if check.fix and check.status != diagnostics.OK:
+            print(f"      FIX: {check.fix}")
+    failed = sum(check.status == diagnostics.FAIL for check in checks)
+    if not as_json:
+        warned = sum(check.status == diagnostics.WARN for check in checks)
+        print(f"\ndoctor: {len(checks)} checks, {failed} failed, {warned} to look at")
+    return 1 if failed else 0
+
+
+def _inspect_request(request_id: str, log: str | None) -> int:
+    path = Path(log) if log else None
+    try:
+        lines = list(diagnostics.request_lines(request_id, path))
+    except FileNotFoundError as error:
+        print(f"no log at {error.filename}", file=sys.stderr)
+        print("  FIX: pass --log <file>, or set SERVER_LOG_PATH to where the server's output goes", file=sys.stderr)
+        return 1
+    if not lines:
+        print(f"no line carries request_id={request_id}", file=sys.stderr)
+        print("  FIX: check the ID (it is in the error response and its X-Request-ID header)", file=sys.stderr)
+        return 1
+    print("\n".join(lines))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="assessment-answer", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -116,6 +151,16 @@ def build_parser() -> argparse.ArgumentParser:
             "--team", default=settings.default_team, help="the team whose knowledge base this is (default: %(default)s)"
         )
 
+    # Read-only, and about the installation rather than a team's work, so without --team.
+    doctor = subparsers.add_parser("doctor", help="check that this installation can run (read-only)")
+    doctor.add_argument("--network", action="store_true", help="also make one GET to each configured service")
+    doctor.add_argument("--json", action="store_true", help="one JSON object per check")
+    inspect = subparsers.add_parser("inspect", help="look at what happened (read-only)")
+    what = inspect.add_subparsers(dest="what", required=True)
+    request = what.add_parser("request", help="the server log's lines for one request ID")
+    request.add_argument("request_id")
+    request.add_argument("--log", default=None, help="the log file (default: SERVER_LOG_PATH)")
+
     return parser
 
 
@@ -134,10 +179,10 @@ def _use_utf8_console() -> None:
             reconfigure(encoding="utf-8", errors="replace")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     _use_utf8_console()
     configure_logging()
-    args = build_parser().parse_args()
+    args = build_parser().parse_args(argv)
 
     if args.command == "guidelines":
         return llm.run(_ingest(args.paths, SourceType.GUIDELINE, args.team))
@@ -147,6 +192,10 @@ def main() -> int:
         return llm.run(_answer(args.path, args.language, args.out, args.team))
     if args.command == "stats":
         return _stats(args.team)
+    if args.command == "doctor":
+        return _doctor(args.network, args.json)
+    if args.command == "inspect":
+        return _inspect_request(args.request_id, args.log)
 
     service.clear_knowledge(args.team)
     print(f"Knowledge base cleared for {args.team}.")

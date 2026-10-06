@@ -93,6 +93,7 @@ def isolated_storage(tmp_path, monkeypatch):
     # The organisation profile was read from data/organisation.json by every test
     # that drafted an answer or opened the preferences page (TD-023).
     monkeypatch.setattr(settings, "organisation_path", tmp_path / "organisation.json")
+    monkeypatch.setattr(settings, "server_log_path", tmp_path / "server.log")
     unredirected = paths_inside_project(settings)
     if unredirected:
         pytest.fail(

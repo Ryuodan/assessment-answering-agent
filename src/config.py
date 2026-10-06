@@ -39,6 +39,16 @@ def _env_file() -> Path | None:
     return Path(named) if named.strip() else None
 
 
+def env_file_in_use() -> Path | None:
+    """The env file this process reads its settings from, or None (for `doctor`)."""
+    return _env_file()
+
+
+def project_venv() -> Path:
+    """Where `uv sync` builds the project's environment (for `doctor`)."""
+    return PROJECT_ROOT / ".venv"
+
+
 class Settings(BaseSettings):
     """Runtime configuration, populated from environment variables / `.env`."""
 
@@ -362,6 +372,8 @@ class Settings(BaseSettings):
     # Who this deployment answers on behalf of (src/organisation.py): a JSON file
     # an administrator edits; when it is missing, the built-in profile is used.
     organisation_path: Path = PROJECT_ROOT / "data" / "organisation.json"
+    # Where serve.sh writes the server's output; `python -m src.cli inspect request` reads it.
+    server_log_path: Path = PROJECT_ROOT / "logs" / "server.log"
 
     # Members to create on a FIRST run only, comma-separated. Access is
     # administered on the admin page once the system is running -- this exists
@@ -410,7 +422,15 @@ class Settings(BaseSettings):
         """`LOG_LEVEL=info` worked before the vocabulary was enforced, so case is not an error."""
         return value.upper() if isinstance(value, str) else value
 
-    @field_validator("chroma_dir", "upload_dir", "filled_dir", "extracted_text_dir", "db_path", "organisation_path")
+    @field_validator(
+        "chroma_dir",
+        "upload_dir",
+        "filled_dir",
+        "extracted_text_dir",
+        "db_path",
+        "organisation_path",
+        "server_log_path",
+    )
     @classmethod
     def _anchor_to_project(cls, value: Path) -> Path:
         """Resolve a relative path against the project, not the process's cwd.

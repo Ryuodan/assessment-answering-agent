@@ -30,11 +30,12 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
 
-- **Modules:** `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.organisation`, `src.rerank`, `src.store`, `src.forms.*`
+- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.organisation`, `src.rerank`, `src.store`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_huggingface`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
 | Module | What it is |
 |---|---|
+| `src/diagnostics.py` | Read-only diagnostics: can this installation run, and what happened to a request. |
 | `src/docling_client.py` | Client for the Docling conversion service. |
 | `src/documents.py` | PDF and DOCX text extraction. |
 | `src/embeddings.py` | Embeddings client. |
