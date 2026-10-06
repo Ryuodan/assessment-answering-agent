@@ -10,7 +10,7 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.verification`
+- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.roles`, `src.verification`
 
 | Module | What it is |
 |---|---|
@@ -24,6 +24,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 | `src/models.py` | Domain models shared by ingestion, retrieval, the graph and the API. |
 | `src/progress.py` | How far along a run is, for anything watching it. |
 | `src/prompts.py` | All prompts, in one place. |
+| `src/roles.py` | The roles a person can have, and what each may do beyond answering. |
 | `src/verification.py` | Checks applied to a drafted answer before it is returned. |
 
 ## 2. integrations
@@ -61,7 +62,7 @@ Everything that talks to something outside the process: model providers, the emb
 
 What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits.
 
-- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.preferences`, `src.runs`, `src.storage`
+- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.preferences`, `src.products`, `src.runs`, `src.storage`
 
 | Module | What it is |
 |---|---|
@@ -73,6 +74,7 @@ What the system remembers about people and their work: identity, events, runs, q
 | `src/identity.py` | Who is using the system, which team's work they see, and who may say so. |
 | `src/memory.py` | The answer memory: what this organisation has actually said, and which of it still stands. |
 | `src/preferences.py` | How one person wants answers worded: preferences, and skills. |
+| `src/products.py` | A team's products: each will have a knowledge base and an answer memory of its own. |
 | `src/runs.py` | Answered runs, kept so they can be looked at again. |
 | `src/storage.py` | Keeping each person's stored files within a limit, oldest work first. |
 
@@ -123,6 +125,8 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/__init__.py` | HTTP routes grouped by area, included by `src/api.py` (plan 019, TD-006). |
 | `src/routes/admin.py` | The Access panel's routes: people, teams and access codes. Administrators only. |
 | `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
+| `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |
+| `src/routes/products.py` | Products: everyone on a team may list them; its leads and administrators change them (plan 020). |
 | `src/web.py` | What every HTTP request shares: its ID, its log line, and how errors answer. |
 
 ## Owned by one module

@@ -81,7 +81,7 @@ def admin_add_user(body: AddUserRequest, admin: User = Depends(current_admin)) -
 @router.patch("/api/admin/users/{email}")
 def admin_update_user(email: str, body: UpdateUserRequest, admin: User = Depends(current_admin)) -> dict[str, Any]:
     address = identity.normalise(email)
-    if body.role == identity.MEMBER or body.disabled:
+    if (body.role is not None and body.role != identity.ADMIN) or body.disabled:
         _refuse_last_admin(address)
     user = identity.update_user(address, team_id=body.team, role=body.role, disabled=body.disabled)
     events.record(

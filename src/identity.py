@@ -34,15 +34,12 @@ from src.logs import get_logger
 from src import access_codes, credentials, store
 from src.config import settings
 from src.errors import AccessDenied as AccessDenied, NotAllowed as NotAllowed
+from src.roles import ADMIN as ADMIN, LEAD as LEAD, MEMBER as MEMBER, ROLES as ROLES
 
 logger = get_logger(__name__)
 
 SESSION_COOKIE = "session"
 LOCAL_EMAIL = "local@localhost"
-
-MEMBER = "member"
-ADMIN = "admin"
-ROLES = (MEMBER, ADMIN)
 
 
 @dataclass(frozen=True)

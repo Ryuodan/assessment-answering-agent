@@ -237,3 +237,43 @@ a plan relies on it.
   escaped it (shown by running the old code against the new test). HTTP
   parameters checked by hand keep their own error codes.
 - **Date:** 2026-10-06. **Status:** accepted. **Decided by:** Claude, within plan 007; the user asked for M3 to be finished.
+
+## D-016: products scope a team's knowledge and memory, one level down
+
+- **Context:** the security team answers for several products (Availo, Msegat,
+  Ole5, RICH, SouqT2) and needs knowledge and answers per product, on top of
+  what the whole team shares (plan 018).
+- **Decision:**
+  - Products belong to a team.
+  - Each product will have its own Chroma collection beside the team's shared
+    one, which is not touched. "General" keeps today's code path exactly. A
+    product's questionnaire searches shared and product material and merges
+    the results by score.
+  - For that product, its own material wins over shared material. The memory
+    compares answers only within one scope.
+  - Approved answers go to the questionnaire's product.
+  - The team's leads and administrators manage products.
+  - Deleting a product takes its documents and answers, behind a typed
+    "confirm"; questionnaires that used it become General.
+  - `SEED_PRODUCTS` applies once.
+- **Consequences:** no stored vector is migrated, and deleting a product drops
+  one collection. The routes and records that products need go into new modules
+  (`src/products.py`, `src/routes/`), because the modules they touch are at
+  their size ceilings.
+- **Date:** 2026-10-06. **Status:** accepted. **Decided by:** the user (decisions 1-8 of plan 018, with two changes).
+
+## D-017: a team lead role manages the team's products
+
+- **Context:** the user wanted people inside a team, not only administrators,
+  to manage that team's products.
+- **Decision:**
+  - A third role, `lead`, shown as "Team lead", sits between member and
+    administrator.
+  - A lead may add, edit and delete their own team's products, and nothing an
+    administrator does besides.
+  - Roles live in `src/roles.py`. Demoting the last administrator to any other
+    role is refused; before this it was refused only for "member".
+- **Consequences:** the Access panel offers the role. `roles.manages_products` is
+  the one rule the routes and pages check.
+- **Date:** 2026-10-06. **Status:** accepted. **Decided by:** the user (the role); Claude (its name, which the user left open).
+

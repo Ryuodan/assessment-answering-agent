@@ -19,7 +19,10 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `Forbidden` | 403 | `forbidden` | Signed in, but not allowed to do this. |
 | `AccessDenied` | 403 | `access_denied` | Sign-in was refused. The message is safe to show the person. |
 | `NotFound` | 404 | `not_found` | Absent -- or belonging to somebody else, which is deliberately the same answer. |
+| `ProductNotFound` | 404 | `product_not_found` | No such product in this team. |
 | `QuestionnaireNotFound` | 404 | `questionnaire_not_found` | No such questionnaire for this person: absent, or a colleague's (TD-026). |
+| `Conflict` | 409 | `conflict` | The request would clash with something that already exists, such as a name in use. |
+| `ProductNameTaken` | 409 | `product_name_taken` | The team already has a product of that name, whatever its case. |
 | `UnsupportedFile` | 415 | `unsupported_file` | A file of a type this cannot take. |
 | `Unprocessable` | 422 | `unprocessable` | Understood, but cannot be used: an unreadable file, nothing to export. |
 | `FormatError` | 422 | `questionnaire_unreadable` | The file is not a workbook this can read. The message is safe to show. |
@@ -35,6 +38,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `admin_required` | 403 | `Forbidden` | `src.routes.auth.current_admin` |
 | `assistant_unconfigured` | 503 | `Unavailable` | `src.api.say_to_assistant`, `src.api.say_with_a_file` |
 | `authority_invalid` | 400 | `Invalid` | `src.api.upload_guidelines` |
+| `confirmation_required` | 400 | `Invalid` | `src.products.delete` |
 | `conversation_not_found` | 404 | `NotFound` | `src.api._conversation` |
 | `document_not_found` | 404 | `NotFound` | `src.api._resolve_document` |
 | `document_path_invalid` | 400 | `Invalid` | `src.api._resolve_document` |
@@ -46,14 +50,19 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `no_files` | 400 | `Invalid` | `src.api._ingest_files` |
 | `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment` |
 | `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |
+| `other_team` | 403 | `Forbidden` | `src.routes.products._team` |
 | `password_from_environment` | 400 | `Invalid` | `src.routes.admin.admin_set_password` |
 | `preview_failed` | 422 | `Unprocessable` | `src.api.preview_document` |
+| `product_color_invalid` | 400 | `Invalid` | `src.products._color` |
+| `product_description_too_long` | 400 | `Invalid` | `src.products._description` |
+| `product_manager_required` | 403 | `Forbidden` | `src.routes.products._manager` |
+| `product_name_invalid` | 400 | `Invalid` | `src.products._name` |
 | `run_not_found` | 404 | `NotFound` | `src.api.get_run` |
 | `run_not_in_progress` | 404 | `NotFound` | `src.api.assessment_progress` |
 | `search_mode_unknown` | 422 | `Unprocessable` | `src.api.search_knowledge` |
 | `skill_not_found` | 404 | `NotFound` | `src.api.copy_skill`, `src.api.edit_skill`, `src.api.remove_skill` |
 | `source_not_found` | 404 | `NotFound` | `src.api.remove_source` |
-| `team_not_found` | 404 | `NotFound` | `src.routes.admin.admin_rotate_code` |
+| `team_not_found` | 404 | `NotFound` | `src.routes.admin.admin_rotate_code`, `src.routes.products._team` |
 | `user_not_found` | 404 | `NotFound` | `src.routes.admin.admin_set_password` |
 
 ## From the framework

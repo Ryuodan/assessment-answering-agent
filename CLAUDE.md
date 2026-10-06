@@ -57,7 +57,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | `src/knowledge.py`, `chunking.py`, `documents.py`, `embeddings.py` | the knowledge base: conversion, chunks, vectors |
 | `src/answer_memory.py`, `memory.py` | approved answers, reused and checked for conflicts |
 | `src/forms/` | reading customer questionnaires, writing answers back |
-| `src/store.py`, `migrations.py`, `identity.py`, `batches.py`, `runs.py`, `conversations.py` | SQLite and its schema, users and teams, saved work |
+| `src/store.py`, `migrations.py`, `identity.py`, `roles.py`, `products.py`, `batches.py`, `runs.py`, `conversations.py` | SQLite and its schema, users, roles, teams and their products, saved work |
 | `src/config.py`, `models.py`, `llm.py`, `prompts.py` | settings, data models, the model client, every prompt |
 | `src/static/` | the browser pages |
 | `harness/` | the checks behind `poe` (not application code) |

@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Products — Assessment Answering</title>
+<link rel="stylesheet" href="static/cards.css" />
+<style>
+  /* The team's products (plan 020). Each will have a knowledge base and an
+     answer memory of its own beside the shared ones; this page names them.
+     Everyone on the team sees the list; its leads and administrators change it.
+     Tokens and the sign-in gate are shared with the other pages. */
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic", Roboto, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 26px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #9b6bff));
+    display: grid; place-items: center; color: var(--on-accent); font-weight: 700; font-size: 14px;
+  }
+  .brand-text h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .brand-text p { margin: 0; font-size: 12.5px; color: var(--ink-faint); }
+  .topbar .spacer { flex: 1; }
+  .topbar a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
+
+  main { max-width: 860px; margin: 0 auto; padding: 26px 24px 90px; }
+
+  button {
+    font: inherit; font-weight: 550;
+    background: var(--accent); color: var(--on-accent);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: 9px 15px; cursor: pointer;
+    transition: filter .15s, background .15s, border-color .15s, color .15s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  button.ghost { background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong); }
+  button.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); filter: none; }
+  button.quiet {
+    background: none; border: none; color: var(--ink-faint);
+    padding: 3px 8px; font-size: 12.5px; border-radius: 6px;
+  }
+  button.quiet:hover { color: var(--accent); background: var(--accent-soft); filter: none; }
+  button.quiet.danger:hover { color: var(--err); background: var(--err-soft); }
+  button.danger-solid { background: var(--err); color: #fff; }
+
+  input[type="text"], textarea {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+    padding: 9px 12px; width: 100%;
+  }
+  input[type="color"] {
+    width: 44px; height: 38px; padding: 2px; border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm); background: var(--surface); cursor: pointer;
+  }
+  textarea { resize: vertical; min-height: 60px; line-height: 1.55; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 18px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { margin: 0 0 3px; font-size: 15px; font-weight: 640; }
+  .panel .hint { margin: 0 0 14px; color: var(--ink-faint); font-size: 12.5px; }
+  .lede { margin: 0 0 20px; color: var(--ink-soft); font-size: 13.5px; max-width: 74ch; }
+  .row { display: flex; gap: 10px; align-items: flex-start; }
+  .row .grow { flex: 1; }
+  .fields { display: grid; gap: 9px; }
+  .status { font-size: 12.5px; color: var(--ink-faint); min-height: 1.4em; margin-top: 6px; }
+  .status.error { color: var(--err); }
+  .status.ok { color: var(--ok); }
+
+  /* --- one product ---------------------------------------------------------- */
+
+  .product {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+  }
+  .swatch { width: 14px; height: 14px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
+  .product .body { flex: 1; min-width: 0; }
+  .product .name { margin: 0; font-weight: 640; font-size: 14.5px; }
+  .product .description { margin: 2px 0 0; color: var(--ink-soft); font-size: 13.5px; white-space: pre-wrap; }
+  .product .meta { margin-top: 6px; font-size: 12px; color: var(--ink-faint); }
+  .product .actions { display: flex; gap: 4px; flex: 0 0 auto; }
+  .empty { color: var(--ink-faint); font-size: 13.5px; }
+
+  /* --- deleting: a warning that cannot be missed, and a word to type -------- */
+
+  dialog {
+    width: min(520px, calc(100% - 32px)); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px; background: var(--surface-raised);
+    color: var(--ink); box-shadow: var(--shadow-lg);
+  }
+  dialog::backdrop { background: rgba(10, 12, 16, .45); }
+  dialog h2 { margin: 0 0 12px; font-size: 17px; }
+  .danger-box {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--err-soft); color: var(--err);
+    border: 1px solid var(--err); border-left-width: 5px;
+    border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;
+    font-size: 13.5px; line-height: 1.55;
+  }
+  .danger-box .icon { font-size: 20px; line-height: 1; }
+  .danger-box b { color: inherit; }
+  dialog label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* --- sign-in gate (shared shape with the other pages) --------------------- */
+
+  .auth-gate {
+    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+    padding: 24px; background: var(--ground);
+  }
+  .auth-card {
+    width: min(420px, 100%); background: var(--surface-raised);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); padding: 28px;
+  }
+  /* A class selector outranks the browser's own `[hidden] { display: none }`. */
+  .auth-gate[hidden], .whoami[hidden], .panel[hidden] { display: none; }
+  .auth-card h2 { margin: 0 0 6px; font-size: 19px; }
+  .auth-card p { margin: 0 0 18px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+  .auth-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .auth-card input { margin-bottom: 12px; width: 100%; }
+  .auth-card button { margin-top: 6px; width: 100%; }
+  .auth-error {
+    margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--err-soft); color: var(--err); font-size: 13.5px;
+  }
+  .whoami { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-faint); }
+  .whoami b { color: var(--ink-soft); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="auth-gate" id="authGate" hidden>
+  <form class="auth-card" id="authForm">
+    <h2>Sign in</h2>
+    <p>Enter your address and your team&rsquo;s access code. Ask an administrator if
+       you do not have one.</p>
+    <label for="authEmail">Email address</label>
+    <input id="authEmail" type="email" autocomplete="email" required
+           placeholder="you@t2.sa" spellcheck="false">
+    <label for="authCode">Access code</label>
+    <input id="authCode" type="password" autocomplete="current-password" required
+           placeholder="Your team's code" spellcheck="false">
+    <button type="submit" id="authSubmit">Continue</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </form>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-text">
+      <h1>Products</h1>
+      <p>Each with its own knowledge and answers, beside what the whole team shares</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="whoami" id="whoami" hidden>
+    <b id="whoamiEmail"></b>
+    <button class="ghost" id="signOut" title="End this session">Sign out</button>
+  </div>
+  <a class="ghost" href="./">Assistant</a>
+  <a class="ghost" href="workbench">Workbench</a>
+  <a class="ghost" href="memory">Answer memory</a>
+  <a class="ghost" href="preferences">Preferences</a>
+  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
+</div>
+
+<main>
+  <p class="lede">
+    The team keeps one shared knowledge base and answer memory. A product adds
+    its own beside them: a questionnaire answered for a product draws on the
+    shared material and on that product&rsquo;s, and one answered for
+    &ldquo;General&rdquo; draws on the shared material alone.
+  </p>
+
+  <section class="panel" id="addPanel" hidden>
+    <h2>Add a product</h2>
+    <p class="hint">Team leads and administrators can add, rename and delete products.</p>
+    <div class="row">
+      <input type="color" id="productColor" title="The product's colour" aria-label="Colour">
+      <div class="grow fields">
+        <input type="text" id="productName" maxlength="40" placeholder="Name, for example Availo" aria-label="Name">
+        <textarea id="productDescription" maxlength="200" placeholder="What it is (optional)" aria-label="Description"></textarea>
+      </div>
+      <button id="addProduct">Add</button>
+    </div>
+    <div class="status" id="addStatus"></div>
+  </section>
+
+  <section class="panel">
+    <h2>The team&rsquo;s products</h2>
+    <p class="hint" id="listHint"></p>
+    <div id="productList"></div>
+    <div class="status" id="listStatus"></div>
+  </section>
+</main>
+
+<dialog id="deleteDialog">
+  <h2 id="deleteTitle">Delete this product?</h2>
+  <div class="danger-box" role="alert">
+    <span class="icon" aria-hidden="true">&#9888;</span>
+    <div id="deleteWarning"></div>
+  </div>
+  <label for="deleteConfirm">Type <b>confirm</b> to delete it</label>
+  <input type="text" id="deleteConfirm" autocomplete="off" spellcheck="false" placeholder="confirm">
+  <div class="status" id="deleteStatus"></div>
+  <div class="buttons">
+    <button class="ghost" id="deleteCancel" type="button">Cancel</button>
+    <button class="danger-solid" id="deleteGo" type="button" disabled>Delete product</button>
+  </div>
+</dialog>
+
+<script>
+// --- sign-in -----------------------------------------------------------------
+// Its own block, ahead of everything else and identical in shape to the other
+// pages: whether anyone may use this page is settled before the rest runs.
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const gate = $("authGate"), form = $("authForm"), error = $("authError");
+
+  function apply(session) {
+    const signedIn = Boolean(session.email);
+    gate.hidden = signedIn || !session.sign_in_required;
+    $("whoami").hidden = !(signedIn && session.sign_in_required);
+    if (!$("whoami").hidden) $("whoamiEmail").textContent = session.email;
+    if (!gate.hidden) $("authEmail").focus();
+  }
+
+  fetch("/api/auth/session")
+    .then((r) => r.json())
+    .then(apply)
+    .catch((e) => console.error("Could not check the session", e));
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    $("authSubmit").disabled = true;
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: $("authEmail").value.trim(), code: $("authCode").value }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.hidden = false;
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      error.textContent = "Could not reach the server.";
+      error.hidden = false;
+    } finally {
+      $("authSubmit").disabled = false;
+    }
+  });
+
+  $("signOut").addEventListener("click", async () => {
+    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+    window.location.reload();
+  });
+})();
+
+// --- the page ----------------------------------------------------------------
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const CONFIRM_WORD = "confirm";
+  let state = { products: [], can_manage: false, palette: [] };
+  let deleting = null;
+
+  // --- theme (same key as the other pages, so the choice follows you) -------
+
+  const THEME_KEY = "assessment-theme";
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    $("themeToggle").textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
+  }
+  (function initTheme() {
+    let stored = null;
+    try { stored = localStorage.getItem(THEME_KEY); } catch (e) { /* private mode */ }
+    const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    applyTheme(stored || (dark ? "dark" : "light"));
+  })();
+  $("themeToggle").addEventListener("click", () => {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  // --- talking to the server ----------------------------------------------
+
+  async function api(path, options) {
+    const response = await fetch(path, Object.assign({
+      headers: { "Content-Type": "application/json" },
+    }, options || {}));
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = body && body.detail;
+      const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
+      throw new Error(said || ("Request failed (" + response.status + ")"));
+    }
+    return body;
+  }
+
+  /* Always text, never markup: a product's name and description are whatever
+     somebody typed, and the server's messages can repeat them. */
+  function say(node, message, kind) {
+    node.className = "status" + (kind ? " " + kind : "");
+    node.textContent = message || "";
+  }
+
+  // --- the list -------------------------------------------------------------
+
+  function productCard(product) {
+    const card = document.createElement("div");
+    card.className = "product";
+    card.dataset.productId = product.id;
+
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = product.color;
+
+    const body = document.createElement("div");
+    body.className = "body";
+    const name = document.createElement("p");
+    name.className = "name";
+    name.textContent = product.name;
+    body.append(name);
+    if (product.description) {
+      const description = document.createElement("p");
+      description.className = "description";
+      description.textContent = product.description;
+      body.append(description);
+    }
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = "Added " + (product.created_at || "").slice(0, 10) +
+      (product.created_by ? " by " + product.created_by : "");
+    body.append(meta);
+
+    card.append(swatch, body);
+    if (state.can_manage) {
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const edit = document.createElement("button");
+      edit.className = "quiet";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => openEditor(card, product));
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", () => openDelete(product));
+      actions.append(edit, remove);
+      card.append(actions);
+    }
+    return card;
+  }
+
+  function openEditor(card, product) {
+    const editor = document.createElement("div");
+    editor.className = "product";
+    const color = document.createElement("input");
+    color.type = "color";
+    color.value = product.color;
+    const fields = document.createElement("div");
+    fields.className = "body fields";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 40;
+    name.value = product.name;
+    const description = document.createElement("textarea");
+    description.maxLength = 200;
+    description.value = product.description;
+    const status = document.createElement("div");
+    status.className = "status";
+    fields.append(name, description, status);
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const save = document.createElement("button");
+    save.textContent = "Save";
+    const cancel = document.createElement("button");
+    cancel.className = "ghost";
+    cancel.textContent = "Cancel";
+    actions.append(save, cancel);
+    editor.append(color, fields, actions);
+    card.replaceWith(editor);
+    name.focus();
+
+    cancel.addEventListener("click", () => editor.replaceWith(productCard(product)));
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      try {
+        await api("/api/products/" + encodeURIComponent(product.id), {
+          method: "PATCH",
+          body: JSON.stringify({ name: name.value, color: color.value, description: description.value }),
+        });
+        await load();
+      } catch (error) {
+        say(status, error.message, "error");
+        save.disabled = false;
+      }
+    });
+  }
+
+  function draw() {
+    $("addPanel").hidden = !state.can_manage;
+    $("listHint").textContent = state.can_manage
+      ? "Rename, recolour or delete them here."
+      : "Only the team's leads and administrators can change products.";
+    const list = $("productList");
+    list.replaceChildren();
+    if (!state.products.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "No products yet. Questionnaires are answered from the shared knowledge (General).";
+      list.append(empty);
+      return;
+    }
+    state.products.forEach((product) => list.append(productCard(product)));
+    const next = state.palette[state.products.length % (state.palette.length || 1)];
+    if (next) $("productColor").value = next;
+  }
+
+  async function load() {
+    try {
+      state = await api("/api/products");
+      draw();
+    } catch (error) {
+      say($("listStatus"), error.message, "error");
+    }
+  }
+
+  // --- adding -----------------------------------------------------------------
+
+  $("addProduct").addEventListener("click", async () => {
+    const button = $("addProduct");
+    button.disabled = true;
+    say($("addStatus"), "");
+    try {
+      const added = await api("/api/products", {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("productName").value,
+          color: $("productColor").value,
+          description: $("productDescription").value,
+        }),
+      });
+      $("productName").value = "";
+      $("productDescription").value = "";
+      say($("addStatus"), "Added " + added.product.name + ".", "ok");
+      await load();
+    } catch (error) {
+      say($("addStatus"), error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  // --- deleting: the warning, and the word to type ----------------------------
+
+  function openDelete(product) {
+    deleting = product;
+    $("deleteTitle").textContent = "Delete " + product.name + "?";
+    const warning = $("deleteWarning");
+    warning.replaceChildren();
+    const strong = document.createElement("b");
+    strong.textContent = "This permanently deletes " + product.name + "'s documents and its remembered answers.";
+    warning.append(
+      strong,
+      document.createElement("br"),
+      document.createTextNode(
+        "Questionnaires and conversations that used it become General and keep the answers they already have. " +
+        "This cannot be undone."
+      ),
+    );
+    $("deleteConfirm").value = "";
+    $("deleteGo").disabled = true;
+    say($("deleteStatus"), "");
+    $("deleteDialog").showModal();
+    $("deleteConfirm").focus();
+  }
+
+  $("deleteConfirm").addEventListener("input", () => {
+    $("deleteGo").disabled = $("deleteConfirm").value.trim().toLowerCase() !== CONFIRM_WORD;
+  });
+  $("deleteCancel").addEventListener("click", () => $("deleteDialog").close());
+  $("deleteGo").addEventListener("click", async () => {
+    if (!deleting) return;
+    $("deleteGo").disabled = true;
+    try {
+      await api(
+        "/api/products/" + encodeURIComponent(deleting.id) + "?confirm=" +
+        encodeURIComponent($("deleteConfirm").value.trim()),
+        { method: "DELETE" },
+      );
+      $("deleteDialog").close();
+      say($("listStatus"), "Deleted " + deleting.name + ".", "ok");
+      deleting = null;
+      await load();
+    } catch (error) {
+      say($("deleteStatus"), error.message, "error");
+      $("deleteGo").disabled = false;
+    }
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

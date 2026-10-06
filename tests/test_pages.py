@@ -16,9 +16,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import api
+from src.routes import pages
 from src.api import app
 
-PAGES = ["/", "/workbench", "/memory", "/preferences", "/admin"]
+PAGES = ["/", "/workbench", "/memory", "/preferences", "/admin", "/products"]
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def test_every_page_names_its_shared_assets_by_their_content(client, path):
     referenced = re.findall(r'"static/(cards\.(?:js|css))(\?v=[0-9a-f]+)?"', body)
     assert referenced, "each page loads the shared stylesheet at least"
     for asset, version in referenced:
-        assert version == f"?v={api._fingerprint(asset)}", f"{path} loads {asset} unversioned"
+        assert version == f"?v={pages._fingerprint(asset)}", f"{path} loads {asset} unversioned"
 
 
 @pytest.mark.parametrize("path", PAGES)
@@ -98,9 +99,9 @@ def test_the_old_chat_address_redirects_within_the_prefix(client):
 def test_changing_a_shared_asset_changes_its_url(tmp_path, monkeypatch):
     """The whole mechanism: a new script is a new URL, which no cache holds."""
     (tmp_path / "cards.js").write_text("const Cards = {};", encoding="utf-8")
-    monkeypatch.setattr(api, "STATIC_DIR", tmp_path)
-    before = api._fingerprint("cards.js")
+    monkeypatch.setattr(pages, "STATIC_DIR", tmp_path)
+    before = pages._fingerprint("cards.js")
 
     (tmp_path / "cards.js").write_text("const Cards = { skillPicker() {} };", encoding="utf-8")
 
-    assert api._fingerprint("cards.js") != before
+    assert pages._fingerprint("cards.js") != before

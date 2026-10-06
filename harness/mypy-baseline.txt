@@ -39,8 +39,6 @@ src/answer_memory.py: [type-arg] Missing type arguments for generic type "dict"
 src/answer_memory.py: [type-arg] Missing type arguments for generic type "list"
 src/api.py: [no-untyped-def] Function is missing a return type annotation
 src/api.py: [no-untyped-def] Function is missing a return type annotation
-src/api.py: [no-untyped-def] Function is missing a return type annotation
-src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/api.py: [no-untyped-def] Function is missing a type annotation for one or more parameters

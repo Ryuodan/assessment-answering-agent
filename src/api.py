@@ -6,10 +6,8 @@ Run with:  uvicorn src.api:app --reload
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import unicodedata
 import uuid
-from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 
@@ -17,7 +15,6 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -32,6 +29,7 @@ from src import (
     identity,
     llm,
     preferences,
+    products,
     progress,
     rewrite,
     runs,
@@ -42,7 +40,9 @@ from src import (
 )
 from src.agents import assistant
 from src.routes import admin as admin_routes
+from src.routes import products as product_routes
 from src.routes.auth import current_user, user_payload
+from src.routes.pages import STATIC_DIR as STATIC_DIR, RevalidatedStatic, page
 from src.identity import User
 from src.config import configure_logging, settings
 from src.documents import SUPPORTED_SUFFIXES
@@ -69,59 +69,6 @@ from src.models import (
 configure_logging()
 logger = get_logger(__name__)
 
-STATIC_DIR = Path(__file__).parent / "static"
-
-SHARED_ASSETS = ("cards.js", "cards.css")
-"""The scripts and styles every page loads, and the reason pages are not plain files.
-
-A page and the shared script it calls are two downloads, and a browser caches
-them separately. Served with no caching instructions, a browser that had
-yesterday's `cards.js` kept it -- for hours, on its own heuristic -- while
-fetching today's page, and the page called a function the old script did not
-have: the assistant's answer panel opened and stayed empty. So each page names
-its shared assets by a fingerprint of their content. A changed script is a new
-URL, which no cache can hold an older copy of.
-"""
-
-NO_CACHE = {"Cache-Control": "no-cache"}
-"""Revalidate every time. Not "do not store": an unchanged file still comes back
-as a 304 against its ETag, so this costs a request and not a download."""
-
-
-def _fingerprint(name: str) -> str:
-    path = STATIC_DIR / name
-    stat = path.stat()
-    return _fingerprint_of(name, stat.st_mtime_ns, stat.st_size)
-
-
-@lru_cache(maxsize=32)
-def _fingerprint_of(name: str, mtime_ns: int, size: int) -> str:
-    """Keyed on the file's timestamp and size, so an edit is a fresh hash."""
-    return hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
-
-
-def _page(name: str) -> HTMLResponse:
-    """One of the pages, pointing at the exact version of the shared assets on disk.
-
-    The pages name the assets and each other relatively -- `static/cards.js`,
-    `memory` -- because the deployment serves this app under a prefix, and nginx
-    rewrites only `/api/` into it. Every page is one level below the app's root,
-    so a relative reference lands in the same place at `/` and at `/assessment/`.
-    """
-    html = (STATIC_DIR / name).read_text(encoding="utf-8")
-    for asset in SHARED_ASSETS:
-        html = html.replace(f'"static/{asset}"', f'"static/{asset}?v={_fingerprint(asset)}"')
-    return HTMLResponse(html, headers=NO_CACHE)
-
-
-class _RevalidatedStatic(StaticFiles):
-    """Static files a browser checks before reusing, for the same reason as `_page`."""
-
-    async def get_response(self, path: str, scope):
-        response = await super().get_response(path, scope)
-        response.headers.setdefault("Cache-Control", "no-cache")
-        return response
-
 
 # Whichever script carries more of a typed question carries the answer. The
 # rule moved to `src.extraction` when the assistant needed it too; the name is
@@ -138,6 +85,7 @@ async def lifespan(_: FastAPI):
 
     store.connect()  # applies the schema before the first request rather than during it
     identity.bootstrap()
+    products.seed()  # SEED_PRODUCTS, the first time only (plan 020)
     identity.purge_expired_sessions()
     identity.purge_old_attempts()
     if identity.sign_in_required():
@@ -247,10 +195,11 @@ def sign_out(request: Request, response: Response) -> dict:
 # ---------------------------------------------------------------------------
 
 app.include_router(admin_routes.router)
+app.include_router(product_routes.router)  # products, src/routes/products.py
 
 
 @app.get("/admin", response_class=HTMLResponse)
-def admin_page() -> HTMLResponse:
+def adminpage() -> HTMLResponse:
     """A deep link to the access panel, which lives inside the app itself.
 
     The same document as `/`, because a deployment may only expose the
@@ -260,7 +209,7 @@ def admin_page() -> HTMLResponse:
     page the request came from. This route exists only so the link still works
     where that path *is* reachable.
     """
-    return _page("index.html")
+    return page("index.html")
 
 
 # ---------------------------------------------------------------------------
@@ -1025,8 +974,8 @@ def _skill_payload(skill: preferences.Skill) -> dict:
 
 
 @app.get("/preferences", include_in_schema=False)
-def preferences_page() -> HTMLResponse:
-    return _page("preferences.html")
+def preferencespage() -> HTMLResponse:
+    return page("preferences.html")
 
 
 @app.get("/api/preferences")
@@ -1239,7 +1188,7 @@ def put_back_the_draft(batch_id: str, body: RestoreDraftRequest, user: User = De
 
 
 @app.get("/memory", include_in_schema=False)
-def memory_page() -> HTMLResponse:
+def memorypage() -> HTMLResponse:
     """The answer memory, managed on a page of its own.
 
     Not a panel in the workbench: the workbench is organised around one
@@ -1247,7 +1196,7 @@ def memory_page() -> HTMLResponse:
     has ever said, which is a different job done at a different time — usually
     after somebody notices an answer they disagree with.
     """
-    return _page("memory.html")
+    return page("memory.html")
 
 
 @app.get("/api/search")
@@ -1830,7 +1779,7 @@ def health() -> dict:
 # The pages were single files with everything inline until the answer card had
 # to be shared between two of them. `/static` serves that one script and
 # whatever else the pages come to share; the directory holds nothing else.
-app.mount("/static", _RevalidatedStatic(directory=STATIC_DIR), name="static")
+app.mount("/static", RevalidatedStatic(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
@@ -1847,16 +1796,16 @@ def index() -> HTMLResponse:
     explained, and everything the workbench does can be asked for in a
     sentence. The workbench is where you go when you want the controls.
     """
-    return _page("chat.html")
+    return page("chat.html")
 
 
 @app.get("/workbench", include_in_schema=False)
-def workbench_page() -> HTMLResponse:
-    return _page("index.html")
+def workbenchpage() -> HTMLResponse:
+    return page("index.html")
 
 
 @app.get("/chat", include_in_schema=False)
-def chat_page() -> RedirectResponse:
+def chatpage() -> RedirectResponse:
     """Where the assistant used to live. Kept so old links and bookmarks work."""
     # Relative, so it stays inside the prefix the app is served under.
     return RedirectResponse("./", status_code=308)

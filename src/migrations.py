@@ -283,6 +283,31 @@ MIGRATIONS: list[str] = [
     # name, and `<file>::<n>` would otherwise collide -- and everything already
     # remembered belongs to the team the system was set up for.
     "_team_the_answer_memory",
+    # 11 -- products (plan 020). A team's products, each of which will have a
+    # knowledge base and an answer memory of its own beside the team's shared
+    # ones. The name is unique per team whatever its case; `src.products`
+    # checks that too, for letters NOCASE does not fold, such as Arabic.
+    #
+    # `seeds` records which one-off seedings have run, so that deleting what
+    # a seeding added is not undone by the next restart.
+    """
+    CREATE TABLE products (
+        product_id  TEXT PRIMARY KEY,
+        team_id     TEXT NOT NULL,
+        name        TEXT NOT NULL,
+        color       TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        created_by  TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX products_team_name ON products(team_id, name COLLATE NOCASE);
+
+    CREATE TABLE seeds (
+        name       TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+    );
+    """,
 ]
 
 

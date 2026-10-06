@@ -20,6 +20,7 @@ modules = [
     "src.formatting",
     "src.prompts",
     "src.credentials",
+    "src.roles",
     "src.verification",
     "src.progress",
     "src.chunking",
@@ -50,6 +51,7 @@ name = "records"
 about = "What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits."
 modules = [
     "src.access_codes",
+    "src.products",
     "src.identity",
     "src.events",
     "src.runs",

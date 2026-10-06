@@ -389,6 +389,10 @@ class Settings(BaseSettings):
     # `ALLOWED_EMAILS=a@t2.sa,b@t2.sa` raises a parse error instead of doing the
     # obvious thing. Read `allowed_emails_set`, never this.
     allowed_emails: str = ""
+    # Products added to the default team the first time the server starts,
+    # comma-separated. Applied once: the Products page is authoritative after
+    # that, so a product deleted there stays deleted (plan 020).
+    seed_products: str = ""
 
     # The break-glass administrator, re-applied at every startup. This is the
     # one account the environment owns, and the way back in when a password is

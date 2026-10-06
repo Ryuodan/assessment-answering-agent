@@ -552,6 +552,8 @@
      style="text-decoration:none;display:inline-flex;align-items:center">Answer memory</a>
   <a class="ghost" href="preferences" title="How you want answers to read, and your skills"
      style="text-decoration:none;display:inline-flex;align-items:center">Preferences</a>
+  <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers"
+     style="text-decoration:none;display:inline-flex;align-items:center">Products</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
@@ -820,6 +822,7 @@
         <select id="adminNewTeam"></select>
         <select id="adminNewRole">
           <option value="member">Member</option>
+          <option value="lead">Team lead</option>
           <option value="admin">Administrator</option>
         </select>
         <button id="adminAddUser">Add</button>
@@ -1128,7 +1131,7 @@
 
     const role = document.createElement("td");
     const rolePicker = picker(
-      [["member", "Member"], ["admin", "Administrator"]],
+      [["member", "Member"], ["lead", "Team lead"], ["admin", "Administrator"]],
       user.role,
       (value) => act(
         () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {

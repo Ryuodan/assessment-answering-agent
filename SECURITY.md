@@ -63,7 +63,10 @@ address, and a refused sign-in costs the same time whether or not the address
 exists. Teams cannot see each other's knowledge base, memory or documents
 (404, not 403); inside a team, questionnaires, runs and conversations belong to
 the person who made them. With no users added the API runs open, as
-`local@localhost`; adding the first user closes it.
+`local@localhost`; adding the first user closes it. Roles are member, team
+lead and administrator (`src/roles.py`). A team lead manages their own team's
+products and nothing else. Deleting a product needs `confirm=confirm` on the
+request, as well as the word typed on the page.
 
 ## Security-sensitive code, and the tests that hold it
 

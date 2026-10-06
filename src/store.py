@@ -29,6 +29,10 @@ from src.config import settings
 from src.migrations import MIGRATIONS as MIGRATIONS
 
 
+IntegrityError = sqlite3.IntegrityError
+"""A constraint the schema enforces was broken, such as a unique name taken by a
+concurrent insert. Named here so that modules above the store need not import sqlite3."""
+
 _local = threading.local()
 _schema_lock = threading.Lock()
 _schema_ready: set[str] = set()

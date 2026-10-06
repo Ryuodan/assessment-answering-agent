@@ -113,6 +113,17 @@ included where its routes used to be defined, so the routes are registered,
 and the OpenAPI contract is ordered, as before. The SQLite schema's
 migrations are in `src/migrations.py`, applied by `src/store.py`.
 
+## Products and roles
+
+A team's products (plan 020, milestone M7) are rows in `products`, managed
+by `src/products.py` and served by `src/routes/products.py` and the
+`/products` page. Each will get a knowledge base and an answer memory of its
+own beside the team's shared ones (plans 021 to 023, design in
+[plan 018](docs/plans/active/018-products.md)). Roles are in `src/roles.py`:
+`manages_products` says who may change a team's products (its leads, and any
+administrator). `SEED_PRODUCTS` adds the first products once, recorded in the
+`seeds` table.
+
 ## How a request flows
 
 **Indexing a policy.** `POST /api/knowledge/guidelines` saves the upload

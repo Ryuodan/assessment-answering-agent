@@ -14,6 +14,7 @@ One hierarchy (plan 004, D-013). Each error carries:
     +-- SignInRequired       401  sign_in_required
     +-- Forbidden            403  forbidden
     +-- NotFound             404  not_found           absent, or somebody else's (which reads the same)
+    +-- Conflict             409  conflict            would clash with something that exists: a taken name
     +-- UnsupportedFile      415  unsupported_file
     +-- Unprocessable        422  unprocessable       understood, but cannot be used: an unreadable file
     +-- Unavailable          503  unavailable         something this depends on is not there
@@ -65,6 +66,13 @@ class NotFound(AppError):
 
     code = "not_found"
     status = 404
+
+
+class Conflict(AppError):
+    """The request would clash with something that already exists, such as a name in use."""
+
+    code = "conflict"
+    status = 409
 
 
 class UnsupportedFile(AppError):
@@ -133,6 +141,20 @@ class NotAllowed(Invalid):
     """An administrative action the caller may not perform."""
 
     code = "not_allowed"
+
+
+# Raised by src.products.
+class ProductNotFound(NotFound):
+    """No such product in this team."""
+
+    code = "product_not_found"
+
+
+# Raised by src.products.
+class ProductNameTaken(Conflict):
+    """The team already has a product of that name, whatever its case."""
+
+    code = "product_name_taken"
 
 
 # Raised by src.preferences.

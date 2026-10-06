@@ -28,6 +28,15 @@ Errors: [errors.md](errors.md).
 | `DELETE` | `/api/admin/teams/{team_id}` | Admin Remove Team |
 | `POST` | `/api/admin/teams/{team_id}/access-code` | Issue a new access code. The plaintext is returned exactly once. |
 
+## `/api/products`
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/api/products` | The team's products, and whether the caller may change them. |
+| `POST` | `/api/products` | Add a product to the team. Its leads and administrators only. |
+| `PATCH` | `/api/products/{product_id}` | Rename, recolour or redescribe a product. Its team's leads and administrators only. |
+| `DELETE` | `/api/products/{product_id}` | Delete a product, with its documents and remembered answers. Needs `confirm=confirm`. |
+
 ## `/admin`
 
 | Method | Path | What it does |

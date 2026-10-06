@@ -129,7 +129,7 @@ Each step is its own plan.
    - the migrations out of `store.py` into `src/migrations.py`.
 
    The generated API contract must come out byte-identical, and the upgrade and error snapshots must pass.
-2. **Plan 020, products and the team lead:**
+2. **[Plan 020](../completed/020-products-and-leads.md), products and the team lead:**
    - the `lead` role ("Team lead"), with the role constants in `src/roles.py`;
    - migration 11, the `products` table;
    - `src/products.py`: create, edit, delete, list and validation;
@@ -179,6 +179,8 @@ which do not exist yet.
   - Product management gets its own page, not a section of the Access panel. Team leads are not administrators, and the Access panel is for administrators only.
 
 - 2026-10-06: Plan 019 done: `api.py` 2036 -> 1862 lines, `store.py` 475 -> 132, and the contract byte-identical.
+
+- 2026-10-06: Plan 020 done. It added the products, the team lead role, the Products page and the delete confirmation; `api.py` went from 1862 to 1811 lines and `identity.py` from 615 to 612.
 
 ## Decision log
 
