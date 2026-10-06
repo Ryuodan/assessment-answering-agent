@@ -675,6 +675,33 @@ const Cards = (window.Cards = {
     return tag;
   }
 
+  /* Which product something is for (plan 024): a source from a product's own
+     knowledge base, or a chat or questionnaire in a list. The page hands over
+     the team's products; an id not among them -- General, or a product since
+     deleted -- gets no badge. */
+  let products = {};
+
+  function setProducts(list) {
+    products = {};
+    (list || []).forEach((product) => { products[product.id] = product; });
+  }
+
+  function productBadge(productId, title) {
+    const product = productId ? products[productId] : null;
+    if (!product) return null;
+    const tag = document.createElement("span");
+    tag.className = "tag product";
+    tag.textContent = product.name;
+    if (product.color) tag.style.setProperty("--product", product.color);
+    tag.title = title || "For " + product.name;
+    return tag;
+  }
+
+  function ownSourceBadge(source) {
+    return productBadge(source && source.product_id,
+      "From this product's own knowledge base. The drafter was told it takes precedence over the shared one.");
+  }
+
   function citationsField(item) {
     const field = labelledField("Sources cited — click to read the clause", "accent");
     const cites = document.createElement("div");
@@ -705,6 +732,8 @@ const Cards = (window.Cards = {
       // Before the caret, so it reads as part of the source's name rather than
       // as another control.
       if (mark) chip.append(mark);
+      const own = ownSourceBadge(source);
+      if (own) chip.append(own);
       const caret = document.createElement("span");
       caret.className = "caret";
       caret.textContent = "▾";
@@ -1014,6 +1043,8 @@ const Cards = (window.Cards = {
       kind.className = "tag " + source.source_type;
       kind.textContent = source.source_type === "prior_answer" ? "previous answer" : "guideline";
       head.prepend(kind);
+      const own = ownSourceBadge(source);
+      if (own) kind.after(own);
 
       if (typeof source.score === "number") {
         const score = document.createElement("span");
@@ -1044,6 +1075,8 @@ const Cards = (window.Cards = {
     detailPicker: detailPicker,
     skillPicker: skillPicker,
     authorityBadge: authorityBadge,
+    setProducts: setProducts,
+    productBadge: productBadge,
     openDocumentButton: openDocumentButton,
     canOpenDocument: canOpenDocument,
     markdown: renderMarkdown,

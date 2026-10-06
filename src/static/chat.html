@@ -317,6 +317,24 @@
   .icon:hover { background: var(--surface-sunken); color: var(--ink); }
   .icon.send { background: var(--accent); color: var(--on-accent); }
   .icon.send:disabled { background: var(--line); color: var(--ink-faint); cursor: not-allowed; }
+  /* Which product the chat is for, beside the box (plan 024): General, or a
+     product in its own colour. */
+  .product-chip {
+    --product: var(--ink-faint);
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+    height: 34px; padding: 0 4px 0 10px; border-radius: var(--radius-pill);
+    border: 1px solid color-mix(in srgb, var(--product) 50%, var(--line));
+    background: color-mix(in srgb, var(--product) 10%, var(--surface));
+    color: color-mix(in srgb, var(--product) 70%, var(--ink));
+    font-size: 12.5px; font-weight: 600;
+  }
+  .product-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--product); flex: 0 0 auto; }
+  .product-chip select {
+    border: 0; background: transparent; color: inherit; font-weight: inherit; font-size: inherit;
+    max-width: 130px; padding: 4px 2px; cursor: pointer; outline: none; text-overflow: ellipsis;
+  }
+  .product-chip:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--product) 35%, transparent); }
+  .convo .tag.product { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .attached {
     max-width: 700px; margin: 0 auto 7px; font-size: 13px; color: var(--ink-faint);
     display: flex; align-items: center; gap: 8px;
@@ -475,8 +493,16 @@
         <label class="icon" for="fileInput" title="Attach a questionnaire">
           <input type="file" id="fileInput" accept=".xlsx,.xlsm,.docx" hidden />＋
         </label>
+        <!-- Which product this chat is for (plan 024). A new chat starts for it;
+             on an open chat, changing it changes the chat's and its questionnaire's. -->
+        <label class="product-chip" id="productChip">
+          <span class="dot" aria-hidden="true"></span>
+          <select id="productPick" aria-label="Which product this chat is for">
+            <option value="">General</option>
+          </select>
+        </label>
         <textarea id="prompt" rows="1"
-          placeholder="Ask for something, ex: “read this and answer the governance questions, keep them short”"></textarea>
+          placeholder="Ask for something, ex: “answer the governance questions briefly”"></textarea>
         <button class="icon send" id="send" disabled title="Send">↑</button>
       </div>
       <div class="foot">Shift + Enter for a new line. It cannot write to your file without you pressing the button.</div>
@@ -988,6 +1014,7 @@
         body.append("message", message);
         body.append("conversation_id", conversationId);
         body.append("run_id", runId);
+        body.append("product", chosenProduct());  // read only when this starts the chat
         data = await request("/api/chat/upload", { method: "POST", body });
         detach();
       } else {
@@ -995,12 +1022,14 @@
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: message, conversation_id: conversationId, run_id: runId,
+            product: chosenProduct(),  // read only when this starts the chat
           }),
         });
       }
       stop();
       conversationId = data.conversation_id;
       batchId = data.batch_id || batchId;
+      showProduct(data.product_id || "");
       placeholder.replaceWith(turnElement("assistant", data.reply, data));
       $("thread").scrollTop = $("thread").scrollHeight;
       if (data.answers) showAnswers(data.answers);
@@ -1514,6 +1543,8 @@
           file.title = c.source_name;
           what.append(file);
         }
+        const product = Cards.productBadge(c.product_id);
+        if (product) what.append(product);
         const forget = document.createElement("span");
         forget.className = "forget";
         forget.textContent = "✕";
@@ -1563,6 +1594,7 @@
       const data = await request("/api/chat/" + id);
       conversationId = data.id;
       batchId = data.batch_id || "";
+      showProduct(data.product_id || "");
       $("thread").replaceChildren($("empty"));
       $("empty").hidden = (data.messages || []).length > 0;
       // With the steps and sources the turn was drawn with the first time: a
@@ -1764,6 +1796,52 @@
     });
   });
 
+  /* --- which product: General, or one of the team's (plan 024) -------------- */
+
+  let teamProducts = [];
+  function chosenProduct() { return $("productPick").value; }
+  function paintProductChip() {
+    const product = teamProducts.find((p) => p.id === chosenProduct());
+    const chip = $("productChip");
+    if (product && product.color) chip.style.setProperty("--product", product.color);
+    else chip.style.removeProperty("--product");
+    chip.title = product
+      ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
+      : "General: answered from the shared knowledge base and answer memory.";
+  }
+  function showProduct(productId) {
+    const select = $("productPick");
+    select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
+    paintProductChip();
+  }
+  async function loadProducts() {
+    try {
+      teamProducts = (await request("/api/products")).products || [];
+    } catch (error) { teamProducts = []; }
+    Cards.setProducts(teamProducts);
+    const select = $("productPick");
+    const chosen = select.value;
+    select.replaceChildren(new Option("General", ""));
+    teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
+    showProduct(chosen);
+  }
+  // A new chat starts for the chip's product with its first message. An open
+  // one changes now, and its questionnaire with it; what is already answered stays.
+  $("productPick").addEventListener("change", async () => {
+    paintProductChip();
+    if (!conversationId) return;
+    try {
+      const changed = await request("/api/chat/" + conversationId + "/product", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product: chosenProduct() }),
+      });
+      showProduct(changed.product_id || "");
+      loadHistory();
+    } catch (error) {
+      addTurn("assistant", "The product could not be changed: " + error.message);
+    }
+  });
+
   /* --- start ---------------------------------------------------------------- */
 
   async function start() {
@@ -1771,6 +1849,7 @@
     refresh();
     grow();
     await loadSkills();
+    await loadProducts();
     await loadHistory();
   }
 

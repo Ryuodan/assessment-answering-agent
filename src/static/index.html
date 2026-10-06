@@ -113,6 +113,8 @@
   }
 
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 13px; }
+  /* The chosen product's colour beside the questionnaire's Product selector (plan 024). */
+  .product-swatch { width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); flex: 0 0 auto; }
 
   label.file {
     display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
@@ -653,6 +655,15 @@
     </p>
 
     <div class="panel">
+      <!-- Which product this questionnaire is answered for (plan 024): General,
+           or a product's knowledge base and answer memory beside the shared ones.
+           Chosen before uploading, or changed once a questionnaire is open. -->
+      <div class="row kb-scope" id="formProductRow" style="margin:0 0 12px">
+        <label for="formProduct"><strong>Product</strong></label>
+        <span class="product-swatch" id="formProductSwatch" aria-hidden="true"></span>
+        <select id="formProduct"><option value="">General</option></select>
+        <span class="hint" id="formProductHint">Answered from the shared knowledge base and answer memory.</span>
+      </div>
       <label class="file" data-drop="assessment">
         <input type="file" id="assessmentInput" accept=".xlsx,.xlsm,.docx,.pdf" />
         Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
@@ -2461,6 +2472,8 @@
       link.className = "quiet";
       link.textContent = form.source_name +
         (form.answered ? " (" + form.answered + " answered)" : "");
+      const product = Cards.productBadge(form.product_id);
+      if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
       link.title = "Loaded " + new Date(form.created_at).toLocaleString();
       link.onclick = () => reopenForm(form.id);
       line.append(link);
@@ -2480,6 +2493,7 @@
   async function loadAsForm(file) {
     const body = new FormData();
     body.append("file", file);
+    body.append("product", formProduct());
     let batch;
     try {
       batch = await request("/api/forms", { method: "POST", body });
@@ -2504,6 +2518,7 @@
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
     sourceName = batch.source_name || sourceName;
+    showFormProduct(batch.product_id || "");
 
     /* Questions somebody typed into the list beside the file's own rows are
        kept. The batch does not know about them -- they have no cell in the
@@ -2959,6 +2974,7 @@
         language: $("languageSelect").value || null,
         run_id: runId,
         source_name: sourceName,
+        product: formProduct(),
       }),
     });
   }
@@ -3406,6 +3422,55 @@
       if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
     } catch (error) { /* no products: the shared knowledge base is all there is */ }
   }
+  // --- which product a questionnaire is for (plan 024) ----------------------
+
+  let teamProducts = [];
+  function formProduct() { return $("formProduct").value; }
+  function describeFormProduct() {
+    const product = teamProducts.find((p) => p.id === formProduct());
+    $("formProductSwatch").style.background = product ? (product.color || "var(--accent)") : "var(--line-strong)";
+    $("formProductHint").textContent = product
+      ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
+      : "Answered from the shared knowledge base and answer memory.";
+  }
+  function showFormProduct(productId) {
+    const select = $("formProduct");
+    select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
+    describeFormProduct();
+  }
+  async function loadFormProducts() {
+    try {
+      teamProducts = (await request("/api/products")).products || [];
+    } catch (error) { teamProducts = []; }
+    Cards.setProducts(teamProducts);
+    const select = $("formProduct");
+    select.replaceChildren(new Option("General", ""));
+    teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
+    showFormProduct(formBatch ? formBatch.product_id || "" : "");
+    listRecentForms();
+  }
+  // Before a questionnaire is open, the choice is what the next one is opened
+  // and answered for. Once one is, it changes that questionnaire's product.
+  $("formProduct").onchange = async () => {
+    describeFormProduct();
+    if (!formBatch) return;
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/product", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product: formProduct() }),
+      });
+      await adoptBatch(updated, { quiet: true });
+      setStatus($("extractStatus"), "Anything answered from now on uses "
+        + ($("formProduct").selectedOptions[0] || {}).textContent
+        + ". The answers already written stay as they are.", "ok");
+      listRecentForms();
+    } catch (error) {
+      setStatus($("extractStatus"), error.message, "error");
+      showFormProduct(formBatch.product_id || "");
+    }
+  };
+  loadFormProducts();
+
   $("kbScope").onchange = () => {
     $("kbScopeHint").textContent = kbScope()
       ? "Used only for " + kbScopeName() + "'s questionnaires, beside the shared one."

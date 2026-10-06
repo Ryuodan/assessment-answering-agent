@@ -163,7 +163,7 @@ Each step is its own plan.
    - carry the scope through `tools`, `service` and the graph to retrieval;
    - tell the assistant the conversation's product;
    - the drafter's precedence rule (decision 2).
-6. **Plan 024, choosing the product on the pages:**
+6. **[Plan 024](../completed/024-choosing-the-product.md), choosing the product on the pages:**
    - the chat chip beside the chat box;
    - the workbench selector;
    - the badges in lists;
@@ -196,6 +196,8 @@ which do not exist yet.
 - 2026-10-06: Plan 023 done:
   - questionnaires and chats carry a product, and answering, approval, search and the assistant use it;
   - five moves made room, and the files they came from shrank: `api.py` 1440 -> 1296 lines, `tools.py` 1487 -> 1376, `service.py` 711 -> 614, `assistant.py` 1742 -> 1524, `models.py` 421 -> 329.
+
+- 2026-10-06: Plan 024 done: the chip beside the chat box, the workbench's Product selector, the badges in the lists and on a product's sources, and browser tests for the main path.
 
 ## Decision log
 

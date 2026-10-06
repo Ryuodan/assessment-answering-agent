@@ -11,7 +11,7 @@ a plan number without a file has not been written yet.
 | M4 README reorganised | the README's design history moved into `docs/` (decisions, design notes, measurements) and the README cut to an introduction | [009](completed/009-readme-reorganised.md) | done 2026-10-06 |
 | M5 Legible system | request IDs in logs and errors, diagnostic CLI commands, browser tests for the main flows | request IDs: [005](completed/005-structured-logging.md); [010](completed/010-diagnostics-cli.md), [011](completed/011-browser-tests.md) | done 2026-10-06 |
 | M6 Trustworthy evaluation | dev and held-out splits, noise measured first, contamination test, item-by-item comparison (TD-014) | [013](completed/013-evaluation-method.md), [014](completed/014-noise-measured.md) | done 2026-10-06 |
-| M7 Products | per-product knowledge bases and answer memories beside the shared ones; products managed, chosen per questionnaire and chat | [018](active/018-products.md) (design; 019-023 done, 024-025 to follow) | active |
+| M7 Products | per-product knowledge bases and answer memories beside the shared ones; products managed, chosen per questionnaire and chat | [018](active/018-products.md) (design; 019-024 done, 025 to follow) | active |
 
 A garbage-collection round, as its own plan, follows each milestone or about
 40 commits, whichever comes first.

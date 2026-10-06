@@ -164,6 +164,14 @@ A questionnaire and a chat are each for a product or General
   - the prompt names the product (`agents/assistant_prompt.py`).
 - **Deletion.** Deleting a product returns its questionnaires and chats to
   General, with their answers.
+- **The pages** (plan 024). The choice is made in two places:
+  - a coloured chip beside the chat box (`chat.html`);
+  - a Product selector at the top of the workbench's questionnaire panel
+    (`index.html`).
+
+  `Cards.productBadge` (`cards.js`) puts a product's name, in its colour, on
+  the chats and questionnaires in the lists, and on an answer's sources that
+  came from the product's own knowledge base.
 
 ## How a request flows
 
