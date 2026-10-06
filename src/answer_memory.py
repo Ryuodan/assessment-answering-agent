@@ -31,14 +31,13 @@ either unretrievable or unaccountable.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
 
 from langchain_core.documents import Document
 
-from src import memory, store
+from src import store
 from src.config import settings
 from src.memory import Entry, Finding
 from src.models import SourceType
@@ -86,6 +85,7 @@ def _entry(row) -> Entry:
         origin=row["origin"],
         superseded_by=row["superseded_by"],
         team_id=row["team_id"],
+        product_id=row["product_id"],
     )
 
 
@@ -155,9 +155,14 @@ def get(entry_id: str, team_id: str | None = None) -> Entry | None:
     return _entry(row) if row else None
 
 
-def _matching(query: str, standing: bool | None, origin: str, team_id: str) -> tuple[str, list]:
-    """The WHERE clause the list and its total both have to agree on."""
+def _matching(
+    query: str, standing: bool | None, origin: str, team_id: str, product_id: str | None = None
+) -> tuple[str, list]:
+    """The WHERE clause the list and its total both have to agree on. `product_id` None is every memory."""
     where, params = ["team_id = ?"], [team_id]
+    if product_id is not None:
+        where.append("product_id = ?")
+        params.append(product_id)
     if query.strip():
         where.append("(question LIKE ? OR answer LIKE ?)")
         params += [f"%{query.strip()}%"] * 2
@@ -179,6 +184,7 @@ def entries(
     limit: int = 100,
     offset: int = 0,
     team_id: str | None = None,
+    product_id: str | None = None,
 ) -> list[Entry]:
     """One team's remembered answers, newest first.
 
@@ -188,7 +194,7 @@ def entries(
     """
     team = _team(team_id)
     ensure_synced(team)
-    clause, params = _matching(query, standing, origin, team)
+    clause, params = _matching(query, standing, origin, team, product_id)
     rows = (
         store.connect()
         .execute(
@@ -206,11 +212,12 @@ def count(
     standing: bool | None = None,
     origin: str = "",
     team_id: str | None = None,
+    product_id: str | None = None,
 ) -> int:
     """How many entries match, for a page that has to say "showing 100 of 812"."""
     team = _team(team_id)
     ensure_synced(team)
-    clause, params = _matching(query, standing, origin, team)
+    clause, params = _matching(query, standing, origin, team, product_id)
     return store.connect().execute(f"SELECT COUNT(*) FROM memory_entries WHERE {clause}", params).fetchone()[0]
 
 
@@ -257,32 +264,42 @@ def superseded_ids(team_id: str | None = None) -> set[str]:
     return {row["entry_id"] for row in rows}
 
 
-def conflicts(*, open_only: bool = True, team_id: str | None = None) -> list[Conflict]:
+def conflicts(*, open_only: bool = True, team_id: str | None = None, product_id: str | None = None) -> list[Conflict]:
+    """Open disagreements, of one memory when `product_id` is given (they never cross memories)."""
     clause = " AND resolved_at = ''" if open_only else ""
+    params: tuple[str, ...] = (_team(team_id),)
+    if product_id is not None:
+        clause += " AND entry_id IN (SELECT entry_id FROM memory_entries WHERE team_id = ? AND product_id = ?)"
+        params = (_team(team_id), _team(team_id), product_id)
     rows = (
         store.connect()
         .execute(
             f"SELECT * FROM memory_conflicts WHERE team_id = ?{clause} ORDER BY raised_at DESC",
-            (_team(team_id),),
+            params,
         )
         .fetchall()
     )
     return [_conflict(row) for row in rows]
 
 
-def stats(team_id: str | None = None) -> dict:
+def stats(team_id: str | None = None, product_id: str | None = None) -> dict:
     team = _team(team_id)
     ensure_synced(team)
     conn = store.connect()
-    total = conn.execute("SELECT COUNT(*) FROM memory_entries WHERE team_id = ?", (team,)).fetchone()[0]
+    mine: str
+    scope: tuple[str, ...]
+    mine, scope = "team_id = ?", (team,)  # every memory of the team, or one (plan 022)
+    if product_id is not None:
+        mine, scope = "team_id = ? AND product_id = ?", (team, product_id)
+    total = conn.execute(f"SELECT COUNT(*) FROM memory_entries WHERE {mine}", scope).fetchone()[0]
     superseded = conn.execute(
-        "SELECT COUNT(*) FROM memory_entries WHERE team_id = ? AND superseded_by != ''", (team,)
+        f"SELECT COUNT(*) FROM memory_entries WHERE {mine} AND superseded_by != ''", scope
     ).fetchone()[0]
     by_origin = {
         row["origin"]: row["n"]
         for row in conn.execute(
-            "SELECT origin, COUNT(*) AS n FROM memory_entries WHERE team_id = ? GROUP BY origin",
-            (team,),
+            f"SELECT origin, COUNT(*) AS n FROM memory_entries WHERE {mine} GROUP BY origin",
+            scope,
         ).fetchall()
     }
     return {
@@ -290,11 +307,9 @@ def stats(team_id: str | None = None) -> dict:
         "standing": total - superseded,
         "superseded": superseded,
         "by_origin": by_origin,
-        "open_conflicts": conn.execute(
-            "SELECT COUNT(*) FROM memory_conflicts WHERE team_id = ? AND resolved_at = ''", (team,)
-        ).fetchone()[0],
+        "open_conflicts": len(conflicts(team_id=team, product_id=product_id)),
         "unscanned": conn.execute(
-            "SELECT COUNT(*) FROM memory_entries WHERE team_id = ? AND scanned_at = ''", (team,)
+            f"SELECT COUNT(*) FROM memory_entries WHERE {mine} AND scanned_at = ''", scope
         ).fetchone()[0],
     }
 
@@ -346,6 +361,7 @@ def record(
     team_id: str = "",
     index: bool = True,
     scanned: bool = False,
+    product_id: str = "",
 ) -> Entry:
     """Remember one answer. Writes the row, then indexes it for retrieval.
 
@@ -368,12 +384,13 @@ def record(
 
     store.connect().execute(
         "INSERT OR REPLACE INTO memory_entries "
-        "(entry_id, team_id, question, answer, section, from_file, origin, "
+        "(entry_id, team_id, product_id, question, answer, section, from_file, origin, "
         " approved_by, approved_on, created_at, updated_at, scanned_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             entry_id,
             team,
+            product_id,
             question,
             answer,
             section,
@@ -474,6 +491,7 @@ def remove(entry_id: str, team_id: str | None = None) -> bool:
     approved by mistake, or a pair the extractor invented out of a table.
     """
     team = _team(team_id)
+    gone = get(entry_id, team)
     conn = store.connect()
     deleted = conn.execute("DELETE FROM memory_entries WHERE team_id = ? AND entry_id = ?", (team, entry_id)).rowcount
     conn.execute(
@@ -490,7 +508,7 @@ def remove(entry_id: str, team_id: str | None = None) -> bool:
     )
     conn.commit()
     if deleted:
-        unindex_entry(entry_id, team)
+        unindex_entry(entry_id, team, gone.product_id if gone else "")
     return bool(deleted)
 
 
@@ -660,20 +678,20 @@ def index_entry(entry: Entry | None) -> None:
     if entry is None:
         return
     try:
-        from src.knowledge import get_store
+        from src.scoped_knowledge import own_store
 
-        index = get_store(_team(entry.team_id))
+        index = own_store(_team(entry.team_id), entry.product_id)
         index.remove_entry(entry.entry_id)
         index.add_entry(entry.entry_id, _document(entry))
     except Exception:  # noqa: BLE001 - never fail the write that produced this
         logger.exception("Could not index memory entry %s", entry.entry_id)
 
 
-def unindex_entry(entry_id: str, team_id: str | None = None) -> None:
+def unindex_entry(entry_id: str, team_id: str | None = None, product_id: str = "") -> None:
     try:
-        from src.knowledge import get_store
+        from src.scoped_knowledge import own_store
 
-        get_store(_team(team_id)).remove_entry(entry_id)
+        own_store(_team(team_id), product_id).remove_entry(entry_id)
     except Exception:  # noqa: BLE001 - removing from the index must not fail the removal itself
         logger.exception("Could not remove memory entry %s from the index", entry_id)
 
@@ -765,154 +783,54 @@ def forget_sync() -> None:
     _synced.clear()
 
 
-# ---------------------------------------------------------------------------
-# Finding what an arrival means
-# ---------------------------------------------------------------------------
+def move(entry_id: str, product_id: str, team_id: str | None = None) -> Entry | None:
+    """Move an entry to another memory: the shared one (`""`) or a product's (plan 022).
 
-
-async def _same_question(question: str, candidates: list[Entry]) -> list[Entry]:
-    """Which candidates ask the same thing. The model decides, not the number.
-
-    Similarity gets these as far as "worth asking about" and no further: two
-    questions about annual drills embed at 0.79 and are different controls, two
-    about sub-processor DPAs embed at 0.81 and are one question. Nothing in the
-    figure separates those.
+    Re-indexed there, and compared again, because its neighbours are now other
+    answers. Supersessions and conflicts it was part of stay as recorded.
     """
-    if not candidates:
-        return []
-    from src.llm import structured_llm, tool_use_failed
-    from src.models import SameQuestions
-    from src.prompts import SAME_QUESTION_SYSTEM, SAME_QUESTION_USER
-
-    listed = "\n".join(f"{n}. {candidate.question}" for n, candidate in enumerate(candidates, start=1))
-    try:
-        verdict = await structured_llm(SameQuestions, temperature=0.0).ainvoke(
-            [
-                ("system", SAME_QUESTION_SYSTEM),
-                ("user", SAME_QUESTION_USER.format(question=question, candidates=listed)),
-            ]
-        )
-    except Exception as error:  # noqa: BLE001 - re-raised unless it is the empty answer
-        if not tool_use_failed(error):
-            raise
-        # The model wrote its answer instead of calling the tool, and the answer
-        # it wrote was "[]". Treating that as "none of them" is not a guess: the
-        # empty verdict is the common one here, since these candidates were
-        # chosen for looking alike rather than for being alike.
-        logger.warning("Same-question check returned prose rather than a call; reading it as none")
-        return []
-    return [candidates[n - 1] for n in dict.fromkeys(verdict.same) if 1 <= n <= len(candidates)]
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    length = (sum(x * x for x in a) ** 0.5) * (sum(y * y for y in b) ** 0.5)
-    return dot / length if length else 0.0
-
-
-async def _close_questions(question: str, candidates: list[Entry]) -> list[Entry]:
-    """Candidates whose *question* embeds within `PROPOSE` of this one.
-
-    Retrieval proposes the candidates and this re-scores them, because the two
-    numbers are on different scales and only one of them is the one the
-    threshold was measured on. The index embeds "Q: … A: …" as a single
-    document, so a hit's score is a question-and-answer similarity: two
-    identical questions with different answers come back at 0.76, and 0.80
-    against that scale would mean almost nothing survives. `PROPOSE` was
-    calibrated question against question, and that is what this compares.
-    """
-    if not candidates:
-        return []
-    from src.embeddings import get_embeddings
-
-    vectors = await get_embeddings().aembed_documents(
-        [question[:900]] + [candidate.question[:900] for candidate in candidates]
+    team = _team(team_id)
+    entry = get(entry_id, team)
+    if entry is None or entry.product_id == product_id:
+        return entry
+    unindex_entry(entry_id, team, entry.product_id)
+    conn = store.connect()
+    conn.execute(
+        "UPDATE memory_entries SET product_id = ?, scanned_at = '', updated_at = ? WHERE team_id = ? AND entry_id = ?",
+        (product_id, store.utcnow(), team, entry_id),
     )
-    mine, theirs = vectors[0], vectors[1:]
-    return [candidate for candidate, vector in zip(candidates, theirs) if _cosine(mine, vector) >= memory.PROPOSE]
+    conn.commit()
+    index_entry(get(entry_id, team))
+    return get(entry_id, team)
+
+
+def forget_product(team_id: str, product_id: str) -> int:
+    """Delete a product's remembered answers and their disagreements. Its vectors go with its collection."""
+    conn = store.connect()
+    mine = "SELECT entry_id FROM memory_entries WHERE team_id = ? AND product_id = ?"
+    conn.execute(
+        f"DELETE FROM memory_conflicts WHERE team_id = ? AND (entry_id IN ({mine}) OR other_id IN ({mine}))",
+        (team_id, team_id, product_id, team_id, product_id),
+    )
+    gone = conn.execute("DELETE FROM memory_entries WHERE team_id = ? AND product_id = ?", (team_id, product_id))
+    conn.commit()
+    return gone.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Finding what an arrival means: src/memory_sweep.py (plan 022)
+# ---------------------------------------------------------------------------
 
 
 async def scan(entry: Entry, *, k: int = 8) -> list[Finding]:
-    """What the arrival of `entry` means for what we already remember.
+    """What the arrival of `entry` means for what we already remember; see `memory_sweep.scan`."""
+    from src import memory_sweep
 
-    Three filters, cheapest first: the index proposes the neighbourhood, the
-    embedding of the questions alone decides which are worth asking about, and a
-    model says which of those are actually the same question.
-
-    Applies what it finds: a supersession is marked, because the ordering is not
-    a judgement call and asking a person to confirm every ordinary revision is
-    how a queue becomes something nobody reads. A contradiction is raised
-    instead, because nothing here can decide it.
-    """
-    from src.knowledge import get_store
-
-    team = _team(entry.team_id)
-    hits = await get_store(team).search(entry.question, SourceType.PRIOR_ANSWER, k, expand=False)
-    seen: dict[str, Entry] = {}
-    for hit in hits:
-        other = get(hit.entry_id, team)
-        if other is None or other.entry_id == entry.entry_id or other.entry_id in seen:
-            continue
-        if not other.stands:
-            continue  # already replaced; it is history, not a second opinion
-        if entry.origin == "import" == other.origin and entry.from_file and entry.from_file == other.from_file:
-            # One questionnaire, filled in by one person on one day. Two rows in
-            # it that look alike are two related controls, or the extractor
-            # reading one row twice -- not the organisation contradicting
-            # itself, which is the only thing this is looking for.
-            continue
-        seen[other.entry_id] = other
-
-    close = await _close_questions(entry.question, list(seen.values()))
-
-    findings: list[Finding] = []
-    for other in await _same_question(entry.question, close):
-        finding = memory.compare(entry, other, same_question=True)
-        if finding is None:
-            continue
-        findings.append(finding)
-        if finding.kind == "supersedes":
-            supersede(other.entry_id, by=entry.entry_id, because=finding.because, team_id=team)
-        elif finding.kind == "superseded_by":
-            supersede(entry.entry_id, by=other.entry_id, because=finding.because, team_id=team)
-            # It arrived already out of date, which happens when an older
-            # questionnaire is imported after a newer one. Stop: an entry that
-            # no longer stands has no standing to replace or contradict a third.
-            break
-        else:
-            raise_conflict(entry.entry_id, other.entry_id, finding.because, team_id=team)
-    return findings
+    return await memory_sweep.scan(entry, k=k)
 
 
-async def scan_pending(
-    *,
-    limit: int = 25,
-    concurrency: int = 4,
-    team_id: str | None = None,
-) -> list[Finding]:
-    """Compare everything that has arrived since the last scan.
+async def scan_pending(*, limit: int = 25, concurrency: int = 4, team_id: str | None = None) -> list[Finding]:
+    """Compare everything that has arrived since the last scan; see `memory_sweep.scan_pending`."""
+    from src import memory_sweep
 
-    Runs after an import and after an approval rather than at answer time. By
-    the time a questionnaire is being answered it is too late to be useful --
-    whichever entry retrieval ranked first has already gone into a customer's
-    file -- and the person filling in the form is not the person who can say
-    which of two answers is our position.
-    """
-    waiting = pending(limit=limit, team_id=team_id)
-    if not waiting:
-        return []
-
-    gate = asyncio.Semaphore(concurrency)
-
-    async def one(entry: Entry) -> list[Finding]:
-        async with gate:
-            try:
-                found = await scan(entry)
-            except Exception:  # noqa: BLE001 - one bad entry must not stop the sweep
-                logger.exception("Could not scan memory entry %s", entry.entry_id)
-                return []
-            mark_scanned(entry.entry_id, entry.team_id)
-            return found
-
-    found = await asyncio.gather(*(one(entry) for entry in waiting))
-    return [finding for group in found for finding in group]
+    return await memory_sweep.scan_pending(limit=limit, concurrency=concurrency, team_id=team_id)

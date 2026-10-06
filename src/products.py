@@ -19,7 +19,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from src import events, scoped_knowledge, store
+from src import answer_memory, events, scoped_knowledge, store
 from src.config import settings
 from src.errors import Invalid, ProductNameTaken, ProductNotFound
 from src.identity import User
@@ -185,6 +185,7 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Product:
         raise Invalid(f'Type "{CONFIRM_WORD}" to delete a product.', code="confirmation_required")
     product = get(team_id, product_id)
     scoped_knowledge.drop_product(team_id, product_id)
+    answer_memory.forget_product(team_id, product_id)  # its remembered answers (plan 022)
     conn = store.connect()
     conn.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
     conn.commit()

@@ -64,7 +64,7 @@ Everything that talks to something outside the process: model providers, the emb
 
 What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits.
 
-- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.preferences`, `src.products`, `src.runs`, `src.storage`
+- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.memory_sweep`, `src.preferences`, `src.products`, `src.runs`, `src.storage`
 
 | Module | What it is |
 |---|---|
@@ -75,6 +75,7 @@ What the system remembers about people and their work: identity, events, runs, q
 | `src/events.py` | An append-only record of what people and the system did. |
 | `src/identity.py` | Who is using the system, which team's work they see, and who may say so. |
 | `src/memory.py` | The answer memory: what this organisation has actually said, and which of it still stands. |
+| `src/memory_sweep.py` | The disagreement sweep: what the arrival of a remembered answer means for the others. |
 | `src/preferences.py` | How one person wants answers worded: preferences, and skills. |
 | `src/products.py` | A team's products: each will have a knowledge base and an answer memory of its own. |
 | `src/runs.py` | Answered runs, kept so they can be looked at again. |
@@ -128,6 +129,7 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/admin.py` | The Access panel's routes: people, teams and access codes. Administrators only. |
 | `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
 | `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021). |
+| `src/routes/memory.py` | The answer memory's routes: the shared memory, or a product's (plan 022). |
 | `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |
 | `src/routes/products.py` | Products: everyone on a team may list them; its leads and administrators change them (plan 020). |
 | `src/web.py` | What every HTTP request shares: its ID, its log line, and how errors answer. |

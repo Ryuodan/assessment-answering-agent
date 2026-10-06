@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src import answer_memory, store, tools
+from src import memory_sweep, answer_memory, store, tools
 from src.api import app
 from src.models import Evidence, SourceType
 from tests import forms_fixtures as shapes
@@ -342,7 +342,7 @@ def confirms(monkeypatch):
         seen.append((question, [c.question for c in candidates]))
         return candidates
 
-    monkeypatch.setattr(answer_memory, "_same_question", same)
+    monkeypatch.setattr(memory_sweep, "_same_question", same)
     return seen
 
 
@@ -361,7 +361,7 @@ def near_neighbour(monkeypatch):
         return candidates
 
     monkeypatch.setattr("src.knowledge.KnowledgeStore.search", search)
-    monkeypatch.setattr(answer_memory, "_close_questions", close)
+    monkeypatch.setattr(memory_sweep, "_close_questions", close)
 
 
 async def test_only_questions_that_embed_close_enough_are_asked_about(monkeypatch, memory_index):
@@ -382,7 +382,7 @@ async def test_only_questions_that_embed_close_enough_are_asked_about(monkeypatc
 
     monkeypatch.setattr("src.embeddings.get_embeddings", lambda: Fake())
 
-    close = await answer_memory._close_questions("Are backups encrypted?", [near, far])
+    close = await memory_sweep._close_questions("Are backups encrypted?", [near, far])
 
     assert [entry.entry_id for entry in close] == [near.entry_id]
 
@@ -449,7 +449,7 @@ async def test_a_model_that_writes_its_answer_instead_of_calling_the_tool_means_
             raise Refused()
 
     monkeypatch.setattr("src.llm.structured_llm", lambda *a, **k: Boom())
-    assert await answer_memory._same_question("Do you run drills?", [entry]) == []
+    assert await memory_sweep._same_question("Do you run drills?", [entry]) == []
 
     class Other:
         async def ainvoke(self, messages):
@@ -457,7 +457,7 @@ async def test_a_model_that_writes_its_answer_instead_of_calling_the_tool_means_
 
     monkeypatch.setattr("src.llm.structured_llm", lambda *a, **k: Other())
     with pytest.raises(TimeoutError):
-        await answer_memory._same_question("Do you run drills?", [entry])
+        await memory_sweep._same_question("Do you run drills?", [entry])
 
 
 async def test_a_neighbouring_control_is_left_alone_when_the_model_says_so(memory_index, near_neighbour, monkeypatch):
@@ -467,7 +467,7 @@ async def test_a_neighbouring_control_is_left_alone_when_the_model_says_so(memor
     async def different(question, candidates):
         return []
 
-    monkeypatch.setattr(answer_memory, "_same_question", different)
+    monkeypatch.setattr(memory_sweep, "_same_question", different)
     answer_memory.adopt_file("a.xlsx", [Pair("Do you run continuity drills?", "Yes.")])
     other = answer_memory.adopt_file("b.xlsx", [Pair("Do you run IR drills?", "No.")])[0]
 
@@ -553,7 +553,7 @@ async def test_one_bad_entry_does_not_stop_the_sweep(memory_index, monkeypatch, 
             raise RuntimeError("groq is down")
         return []
 
-    monkeypatch.setattr(answer_memory, "_same_question", explode)
+    monkeypatch.setattr(memory_sweep, "_same_question", explode)
 
     await answer_memory.scan_pending()
 
@@ -945,7 +945,7 @@ async def test_approvals_in_a_row_share_one_sweep_rather_than_racing(monkeypatch
             await release.wait()
         return []
 
-    monkeypatch.setattr(api.answer_memory, "scan_pending", sweep)
+    monkeypatch.setattr(answer_memory, "scan_pending", sweep)
 
     first = asyncio.create_task(api._scan_memory())
     await asyncio.sleep(0)
@@ -977,7 +977,7 @@ async def test_an_entry_withdrawn_mid_sweep_replaces_nothing(memory_index, near_
         answer_memory.remove(newer.entry_id)  # the reviewer withdraws meanwhile
         return candidates
 
-    monkeypatch.setattr(answer_memory, "_same_question", slow_and_then_withdrawn)
+    monkeypatch.setattr(memory_sweep, "_same_question", slow_and_then_withdrawn)
 
     await answer_memory.scan(newer)
 

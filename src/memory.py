@@ -147,6 +147,9 @@ class Entry:
     team_id: str = ""
     """The team whose memory this is. Entries are only ever compared within one."""
 
+    product_id: str = ""
+    """The product whose memory this is; empty for the team's shared memory (plan 022)."""
+
     @property
     def stands(self) -> bool:
         return not self.superseded_by

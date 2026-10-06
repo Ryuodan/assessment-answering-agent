@@ -46,7 +46,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `extraction_failed` | 422 | `Unprocessable` | `src.api.view_extracted_text` |
 | `filled_file_missing` | 404 | `NotFound` | `src.api.download_filled_questionnaire` |
 | `last_administrator` | 400 | `Invalid` | `src.routes.admin._refuse_last_admin` |
-| `memory_entry_not_found` | 404 | `NotFound` | `src.api.edit_memory_entry`, `src.api.remove_memory_entry`, `src.api.resolve_memory_conflict`, `src.api.restore_memory_entry` |
+| `memory_entry_not_found` | 404 | `NotFound` | `src.routes.memory.edit_memory_entry`, `src.routes.memory.move_memory_entry`, `src.routes.memory.remove_memory_entry`, `src.routes.memory.resolve_memory_conflict`, `src.routes.memory.restore_memory_entry` |
 | `no_files` | 400 | `Invalid` | `src.routes.knowledge._ingest_files` |
 | `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment` |
 | `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |

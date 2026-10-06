@@ -91,12 +91,13 @@ Errors: [errors.md](errors.md).
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/api/memory` | What we have said before, newest first. |
+| `GET` | `/api/memory` | What we have said before, newest first: the shared memory, or a `product`'s. |
 | `POST` | `/api/memory` | Teach the memory an answer by hand. |
-| `GET` | `/api/memory/conflicts` | Pairs that disagree, with both answers, for somebody to decide between. |
+| `GET` | `/api/memory/conflicts` | Pairs that disagree, with both answers, for somebody to decide between. One memory's. |
 | `PATCH` | `/api/memory/{entry_id}` | Correct an entry. Not a supersession: nothing changed its mind. |
 | `DELETE` | `/api/memory/{entry_id}` | Forget an entry: the row, its vector, and the conflicts it raised. |
 | `POST` | `/api/memory/{entry_id}/restore` | Put a superseded entry back into use, when the later answer was wrong. |
+| `POST` | `/api/memory/{entry_id}/move` | Move an entry to the shared memory (`product` empty) or a product's, and compare it again there. |
 | `POST` | `/api/memory/conflicts/resolve` | Say which of two disagreeing answers is our position, or that neither loses. |
 | `POST` | `/api/memory/scan` | Compare everything that has arrived since the last sweep, and report it. |
 

@@ -147,7 +147,7 @@ Each step is its own plan.
    - deleting a product drops its collection;
    - move the knowledge routes into `src/routes/knowledge.py`;
    - write tests that General's snapshots are unchanged.
-4. **Plan 022, product answer memories:**
+4. **[Plan 022](../completed/022-product-answer-memories.md), product answer memories:**
    - migration 12, `memory_entries.product_id`;
    - index entries in their product's collection;
    - route approvals by the questionnaire's product;
@@ -185,6 +185,8 @@ which do not exist yet.
 - 2026-10-06: Plan 021 smaller than first sketched: carrying the product into answering moves to plan 023, where a questionnaire gets its product, so 021 is the knowledge bases and the search alone.
 
 - 2026-10-06: Plan 021 done: product knowledge bases, the selector on both pages, and the knowledge routes moved out of `api.py` (1811 -> 1700 lines).
+
+- 2026-10-06: Plan 022 done. It added product answer memories, the scoped sweep and moving; the sweep moved to `src/memory_sweep.py`; `api.py` went from 1700 to 1440 lines and `answer_memory.py` from 918 to 836.
 
 ## Decision log
 

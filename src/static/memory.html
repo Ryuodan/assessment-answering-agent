@@ -235,6 +235,14 @@
     replaced, and settle the pairs that disagree.
   </p>
 
+  <!-- Which memory the page shows (plan 022): the shared one, used for every
+       questionnaire, or one product's, used beside it for that product's. -->
+  <div class="controls" style="margin-bottom:14px">
+    <label for="memoryScope"><strong>Answer memory</strong></label>
+    <select id="memoryScope"><option value="">Shared, for every product</option></select>
+    <span class="hint" id="memoryScopeHint" style="font-size:12.5px;color:var(--ink-faint)">Used for every questionnaire.</span>
+  </div>
+
   <div class="counts" id="counts"></div>
 
   <!-- Disagreements first. This is the only part of the page that is somebody's
@@ -495,6 +503,24 @@
     edit.onclick = () => openEditor(card, entry);
     meta.append(edit);
 
+    // Into another memory: the shared one or a product's (plan 022).
+    if (scopes.length) {
+      const move = document.createElement("select");
+      move.className = "move";
+      move.title = "Move this answer to another memory";
+      move.append(new Option("Move to\u2026", ""));
+      [["", "Shared, for every product"], ...scopes.map((p) => [p.id, p.name])]
+        .filter(([id]) => id !== (entry.product_id || ""))
+        .forEach(([id, name]) => move.append(new Option(name, id || "shared")));
+      move.onchange = () => {
+        const target = move.value === "shared" ? "" : move.value;
+        act(move, () => api("/api/memory/" + encodeURIComponent(entry.entry_id) + "/move", {
+          method: "POST", body: JSON.stringify({ product: target }),
+        }));
+      };
+      meta.append(move);
+    }
+
     const remove = document.createElement("button");
     remove.className = "quiet danger";
     remove.textContent = "Forget";
@@ -645,6 +671,7 @@
     if ($("search").value.trim()) params.set("query", $("search").value.trim());
     if ($("standing").value) params.set("standing", $("standing").value);
     if ($("origin").value) params.set("origin", $("origin").value);
+    if (scope()) params.set("product", scope());
     params.set("limit", String(PAGE));
     params.set("offset", String(offset));
     return params;
@@ -679,7 +706,7 @@
 
   async function loadConflicts() {
     try {
-      const body = await api("/api/memory/conflicts");
+      const body = await api("/api/memory/conflicts" + (scope() ? "?product=" + encodeURIComponent(scope()) : ""));
       const pairs = body.conflicts || [];
       $("conflictsPanel").hidden = pairs.length === 0;
       $("conflicts").replaceChildren(...pairs.map(conflictCard));
@@ -692,6 +719,26 @@
     offset = 0;
     await Promise.all([loadEntries(false), loadConflicts()]);
   }
+
+  // --- which memory: shared, or a product's (plan 022) ---------------------
+
+  let scopes = [];
+  function scope() { return $("memoryScope").value; }
+  async function loadScopes() {
+    try {
+      scopes = (await api("/api/products")).products || [];
+    } catch (error) { scopes = []; }
+    const select = $("memoryScope");
+    select.replaceChildren(new Option("Shared, for every product", ""));
+    scopes.forEach((product) => select.append(new Option(product.name, product.id)));
+  }
+  $("memoryScope").addEventListener("change", () => {
+    const name = $("memoryScope").selectedOptions[0].textContent;
+    $("memoryScopeHint").textContent = scope()
+      ? "Used only for " + name + "'s questionnaires, beside the shared one."
+      : "Used for every questionnaire.";
+    reload();
+  });
 
   // --- events --------------------------------------------------------------
 
@@ -740,7 +787,7 @@
     try {
       const added = await api("/api/memory", {
         method: "POST",
-        body: JSON.stringify({ question, answer }),
+        body: JSON.stringify({ question, answer, product: scope() }),
       });
       $("newQuestion").value = "";
       $("newAnswer").value = "";
@@ -766,7 +813,7 @@
     }
   });
 
-  reload();
+  loadScopes().then(reload);
 })();
 </script>
 </body>

@@ -1720,7 +1720,7 @@
     "/api/memory": {
       "get": {
         "summary": "List Memory",
-        "description": "What we have said before, newest first.",
+        "description": "What we have said before, newest first: the shared memory, or a `product`'s.",
         "operationId": "list_memory_api_memory_get",
         "parameters": [
           {
@@ -1771,6 +1771,16 @@
               "type": "integer",
               "default": 0,
               "title": "Offset"
+            }
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Product"
             }
           }
         ],
@@ -1842,17 +1852,39 @@
     "/api/memory/conflicts": {
       "get": {
         "summary": "List Memory Conflicts",
-        "description": "Pairs that disagree, with both answers, for somebody to decide between.",
+        "description": "Pairs that disagree, with both answers, for somebody to decide between. One memory's.",
         "operationId": "list_memory_conflicts_api_memory_conflicts_get",
+        "parameters": [
+          {
+            "name": "product",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Product"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response List Memory Conflicts Api Memory Conflicts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1977,6 +2009,58 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Restore Memory Entry Api Memory  Entry Id  Restore Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memory/{entry_id}/move": {
+      "post": {
+        "summary": "Move Memory Entry",
+        "description": "Move an entry to the shared memory (`product` empty) or a product's, and compare it again there.",
+        "operationId": "move_memory_entry_api_memory__entry_id__move_post",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Move Memory Entry Api Memory  Entry Id  Move Post"
                 }
               }
             }
@@ -4345,6 +4429,12 @@
             "maxLength": 400,
             "title": "Section",
             "default": ""
+          },
+          "product": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Product",
+            "default": ""
           }
         },
         "type": "object",
@@ -4353,6 +4443,18 @@
           "answer"
         ],
         "title": "MemoryEntryRequest"
+      },
+      "MoveRequest": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Product",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "MoveRequest"
       },
       "PasswordRequest": {
         "properties": {

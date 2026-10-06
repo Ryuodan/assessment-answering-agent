@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 1700
+max_lines = 1440
 debt = "TD-006"
 
 [[size]]
@@ -29,7 +29,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/answer_memory.py"
-max_lines = 918
+max_lines = 836
 debt = "TD-006"
 
 [[size]]

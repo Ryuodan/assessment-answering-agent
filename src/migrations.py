@@ -308,6 +308,13 @@ MIGRATIONS: list[str] = [
         applied_at TEXT NOT NULL
     );
     """,
+    # 12 -- which memory an answer belongs to (plan 022): '' is the team's
+    # shared memory, a product id that product's. Every entry from before is
+    # shared, which is what it was.
+    """
+    ALTER TABLE memory_entries ADD COLUMN product_id TEXT NOT NULL DEFAULT '';
+    CREATE INDEX memory_entries_team_product ON memory_entries(team_id, product_id);
+    """,
 ]
 
 

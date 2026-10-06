@@ -134,6 +134,14 @@ the product's hits before the shared ones. The knowledge routes
 (`src/routes/knowledge.py`) take an optional `product`. Deleting a product
 drops its collection.
 
+A product's answer memory is the team's `memory_entries` rows that carry its
+id (`product_id`, `''` for the shared memory), indexed in that product's
+collection. The disagreement sweep (`src/memory_sweep.py`) searches only an
+entry's own memory, so supersession and conflicts never cross memories.
+`answer_memory.move` moves an entry between memories. The memory routes
+(`src/routes/memory.py`) read and teach one memory at a time, Shared by
+default. Deleting a product forgets its entries.
+
 ## How a request flows
 
 **Indexing a policy.** `POST /api/knowledge/guidelines` saves the upload

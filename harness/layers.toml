@@ -62,6 +62,7 @@ modules = [
     "src.preferences",
     "src.answer_memory",
     "src.memory",
+    "src.memory_sweep",
     "src.storage",
 ]
 
