@@ -48,7 +48,7 @@ Always start tools as `python -m <tool>`: see decision D-008 in
 `eval/` scores answers two ways: against facts a correct answer must state
 (`eval/golden_set.json`) and against what the team actually wrote (the house
 set, sealed in git: `uv run poe eval-unlock` first, see
-[SECURITY.md](../../SECURITY.md#sealed-eval-data)). The README's [Evaluation](../../README.md#evaluation) section has the
+[SECURITY.md](../../SECURITY.md#sealed-eval-data)). [Evaluation](../measurements/evaluation.md) has the
 method and the history of measurements; TD-014 in
 [tech-debt.md](../plans/tech-debt.md) notes what the method still lacks.
 

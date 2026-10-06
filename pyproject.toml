@@ -60,9 +60,6 @@ dev = [
 ]
 
 [project.optional-dependencies]
-# Only needed to regenerate the bundled trial corpus (`python -m demo_data.generate`).
-# reportlab and arabic-reshaper are core dependencies — the PDF export uses them.
-demo = []
 # Only needed to turn an evaluation run into a spreadsheet
 # (`python -m scripts.eval_to_xlsx`). The application never writes a workbook
 # from scratch: filling a questionnaire edits the customer's own file through

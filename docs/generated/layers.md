@@ -12,6 +12,20 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 - **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.verification`
 
+| Module | What it is |
+|---|---|
+| `src/__init__.py` | Agentic assessment answering: ingest guidelines and past answers, fill new assessments. |
+| `src/chunking.py` | Structure-aware chunking for policy, standards and regulatory documents. |
+| `src/config.py` | Application settings — the single source of truth for configuration. |
+| `src/credentials.py` | Hashing and generating the secrets people type. |
+| `src/errors.py` | Every error the application raises on purpose, and what it means to a client. |
+| `src/formatting.py` | The small slice of Markdown the drafter actually writes. |
+| `src/logs.py` | Structured logs: an event name, named fields, and the request they belong to. |
+| `src/models.py` | Domain models shared by ingestion, retrieval, the graph and the API. |
+| `src/progress.py` | How far along a run is, for anything watching it. |
+| `src/prompts.py` | All prompts, in one place. |
+| `src/verification.py` | Checks applied to a drafted answer before it is returned. |
+
 ## 2. integrations
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
@@ -19,11 +33,46 @@ Everything that talks to something outside the process: model providers, the emb
 - **Modules:** `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.organisation`, `src.rerank`, `src.store`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_huggingface`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
+| Module | What it is |
+|---|---|
+| `src/docling_client.py` | Client for the Docling conversion service. |
+| `src/documents.py` | PDF and DOCX text extraction. |
+| `src/embeddings.py` | Embeddings client. |
+| `src/export_docx.py` | Render an answered assessment as a Word document. |
+| `src/export_pdf.py` | Render an answered assessment as a PDF. |
+| `src/forms/__init__.py` | Reading questionnaires and writing answers back into them. |
+| `src/forms/docx.py` | Understanding a questionnaire in a Word document. |
+| `src/forms/llm_layout.py` | Asking a model to read a sheet the rules could not. |
+| `src/forms/model.py` | What a questionnaire looks like once we have understood it. |
+| `src/forms/sheet_view.py` | Showing a worksheet to a language model. |
+| `src/forms/status.py` | Turning a written answer into the word a form's dropdown will accept. |
+| `src/forms/xlsx.py` | Understanding a questionnaire workbook: which sheets, which columns, which rows. |
+| `src/forms/xlsx_package.py` | Reading and writing .xlsx as what it is: a zip of XML parts. |
+| `src/knowledge.py` | The knowledge base: guidelines and previously answered assessments. |
+| `src/lexical.py` | Lexical (BM25) retrieval, fused with the dense search. |
+| `src/llm.py` | Groq chat-model factory. |
+| `src/organisation.py` | Who this system is answering on behalf of. |
+| `src/rerank.py` | Cross-encoder reranking of retrieved evidence. |
+| `src/store.py` | SQLite storage for identity, the event log, and answered runs. |
+
 ## 3. records
 
 What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits.
 
 - **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.preferences`, `src.runs`, `src.storage`
+
+| Module | What it is |
+|---|---|
+| `src/access_codes.py` | Where a team access code generated at startup is shown: never the log (TD-029). |
+| `src/answer_memory.py` | The answer memory as something a person can manage. |
+| `src/batches.py` | An uploaded questionnaire, and the answers written for it so far. |
+| `src/conversations.py` | A conversation with the assistant, kept so the work outlives the request. |
+| `src/events.py` | An append-only record of what people and the system did. |
+| `src/identity.py` | Who is using the system, which team's work they see, and who may say so. |
+| `src/memory.py` | The answer memory: what this organisation has actually said, and which of it still stands. |
+| `src/preferences.py` | How one person wants answers worded: preferences, and skills. |
+| `src/runs.py` | Answered runs, kept so they can be looked at again. |
+| `src/storage.py` | Keeping each person's stored files within a limit, oldest work first. |
 
 ## 4. answering
 
@@ -32,6 +81,19 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 - **Modules:** `src.agents`, `src.agents.excel_agent`, `src.extraction`, `src.forms.reading`, `src.relevance`, `src.rewrite`, `src.graph.*`
 - **Owns:** `langchain`, `langgraph`
 
+| Module | What it is |
+|---|---|
+| `src/agents/__init__.py` | Agents that read files by exploring them, rather than by rule. |
+| `src/agents/excel_agent.py` | Reading a questionnaire workbook by exploring it. |
+| `src/extraction.py` | Turn raw document text into structured questions or question/answer pairs. |
+| `src/forms/reading.py` | The five ways a questionnaire can be read, behind one call. |
+| `src/graph/__init__.py` | LangGraph workflow for answering assessments. |
+| `src/graph/nodes.py` | Graph nodes. |
+| `src/graph/state.py` | Graph state schemas. |
+| `src/graph/workflow.py` | Graph wiring. |
+| `src/relevance.py` | LLM relevance grading of retrieved chunks. |
+| `src/rewrite.py` | Rewording an answer that has already been written and checked. |
+
 ## 5. operations
 
 The use cases the web interface, the command line and the chat assistant share.
@@ -39,12 +101,24 @@ The use cases the web interface, the command line and the chat assistant share.
 - **Modules:** `src.agents.assistant`, `src.service`, `src.tools`
 - **Owns:** `langchain`
 
+| Module | What it is |
+|---|---|
+| `src/agents/assistant.py` | The assistant: one conversation, over everything the system can do. |
+| `src/service.py` | Application service — the one orchestration layer the API and CLI share. |
+| `src/tools.py` | The operations the interface performs, and the agent will later call. |
+
 ## 6. interfaces
 
 How people and programs reach the system: the HTTP API with its pages, and the command line.
 
 - **Modules:** `src.api`, `src.cli`, `src.web`
 - **Owns:** `fastapi`, `starlette`, `uvicorn`
+
+| Module | What it is |
+|---|---|
+| `src/api.py` | FastAPI application: REST endpoints plus the single-page frontend. |
+| `src/cli.py` | Command-line interface. |
+| `src/web.py` | What every HTTP request shares: its ID, its log line, and how errors answer. |
 
 ## Owned by one module
 

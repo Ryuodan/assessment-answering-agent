@@ -13,7 +13,7 @@ source. The description is the comment above the field, the field's
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `GROQ_API_KEY` | `str` | `""` |  |
-| `GROQ_CHAT_MODEL` | `str` | `"openai/gpt-oss-120b"` |  |
+| `GROQ_CHAT_MODEL` | `str` | `"openai/gpt-oss-120b"` | Used for extraction, drafting and review. |
 | `GROQ_REASONING_FORMAT` | `Literal["parsed", "hidden", "raw", ""]` | `"parsed"` | Groq's reasoning_format: parsed, hidden, raw, or '' to send nothing |
 | `GROQ_BASE_URL` | `str \| None` | `"https://api.me-central-1.groqcloud.com"` | ME-Central-1 regional endpoint. Host root only — the groq client appends `/openai/v1` to it. Set to "" to fall back to the global api.groq.com. |
 | `LLM_TEMPERATURE` | `float` | `0.0` |  |
@@ -38,7 +38,7 @@ source. The description is the comment above the field, the field's
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `PHOENIX_TRACING` | `bool` | `False` | The same traces, kept locally. Phoenix is an OpenTelemetry collector with a UI that understands LLM spans, and it runs wherever this does, so the data-residency objection to LangSmith does not apply: nothing crosses a border, or leaves the host at all. Still off by default, because a trace is a copy of the policy text and the customer's questionnaire in a second store with no access control in front of it. Local is not the same as harmless -- see the README. |
+| `PHOENIX_TRACING` | `bool` | `False` | The same traces, kept locally. Phoenix is an OpenTelemetry collector with a UI that understands LLM spans, and it runs wherever this does, so the data-residency objection to LangSmith does not apply: nothing crosses a border, or leaves the host at all. Still off by default, because a trace is a copy of the policy text and the customer's questionnaire in a second store with no access control in front of it. Local is not the same as harmless -- see docs/operations/tracing.md. |
 | `PHOENIX_ENDPOINT` | `str` | `"http://localhost:6006/v1/traces"` |  |
 | `PHOENIX_PROJECT` | `str` | `"assessment-answer"` |  |
 
@@ -81,15 +81,15 @@ source. The description is the comment above the field, the field's
 | `CHROMA_DIR` | `Path` | `PROJECT_ROOT / "chroma_db"` |  |
 | `COLLECTION_NAME` | `str` | `"assessment_knowledge"` |  |
 | `UPLOAD_DIR` | `Path` | `PROJECT_ROOT / "data" / "uploads"` |  |
-| `EXTRACTED_TEXT_DIR` | `Path` | `PROJECT_ROOT / "data" / "extracted"` |  |
+| `EXTRACTED_TEXT_DIR` | `Path` | `PROJECT_ROOT / "data" / "extracted"` | Cache for document text shown in the interface. |
 | `FILLED_DIR` | `Path` | `PROJECT_ROOT / "data" / "filled"` | Where a filled copy of a questionnaire is written, one directory per batch. |
 
 ## Retrieval + answering
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `TOP_K_GUIDELINES` | `int` | `8` |  |
-| `TOP_K_PRIOR_ANSWERS` | `int` | `5` |  |
+| `TOP_K_GUIDELINES` | `int` | `8` | Guideline chunks retrieved per search query. |
+| `TOP_K_PRIOR_ANSWERS` | `int` | `5` | Previous answers retrieved per question. |
 | `QUERY_EXPANSION` | `bool` | `True` | Split a multi-part question into one search per part before retrieving. Costs one extra LLM call per question; turn it off to retrieve on the question's own wording alone. |
 | `MAX_SEARCH_QUERIES` | `int` | `6` | The verbatim question always occupies the first slot, so this is one more than the number of decomposed angles. Four left only three angles for a question needing five different policies, which is most of what multi-document recall was losing. |
 | `HYBRID_SEARCH` | `bool` | `False` | Fuse a BM25 pass with the dense search, to catch the exact figures embeddings blur — "72 hours", "90 days", "12 characters". Off by default because it measured worse on the T2 corpus: 71.4% against 73.6% for dense alone. It does what it claims (it moved the PDPL 72-hour clause from rank 11 to rank 1) but it also promotes the wrong section of the right document, and on the golden set it lost more than it won. Turn it on for a corpus whose questions are mostly exact-figure lookups, and re-run `eval/` to check. See src/lexical.py. |
@@ -99,11 +99,11 @@ source. The description is the comment above the field, the field's
 | `RERANKER_MAX_LENGTH` | `int` | `1024` |  |
 | `RERANKER_BATCH_SIZE` | `int` | `16` |  |
 | `MAX_ANSWER_ATTEMPTS` | `int` | `3` | Draft/review rounds per question. Evidence accumulates across rounds rather than being replaced, so a third attempt adds material to the drafter's context instead of trading one retrieval for another. |
-| `MAX_CONCURRENT_QUESTIONS` | `int` | `4` |  |
+| `MAX_CONCURRENT_QUESTIONS` | `int` | `4` | Questions answered at once. Raise carefully: Groq rate limits apply. |
 | `MAX_CONCURRENT_REWRITES` | `int` | `8` | Rewordings reaching the model at once: preferences, skills, "make them shorter", and the brief form, each one call per answer. Unbounded, 80 at once lost 44 to Groq's rate limit and every lost one stayed as it was. |
 | `STORAGE_LIMIT_PER_USER_MB` | `int` | `2048` | Stored files per person: the questionnaires they uploaded and the filled copies written from them. Under the limit nothing is removed; over it, the files of the work they have not used longest go first -- never a document the team's knowledge base was built from, and never anything used in the last STORAGE_KEEP_DAYS days, whatever the limit says. Per person, because that is who a questionnaire belongs to, so a new colleague brings their own allowance. 0 turns the limit off. |
-| `STORAGE_KEEP_DAYS` | `int` | `30` |  |
-| `REVIEW_CONFIDENCE_THRESHOLD` | `float` | `0.6` |  |
+| `STORAGE_KEEP_DAYS` | `int` | `30` | Nothing used this recently is removed, even over the limit. |
+| `REVIEW_CONFIDENCE_THRESHOLD` | `float` | `0.6` | Below this, an answer is flagged for review. |
 | `CHUNK_SIZE` | `int` | `1200` | 1200, not the 1800 this carried while Markdown tables still held Docling's alignment padding. De-padding changed what the number buys: at 1800 a chunk held 1,118 characters of content instead of 950, the corpus became coarser than the retriever was tuned for, and measured accuracy fell 4.4 points. 1200 restores the granularity and still holds more content than 1800 did. |
 | `CHUNK_OVERLAP` | `int` | `150` |  |
 | `MAX_EXPANDED_CHARS` | `int` | `12000` |  |

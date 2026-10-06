@@ -3,8 +3,12 @@
 Lasting decisions, numbered. Each records its context, the decision, its
 consequences, the date, its status (accepted, superseded by D-NNN, or
 withdrawn), and who decided. Earlier design decisions are recorded, with
-their measurements, in the README; they are promoted here as the README is
-reorganised (roadmap M4).
+their measurements, in the design notes that were moved out of the README
+(plan 009): [answering](answering.md), [questionnaires](questionnaires.md),
+[the assistant](assistant.md), [the answer memory](answer-memory.md),
+[preferences](preferences.md), [access](access.md), and the
+[evaluation](../measurements/evaluation.md). A decision is promoted here when
+a plan relies on it.
 
 ## D-001: poethepoet is the task runner
 
@@ -70,6 +74,9 @@ reorganised (roadmap M4).
   partly out of date (TD-001 to TD-005).
 - **Decision:** keep its content; move it into `docs/` (decisions, design
   notes, measurements) in a later plan, and cut the README to an introduction.
+- **Consequences:** done in plan 009: the sections moved verbatim into
+  `docs/design/`, `docs/operations/` and `docs/measurements/`; the API, settings
+  and module tables are generated instead of hand-written.
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user.
 
 ## D-007: harness code lives in `harness/`, outside the application

@@ -11,6 +11,7 @@ line, `KIND path:line: what`. Kinds:
     SUPPRESS    a `noqa` or `type: ignore` with no reason written beside it
     OVERSIZE    a module over the size limit (its ceiling is in the allow-list)
     STALE-PATH  a doc names a repository path, in backticks, that does not exist
+                (plans are records, so they are not read)
     TODO        a TODO, FIXME or XXX in src/
 
 References are found by name across src/, tests/, scripts/, eval/ and the pages
@@ -114,7 +115,8 @@ def stale_paths(root: Path) -> list[str]:
     docs = [p for p in root.glob("*.md")] + list((root / "docs").rglob("*.md"))
     for doc in sorted(docs):
         rel = doc.relative_to(root).as_posix()
-        if rel.startswith("docs/generated/"):
+        # Plans are records: a path in one names the tree as it was, or an alternative not taken.
+        if rel.startswith(("docs/generated/", "docs/plans/active/", "docs/plans/completed/")):
             continue
         for number, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), start=1):
             for mentioned in _PATH_IN_BACKTICKS.findall(line):

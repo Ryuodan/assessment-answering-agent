@@ -51,6 +51,7 @@ class Settings(BaseSettings):
 
     # --- LLM (Groq) --------------------------------------------------------
     groq_api_key: str = ""
+    # Used for extraction, drafting and review.
     groq_chat_model: str = "openai/gpt-oss-120b"
     groq_reasoning_format: Literal["parsed", "hidden", "raw", ""] = Field(
         default="parsed",
@@ -103,7 +104,7 @@ class Settings(BaseSettings):
     #
     # Still off by default, because a trace is a copy of the policy text and
     # the customer's questionnaire in a second store with no access control in
-    # front of it. Local is not the same as harmless -- see the README.
+    # front of it. Local is not the same as harmless -- see docs/operations/tracing.md.
     phoenix_tracing: bool = False
     phoenix_endpoint: str = "http://localhost:6006/v1/traces"
     phoenix_project: str = "assessment-answer"
@@ -190,6 +191,7 @@ class Settings(BaseSettings):
     chroma_dir: Path = PROJECT_ROOT / "chroma_db"
     collection_name: str = "assessment_knowledge"
     upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
+    # Cache for document text shown in the interface.
     extracted_text_dir: Path = PROJECT_ROOT / "data" / "extracted"
 
     filled_dir: Path = PROJECT_ROOT / "data" / "filled"
@@ -201,7 +203,9 @@ class Settings(BaseSettings):
     """
 
     # --- Retrieval + answering --------------------------------------------
+    # Guideline chunks retrieved per search query.
     top_k_guidelines: int = 8
+    # Previous answers retrieved per question.
     top_k_prior_answers: int = 5
 
     # Split a multi-part question into one search per part before retrieving.
@@ -238,6 +242,7 @@ class Settings(BaseSettings):
     # rather than being replaced, so a third attempt adds material to the
     # drafter's context instead of trading one retrieval for another.
     max_answer_attempts: int = Field(default=3, ge=1, le=5)
+    # Questions answered at once. Raise carefully: Groq rate limits apply.
     max_concurrent_questions: int = Field(default=4, ge=1, le=32)
     # Rewordings reaching the model at once: preferences, skills, "make them
     # shorter", and the brief form, each one call per answer. Unbounded, 80 at
@@ -252,7 +257,9 @@ class Settings(BaseSettings):
     # that is who a questionnaire belongs to, so a new colleague brings their
     # own allowance. 0 turns the limit off.
     storage_limit_per_user_mb: int = Field(default=2048, ge=0)
+    # Nothing used this recently is removed, even over the limit.
     storage_keep_days: int = Field(default=30, ge=1)
+    # Below this, an answer is flagged for review.
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # 1200, not the 1800 this carried while Markdown tables still held Docling's

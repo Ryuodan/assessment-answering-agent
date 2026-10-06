@@ -12,13 +12,13 @@ or docs and has not been verified by running anything.
 
 - **What:** `README.md` (Setup, and the Layout entry for `embeddings.py`) says embeddings "run locally through sentence-transformers" and need no key. `src/embeddings.py` builds `OpenAIEmbeddings` against `settings.embedding_base_url` (default `https://ds.t2.sa/text_embed/v1`); the local variant is commented out at the end of the file. Read.
 - **Impact:** a reader or agent believes ingestion works offline and that no policy text leaves the host for embedding.
-- **Fix:** correct the README when it is reorganised into `docs/`; decide whether the commented-out variant (TD-020) stays.
+- **Resolved** 2026-10-06 (Claude, plan 009): the README's Setup says embeddings go to the BGE-M3 service at `EMBEDDING_BASE_URL`, and that indexed text and searches are sent there; the Layout entry is replaced by the generated module table in `docs/generated/layers.md`, which quotes `src/embeddings.py`'s own docstring. The commented-out variant is TD-020, still the user's call.
 
 ## TD-002: README "Limits" section is out of date
 
 - **What:** it says filled forms are not written back into the original file (`POST /api/forms/{id}/fill` does exactly that); it says scanned PDFs need OCR turned on (`DOCLING_OCR_AUTO` defaults to true); one bullet ends mid-sentence ("Except when "). Read.
 - **Impact:** wrong statements about the product's limits, in the document readers trust most.
-- **Fix:** rewrite the section during the README reorganisation.
+- **Resolved** 2026-10-06 (Claude, plan 009): the OCR bullet now says what the code does (`DOCLING_OCR_AUTO` turns OCR on for a PDF with no text layer, `DOCLING_DO_OCR` forces it, the local fallback has none), and the write-back bullet says answers are written into a copy of an .xlsx, .xlsm or .docx questionnaire and never into a PDF. Both read from `src/documents.py`, `src/forms/__init__.py` and the `fill` route.
 
 ## TD-003: README API table lists 46 of 70 operations
 
@@ -26,12 +26,14 @@ or docs and has not been verified by running anything.
 - **Impact:** the API cannot be learned from the docs.
 - **Fix:** plan 001 generates `docs/generated/openapi.json`; the README table should link to it instead of listing routes by hand.
 - **Partly resolved** 2026-10-05 (plan 001): the generated contract exists and is kept current by a test; the README table is still hand-written.
+- **Resolved** 2026-10-06 (Claude, plan 009): the hand-written table is gone; `docs/generated/api.md` lists all 70 operations with the first paragraph of each route's docstring. 17 routes in `src/api.py` have no docstring and show the summary FastAPI derives from the function name ("Admin Add User"); adding docstrings would grow `api.py` past its ceiling, so they come with splitting it (TD-006).
 
 ## TD-004: References to the deleted `demo_data` package
 
 - **What:** the demo files were deleted in commit 5da221d, but the README still mentions "bundled English, Arabic and bilingual trial documents", `pyproject.toml` describes a `demo` extra for `python -m demo_data.generate`, and `.claude/settings.json` allows `demo_data.smoke` and macOS-only paths. Read.
 - **Impact:** instructions that cannot work; an empty `demo` extra.
 - **Fix:** remove the references (small change, no plan needed) once the README is reorganised.
+- **Resolved** 2026-10-06 (Claude, plan 009) for the README and `pyproject.toml` (the empty `demo` extra is gone; `uv.lock` changed only in its list of extras). Left: `.claude/settings.json` still allows `demo_data.smoke`, alongside other entries from earlier sessions (macOS `sed -i ''` edits, `/usr/share/fonts`). That file is the agent's own permission list, so it is the user's to prune, not the agent's.
 
 ## TD-005: Small configuration doc errors
 
@@ -39,6 +41,7 @@ or docs and has not been verified by running anything.
 - **Impact:** minor confusion.
 - **Fix:** the generated `docs/generated/settings.md` replaces the hand-written table; move the comment.
 - **Partly resolved** 2026-10-05 (plan 001): the comment is above `groq_base_url` again and `docs/generated/settings.md` exists; the README table still lists `DOCLING_DO_OCR` twice.
+- **Resolved** 2026-10-06 (Claude, plan 009): the README's table is replaced by a link to `docs/generated/settings.md`. It had also drifted: it gave `TOP_K_GUIDELINES` as 5 and `MAX_EVIDENCE_CHUNKS` as 14, where `src/config.py` has 8 and 38. Its notes for the seven settings that had no comment moved into `src/config.py` as comments, where the generated page reads them.
 
 ## TD-006: Eighteen modules in `src/` exceed 400 lines
 
@@ -172,6 +175,7 @@ or docs and has not been verified by running anything.
 - **What:** measured 2026-10-05 (Claude): `eval/house_set.json` holds 135 cases. The README's "Evaluation" introduction says it "holds 122 questions"; its "Splitting the team's answers" section says 135.
 - **Impact:** a reader cannot tell which number a reported score is over.
 - **Fix:** correct it when the README is reorganised (M4); numbers about a dataset should come from the dataset (a generated summary) rather than be typed.
+- **Resolved** 2026-10-06 (Claude, plan 009): re-measured on the unlocked file, 135 cases from 5 questionnaires; `docs/measurements/evaluation.md` now says 135. A generated summary was not added: the file is sealed in git, so a generator would only work where it is unlocked.
 
 ## TD-026: A questionnaire that was not yours answered 400, everything else 404
 

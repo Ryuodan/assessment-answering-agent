@@ -48,6 +48,7 @@ REQUIRED = [
     "docs/generated/settings.md",
     "docs/generated/layers.md",
     "docs/generated/errors.md",
+    "docs/generated/api.md",
 ]
 
 PLAN_SECTIONS = ["Goal", "Acceptance criteria", "Plan", "Progress log", "Decision log"]

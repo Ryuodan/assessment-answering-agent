@@ -34,13 +34,14 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 | What the product is | [docs/project/DESCRIPTION.md](docs/project/DESCRIPTION.md), [overview](docs/project/overview.md) |
 | How the code is layered, how a request flows | [ARCHITECTURE.md](ARCHITECTURE.md), [layers.md](docs/generated/layers.md) |
 | Secrets, sensitive data, access model | [SECURITY.md](SECURITY.md) |
-| Why things are the way they are | [decisions.md](docs/design/decisions.md), [boundaries.md](docs/design/boundaries.md); design history in [README.md](README.md) |
+| Why things are the way they are | [decisions.md](docs/design/decisions.md), [boundaries.md](docs/design/boundaries.md); design notes in [docs/design/](README.md#read-more) |
+| How answers are measured, and what the numbers were | [evaluation.md](docs/measurements/evaluation.md) |
 | Current work | [docs/plans/active/](docs/plans/README.md), [roadmap](docs/plans/roadmap.md) |
 | Known problems | [tech-debt.md](docs/plans/tech-debt.md) |
 | Quality per layer, round by round | [quality/grades.md](docs/quality/grades.md) |
 | The rules and what enforces each | [golden-principles.md](docs/harness/golden-principles.md), [PRINCIPLES.md](docs/harness/PRINCIPLES.md) |
 | Plan template and rules | [docs/plans/README.md](docs/plans/README.md) |
-| API contract, settings, error codes (generated) | [openapi.json](docs/generated/openapi.json), [settings.md](docs/generated/settings.md), [errors.md](docs/generated/errors.md) |
+| API, settings, error codes, modules (generated) | [api.md](docs/generated/api.md), [openapi.json](docs/generated/openapi.json), [settings.md](docs/generated/settings.md), [errors.md](docs/generated/errors.md), [layers.md](docs/generated/layers.md) |
 
 ## Code map
 
