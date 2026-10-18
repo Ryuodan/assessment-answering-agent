@@ -290,3 +290,18 @@ or docs and has not been verified by running anything.
 
   300 s is about four times the slowest batch. A stalled host now fails a request after about 15 minutes (three attempts) instead of never. `tests/test_embeddings_client.py` holds a local server that never replies: with the timeout the request fails in about 3 s; without it, the same test was still waiting when a 40 s limit killed it.
 
+
+## TD-035: Importing a completed questionnaire for a product would file its answers as shared
+
+- **What:** read 2026-10-18 (Claude, plan 026). `service.ingest(path, PRIOR_ANSWER, product_id=...)` indexes the pairs into the product's collection (`own_store`). `answer_memory.adopt_file` then writes their rows with `product_id = ''`, because it takes no product. The rows would be listed under Shared on the memory page while their vectors sit in the product's collection, and forgetting one would unindex it from the shared collection and leave the vector behind.
+- **Impact:** none today. No route offers this combination; the command line's `answers` command and the scripts pass no product. The import of the products' data (plan 026, a later step) would reach it.
+- **Fix (needs approval, with that import):** give `adopt_file` the product, or have the import record its entries with `answer_memory.record(..., product_id=...)`. Either way, add a test that an imported product answer is listed, indexed and forgotten in its own memory.
+
+## TD-036: Three entries in the live shared answer memory need the team's decision
+
+- **What:** seen 2026-10-18 (Claude, plan 026's survey), read-only.
+  - `MEM-0035`: its answer is the name, job title and email address of the person who filled in the questionnaire. That is personal data, and nothing should reuse it as an answer.
+  - `MEM-0519`: its answer is a routing note that sends the question to the product and legal teams, not an answer.
+  - `MEM-0400`: it says a Data Protection Officer is in place. The team's own 2026 correspondence says, twice, that none is appointed.
+- **Impact:** the drafter can quote the first two as if they were T2's answers, and the third may no longer be true.
+- **Fix:** the user's call, on the Answer memory page: forget `MEM-0035` and `MEM-0519`, and confirm the DPO status before correcting or forgetting `MEM-0400`. Not done by Claude, because the live memory is the team's data.
