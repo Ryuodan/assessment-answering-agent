@@ -318,6 +318,7 @@ or docs and has not been verified by running anything.
 - **What:** found 2026-10-19 (tracks C, D2, D3 and E, confirmed). `products.seed()` records the `products` seed on the first start even when `SEED_PRODUCTS` is empty. `identity.bootstrap` seeds `ALLOWED_EMAILS` only when the list is non-empty, which is the behaviour plan 018's decision 6 compared it to.
 - **Impact:** an upgraded server whose `.env` has no `SEED_PRODUCTS`, which is every older production `.env`, marks the seed done on its first start. Setting the names afterwards adds nothing, and nothing is logged. The workaround is to add the products on the Products page.
 - **Fix (needs approval):** record the seed only when `SEED_PRODUCTS` names something. For a deploy before the fix, set `SEED_PRODUCTS` before the first start.
+- **Decision** 2026-10-19, by the user: not changed in code. The server manager starts the new version with a copy of the user's current `.env`, which sets `SEED_PRODUCTS` to the five products (checked, keys only).
 
 ## TD-039: Deleting a product leaves its uploaded files on disk and in the document library
 
@@ -333,6 +334,11 @@ Found 2026-10-19 by the pre-deploy tests. Each item works as specified, but a us
 - **Switching to General before approving.** Approving a product questionnaire's hand-written answer after switching it to General moves product wording into the shared memory. In the test, the sweep then marked a shared answer superseded by it, without asking anyone.
 - **Silent forgetting on delete.** Deleting a product forgets its remembered answers, including shared answers that had been moved into it. The dialog does not count them.
 - **Member rights.** Any member can upload to or clear a product's knowledge base and move memory entries; only managing products themselves needs a lead.
+- **Decisions** 2026-10-19, by the user:
+  - Product evidence is marked FOR THIS PRODUCT in the drafter's prompt and shared evidence carries no mark; that label is the precedence.
+  - A questionnaire's or chat's product is chosen once and cannot be changed afterwards, which removes the switch-before-approving path.
+  - Deleting a product deletes its remembered answers, including those moved in from Shared, and the warning says so.
+  - Member rights stay as they are.
 
 ## TD-041: Chat page issues found in the browser tests
 
@@ -366,3 +372,4 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-10-19 by the upgrade rehearsal from the production commit (track D3, check D3-07). Since the 20 September release, questionnaires and chats are private to their owner, by design. Before it, every member and the administrator could list and open all of them. After an upgrade from an earlier version, each is visible only to its owner; anyone else gets 404, and the administrator has no team-wide view.
 - **Impact:** nothing is lost, and owners keep their own work. But colleagues who used to share questionnaires lose sight of each other's, and a former member's questionnaires and chats cannot be reached or handed over.
 - **Fix (a product decision):** at least a release note for the upgrade. Possibly a read-only or reassign view for administrators.
+- **Decision** 2026-10-19, by the user: intended; each person has their own history. Nothing to change beyond the release note.
