@@ -56,9 +56,10 @@ async def _ingest_files(
     for upload in files:
         check_suffix(upload.filename or "")
 
+    # A product's file is kept in the product's own folder, and goes with it (plan 027).
     results = []
     for upload in files:
-        path = service.save_upload(upload.filename or "upload", await upload.read(), team_id)
+        path = service.save_upload(upload.filename or "upload", await upload.read(), team_id, **(scope or {}))
         results.append(await service.ingest(path, source_type, authority, team_id, **(scope or {})))
     return results
 
@@ -128,7 +129,7 @@ def _record_indexing(user: User, results: list[IngestResult], **payload: str) ->
 
 @router.delete("/api/knowledge/sources/{source_name}")
 def remove_source(source_name: str, product: str = "", user: User = Depends(current_user)) -> dict[str, Any]:
-    """Remove one indexed policy document, from the shared knowledge base or a `product`'s."""
+    """Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file)."""
     scope = _scope(user, product)
     try:
         service.delete_source(source_name, user.team_id, **scope)
@@ -146,7 +147,7 @@ def remove_source(source_name: str, product: str = "", user: User = Depends(curr
 
 @router.delete("/api/knowledge")
 def clear_knowledge(product: str = "", user: User = Depends(current_user)) -> dict[str, Any]:
-    """Remove every policy document, shared or a `product`'s. The answer memory is left as it is."""
+    """Remove every policy document, shared or a `product`'s (with their files). The answer memory stays."""
     scope = _scope(user, product)
     service.clear_knowledge(user.team_id, **scope)
     events.record(user, events.SOURCE_REMOVED, subject_type="document", subject_id="*", all=True, **scope)

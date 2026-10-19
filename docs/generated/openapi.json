@@ -591,7 +591,7 @@
       },
       "delete": {
         "summary": "Delete Product",
-        "description": "Delete a product, with its documents and remembered answers. Needs `confirm=confirm`.",
+        "description": "Delete a product, with its documents and their files, and its remembered answers. Needs `confirm=confirm`.\n\nThe remembered answers include those moved in from the shared memory. Its\nquestionnaires and chats become General. `removed` says how many of each.",
         "operationId": "delete_product_api_products__product_id__delete",
         "parameters": [
           {
@@ -639,6 +639,64 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Delete Product Api Products  Product Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{product_id}/deletion": {
+      "get": {
+        "summary": "Preview Deletion",
+        "description": "What deleting a product would remove, counted, for the page's warning. Changes nothing.\n\nIts team's leads and administrators only, as deleting it is.",
+        "operationId": "preview_deletion_api_products__product_id__deletion_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Team"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Preview Deletion Api Products  Product Id  Deletion Get"
                 }
               }
             }
@@ -1640,7 +1698,7 @@
       },
       "delete": {
         "summary": "Clear Knowledge",
-        "description": "Remove every policy document, shared or a `product`'s. The answer memory is left as it is.",
+        "description": "Remove every policy document, shared or a `product`'s (with their files). The answer memory stays.",
         "operationId": "clear_knowledge_api_knowledge_delete",
         "parameters": [
           {
@@ -1726,7 +1784,7 @@
     "/api/knowledge/sources/{source_name}": {
       "delete": {
         "summary": "Remove Source",
-        "description": "Remove one indexed policy document, from the shared knowledge base or a `product`'s.",
+        "description": "Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file).",
         "operationId": "remove_source_api_knowledge_sources__source_name__delete",
         "parameters": [
           {

@@ -15,7 +15,9 @@ Two things are never removed, whatever the limit says:
 
 * **A document the team's knowledge base was built from.** It is what answers
   are drafted from and what a person opens to check a citation. Policies belong
-  to the team, not to whoever uploaded them, and count against nobody.
+  to the team, not to whoever uploaded them, and count against nobody. A
+  product's are in its own folder, which nothing here walks: they go when they
+  are removed from its knowledge base, or with the product.
 * **Anything used in the last `STORAGE_KEEP_DAYS` days.** The limit is a
   number somebody chose for the usage they had then. If a person's work grows
   and nobody raises it, the work in front of them is still left alone -- they
@@ -39,6 +41,7 @@ from src.logs import get_logger
 from src import events, store
 from src.config import settings
 from src.identity import User
+from src.uploads import extracted_text_cache_path
 
 logger = get_logger(__name__)
 
@@ -201,8 +204,6 @@ def removable(person: Person) -> list[Item]:
 
 def enforce(person: Person, *, now: datetime | None = None) -> Checked:
     """Bring one person under their limit, removing only work nobody has used lately."""
-    from src.service import _extracted_text_cache_path
-
     checked = Checked(
         person.email,
         person.team_id,
@@ -219,7 +220,7 @@ def enforce(person: Person, *, now: datetime | None = None) -> Checked:
         try:
             if item.kind == "questionnaire":
                 # The text read out of it is as confidential as the file.
-                _extracted_text_cache_path(item.path).unlink(missing_ok=True)
+                extracted_text_cache_path(item.path).unlink(missing_ok=True)
             item.path.unlink()
         except OSError:
             logger.warning("storage.remove_failed", file=str(item.path), exc_info=True)

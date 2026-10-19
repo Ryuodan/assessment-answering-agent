@@ -88,14 +88,30 @@ def edit_product(
     return {"product": changed.as_dict()}
 
 
+@router.get("/api/products/{product_id}/deletion")
+def preview_deletion(product_id: str, team: str | None = None, user: User = Depends(current_user)) -> dict[str, Any]:
+    """What deleting a product would remove, counted, for the page's warning. Changes nothing.
+
+    Its team's leads and administrators only, as deleting it is.
+    """
+    which = _team(user, team)
+    _manager(user, which)
+    return products.deletion_preview(which, product_id)
+
+
 @router.delete("/api/products/{product_id}")
 def delete_product(
     product_id: str, confirm: str = "", team: str | None = None, user: User = Depends(current_user)
 ) -> dict[str, Any]:
-    """Delete a product, with its documents and remembered answers. Needs `confirm=confirm`."""
+    """Delete a product, with its documents and their files, and its remembered answers. Needs `confirm=confirm`.
+
+    The remembered answers include those moved in from the shared memory. Its
+    questionnaires and chats become General. `removed` says how many of each.
+    """
     which = _team(user, team)
     _manager(user, which)
-    return {"deleted": products.delete(user, which, product_id, confirm).as_dict()}
+    deletion = products.delete(user, which, product_id, confirm)
+    return {"deleted": deletion.product.as_dict(), "removed": deletion.as_dict()}
 
 
 @router.get("/products", include_in_schema=False)

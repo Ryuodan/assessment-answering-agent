@@ -6,7 +6,8 @@ material and on that product's, and one answered for no product ("General")
 draws on the shared material alone (plan 018). This module is the products
 themselves -- their names, colours and descriptions -- and nothing they hold;
 plans 021 to 023 give them a knowledge base, a memory and a place in each
-questionnaire and conversation.
+questionnaire and conversation. Deleting one is the exception: what it holds
+goes with it, and is counted first, so the page can say what will go (plan 027).
 
 Who may change them is `src.roles.manages_products`: the team's leads, and any
 administrator. Everyone on the team may list them.
@@ -17,9 +18,10 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
-from src import answer_memory, events, scoped_knowledge, store
+from src import answer_memory, batches, events, knowledge, scoped_knowledge, store, uploads
 from src.config import settings
 from src.errors import Invalid, ProductNameTaken, ProductNotFound
 from src.identity import User
@@ -53,6 +55,25 @@ class Product:
 
     def as_dict(self) -> dict[str, str]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class Deletion:
+    """What deleting a product removed, and any of its files that could not be removed."""
+
+    product: Product
+    files_removed: int
+    answers_forgotten: int
+    moved_from_shared: int  # of the answers forgotten, those moved in from the shared memory
+    questionnaires: int  # now General
+    conversations: int  # now General
+    files_left: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, Any]:
+        """The counts without the product: what the route reports as `removed`, and the event records."""
+        return {key: value for key, value in asdict(self).items() if key != "product"} | {
+            "files_left": list(self.files_left)
+        }
 
 
 def _product(row: Any) -> Product:
@@ -173,13 +194,91 @@ def update(
     return get(team_id, product_id)
 
 
-def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Product:
-    """Delete a product, once "confirm" has been typed.
+def _count(table: str, team_id: str, product_id: str) -> int:
+    query = f"SELECT COUNT(*) FROM {table} WHERE team_id = ? AND product_id = ?"
+    return int(store.connect().execute(query, (team_id, product_id)).fetchone()[0])
 
-    The page warns that the product's documents and remembered answers go with
-    it; the word is checked here too, so no other caller can delete one without
-    the same confirmation. Its knowledge base goes first (plan 021), so a
-    failure there leaves the product whole rather than half-deleted.
+
+def _moved_in(team_id: str, product_id: str) -> int:
+    """How many of a product's remembered answers were moved into it, rather than given for it.
+
+    The memory keeps no origin. The event a move records (`moved_to`) is the
+    only trace, and it is read here rather than with SQLite's JSON functions,
+    so that it does not depend on how the server's SQLite was built.
+    """
+    conn = store.connect()
+    query = "SELECT entry_id FROM memory_entries WHERE team_id = ? AND product_id = ?"
+    own = {row["entry_id"] for row in conn.execute(query, (team_id, product_id))}
+    moves = conn.execute(
+        "SELECT subject_id, payload FROM events WHERE team_id = ? AND kind = ? AND subject_type = 'memory_entry'"
+        " AND instr(payload, ?) > 0",
+        (team_id, events.MEMORY_EDITED, product_id),
+    )
+    return len(own & {row["subject_id"] for row in moves if store.loads(row["payload"]).get("moved_to") == product_id})
+
+
+def _legacy_files(team_id: str, product_id: str) -> list[Path]:
+    """A product's files from before it had a folder of its own, in the team's folder (plan 027).
+
+    Its knowledge base names them. A file that the shared knowledge base or
+    another product's also indexes, or somebody's questionnaire reads, is kept:
+    one name is one document, so that file is theirs as much as this product's.
+    """
+    shared = settings.team_upload_dir(team_id)
+    sources = scoped_knowledge.knowledge_stats(team_id, product_id=product_id)["sources"]
+    names = {s["name"] for s in sources if s["name"] == Path(s["name"]).name and (shared / s["name"]).is_file()}
+    if not names:
+        return []  # the usual case, and no other knowledge base is opened for it
+    names -= set(knowledge.get_store(team_id).documents_indexed())
+    for other in list_products(team_id):
+        if other.id != product_id:
+            names -= set(knowledge.get_store(team_id, product_id=other.id).documents_indexed())
+    return sorted(shared / name for name in names - set(batches.claimed_sources(team_id)))
+
+
+def _files(team_id: str, product_id: str) -> list[Path]:
+    """Every file deleting a product removes: its folder's, and its own from before it had one."""
+    folder = settings.product_upload_dir(team_id, product_id)
+    return uploads.document_files(folder) + _legacy_files(team_id, product_id)
+
+
+def deletion_preview(team_id: str, product_id: str) -> dict[str, Any]:
+    """What deleting a product would remove, and what would become General. Changes nothing.
+
+    Counted across the whole team, because everyone's work is affected; the
+    page shows it in its warning before anyone types the word.
+    """
+    product = get(team_id, product_id)
+    files = _files(team_id, product_id)
+    stats = scoped_knowledge.knowledge_stats(team_id, product_id=product_id)
+    return {
+        "product": product.as_dict(),
+        "confirm_word": CONFIRM_WORD,
+        "documents": {
+            "files": len(files),
+            "names": sorted(path.name for path in files)[:20],
+            "indexed": len(stats["sources"]),
+            "chunks": stats["guideline_chunks"],
+        },
+        "answers": {
+            "remembered": _count("memory_entries", team_id, product_id),
+            "moved_from_shared": _moved_in(team_id, product_id),
+        },
+        "questionnaires": _count("form_batches", team_id, product_id),
+        "conversations": _count("conversations", team_id, product_id),
+    }
+
+
+def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Deletion:
+    """Delete a product, once "confirm" has been typed, and say what went with it.
+
+    The page warns, with `deletion_preview`'s counts, that the product's
+    documents and their files go with it, and its remembered answers, those
+    moved in from Shared included; the word is checked here too, so no other
+    caller can delete one without the same confirmation. Its knowledge base
+    goes first (plan 021), so a failure there leaves the product whole rather
+    than half-deleted. Its files go last, after the commit: a file that cannot
+    be removed then is in a folder nothing lists or opens, and is reported.
 
     Questionnaires and chats that were for it become General and keep their
     answers (plan 018, decision 5): those were written and reviewed, and the
@@ -188,15 +287,35 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Product:
     if confirm.strip().casefold() != CONFIRM_WORD:
         raise Invalid(f'Type "{CONFIRM_WORD}" to delete a product.', code="confirmation_required")
     product = get(team_id, product_id)
+    files = _files(team_id, product_id)  # while its knowledge base can still say which are its own
+    moved = _moved_in(team_id, product_id)
     scoped_knowledge.drop_product(team_id, product_id)
-    answer_memory.forget_product(team_id, product_id)  # its remembered answers (plan 022)
+    forgotten = answer_memory.forget_product(team_id, product_id)  # its remembered answers (plan 022)
     conn = store.connect()
+    general: dict[str, int] = {}
     for table in ("form_batches", "conversations"):  # plan 023
-        conn.execute(f"UPDATE {table} SET product_id = '' WHERE team_id = ? AND product_id = ?", (team_id, product_id))
+        query = f"UPDATE {table} SET product_id = '' WHERE team_id = ? AND product_id = ?"
+        general[table] = conn.execute(query, (team_id, product_id)).rowcount
     conn.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
     conn.commit()
-    events.record(actor, events.PRODUCT_DELETED, subject_type="product", subject_id=product_id, name=product.name)
-    return product
+    left = uploads.remove(files, folder=settings.product_upload_dir(team_id, product_id))
+    deletion = Deletion(
+        product,
+        files_removed=sum(not path.exists() for path in files),
+        answers_forgotten=forgotten,
+        moved_from_shared=moved,
+        questionnaires=general["form_batches"],
+        conversations=general["conversations"],
+        files_left=tuple(left),
+    )
+    if left:
+        logger.warning("products.files_remove_failed", product=product_id, files=left[:50], fix="remove them by hand")
+    removed = deletion.as_dict()
+    events.record(
+        actor, events.PRODUCT_DELETED, subject_type="product", subject_id=product_id, name=product.name, **removed
+    )
+    logger.info("products.deleted", team=team_id, product=product_id, **(removed | {"files_left": len(left)}))
+    return deletion
 
 
 def chosen(team_id: str, product_id: str) -> str:

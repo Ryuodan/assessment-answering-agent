@@ -44,7 +44,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/service.py"
-max_lines = 614
+max_lines = 591
 debt = "TD-006"
 
 [[size]]
@@ -90,11 +90,6 @@ debt = "TD-022"
 [[layer]]
 module = "src.knowledge"
 imports = "src.answer_memory"
-debt = "TD-007"
-
-[[layer]]
-module = "src.storage"
-imports = "src.service"
 debt = "TD-007"
 
 # Owned libraries imported from the wrong layer, plan 003.

@@ -61,6 +61,10 @@ def test_the_selector_decides_which_knowledge_base_is_listed_and_uploaded_to(
     page.click("#guidelinesBtn")
     expect(page.locator("#guidelinesStatus")).to_contain_text("Indexed 1/1")
     assert uploads == [{"product_id": availo.id}]
+    # Kept in Availo's own folder, and badged with it in the document library (plan 027).
+    assert (settings.product_upload_dir(TEAM, availo.id) / "standard.pdf").is_file()
+    card = page.locator("#uploadedDocuments .document-card", has_text="standard.pdf")
+    expect(card.locator(".tag.product")).to_have_text("Availo")
 
     page.select_option("#kbScope", "")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")

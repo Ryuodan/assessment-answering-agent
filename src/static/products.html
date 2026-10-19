@@ -105,10 +105,12 @@
   .product .actions { display: flex; gap: 4px; flex: 0 0 auto; }
   .empty { color: var(--ink-faint); font-size: 13.5px; }
 
-  /* --- deleting: a warning that cannot be missed, and a word to type -------- */
+  /* --- deleting: a warning that cannot be missed, and a word to type --------
+     The warning lists what goes, counted, before anyone types the word. */
 
   dialog {
-    width: min(520px, calc(100% - 32px)); border: 1px solid var(--line);
+    width: min(560px, calc(100% - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+    border: 1px solid var(--line);
     border-radius: var(--radius); padding: 22px; background: var(--surface-raised);
     color: var(--ink); box-shadow: var(--shadow-lg);
   }
@@ -118,11 +120,16 @@
     display: flex; gap: 12px; align-items: flex-start;
     background: var(--err-soft); color: var(--err);
     border: 1px solid var(--err); border-left-width: 5px;
-    border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;
+    border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px;
     font-size: 13.5px; line-height: 1.55;
   }
   .danger-box .icon { font-size: 20px; line-height: 1; }
   .danger-box b { color: inherit; }
+  .danger-box ul { margin: 6px 0 0; padding-inline-start: 18px; }
+  .danger-box li + li { margin-top: 6px; }
+  .danger-box .names { display: block; margin-top: 2px; font-size: 12.5px; word-break: break-word; }
+  dialog .stays { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-soft); }
+  dialog .tip { margin: 0 0 14px; font-size: 12.5px; color: var(--ink-faint); }
   dialog label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
   dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
@@ -220,18 +227,24 @@
   </section>
 </main>
 
-<dialog id="deleteDialog">
-  <h2 id="deleteTitle">Delete this product?</h2>
+<dialog id="deleteDialog" aria-labelledby="deleteTitle">
+  <h2 id="deleteTitle">Delete this product permanently?</h2>
   <div class="danger-box" role="alert">
     <span class="icon" aria-hidden="true">&#9888;</span>
-    <div id="deleteWarning"></div>
+    <div id="deleteWarning">
+      <b id="deleteLead"></b>
+      <ul id="deleteConsequences"></ul>
+    </div>
   </div>
-  <label for="deleteConfirm">Type <b>confirm</b> to delete it</label>
+  <p class="stays" id="deleteStays"></p>
+  <p class="tip">To keep something, download its documents from the document library, or move answers
+     to Shared on the Answer memory page, first.</p>
+  <label for="deleteConfirm" id="deleteLabel">Type <b>confirm</b> to delete it</label>
   <input type="text" id="deleteConfirm" autocomplete="off" spellcheck="false" placeholder="confirm">
   <div class="status" id="deleteStatus"></div>
   <div class="buttons">
     <button class="ghost" id="deleteCancel" type="button">Cancel</button>
-    <button class="danger-solid" id="deleteGo" type="button" disabled>Delete product</button>
+    <button class="danger-solid" id="deleteGo" type="button" disabled>Delete permanently</button>
   </div>
 </dialog>
 
@@ -485,50 +498,150 @@
     }
   });
 
-  // --- deleting: the warning, and the word to type ----------------------------
+  // --- deleting: the warning, counted, and the word to type -------------------
 
-  function openDelete(product) {
-    deleting = product;
-    $("deleteTitle").textContent = "Delete " + product.name + "?";
-    const warning = $("deleteWarning");
-    warning.replaceChildren();
-    const strong = document.createElement("b");
-    strong.textContent = "This permanently deletes " + product.name + "'s documents and its remembered answers.";
-    warning.append(
-      strong,
-      document.createElement("br"),
-      document.createTextNode(
-        "Questionnaires and conversations that used it become General and keep the answers they already have. " +
-        "This cannot be undone."
-      ),
-    );
-    $("deleteConfirm").value = "";
-    $("deleteGo").disabled = true;
-    say($("deleteStatus"), "");
-    $("deleteDialog").showModal();
-    $("deleteConfirm").focus();
+  let counted = false;  // the counts have arrived, or failed to: either way the warning is complete
+  let opened = 0;       // which opening of the dialog a count belongs to
+
+  function plural(count, one, many) {
+    return count + " " + (count === 1 ? one : (many || one + "s"));
   }
 
-  $("deleteConfirm").addEventListener("input", () => {
-    $("deleteGo").disabled = $("deleteConfirm").value.trim().toLowerCase() !== CONFIRM_WORD;
-  });
+  function consequence(text, detail) {
+    const item = document.createElement("li");
+    item.textContent = text;
+    if (detail) {
+      const names = document.createElement("span");
+      names.className = "names";
+      names.textContent = detail;
+      item.append(names);
+    }
+    return item;
+  }
+
+  /* What deleting takes: the product's knowledge base, with the files, and
+     its answer memory. Counted when the server could count them, and said
+     without numbers when it could not -- the warning never waits on a count. */
+  function consequences(preview) {
+    const gone = (one) => (one ? " It leaves" : " They leave") + " the document library and can no longer be " +
+      "opened or downloaded, even from answers that cite " + (one ? "it." : "them.");
+    const forgotten = (one) => (one ? " It is" : " They are") + " deleted, not moved back to Shared.";
+    if (!preview) {
+      return [
+        consequence("Its knowledge base: every document, and its file on the server." + gone(false)),
+        consequence("Its answer memory: every remembered answer, including any moved here from Shared." +
+          forgotten(false)),
+      ];
+    }
+    const docs = preview.documents, answers = preview.answers;
+    const items = [];
+    if (!docs.indexed && !docs.files) {
+      items.push(consequence("Its knowledge base: no documents."));
+    } else {
+      const documents = docs.indexed || docs.files;
+      const more = docs.files > 5 ? " and " + (docs.files - 5) + " more" : "";
+      items.push(consequence(
+        "Its knowledge base: " + plural(documents, "document") + " (" + plural(docs.chunks, "passage") + "), " +
+        (documents === 1 ? "and its file" : "and their files") + " on the server" +
+        (docs.files !== docs.indexed ? " (" + plural(docs.files, "file") + ")" : "") + "." + gone(documents === 1),
+        docs.names.slice(0, 5).join(", ") + more,
+      ));
+    }
+    if (!answers.remembered) {
+      items.push(consequence("Its answer memory: no remembered answers."));
+    } else {
+      items.push(consequence(
+        "Its answer memory: " + plural(answers.remembered, "remembered answer") +
+        (answers.moved_from_shared ? ", including " + answers.moved_from_shared + " moved here from Shared" : "") +
+        "." + forgotten(answers.remembered === 1),
+      ));
+    }
+    return items;
+  }
+
+  /* What becomes of the product's questionnaires and chats, before and after.
+     Kept to these two sentences, in this one place, because that is still
+     being decided; today they become General. */
+  const ITS_WORK = {
+    before(product, preview) {
+      const work = preview
+        ? plural(preview.questionnaires, "questionnaire") + " and " + plural(preview.conversations, "chat") +
+          " for " + product.name
+        : "Its questionnaires and chats";
+      return "What stays: " + work + " become General and keep the answers already written; anything " +
+        "answered in them from now on uses only the shared knowledge base and memory.";
+    },
+    after(removed) {
+      return plural(removed.questionnaires || 0, "questionnaire") + " and " +
+        plural(removed.conversations || 0, "chat") + " are now General.";
+    },
+  };
+
+  function ready() {
+    $("deleteGo").disabled = !counted || $("deleteConfirm").value.trim().toLowerCase() !== CONFIRM_WORD;
+  }
+
+  async function openDelete(product) {
+    const mine = ++opened;
+    deleting = product;
+    counted = false;
+    $("deleteTitle").textContent = "Delete " + product.name + " permanently?";
+    $("deleteLead").textContent = "This cannot be undone. Deleting " + product.name + " removes, for the whole team:";
+    $("deleteConsequences").replaceChildren(consequence("Counting what would be deleted…"));
+    $("deleteStays").textContent = "";
+    const word = document.createElement("b");
+    word.textContent = CONFIRM_WORD;
+    $("deleteLabel").replaceChildren("Type ", word, " to delete " + product.name + " and everything listed above");
+    $("deleteConfirm").value = "";
+    say($("deleteStatus"), "");
+    ready();
+    $("deleteDialog").showModal();
+    $("deleteConfirm").focus();
+
+    let preview = null;
+    try {
+      preview = await api("/api/products/" + encodeURIComponent(product.id) + "/deletion");
+    } catch (error) {
+      if (mine === opened) {
+        say($("deleteStatus"), "Could not count what would be deleted (" + error.message + "). " +
+          "Deleting still removes everything listed.", "error");
+      }
+    }
+    if (mine !== opened) return;  // the dialog was opened again while this was counting
+    $("deleteConsequences").replaceChildren(...consequences(preview));
+    $("deleteStays").textContent = ITS_WORK.before(product, preview);
+    counted = true;
+    ready();
+  }
+
+  function deleted(product, removed) {
+    let message = "Deleted " + product.name + ": " + plural(removed.files_removed || 0, "file") + " and " +
+      plural(removed.answers_forgotten || 0, "remembered answer") + " removed; " + ITS_WORK.after(removed);
+    const left = (removed.files_left || []).length;
+    if (left) message += " " + plural(left, "file") + " could not be removed from the server; see the log.";
+    return message;
+  }
+
+  $("deleteConfirm").addEventListener("input", ready);
   $("deleteCancel").addEventListener("click", () => $("deleteDialog").close());
   $("deleteGo").addEventListener("click", async () => {
-    if (!deleting) return;
+    const product = deleting;
+    if (!product) return;
     $("deleteGo").disabled = true;
     try {
-      await api(
-        "/api/products/" + encodeURIComponent(deleting.id) + "?confirm=" +
+      const done = await api(
+        "/api/products/" + encodeURIComponent(product.id) + "?confirm=" +
         encodeURIComponent($("deleteConfirm").value.trim()),
         { method: "DELETE" },
       );
+      const removed = done.removed || {};
       $("deleteDialog").close();
-      say($("listStatus"), "Deleted " + deleting.name + ".", "ok");
+      say($("listStatus"), deleted(product, removed), (removed.files_left || []).length ? "error" : "ok");
       deleting = null;
       await load();
     } catch (error) {
       say($("deleteStatus"), error.message, "error");
-      $("deleteGo").disabled = false;
+      ready();
     }
   });
 

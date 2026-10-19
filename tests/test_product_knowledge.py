@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src import identity, knowledge, products, roles, scoped_knowledge, service
+from src import batches, events, identity, knowledge, products, roles, scoped_knowledge, service, uploads
 from src.api import app
 from src.config import settings
+from src.forms.model import DetectedForm
+from src.identity import User
 from src.models import IngestResult, SourceType
 from src.vector_names import collection_for
 from tests.conftest import FakeDocument, FakeVectorStore, bare_store
@@ -30,6 +33,7 @@ def stores(monkeypatch):
         if key not in made:
             made[key] = bare_store(FakeVectorStore([]))
             made[key].team_id, made[key].product_id = key
+            made[key]._store.delete_collection = lambda key=key: made.pop(key, None)
         return made[key]
 
     monkeypatch.setattr("src.knowledge.get_store", get_store)
@@ -99,17 +103,62 @@ def alice(availo) -> TestClient:
 
 
 def test_uploads_go_to_the_knowledge_base_chosen(stores, availo, alice, monkeypatch, tmp_path) -> None:
-    calls: list[tuple[str, dict]] = []
+    calls: list[tuple[str, dict, Path]] = []
 
     async def indexed(path, source_type, authority="ours", team_id=None, **scope):
-        calls.append((path.name, scope))
+        calls.append((path.name, scope, path.parent))
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=3)
 
     monkeypatch.setattr("src.routes.knowledge.service.ingest", indexed)
     upload = {"files": ("policy.pdf", b"%PDF-1.4 anything", "application/pdf")}
     assert alice.post("/api/knowledge/guidelines", files=upload).status_code == 200
     assert alice.post("/api/knowledge/guidelines", files=upload, data={"product": availo.id}).status_code == 200
-    assert calls == [("policy.pdf", {}), ("policy.pdf", {"product_id": availo.id})]
+    assert calls == [
+        ("policy.pdf", {}, settings.team_upload_dir(TEAM)),
+        ("policy.pdf", {"product_id": availo.id}, settings.product_upload_dir(TEAM, availo.id)),
+    ], "a product's file is kept in its own folder, which goes with it"
+
+
+def test_one_name_is_one_document_across_the_team_and_its_products(availo) -> None:
+    """Answering merges evidence by file name, so two different files of one
+    name, one shared and one a product's, would lose one of them from answers."""
+    msegat = products.add(None, TEAM, "Msegat")
+    shared = service.save_upload("Policy.pdf", b"shared", TEAM)
+    differs = service.save_upload("Policy.pdf", b"availo's own", TEAM, product_id=availo.id)
+    same = service.save_upload("Policy.pdf", b"shared", TEAM, product_id=msegat.id)
+
+    assert shared == settings.team_upload_dir(TEAM) / "Policy.pdf"
+    assert differs == settings.product_upload_dir(TEAM, availo.id) / "Policy (2).pdf"
+    assert same == settings.product_upload_dir(TEAM, msegat.id) / "Policy.pdf", "the same bytes keep the name"
+
+    service.save_upload("Standard.pdf", b"availo's standard", TEAM, product_id=availo.id)
+    later = service.save_upload("Standard.pdf", b"the team's standard", TEAM)
+    assert later == settings.team_upload_dir(TEAM) / "Standard (2).pdf", "checked from the shared side too"
+    assert service.save_upload("Policy.pdf", b"availo's own", TEAM, product_id=availo.id) == differs
+
+
+def test_removing_a_products_document_removes_its_file_and_a_shared_one_keeps_it(stores, availo, alice) -> None:
+    shared = service.save_upload("Shared policy.pdf", b"%PDF-1.4 shared", TEAM)
+    own = service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=availo.id)
+    other = service.save_upload("Availo standard.pdf", b"%PDF-1.4 standard", TEAM, product_id=availo.id)
+    read_out = uploads.extracted_text_cache_path(own)
+    read_out.parent.mkdir(parents=True, exist_ok=True)
+    read_out.write_text("Availo's policy", encoding="utf-8")
+    staged(knowledge.get_store(TEAM), shared.name, 0.9)
+    staged(knowledge.get_store(TEAM, product_id=availo.id), own.name, 0.9)
+    staged(knowledge.get_store(TEAM, product_id=availo.id), other.name, 0.9)
+
+    assert alice.delete(f"/api/knowledge/sources/{own.name}?product={availo.id}").status_code == 200
+    assert not own.exists() and not read_out.exists(), "the file and the text read out of it"
+    assert other.exists(), "only the document removed"
+
+    assert alice.delete("/api/knowledge/sources/Shared policy.pdf").status_code == 200
+    assert shared.exists(), "a shared document's file stays, as it always has"
+
+    assert alice.delete(f"/api/knowledge?product={availo.id}").status_code == 200
+    assert uploads.document_files(settings.product_upload_dir(TEAM, availo.id)) == []
+    assert alice.delete("/api/knowledge").status_code == 200
+    assert shared.exists()
 
 
 def names(body: dict) -> list[str]:
@@ -182,6 +231,82 @@ def test_deleting_a_product_deletes_its_collection_in_chroma(availo) -> None:
     assert name not in [c.name for c in client.list_collections()]
     assert knowledge.get_store(TEAM, product_id=availo.id) is not store, "the store was forgotten too"
     knowledge.get_store.cache_clear()
+
+
+def test_deleting_a_product_removes_its_folder_and_the_text_read_from_its_files(stores, availo) -> None:
+    lead = identity.find_user("lead@example.test")
+    shared = service.save_upload("Shared policy.pdf", b"%PDF-1.4 shared", TEAM)
+    own = service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=availo.id)
+    read_out = [uploads.extracted_text_cache_path(path) for path in (shared, own)]
+    for cache in read_out:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text("the text read out of it", encoding="utf-8")
+
+    deletion = products.delete(lead, TEAM, availo.id, confirm="confirm")
+
+    assert not settings.product_upload_dir(TEAM, availo.id).exists()
+    assert not read_out[1].exists(), "the text read out of its file goes too"
+    assert shared.exists() and read_out[0].exists(), "the shared knowledge base's file is untouched"
+    assert (deletion.files_removed, deletion.files_left) == (1, ())
+
+
+def test_deleting_a_product_removes_its_files_from_before_it_had_a_folder(stores, availo) -> None:
+    """Product files used to be kept in the team's folder. One only this product
+    indexes goes; one that anything else still uses is kept."""
+    lead = identity.find_user("lead@example.test")
+    msegat = products.add(None, TEAM, "Msegat")
+    folder = settings.team_upload_dir(TEAM)
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in ("Legacy.pdf", "Shared.pdf", "Both.pdf", "Claimed.pdf", "Unindexed.pdf"):
+        (folder / name).write_bytes(b"%PDF-1.4 " + name.encode())
+    for name in ("Legacy.pdf", "Shared.pdf", "Both.pdf", "Claimed.pdf"):
+        staged(knowledge.get_store(TEAM, product_id=availo.id), name, 0.9)
+    staged(knowledge.get_store(TEAM), "Shared.pdf", 0.9)
+    staged(knowledge.get_store(TEAM, product_id=msegat.id), "Both.pdf", 0.9)
+    batches.create(
+        User(email=ALICE, team_id=TEAM), folder / "Claimed.pdf", DetectedForm(source_name="Claimed.pdf", format="xlsx")
+    )
+
+    assert products.deletion_preview(TEAM, availo.id)["documents"]["names"] == ["Legacy.pdf"]
+    deletion = products.delete(lead, TEAM, availo.id, confirm="confirm")
+
+    assert not (folder / "Legacy.pdf").exists()
+    assert [path.name for path in uploads.document_files(folder)] == [
+        "Both.pdf",
+        "Claimed.pdf",
+        "Shared.pdf",
+        "Unindexed.pdf",
+    ]
+    assert deletion.files_removed == 1
+
+
+def test_a_file_that_cannot_be_removed_does_not_stop_the_delete(stores, availo, monkeypatch, caplog) -> None:
+    lead = identity.find_user("lead@example.test")
+    stuck = service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=availo.id)
+    unlink = Path.unlink
+
+    def in_use(path, missing_ok=False):
+        if path == stuck:
+            raise PermissionError("open in another program")
+        return unlink(path, missing_ok=missing_ok)
+
+    def cannot(path, *args, **kwargs):
+        raise PermissionError("open in another program")
+
+    monkeypatch.setattr(Path, "unlink", in_use)
+    monkeypatch.setattr(uploads.shutil, "rmtree", cannot)
+
+    deletion = products.delete(lead, TEAM, availo.id, confirm="confirm")
+
+    assert products.list_products(TEAM) == [], "the product is deleted all the same"
+    assert (deletion.files_removed, deletion.files_left) == (0, ("Availo policy.pdf",))
+    recorded = events.for_subject("product", availo.id)[-1]
+    assert (recorded.kind, recorded.payload["files_left"]) == (events.PRODUCT_DELETED, ["Availo policy.pdf"])
+    assert "products.files_remove_failed" in caplog.text
+    assert stuck.exists()
+    assert "Availo policy.pdf" not in [doc["name"] for doc in service.list_documents(TEAM)], "nothing lists it"
+    with pytest.raises(FileNotFoundError):
+        service.resolve_document("uploaded", "uploaded", "Availo policy.pdf", TEAM)
 
 
 def test_the_shared_collection_cannot_be_dropped() -> None:

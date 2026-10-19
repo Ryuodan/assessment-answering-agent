@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 
 from src.errors import NotADocument as NotADocument
-from src import answer_memory, progress
+from src import answer_memory, products, progress, uploads
 from src.config import settings
 from src.documents import SUPPORTED_SUFFIXES, load_text
 from src.extraction import extract_qa_pairs, extract_questions
@@ -26,6 +26,7 @@ from src.scoped_knowledge import knowledge_stats as knowledge_stats, own_store
 from src.models import AnsweredQuestion, AssessmentResult, IngestResult, Language, Question, SourceType
 from src.schemas import ExtractedQAPair
 from src.search import search_knowledge as search_knowledge
+from src.uploads import extracted_text_cache_path as _extracted_text_cache_path
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,7 @@ def save_upload(
     content: bytes,
     team_id: str | None = None,
     owner: str = "",
+    product_id: str = "",
 ) -> Path:
     """Persist an uploaded file under the configured upload directory.
 
@@ -336,21 +338,18 @@ def save_upload(
     content keeps the one name: re-uploading the same file is how a person
     reopens their own work, and a folder of `(2)`, `(3)`, `(4)` copies of one
     document helps nobody.
+
+    A knowledge-base file is checked against every knowledge-base folder of the
+    team, the shared one and each product's (plan 027): one name is one
+    document, which is what answering merges evidence by.
     """
     settings.ensure_directories()
-    # A questionnaire goes to the person who uploaded it; a policy for the
-    # knowledge base goes to the team, because that is who it answers for.
-    directory = settings.user_upload_dir(team_id, owner) if owner else settings.team_upload_dir(team_id)
-    directory.mkdir(parents=True, exist_ok=True)
     name = Path(filename).name
-    destination = directory / name
-    stem, suffix = destination.stem, destination.suffix
-    attempt = 1
-    while destination.exists() and destination.read_bytes() != content:
-        attempt += 1
-        destination = directory / f"{stem} ({attempt}){suffix}"
-    destination.write_bytes(content)
-    return destination
+    if owner:  # a questionnaire goes to the person who uploaded it
+        return uploads.save(settings.user_upload_dir(team_id, owner), name, content)
+    # A policy goes to whoever it answers for: the team, or one of its products.
+    directory = settings.product_upload_dir(team_id, product_id) if product_id else settings.team_upload_dir(team_id)
+    return uploads.save(directory, name, content, uploads.knowledge_folders(team_id))
 
 
 def list_documents(team_id: str | None = None, owner: str = "") -> list[dict]:
@@ -360,16 +359,20 @@ def list_documents(team_id: str | None = None, owner: str = "") -> list[dict]:
     questionnaire anybody had ever uploaded. Policies still are listed for
     everyone -- the knowledge base is the team's, an answer cites it, and the
     citation has to open. What is hidden is a questionnaire somebody else is
-    working on.
+    working on. A product's files are its knowledge base, listed for everyone
+    with the product they are for; a deleted product's are not listed at all.
     """
     settings.ensure_directories()
-    paths = _document_files(settings.user_upload_dir(team_id, owner)) if owner else []
+    paths = uploads.document_files(settings.user_upload_dir(team_id, owner)) if owner else []
     paths += [
         path
-        for path in _document_files(settings.team_upload_dir(team_id))
+        for path in uploads.document_files(settings.team_upload_dir(team_id))
         if _may_read_shared(path.name, team_id, owner)
     ]
-    documents = [_document_info(path, origin="uploaded", category="uploaded") for path in paths]
+    documents = [_document_info(path) for path in paths]
+    for product in products.list_products(team_id or settings.default_team):
+        folder = settings.product_upload_dir(product.team_id, product.id)
+        documents += [_document_info(path, product) for path in uploads.document_files(folder)]
     return sorted(documents, key=lambda document: document["name"])
 
 
@@ -404,7 +407,7 @@ def resolve_document(
 
     Their own folder first, then the team's -- and there only the names
     `list_documents` would have shown them, so a colleague's questionnaire is
-    not readable by typing its name.
+    not readable by typing its name -- then each product's that still exists.
     """
     if not name or name != Path(name).name or Path(name).suffix.lower() not in SUPPORTED_SUFFIXES:
         raise ValueError("Invalid document name.")
@@ -412,19 +415,21 @@ def resolve_document(
     if origin != "uploaded" or category != "uploaded":
         raise ValueError("Invalid document location.")
 
+    shared = settings.team_upload_dir(team_id)
     directories = [settings.user_upload_dir(team_id, owner)] if owner else []
-    directories.append(settings.team_upload_dir(team_id))
-    for index, directory in enumerate(directories):
+    directories.append(shared)
+    for product in products.list_products(team_id or settings.default_team):
+        directories.append(settings.product_upload_dir(product.team_id, product.id))
+    for directory in directories:
         base = directory.resolve()
         path = (base / name).resolve()
         if path.parent != base:
             raise ValueError("Invalid document path.")
         if not path.is_file():
             continue
-        their_own = index < len(directories) - 1 or not owner
-        if their_own or _may_read_shared(name, team_id, owner):
+        # Somebody else's questionnaire is absent rather than forbidden.
+        if directory != shared or _may_read_shared(name, team_id, owner):
             return path
-        break  # somebody else's: absent rather than forbidden
     raise FileNotFoundError(name)
 
 
@@ -570,45 +575,17 @@ def _preview_table(table) -> str:
     return f"<table>{''.join(rows)}</table>"
 
 
-def _document_files(directory: Path) -> list[Path]:
-    if not directory.is_dir():
-        return []
-    return sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES)
-
-
-def _document_info(path: Path, *, origin: str, category: str) -> dict:
+def _document_info(path: Path, product: products.Product | None = None) -> dict:
     title = path.stem.replace("_", " ").replace("-", " ").strip().title()
     return {
         "name": path.name,
         "title": title,
-        "origin": origin,
-        "category": category,
-        "label": _DOCUMENT_LABELS[category],
+        "origin": "uploaded",
+        "category": "uploaded",
+        "label": _DOCUMENT_LABELS["uploaded"],
         "extension": path.suffix.lower().lstrip("."),
         "size_bytes": path.stat().st_size,
+        # Whose knowledge base it is: a product's, or "" for the team's and a person's own.
+        "product_id": product.id if product else "",
+        "product_name": product.name if product else "",
     }
-
-
-# Bumped whenever the extraction code changes in a way that alters its output,
-# so cached text from an older, worse extractor is not silently reused.
-_EXTRACTION_VERSION = "7"
-
-
-def _extracted_text_cache_path(path: Path) -> Path:
-    cache_input = "\0".join(
-        (
-            _EXTRACTION_VERSION,
-            str(path.resolve()),
-            settings.docling_base_url,
-            str(settings.docling_do_ocr),
-            str(settings.docling_ocr_auto),
-            settings.docling_image_export_mode,
-            str(settings.docling_heading_hierarchy),
-            # Part of the key, not just the version: a text extracted without
-            # page markers and one extracted with them are different documents
-            # as far as chunk metadata is concerned.
-            settings.docling_page_break_placeholder,
-        )
-    )
-    cache_key = hashlib.sha256(cache_input.encode("utf-8")).hexdigest()[:24]
-    return settings.extracted_text_dir / f"{cache_key}.txt"
