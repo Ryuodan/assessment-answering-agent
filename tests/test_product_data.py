@@ -267,3 +267,29 @@ def test_held_items_from_every_batch_go_into_one_workbook(root: Path, tmp_path: 
     answers = [[c.value for c in row] for row in book["Held answers"].iter_rows(min_row=2)]
     assert [(r[0], r[1]) for r in answers] == [("Other", "QA-002")]
     assert book["Existing memory entries"]["B2"].value == "MEM-1"
+
+
+def test_the_shared_batch_writes_the_t2_wide_facts(root: Path, tmp_path: Path) -> None:
+    facts = [
+        fact(),
+        fact(id="F-002", statement="T2 is certified to ISO/IEC 27001 across the company.", scope="t2_wide"),
+    ]
+    shared = batch(facts=facts)
+    shared.product = pd.SHARED
+    out = tmp_path / "shared.docx"
+    assert pd.write_fact_sheet(shared, out) == 1
+    text = "\n".join(p.text for p in docx.Document(str(out)).paragraphs)
+    assert "T2: security and operations facts" in text and "whatever the product" in text
+    assert "ISO/IEC 27001" in text and STATEMENT not in text, "the shared sheet takes T2-wide facts, not a product's"
+
+
+def test_a_t2_wide_item_is_held_once_in_the_shared_batch_not_again_in_its_product(root: Path, tmp_path: Path) -> None:
+    wide = fact(id="F-009", statement="T2 is certified to ISO/IEC 27001 across the company.", scope="t2_wide",
+                status="dated", as_of="2026-08", proposed="hold")  # fmt: skip
+    product = batch(facts=[fact(), wide])
+    shared = batch(facts=[wide])
+    shared.product = pd.SHARED
+    out = tmp_path / "held.xlsx"
+    pd.write_held([product, shared], out)
+    rows = [[c.value for c in row] for row in openpyxl.load_workbook(out)["Held facts"].iter_rows(min_row=2)]
+    assert [(r[0], r[1]) for r in rows] == [(pd.SHARED, "F-009")]

@@ -55,7 +55,9 @@ Proposal = Literal["keep", "hold", "drop"]
 class Source(BaseModel):
     file: str = Field(description="Path relative to the delivery's root")
     where: str = Field(description="A location label exactly as `extract` prints it")
-    quote: str = Field(min_length=3, description="Verbatim text from that location, in its own language")
+    quote: str = Field(
+        min_length=1, description="Verbatim text from that location, in its own language; a whole cell may be one word"
+    )
 
 
 class Fact(BaseModel):
@@ -399,11 +401,22 @@ HELD_READ_ME = [
 ]
 
 
+def owns(batch: Batch, item: Fact | Pair) -> bool:
+    """Whether this batch is where the item is used: a product's own items, or the shared batch's T2-wide ones.
+
+    A product batch also extracts the T2-wide items it finds, and the shared
+    batch merges them all, so taking them from both would count them twice.
+    """
+    return batch.product == SHARED or item.scope == "product"
+
+
 def write_held(batches: list[Batch], out: Path, existing: list[Existing] | None = None) -> int:
     """Every held item from every batch, in one workbook for the team. Returns how many rows."""
     product = [("Product", 12)]
-    facts = [[b.product, *_fact_row(f)] for b in batches for f in _by_topic(b.facts) if f.proposed == "hold"]
-    pairs = [[b.product, *_pair_row(p)] for b in batches for p in b.pairs if p.proposed == "hold"]
+    facts = [
+        [b.product, *_fact_row(f)] for b in batches for f in _by_topic(b.facts) if f.proposed == "hold" and owns(b, f)
+    ]
+    pairs = [[b.product, *_pair_row(p)] for b in batches for p in b.pairs if p.proposed == "hold" and owns(b, p)]
     asks = [[b.product, *_ask_row(a)] for b in batches for a in b.asks]
     rows = [[e.product, e.entry_id, e.from_file, e.question, e.answer, e.why, ""] for e in existing or []]
     book = _book("Held for the team's review", HELD_READ_ME)
@@ -417,24 +430,35 @@ def write_held(batches: list[Batch], out: Path, existing: list[Existing] | None 
     return len(facts) + len(pairs) + len(asks) + len(rows)
 
 
-def write_fact_sheet(batch: Batch, out: Path, *, draft: bool = False) -> int:
-    """The product's knowledge-base document: kept, standing, product facts by topic. Returns how many.
+SHARED = "Shared"
+"""The batch of T2-wide items, for the shared knowledge base and memory rather than one product's."""
 
-    Facts are cited by id only. A file name can carry a customer's name, and a
-    drafter quoting its source would put that name in somebody else's answer.
+
+def write_fact_sheet(batch: Batch, out: Path, *, draft: bool = False) -> int:
+    """The knowledge-base document: kept, standing facts by topic. Returns how many.
+
+    A product's sheet holds its product facts; the shared batch's holds the
+    T2-wide ones. Facts are cited by id only. A file name can carry a customer's
+    name, and a drafter quoting its source would put that name in somebody
+    else's answer.
     """
     import docx
 
-    kept = [f for f in batch.facts if f.proposed == "keep" and f.status == "standing" and f.scope == "product"]
+    shared = batch.product == SHARED
+    scope = "t2_wide" if shared else "product"
+    kept = [f for f in batch.facts if f.proposed == "keep" and f.status == "standing" and f.scope == scope]
     document = docx.Document()
-    document.add_heading(f"{batch.product}: security and operations facts", level=0)
+    subject = "T2" if shared else batch.product
+    document.add_heading(f"{subject}: security and operations facts", level=0)
     if draft:
         document.add_paragraph("DRAFT FOR REVIEW. Not yet confirmed by the team, and not indexed.")
     reviewed = "" if draft else " and reviewed by the team"
+    compiled = f"compiled from the security team's correspondence and questionnaires{reviewed} ({batch.prepared_on})"
     document.add_paragraph(
-        f"What T2 has stated about {batch.product}, compiled from the security team's correspondence and "
-        f"questionnaires{reviewed} ({batch.prepared_on}). Where these facts and T2's general policies differ, "
-        f"these describe {batch.product}."
+        f"What T2 has stated about itself, whatever the product, {compiled}."
+        if shared
+        else f"What T2 has stated about {batch.product}, {compiled}. Where these facts and T2's general policies "
+        f"differ, these describe {batch.product}."
     )
     for topic in TOPICS:
         facts = [f for f in kept if f.topic == topic]
