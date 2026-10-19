@@ -284,7 +284,6 @@ def test_a_sheet_read_thinly_is_offered_for_a_second_reading(tmp_path, monkeypat
     """Seven questions on a sheet of 133 rows is a wrong column, not a short
     questionnaire, and it never reports itself as a failure -- so coverage, not
     just emptiness, has to trigger the fallback."""
-    from src.forms import xlsx
     from src.forms.model import Finding, Part
 
     sheet_rows = list(range(1, 60))
@@ -300,21 +299,21 @@ def test_a_sheet_read_thinly_is_offered_for_a_second_reading(tmp_path, monkeypat
     class Fake:
         rows = sheet_rows
 
-    assert xlsx._thin(Fake(), part, 1) is True
+    assert llm_layout.header_row_of(part) == 1
+    assert llm_layout.thin(Fake(), part, 1) is True
     part.questions = 40
-    assert xlsx._thin(Fake(), part, 1) is False
+    assert llm_layout.thin(Fake(), part, 1) is False
 
 
 def test_a_short_sheet_is_not_called_thin(tmp_path):
     """Four questions out of five rows is a short questionnaire, and asking
     about every small sheet would be a call per cover page."""
-    from src.forms import xlsx
     from src.forms.model import Part
 
     class Fake:
         rows = [1, 2, 3, 4, 5]
 
-    assert xlsx._thin(Fake(), Part(name="S", kind="questions", questions=1), 1) is False
+    assert llm_layout.thin(Fake(), Part(name="S", kind="questions", questions=1), 1) is False
 
 
 # --- what the model is shown -----------------------------------------------

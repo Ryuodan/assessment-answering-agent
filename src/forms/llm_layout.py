@@ -29,10 +29,12 @@ the confirmation panel with its reasoning attached.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.config import settings
 from src.forms import sheet_view
 from src.forms.model import Finding, FormQuestion, Part, Role
 from src.forms.xlsx import Layout, read_sheet
@@ -233,6 +235,37 @@ def apply(
         ),
     )
     return part, questions
+
+
+def thin(sheet: Sheet, part: Part, layout_row: int) -> bool:
+    """Whether a sheet was read, but read badly.
+
+    Seven questions on a sheet of 133 rows is a wrong column, not a short
+    questionnaire -- that is the ISRA workbook, whose sections are headed 'HR
+    Security' and 'Physical Security' and which no word list anticipates. The
+    test is coverage: what share of the rows below the header became questions.
+    """
+    below = [row for row in sheet.rows if row > layout_row]
+    if len(below) < settings.detection_assist_min_rows:
+        return False
+    return part.questions / len(below) < settings.detection_assist_coverage
+
+
+_HEADER_ROW = re.compile(r"headings on row (\d+)")
+
+
+def header_row_of(part: Part) -> int:
+    """The header row the rules settled on, read back off the finding.
+
+    Recovered from the report rather than threaded through the return type,
+    because the header row is of no interest to anything else and a second
+    return value on `xlsx._detect_sheet` would be carried by every caller.
+    """
+    for finding in part.findings:
+        match = _HEADER_ROW.search(finding.because)
+        if match:
+            return int(match.group(1))
+    return 0
 
 
 def read(workbook: Workbook, sheet: Sheet) -> tuple[Part, list[FormQuestion]] | None:

@@ -805,20 +805,6 @@ def _is_repeated_header(values: dict[str, str], headings: dict[str, str]) -> boo
     return all(values[column].strip() == headings[column].strip() for column in shared)
 
 
-def _thin(sheet: Sheet, part: Part, layout_row: int) -> bool:
-    """Whether a sheet was read, but read badly.
-
-    Seven questions on a sheet of 133 rows is a wrong column, not a short
-    questionnaire -- that is the ISRA workbook, whose sections are headed 'HR
-    Security' and 'Physical Security' and which no word list anticipates. The
-    test is coverage: what share of the rows below the header became questions.
-    """
-    below = [row for row in sheet.rows if row > layout_row]
-    if len(below) < settings.detection_assist_min_rows:
-        return False
-    return part.questions / len(below) < settings.detection_assist_coverage
-
-
 def _assist(workbook: Workbook, sheet: Sheet, part: Part, found: int) -> tuple[Part, list] | None:
     """A model's reading of a sheet, if it beats what the rules managed.
 
@@ -859,8 +845,9 @@ def detect(path: str | Path, *, assist: bool | None = None) -> DetectedForm:
             part, questions = _detect_sheet(workbook, sheet)
 
             if assist and unreadable(sheet) is None:
-                header_row = _header_row_of(part)
-                if not questions or _thin(sheet, part, header_row):
+                from src.forms import llm_layout
+
+                if not questions or llm_layout.thin(sheet, part, llm_layout.header_row_of(part)):
                     better = _assist(workbook, sheet, part, len(questions))
                     if better is not None:
                         part, questions = better
@@ -874,23 +861,6 @@ def detect(path: str | Path, *, assist: bool | None = None) -> DetectedForm:
             + ", ".join(f"{part.name} ({part.kind})" for part in form.parts)
         )
     return form
-
-
-_HEADER_ROW = re.compile(r"headings on row (\d+)")
-
-
-def _header_row_of(part: Part) -> int:
-    """The header row the rules settled on, read back off the finding.
-
-    Recovered from the report rather than threaded through the return type,
-    because the header row is of no interest to anything else and a second
-    return value on `_detect_sheet` would be carried by every caller.
-    """
-    for finding in part.findings:
-        match = _HEADER_ROW.search(finding.because)
-        if match:
-            return int(match.group(1))
-    return 0
 
 
 # --- writing ---------------------------------------------------------------
