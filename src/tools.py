@@ -1,11 +1,10 @@
-"""The operations the interface performs, and the agent will later call.
+"""The operations the interface performs, and the chat assistant calls.
 
 Everything a person can do to a questionnaire is one of these, and each is a
 plain function taking a user and returning data -- no request, no response, no
-HTML. That is deliberate: the agent in a later phase chooses *which* of these to
-call and with what arguments, and the less it can do beyond calling them, the
-less there is to go wrong. Building them first also means they can be tested
-with fixed inputs, before anything non-deterministic is choosing between them.
+HTML. That is deliberate: the assistant chooses *which* of these to call and
+with what arguments, and the less it can do beyond calling them, the less there
+is to go wrong; and they are tested with fixed inputs.
 
     open_form   a file becomes a batch of questions
     inspect     what is in a batch and how far it has got
@@ -32,7 +31,7 @@ from typing import Any
 import asyncio
 
 from src.config import settings
-from src import answer_memory, batches, events, preferences, products, progress, rewrite, service
+from src import answer_memory, batches, events, preferences, products, progress, rewrite, service, store
 from src.formatting import to_cell_text
 from src.batches import Batch
 from src.forms import status as status_map
@@ -195,15 +194,18 @@ def set_product(user: User, batch_id: str, product_id: str) -> Batch:
     return batch
 
 
-def _require(user: User, batch_id: str) -> Batch:
+def _require(user: User, batch_id: str, *, reading: bool = False) -> Batch:
     """The one gate every operation on a questionnaire passes through.
 
     Somebody else's questionnaire is "no questionnaire": the person who
-    uploaded it owns it and its answers.
+    uploaded it owns it and its answers. A deleted product's is kept to be
+    read and filled, `reading`, and nothing else (plan 027).
     """
     batch = batches.load(batch_id, team_id=user.team_id, actor_email=user.email)
     if batch is None:
         raise QuestionnaireNotFound(f"No questionnaire {batch_id!r}.")
+    if not reading:
+        products.refuse_deleted(user.team_id, batch.product_id)
     return batch
 
 
@@ -212,7 +214,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
 
     Read-only, and the only operation the interface needs to render a batch.
     """
-    batch = _require(user, batch_id)
+    batch = _require(user, batch_id, reading=True)
     answered = batches.answers(batch.id)
     edits = batches.edited_by(batch.id)
     selected = {q.id for q in (scope or Scope()).select(batch.form, answered)}
@@ -283,6 +285,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
         "format": batch.form.format,
         "detail": batch.detail,
         "product_id": batch.product_id,
+        "read_only": batch.product_id in products.deleted(user.team_id),  # a deleted product's (plan 027)
         "file_present": batch.exists,
         "created_at": batch.created_at,
         "updated_at": batch.updated_at,
@@ -655,8 +658,7 @@ def set_answer(user: User, batch_id: str, question_id: str, text: str, *, which:
     """Replace one answer with words a person wrote.
 
     Recorded as an edit with their name on it. This is one of only three ways
-    answer text is ever written -- the other two are `answer` and `revise` --
-    and the agent, when it arrives, will have none of its own.
+    answer text is ever written -- the other two are `answer` and `revise`.
 
     `which` says which of the two lengths is being edited. Editing the full
     answer throws the brief one away rather than keeping it: the brief was
@@ -1005,7 +1007,7 @@ def fill(
     """
     from src import forms
 
-    batch = _require(user, batch_id)
+    batch = _require(user, batch_id, reading=True)  # the customer's file only: a deleted product's too
     if not batch.exists:
         raise ToolError(
             f"The uploaded file for {batch.source_name!r} is no longer on the server. Upload it again to fill it in."
@@ -1177,7 +1179,7 @@ def column_roles(user: User, batch_id: str) -> list[dict]:
     is what will actually be written. Detection proposes these; this is the
     other half of that sentence.
     """
-    batch = _require(user, batch_id)
+    batch = _require(user, batch_id, reading=True)
     if batch.form.format != "xlsx":
         return []
 
@@ -1363,8 +1365,6 @@ def set_questions(user: User, batch_id: str, changes: list[dict]) -> dict:
 
 def _save_form(batch: Batch, form: DetectedForm) -> None:
     """Write a corrected reading back over the stored one."""
-    from src import store
-
     conn = store.connect()
     conn.execute(
         "UPDATE form_batches SET detected = ?, updated_at = ? WHERE batch_id = ?",

@@ -223,6 +223,149 @@ def test_a_deleted_product_chosen_before_the_first_message_is_refused_beside_the
     assert chat["product_id"] == ""
 
 
+def test_the_chip_is_fixed_while_the_first_message_is_on_its_way(
+    page: Page, availo: products.Product, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "groq_api_key", "not-a-real-key")
+    monkeypatch.setattr(assistant, "_agent", lambda tools, **named: _graph([])(tools))
+    held = []
+    page.route("**/api/chat", lambda route: held.append(route) if route.request.method == "POST" else route.continue_())
+
+    page.goto("/")
+    pick = page.locator("#productPick")
+    page.select_option("#productPick", availo.id)
+    page.fill("#prompt", "Hello")
+    page.click("#send")
+    page.wait_for_function("() => document.querySelector('#thread .turn.working') !== null")
+    expect(pick).to_be_disabled()  # before the server has answered: the chat starts for this product
+    assert len(held) == 1
+    held[0].continue_()
+
+    expect(page.locator("#thread .turn.assistant:not(.working)")).to_have_count(1)
+    expect(pick).to_be_disabled()
+    [chat] = conversations.recent(TEAM)
+    assert chat["product_id"] == availo.id
+
+
+def test_a_deleted_product_chosen_for_a_chat_with_a_file_keeps_the_file_attached(
+    page: Page, tmp_path: Path, availo: products.Product, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "groq_api_key", "not-a-real-key")  # the route has to reach the product check
+    monkeypatch.setattr(assistant, "_agent", lambda tools, **named: _graph([])(tools))
+    gone = products.add(None, TEAM, "Msegat", color="#dc2626")
+
+    page.goto("/")
+    page.select_option("#productPick", gone.id)
+    products.delete(identity.local_user(), TEAM, gone.id, "confirm")
+    page.set_input_files("#fileInput", str(shapes.status_and_comment(tmp_path / "HR.xlsx")))
+    page.fill("#prompt", "Read this")
+    page.click("#send")
+
+    expect(page.locator("#composerNote")).to_contain_text("Msegat has been deleted")
+    expect(page.locator("#attached")).to_be_visible()
+    expect(page.locator("#attachedName")).to_have_text("HR.xlsx")
+    expect(page.locator("#thread .turn")).to_have_count(0)
+    expect(page.locator("#prompt")).to_have_value("Read this")
+    expect(page.locator("#productPick")).to_have_value("")
+    assert conversations.recent(TEAM) == [], "nothing was saved"
+    folder = settings.user_upload_dir(TEAM, identity.local_user().email)
+    assert not folder.exists() or not any(folder.iterdir()), "and no file was kept"
+
+
+def test_a_product_deleted_after_the_workbench_listed_it_is_said_when_a_file_is_opened(
+    page: Page, tmp_path: Path, availo: products.Product
+) -> None:
+    """The workbench's twin of the chat's refusal: the upload is refused before
+    anything is kept, and the page said nothing true about why."""
+    gone = products.add(None, TEAM, "Msegat", color="#dc2626")
+    page.goto("/workbench")
+    page.select_option("#formProduct", gone.id)
+    products.delete(identity.local_user(), TEAM, gone.id, "confirm")
+
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+
+    status = page.locator("#extractStatus")
+    expect(status).to_contain_text("Msegat has been deleted, so the file was not opened for it")
+    expect(status).not_to_contain_text(gone.id)
+    expect(status).not_to_contain_text("not supported")
+    selector = page.locator("#formProduct")
+    expect(selector).to_have_value("")
+    expect(selector.locator("option", has_text="Msegat")).to_have_count(0)
+    assert batches.recent(TEAM) == []
+
+    page.click("#extractBtn")  # as General, now
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    assert batches.recent(TEAM)[0]["product_id"] == ""
+
+
+def test_closing_a_questionnaire_asks_about_typed_answers_and_forgets_the_fill(
+    page: Page, tmp_path: Path, availo: products.Product, answers_from_availo: None
+) -> None:
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    questions = page.get_by_role("textbox", name="Type a question")
+    expect(questions).to_have_count(4)
+    page.click("#addQuestionBtn")
+    questions.last.fill("Do you test your backups?")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(5, timeout=15_000)
+    page.click("#fillFormBtn")
+    expect(page.locator("#formFilled")).to_be_visible()
+
+    asked: list[str] = []
+
+    def dismiss(dialog) -> None:
+        asked.append(dialog.message)
+        dialog.dismiss()
+
+    page.once("dialog", dismiss)
+    page.click("#closeForm")
+    assert "1 question(s) typed beside it are not part of the file and will go" in asked[0]
+    assert "and so will the answers to 1 of them" in asked[0]
+    rows = page.locator("#questionList .qrow")
+    expect(rows).to_have_count(5)  # dismissed: nothing went
+    expect(page.locator("#results .answer", has_text="Do you test your backups?")).to_be_visible()
+    expect(page.locator("#closeForm")).to_be_visible()
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#closeForm")
+    expect(rows).to_have_count(0)
+    expect(page.locator("#closeForm")).to_be_hidden()
+    expect(page.locator("#formFilled")).to_be_hidden()
+
+    page.click("#addQuestionBtn")
+    questions.last.fill("Do you encrypt backups?")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(1, timeout=15_000)
+    expect(page.locator("#formFilled")).to_be_hidden()  # the closed file's fill is not shown again
+    expect(page.locator("#extractStatus")).to_contain_text("Closed vendor.xlsx. It stays in")
+    expect(page.locator("#formRecent button").first).to_contain_text("vendor.xlsx")
+
+
+def test_close_waits_for_a_request_about_the_questionnaire(
+    page: Page, tmp_path: Path, availo: products.Product, answers_from_availo: None
+) -> None:
+    """A reply arriving after Close opened the closed questionnaire again."""
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
+    held = []
+    page.route("**/approve", lambda route: held.append(route))
+
+    page.locator("#results button.approve").first.click()
+    close = page.locator("#closeForm")
+    expect(close).to_be_disabled()
+    held[0].continue_()
+    expect(close).to_be_enabled()
+    close.click()
+    expect(close).to_be_hidden()
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(0)
+
+
 def test_chat_sources_from_a_product_carry_its_badge(
     page: Page, availo: products.Product, monkeypatch: pytest.MonkeyPatch
 ) -> None:

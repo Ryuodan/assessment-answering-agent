@@ -156,7 +156,7 @@ Errors: [errors.md](errors.md).
 | `POST` | `/api/chat` | One exchange with the assistant. |
 | `POST` | `/api/chat/upload` | A message with a questionnaire attached. |
 | `GET` | `/api/chat/{conversation_id}` | One conversation, as a transcript plus whatever answers it has produced. |
-| `DELETE` | `/api/chat/{conversation_id}` | Delete one of the caller's conversations. Its questionnaire and the answers in it stay. |
+| `DELETE` | `/api/chat/{conversation_id}` | Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay. |
 | `POST` | `/api/chat/{conversation_id}/product` | Refused unless it is the conversation's own product: a chat's product is fixed once it starts. |
 
 ## `/health`

@@ -7,7 +7,8 @@ draws on the shared material alone (plan 018). This module is the products
 themselves -- their names, colours and descriptions -- and nothing they hold;
 plans 021 to 023 give them a knowledge base, a memory and a place in each
 questionnaire and conversation. Deleting one is the exception: what it holds
-goes with it, and is counted first, so the page can say what will go (plan 027).
+goes with it, and is counted first, so the page can say what will go; the work
+done for it stays, read-only, under its name (plan 027).
 
 Who may change them is `src.roles.manages_products`: the team's leads, and any
 administrator. Everyone on the team may list them.
@@ -23,7 +24,7 @@ from typing import Any
 
 from src import answer_memory, batches, events, knowledge, scoped_knowledge, store, uploads
 from src.config import settings
-from src.errors import Invalid, ProductLocked, ProductNameTaken, ProductNotFound
+from src.errors import Invalid, ProductDeleted, ProductLocked, ProductNameTaken, ProductNotFound
 from src.identity import User
 from src.logs import get_logger
 
@@ -65,8 +66,8 @@ class Deletion:
     files_removed: int
     answers_forgotten: int
     moved_from_shared: int  # of the answers forgotten, those moved in from the shared memory
-    questionnaires: int  # now General
-    conversations: int  # now General
+    questionnaires: int  # kept, read-only
+    conversations: int  # kept, read-only
     files_left: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
@@ -105,6 +106,22 @@ def get(team_id: str, product_id: str) -> Product:
     if row is None:
         raise ProductNotFound(f"No product {product_id!r} in this team.")
     return _product(row)
+
+
+def deleted(team_id: str) -> dict[str, dict[str, str]]:
+    """The team's deleted products, by id: the names their kept, read-only work is labelled with (plan 027)."""
+    query = "SELECT product_id AS id, name, color, deleted_at FROM deleted_products WHERE team_id = ? ORDER BY name"
+    return {row["id"]: dict(row) for row in store.connect().execute(query, (team_id,))}
+
+
+def refuse_deleted(team_id: str, product_id: str) -> None:
+    """Refuse to change a deleted product's questionnaire or chat: it is kept to read and download (plan 027)."""
+    gone = deleted(team_id).get(product_id) if product_id else None
+    if gone:
+        raise ProductDeleted(
+            f"{gone['name']} was deleted, so this is kept read-only: it can be read and its filled file "
+            "downloaded, but no longer changed."
+        )
 
 
 def _name(name: str) -> str:
@@ -217,40 +234,60 @@ def _moved_in(team_id: str, product_id: str) -> int:
     return len(own & {row["subject_id"] for row in moves if store.loads(row["payload"]).get("moved_to") == product_id})
 
 
-def _legacy_files(team_id: str, product_id: str) -> list[Path]:
+def _in_team_folder(team_id: str, product_id: str, names: set[str] | None) -> set[str]:
+    """The documents of a product's knowledge base (or those of `names`) with a file in the team's folder only."""
+    shared, own = settings.team_upload_dir(team_id), settings.product_upload_dir(team_id, product_id)
+    sources = {s["name"] for s in scoped_knowledge.knowledge_stats(team_id, product_id=product_id)["sources"]}
+    found = sources if names is None else sources & names
+    return {n for n in found if n == Path(n).name and (shared / n).is_file() and not (own / n).exists()}
+
+
+def legacy_files(team_id: str, product_id: str, names: set[str] | None = None) -> list[Path]:
     """A product's files from before it had a folder of its own, in the team's folder (plan 027).
 
-    Its knowledge base names them. A file that the shared knowledge base or
-    another product's also indexes, or somebody's questionnaire reads, is kept:
-    one name is one document, so that file is theirs as much as this product's.
+    Its knowledge base names them, and its folder has no copy. One that the shared knowledge base or
+    another product's also indexes, or a questionnaire reads, is kept: one name is one document. Found
+    before the documents leave the index -- removed, cleared or deleted -- after which nothing says whose.
     """
-    shared = settings.team_upload_dir(team_id)
-    sources = scoped_knowledge.knowledge_stats(team_id, product_id=product_id)["sources"]
-    names = {s["name"] for s in sources if s["name"] == Path(s["name"]).name and (shared / s["name"]).is_file()}
-    if not names:
+    found = _in_team_folder(team_id, product_id, names)
+    if not found:
         return []  # the usual case, and no other knowledge base is opened for it
-    names -= set(knowledge.get_store(team_id).documents_indexed())
+    found -= set(knowledge.get_store(team_id).documents_indexed())
     for other in list_products(team_id):
         if other.id != product_id:
-            names -= set(knowledge.get_store(team_id, product_id=other.id).documents_indexed())
-    return sorted(shared / name for name in names - set(batches.claimed_sources(team_id)))
+            found -= set(knowledge.get_store(team_id, product_id=other.id).documents_indexed())
+    return sorted(settings.team_upload_dir(team_id) / name for name in found - set(batches.claimed_sources(team_id)))
+
+
+def remove_documents(team_id: str, product_id: str, name: str = "") -> list[str]:
+    """Remove one document of a product's knowledge base, or with no `name` all of them, with their files.
+
+    Its files from before it had a folder go by `legacy_files`' rule, found
+    first. Returns the files that could not be removed.
+    """
+    legacy = legacy_files(team_id, product_id, {name} if name else None)
+    if name:
+        return scoped_knowledge.delete_source(name, team_id, product_id=product_id, also=legacy)
+    return scoped_knowledge.clear_knowledge(team_id, product_id=product_id, also=legacy)
 
 
 def _files(team_id: str, product_id: str) -> list[Path]:
     """Every file deleting a product removes: its folder's, and its own from before it had one."""
     folder = settings.product_upload_dir(team_id, product_id)
-    return uploads.document_files(folder) + _legacy_files(team_id, product_id)
+    return uploads.document_files(folder) + legacy_files(team_id, product_id)
 
 
 def deletion_preview(team_id: str, product_id: str) -> dict[str, Any]:
-    """What deleting a product would remove, and what would become General. Changes nothing.
+    """What deleting a product would remove, and what of the team's work would stay. Changes nothing.
 
     Counted across the whole team, because everyone's work is affected; the
-    page shows it in its warning before anyone types the word.
+    page shows it in its warning before anyone types the word. `kept` are its
+    documents whose file stays, because something else uses it too.
     """
     product = get(team_id, product_id)
     files = _files(team_id, product_id)
     stats = scoped_knowledge.knowledge_stats(team_id, product_id=product_id)
+    kept = _in_team_folder(team_id, product_id, None) - {path.name for path in files}
     return {
         "product": product.as_dict(),
         "confirm_word": CONFIRM_WORD,
@@ -259,6 +296,7 @@ def deletion_preview(team_id: str, product_id: str) -> dict[str, Any]:
             "names": sorted(path.name for path in files)[:20],
             "indexed": len(stats["sources"]),
             "chunks": stats["guideline_chunks"],
+            "kept": len(kept),
         },
         "answers": {
             "remembered": _count("memory_entries", team_id, product_id),
@@ -280,22 +318,24 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Deletion
     than half-deleted. Its files go last, after the commit: a file that cannot
     be removed then is in a folder nothing lists or opens, and is reported.
 
-    Questionnaires and chats that were for it become General and keep their
-    answers (plan 018, decision 5): those were written and reviewed, and the
-    product going does not make them wrong.
+    Questionnaires and chats that were for it keep its id and stay listed, read-only, under the name
+    `deleted_products` keeps (plan 027, the user's decision): read and downloaded, never changed again.
+    Made General, a later approval would file the product's wording as a shared answer.
     """
     if confirm.strip().casefold() != CONFIRM_WORD:
         raise Invalid(f'Type "{CONFIRM_WORD}" to delete a product.', code="confirmation_required")
     product = get(team_id, product_id)
     files = _files(team_id, product_id)  # while its knowledge base can still say which are its own
     moved = _moved_in(team_id, product_id)
+    kept = {table: _count(table, team_id, product_id) for table in ("form_batches", "conversations")}
     scoped_knowledge.drop_product(team_id, product_id)
     forgotten = answer_memory.forget_product(team_id, product_id)  # its remembered answers (plan 022)
     conn = store.connect()
-    general: dict[str, int] = {}
-    for table in ("form_batches", "conversations"):  # plan 023
-        query = f"UPDATE {table} SET product_id = '' WHERE team_id = ? AND product_id = ?"
-        general[table] = conn.execute(query, (team_id, product_id)).rowcount
+    conn.execute(
+        "INSERT INTO deleted_products (product_id, team_id, name, color, deleted_at)"
+        " SELECT product_id, team_id, name, color, ? FROM products WHERE product_id = ?",
+        (store.utcnow(), product_id),
+    )
     conn.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
     conn.commit()
     left = uploads.remove(files, folder=settings.product_upload_dir(team_id, product_id))
@@ -304,8 +344,8 @@ def delete(actor: User, team_id: str, product_id: str, confirm: str) -> Deletion
         files_removed=sum(not path.exists() for path in files),
         answers_forgotten=forgotten,
         moved_from_shared=moved,
-        questionnaires=general["form_batches"],
-        conversations=general["conversations"],
+        questionnaires=kept["form_batches"],
+        conversations=kept["conversations"],
         files_left=tuple(left),
     )
     if left:

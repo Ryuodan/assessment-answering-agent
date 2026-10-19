@@ -51,6 +51,7 @@
   .status.error { color: var(--err); }
   .status.ok { color: var(--ok); }
   .status.busy { color: var(--accent-ink); }
+  .status.calm { color: var(--ink-soft); }
 
   /* --- top bar: wrapping and the links' look are shared, in cards.css ----- */
   .topbar {
@@ -691,6 +692,7 @@
   let busy = false;
   let attached = null;
   let startingChat = false;  // the first message is on its way: the chip is fixed already
+  let readOnly = false;  // a deleted product's chat: kept to read, never added to (plan 027)
 
   const STARTERS = [
     "Read this questionnaire and tell me what is in it",
@@ -1029,7 +1031,7 @@
   async function send() {
     const field = $("prompt");
     const message = field.value.trim();
-    if ((!message && !attached) || busy) return;
+    if ((!message && !attached) || busy || readOnly) return;
 
     // The product this message starts a chat for, if it starts one. The chip
     // is fixed from here on, so it cannot change under the first turn.
@@ -1087,21 +1089,36 @@
       loadHistory();
     } catch (error) {
       stop();
-      if (error.code === "product_not_found" && startingFor) {
+      const refusedProduct = (error.code === "product_not_found" && startingFor) || error.code === "product_deleted";
+      if (refusedProduct) {
         // The product was deleted after this page listed it. The server
-        // refused before saving anything -- no chat, no file -- so the two
-        // turns come off the page, the words go back in the box, and the chip
-        // goes back to General, said beside the box rather than as a reply.
-        const name = (teamProducts.find((p) => p.id === startingFor) || {}).name || "That product";
+        // refused before saving anything -- no message, no file -- so the two
+        // turns come off the page and the words go back in the box, said
+        // beside the box rather than as a reply. An attachment stays attached.
         you.remove();
         placeholder.remove();
         $("empty").hidden = Boolean($("thread").querySelector(".turn"));
         $("prompt").value = message;
         grow();
+      }
+      if (error.code === "product_not_found" && startingFor) {
+        // A new chat: the chip goes back to General, whether or not the list
+        // of products can be read again.
+        const name = (teamProducts.find((p) => p.id === startingFor) || {}).name || "That product";
+        teamProducts = teamProducts.filter((p) => p.id !== startingFor);
         await loadProducts();
+        if (chosenProduct() === startingFor) showProduct("");
         chipChoice = chosenProduct();
         noteByTheBox(name + " has been deleted, so the chat could not start for it. Nothing was sent. " +
           "The chip is back on General: choose a product, or send it as General.");
+        return;
+      }
+      if (error.code === "product_deleted") {
+        // An open chat whose product was deleted since: read-only from here on,
+        // its answers drawn again without their controls.
+        await loadProducts();
+        setReadOnly(true, chosenProduct());
+        if (batchId && answersAvailable) reloadAnswers();
         return;
       }
       placeholder.classList.remove("working");
@@ -1116,10 +1133,32 @@
     }
   }
 
-  function noteByTheBox(text) {
+  /* `calm` for something that is so, rather than something that went wrong. */
+  function noteByTheBox(text, calm) {
     const note = $("composerNote");
     note.textContent = text || "";
     note.hidden = !text;
+    note.className = "status " + (calm ? "calm" : "error") + " composer-note";
+    note.setAttribute("role", calm ? "status" : "alert");
+  }
+
+  /* A deleted product's chat (plan 027): its transcript and answers stay to
+     read, and Fill and Download still work; nothing new can be said in it, and
+     its answers are drawn without the controls that would change one. */
+  const ASK = $("prompt").placeholder;
+  function setReadOnly(on, productId) {
+    readOnly = on;
+    Cards.readOnly = on;
+    Cards.canSetAside = !on;
+    $("fileInput").disabled = on;
+    $("prompt").placeholder = on ? "Kept to read — start a new chat to carry on" : ASK;
+    if (on) {
+      const name = (Cards.product(productId) || {}).name || "Its product";
+      noteByTheBox(name + " was deleted. This chat is kept so you can read it; start a new chat to carry on.", true);
+    } else {
+      noteByTheBox("");
+    }
+    refresh();
   }
 
   /* --- the answers beside it ------------------------------------------------ */
@@ -1152,7 +1191,7 @@
     const row = document.createElement("div");
     row.className = "pick-row";
     row.append(picker, Cards.skillPicker(mySkills, applySkill));
-    host.append(row);
+    if (!readOnly) host.append(row);  // both change the answers: not on a deleted product's
 
     const counts = report.counts || {};
     const summary = document.createElement("div");
@@ -1216,7 +1255,8 @@
     back.className = "ghost";
     back.textContent = "Include it again";
     back.onclick = () => setAside(question.id, false);
-    row.append(text, back);
+    row.append(text);
+    if (!readOnly) row.append(back);
     return row;
   }
 
@@ -1670,7 +1710,10 @@
       const data = await request("/api/chat/" + id);
       conversationId = data.id;
       batchId = data.batch_id || "";
-      noteByTheBox("");
+      // A deleted product's chat is kept to read (plan 027): named, even when
+      // the page listed the products before the deletion.
+      if (data.read_only && !(Cards.product(data.product_id) || {}).deleted) await loadProducts();
+      setReadOnly(Boolean(data.read_only), data.product_id);
       showProduct(data.product_id || "");
       $("thread").replaceChildren($("empty"));
       $("empty").hidden = (data.messages || []).length > 0;
@@ -1689,7 +1732,7 @@
   function newConversation() {
     conversationId = "";
     batchId = "";
-    noteByTheBox("");
+    setReadOnly(false);
     // The chip can be changed again, and starts on the product last chosen for
     // a chat rather than on whichever chat was open: opening an old chat to
     // read it is not choosing its product for the next one.
@@ -1720,8 +1763,8 @@
     if (field.value) field.style.height = Math.min(field.scrollHeight, 190) + "px";
   }
   function refresh() {
-    $("send").disabled = busy || !($("prompt").value.trim() || attached);
-    $("prompt").disabled = busy;
+    $("send").disabled = busy || readOnly || !($("prompt").value.trim() || attached);
+    $("prompt").disabled = busy || readOnly;
   }
   function detach() {
     attached = null;
@@ -1730,6 +1773,7 @@
     refresh();
   }
   function attach(file) {
+    if (readOnly) return;  // nothing can be sent in a deleted product's chat
     attached = file;
     $("attachedName").textContent = file.name;
     $("attached").hidden = false;
@@ -1825,13 +1869,20 @@
         remove.className = "ghost";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          // A product's document goes with its file (TD-039); a shared one is
-          // only taken out of the index.
-          const files = kbScope() ? "\n\nIts file is deleted too, and cannot be recovered from here." : "";
+          // A product's document goes with its file (TD-039), unless something
+          // else uses it too: one name is one document (plan 027). A shared one
+          // is only taken out of the index.
+          const files = kbScope() ? "\n\nIts file is deleted too, and cannot be recovered from here — unless " +
+            "the shared knowledge base, another product or a questionnaire also uses it." : "";
           if (!confirm("Remove " + source.name + " from the knowledge base?" + files)) return;
           try {
-            await request("/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
-              { method: "DELETE" });
+            const removed = await request(
+              "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"), { method: "DELETE" });
+            const left = (removed && removed.files_left) || [];
+            $("kbStatus").textContent = "Removed " + source.name + "." + (left.length
+              ? " " + left.length + " file(s) could not be removed from the server (" + left.join(", ") + "); see the log."
+              : "");
+            $("kbStatus").className = "status " + (left.length ? "error" : "ok");
           } catch (error) {
             $("kbStatus").textContent = error.message;
             $("kbStatus").className = "status error";
@@ -1884,6 +1935,7 @@
   /* --- which product: General, or one of the team's (plan 024) -------------- */
 
   let teamProducts = [];
+  let deletedProducts = [];  // since plan 027: their chats are kept, read-only
   let chipChoice = "";  // what the person last chose on the chip, for the next new chat
   function chosenProduct() { return $("productPick").value; }
   /* A chat's product is fixed once it starts (TD-040): the chip can be changed
@@ -1891,31 +1943,47 @@
      work on another product, start a new chat. */
   function paintProductChip() {
     const product = teamProducts.find((p) => p.id === chosenProduct());
+    const gone = !product && Cards.product(chosenProduct());
     const chip = $("productChip");
     const fixed = Boolean(conversationId) || startingChat;
     $("productPick").disabled = fixed;
     if (product && product.color) chip.style.setProperty("--product", product.color);
     else chip.style.removeProperty("--product");
-    chip.title = (product
-      ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
-      : "General: answered from the shared knowledge base and answer memory.") +
-      (fixed ? " Fixed for this chat; start a new chat to work on another product." : "");
+    chip.title = gone
+      ? gone.name + " was deleted. This chat is kept to read; start a new chat to carry on."
+      : (product
+        ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
+        : "General: answered from the shared knowledge base and answer memory.") +
+        (fixed ? " Fixed for this chat; start a new chat to work on another product." : "");
   }
+  /* A deleted product cannot be chosen, so it is offered only as the badge of
+     a chat kept from it: disabled and named as deleted, rather than the chip
+     falling back to General and saying the wrong thing. */
   function showProduct(productId) {
     const select = $("productPick");
+    [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
+    const gone = Cards.product(productId);
+    if (conversationId && gone && gone.deleted) {
+      const option = new Option(gone.name + " (deleted)", productId);
+      option.disabled = true;
+      option.dataset.deleted = "true";
+      select.append(option);
+    }
     select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
     paintProductChip();
   }
   /* The team's products, again. Returns the name of the product the chip was
      on if it has since been deleted -- the chip is then back on General, which
-     the caller says -- and "" otherwise. A failed fetch changes nothing. */
+     the caller says -- and "" otherwise. A failed fetch keeps what the page had. */
   async function loadProducts() {
     const chosen = chosenProduct();
     const was = teamProducts.find((p) => p.id === chosen);
     try {
-      teamProducts = (await request("/api/products")).products || [];
-    } catch (error) { return ""; }
-    Cards.setProducts(teamProducts);
+      const listed = await request("/api/products");
+      teamProducts = listed.products || [];
+      deletedProducts = listed.deleted || [];
+    } catch (error) { /* as it was */ }
+    Cards.setProducts(teamProducts, deletedProducts);
     const select = $("productPick");
     select.replaceChildren(new Option("General", ""));
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
@@ -1930,11 +1998,14 @@
     paintProductChip();
   });
   // A tab left open while somebody deleted a product corrects itself when the
-  // person comes back to it, rather than on the message that fails.
+  // person comes back to it, rather than on the message that fails: a new
+  // chat's chip goes back to General, and an open chat of that product is
+  // opened again, read-only (plan 027).
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !$("gate").hidden) return;
     const gone = await loadProducts();
-    if (gone) noteByTheBox(gone + " has been deleted; the chip is back on General.");
+    if (conversationId && !readOnly && !busy && (Cards.product(chosenProduct()) || {}).deleted) open(conversationId);
+    else if (gone) noteByTheBox(gone + " has been deleted; the chip is back on General.");
   });
 
   /* --- start ---------------------------------------------------------------- */

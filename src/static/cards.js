@@ -20,6 +20,8 @@
      Cards.onRestoreDraft(item, index)    put back the answer as it was drafted
      Cards.onSetAside(item, index, skip)  leave the question out of the file, or bring it back
      Cards.canSetAside                    whether the page offers that on the card
+     Cards.readOnly                       the answers are to read, not change: a deleted
+                                          product's (plan 027), so no control that changes one
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
    control simply does nothing rather than throwing.
@@ -37,6 +39,7 @@ const Cards = (window.Cards = {
   onRestoreDraft() {},
   onSetAside() {},
   canSetAside: false,
+  readOnly: false,
   /* Where the page keeps the answer being edited. The card shows and writes
      through this rather than owning it, because the workbench holds a whole
      run in memory and the chat page holds a batch. */
@@ -517,7 +520,7 @@ const Cards = (window.Cards = {
       const why = document.createElement("span");
       why.textContent = " Nothing is written to the file for this question, whatever its answer says.";
       aside.append(what, why);
-      if (Cards.canSetAside) {
+      if (Cards.canSetAside && !Cards.readOnly) {
         const back = document.createElement("button");
         back.className = "quiet";
         back.dataset.mutates = "true";
@@ -535,11 +538,27 @@ const Cards = (window.Cards = {
       why.textContent = item.held_back_because
         ? " " + item.held_back_because[0].toUpperCase() + item.held_back_because.slice(1) + "."
         : " Nobody has confirmed this answer.";
-      const how = document.createElement("span");
-      how.className = "how";
-      how.textContent = "Edit it, or approve it as it stands.";
-      held.append(what, why, how);
+      held.append(what, why);
+      if (!Cards.readOnly) {
+        const how = document.createElement("span");
+        how.className = "how";
+        how.textContent = "Edit it, or approve it as it stands.";
+        held.append(how);
+      }
       field.append(held);
+    }
+
+    /* Read-only: a deleted product's answers (plan 027). What they say, and
+       whether they were approved, is shown; nothing that would change one is. */
+    if (Cards.readOnly) {
+      if (item.approved) {
+        const approved = document.createElement("span");
+        approved.className = "tag";
+        approved.textContent = "approved";
+        field.querySelector(".field-label").append(approved);
+      }
+      toggle.hidden = true;
+      editor.readOnly = true;
     }
 
     /* Full or brief, for this one answer. The questionnaire-level control is
@@ -552,7 +571,7 @@ const Cards = (window.Cards = {
        whole file had been switched to Brief at least once: the per-answer
        choice was reachable only through the bulk one it exists to avoid.
        Choosing Brief here shortens this one answer on the spot. */
-    if (item.length && !item.blanked && (item.answer || "").trim()) {
+    if (item.length && !item.blanked && (item.answer || "").trim() && !Cards.readOnly) {
       const lengths = document.createElement("span");
       lengths.className = "len-pick";
       const buttons = [["full", "Full"], ["brief", "Brief"]].map(([value, text]) => {
@@ -596,7 +615,7 @@ const Cards = (window.Cards = {
        "previous answer" at a confidence the loop manufactured rather than
        earned. The title says which of the two effects apply here, because the
        difference is invisible otherwise. */
-    {
+    if (!Cards.readOnly) {
       const byHand = item.by_hand || item.confidence_reason === "written by hand";
       const approve = document.createElement("button");
       approve.className = item.approved ? "quiet" : "quiet approve";
@@ -630,11 +649,13 @@ const Cards = (window.Cards = {
     /* Leaving it blank on purpose. Beside Edit because it is the same kind of
        decision -- what this question should say -- and because a control that
        empties an answer belongs next to the answer and nowhere else. */
-    const blank = document.createElement("button");
-    blank.className = "quiet";
-    blank.textContent = item.blanked ? "Write an answer" : "Leave blank";
-    blank.onclick = () => Cards.onBlank(item, index, !item.blanked);
-    field.querySelector(".field-label").append(blank);
+    if (!Cards.readOnly) {
+      const blank = document.createElement("button");
+      blank.className = "quiet";
+      blank.textContent = item.blanked ? "Write an answer" : "Leave blank";
+      blank.onclick = () => Cards.onBlank(item, index, !item.blanked);
+      field.querySelector(".field-label").append(blank);
+    }
 
     let editing = false;
     const setMode = (next) => {
@@ -677,23 +698,33 @@ const Cards = (window.Cards = {
 
   /* Which product something is for (plan 024): a source from a product's own
      knowledge base, or a chat or questionnaire in a list. The page hands over
-     the team's products; an id not among them -- General, or a product since
-     deleted -- gets no badge. */
+     the team's products, and those deleted since plan 027 -- whose work is
+     kept, read-only, and badged as theirs, marked deleted. An id among
+     neither, General, gets no badge. */
   let products = {};
 
-  function setProducts(list) {
+  function setProducts(list, deleted) {
     products = {};
+    (deleted || []).forEach((product) => { products[product.id] = Object.assign({}, product, { deleted: true }); });
     (list || []).forEach((product) => { products[product.id] = product; });
   }
 
+  /* The product with this id, live or deleted (`deleted` is then true), or null. */
+  function product(productId) {
+    return (productId && products[productId]) || null;
+  }
+
   function productBadge(productId, title) {
-    const product = productId ? products[productId] : null;
-    if (!product) return null;
+    const found = product(productId);
+    if (!found) return null;
     const tag = document.createElement("span");
-    tag.className = "tag product";
-    tag.textContent = product.name;
-    if (product.color) tag.style.setProperty("--product", product.color);
-    tag.title = title || "For " + product.name;
+    tag.className = "tag product" + (found.deleted ? " deleted" : "");
+    tag.textContent = found.deleted ? found.name + " · deleted" : found.name;
+    if (found.color) tag.style.setProperty("--product", found.color);
+    tag.title = found.deleted
+      ? found.name + " has been deleted. What was done for it is kept to read, and its filled files " +
+        "to download; it can no longer be changed."
+      : title || "For " + found.name;
     return tag;
   }
 
@@ -829,7 +860,7 @@ const Cards = (window.Cards = {
     meta.append(detail, more);
     /* Beside the question, because it is a decision about the question: leave
        it out of the file, whatever the answer says. */
-    if (Cards.canSetAside && !item.set_aside) {
+    if (Cards.canSetAside && !Cards.readOnly && !item.set_aside) {
       const aside = document.createElement("button");
       aside.className = "quiet";
       aside.dataset.mutates = "true";
@@ -872,7 +903,7 @@ const Cards = (window.Cards = {
     // Removing the pair belongs here, beside what it removes. Only offered for
     // answers this session produced, since an imported result has no question
     // row behind it to keep in step.
-    if (item.__key) {
+    if (item.__key && !Cards.readOnly) {
       const remove = document.createElement("button");
       remove.className = "quiet danger qdelete";
       remove.dataset.mutates = "true";
@@ -911,7 +942,8 @@ const Cards = (window.Cards = {
       back.textContent = "Put the draft back";
       back.title = "Replace the reworded answer with the original draft, for this question only";
       back.onclick = () => Cards.onRestoreDraft(item, index);
-      box.append(summary, original, back);
+      box.append(summary, original);
+      if (!Cards.readOnly) box.append(back);
       field.append(box);
       content.append(field);
     }
@@ -946,7 +978,7 @@ const Cards = (window.Cards = {
       box.className = "reasons why";
       box.textContent = item.error;
       field.append(box);
-      if (item.__key) {
+      if (item.__key && !Cards.readOnly) {
         const again = document.createElement("button");
         again.className = "ghost";
         again.dataset.mutates = "true";
@@ -1076,6 +1108,7 @@ const Cards = (window.Cards = {
     skillPicker: skillPicker,
     authorityBadge: authorityBadge,
     setProducts: setProducts,
+    product: product,
     productBadge: productBadge,
     ownSourceBadge: ownSourceBadge,
     openDocumentButton: openDocumentButton,

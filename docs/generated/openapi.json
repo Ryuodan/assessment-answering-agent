@@ -419,7 +419,7 @@
     "/api/products": {
       "get": {
         "summary": "List Products",
-        "description": "The team's products, and whether the caller may change them.",
+        "description": "The team's products, and whether the caller may change them.\n\n`deleted` are the products deleted since plan 027, by name and colour: the\npages label the questionnaires and chats kept, read-only, from each.",
         "operationId": "list_products_api_products_get",
         "parameters": [
           {
@@ -591,7 +591,7 @@
       },
       "delete": {
         "summary": "Delete Product",
-        "description": "Delete a product, with its documents and their files, and its remembered answers. Needs `confirm=confirm`.\n\nThe remembered answers include those moved in from the shared memory. Its\nquestionnaires and chats become General. `removed` says how many of each.",
+        "description": "Delete a product, with its documents and their files, and its remembered answers. Needs `confirm=confirm`.\n\nThe remembered answers include those moved in from the shared memory. Its\nquestionnaires and chats are kept, read-only (plan 027). `removed` says how many of each.",
         "operationId": "delete_product_api_products__product_id__delete",
         "parameters": [
           {
@@ -1698,7 +1698,7 @@
       },
       "delete": {
         "summary": "Clear Knowledge",
-        "description": "Remove every policy document, shared or a `product`'s (with their files). The answer memory stays.",
+        "description": "Remove every policy document, shared or a `product`'s (with their files). The answer memory stays.\n\n`files_left` names a product's files that could not be removed from the server.",
         "operationId": "clear_knowledge_api_knowledge_delete",
         "parameters": [
           {
@@ -1784,7 +1784,7 @@
     "/api/knowledge/sources/{source_name}": {
       "delete": {
         "summary": "Remove Source",
-        "description": "Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file).",
+        "description": "Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file).\n\n`files_left` names a product's file that could not be removed from the server.",
         "operationId": "remove_source_api_knowledge_sources__source_name__delete",
         "parameters": [
           {
@@ -3486,7 +3486,7 @@
       },
       "delete": {
         "summary": "Forget Conversation",
-        "description": "Delete one of the caller's conversations. Its questionnaire and the answers in it stay.",
+        "description": "Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay.",
         "operationId": "forget_conversation_api_chat__conversation_id__delete",
         "parameters": [
           {
@@ -3528,7 +3528,7 @@
     "/api/chat/{conversation_id}/product": {
       "post": {
         "summary": "Choose Chat Product",
-        "description": "Refused unless it is the conversation's own product: a chat's product is fixed once it starts.\n\nAnother product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.\nKept so a page opened before the change, or a script, is told why rather than finding no route.",
+        "description": "Refused unless it is the conversation's own product: a chat's product is fixed once it starts.\n\nAnother product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.\nA deleted product's chat is 409 `product_deleted` (plan 027). Kept so a page opened before the\nchange, or a script, is told why rather than finding no route.",
         "operationId": "choose_chat_product_api_chat__conversation_id__product_post",
         "parameters": [
           {

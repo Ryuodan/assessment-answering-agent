@@ -1,17 +1,23 @@
-"""Questionnaires and chats carry a product, and answering uses it (plan 023)."""
+"""Questionnaires and chats carry a product, and answering uses it (plan 023).
+
+A deleted product's questionnaires and chats keep it, read-only (plan 027).
+"""
 
 from __future__ import annotations
+
+import inspect
 
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src import answer_memory, batches, conversations, identity, knowledge, products, roles, service, store, tools
+from src import answer_memory, batches, conversations, identity, knowledge, preferences, products, roles, service
+from src import store, tools
 from src.agents import assistant
 from src.agents.assistant_prompt import FOR_PRODUCT
 from src.api import app
 from src.config import settings
-from src.errors import ProductLocked, ProductNotFound
+from src.errors import ProductDeleted, ProductLocked, ProductNotFound
 from src.graph import nodes, workflow
 from src.models import AnsweredQuestion, Evidence, Question, SourceType
 from src.prompts import PRODUCT_SOURCES_NOTE, format_sources_block
@@ -347,38 +353,119 @@ async def test_the_assistant_is_told_the_product_and_only_when_there_is_one(user
     assert "is fixed; to work on another product the\nperson starts a new chat" in told_about
 
 
-# --- deleting a product ----------------------------------------------------------------
+# --- deleting a product: its work is kept, read-only (plan 027) --------------------------
+
+
+def delete(product: products.Product) -> None:
+    products.delete(identity.add_user("lead@example.test", role=roles.LEAD), TEAM, product.id, confirm="confirm")
+
+
+def approved_by_hand(user, availo, tmp_path) -> tuple[str, str]:
+    """A questionnaire for Availo with one answer written by hand and approved, so remembered."""
+    batch = tools.open_form(user, shapes.simple(tmp_path / "vendor.xlsx"), product_id=availo.id)
+    question = next(q for q in batch.form.questions if q.writable)
+    tools.set_answer(user, batch.id, question.id, "Yes, every backup is encrypted.")
+    assert tools.approve_answer(user, batch.id, question.id)
+    return batch.id, question.id
+
+
+async def worked_on(user, availo, tmp_path) -> tuple[str, str]:
+    """`approved_by_hand`, and the rest of it answered."""
+    batch_id, question_id = approved_by_hand(user, availo, tmp_path)
+    await tools.answer(user, batch_id)
+    return batch_id, question_id
+
+
+# Every operation that changes a questionnaire. Each is refused once its product is deleted.
+CHANGES = {
+    "answer": lambda user, batch_id, q: tools.answer(user, batch_id),
+    "revise": lambda user, batch_id, q: tools.revise(user, batch_id, "Shorter."),
+    "apply_skill": lambda user, batch_id, q: tools.apply_skill(user, batch_id, preferences.BUILTIN_SKILLS[0].skill_id),
+    "make_brief": lambda user, batch_id, q: tools.make_brief(user, batch_id),
+    "set_answer": lambda user, batch_id, q: tools.set_answer(user, batch_id, q, "No."),
+    "blank_answer": lambda user, batch_id, q: tools.blank_answer(user, batch_id, q),
+    "restore_draft": lambda user, batch_id, q: tools.restore_draft(user, batch_id, q),
+    "prefer_length": lambda user, batch_id, q: tools.prefer_length(user, batch_id, q, "brief"),
+    "set_detail": lambda user, batch_id, q: tools.set_detail(user, batch_id, "brief"),
+    "set_questions": lambda user, batch_id, q: tools.set_questions(user, batch_id, [{"id": q, "skip": True}]),
+    "set_column_role": lambda user, batch_id, q: tools.set_column_role(user, batch_id, "Sheet1", "C", "ignore"),
+    "set_product": lambda user, batch_id, q: tools.set_product(user, batch_id, ""),
+    "approve_answer": lambda user, batch_id, q: tools.approve_answer(user, batch_id, q),
+    "withdraw_approval": lambda user, batch_id, q: tools.approve_answer(user, batch_id, q, approved=False),
+}
 
 
 @pytest.mark.asyncio
-async def test_deleting_a_product_returns_its_questionnaires_and_chats_to_general(
+@pytest.mark.parametrize("change", sorted(CHANGES))
+async def test_a_deleted_products_questionnaire_is_kept_read_only(
+    stores, user, availo, answering, tmp_path, change: str
+) -> None:
+    """The user's decision (plan 027): kept, still the product's, and read-only.
+    Made General instead, approving in it filed the product's wording in the
+    shared memory."""
+    batch_id, question_id = await worked_on(user, availo, tmp_path)
+    written = batches.answers(batch_id)
+    delete(availo)
+
+    assert batches.load(batch_id).product_id == availo.id, "still the deleted product's"
+    assert batches.answers(batch_id) == written, "with its answers"
+    report = tools.inspect(user, batch_id)
+    assert (report["product_id"], report["read_only"]) == (availo.id, True)
+
+    with pytest.raises(ProductDeleted) as refused:
+        attempt = CHANGES[change](user, batch_id, question_id)
+        if inspect.isawaitable(attempt):
+            await attempt
+    assert (refused.value.code, refused.value.status) == ("product_deleted", 409)
+    assert "Availo was deleted" in refused.value.message and availo.id not in refused.value.message
+    assert batches.answers(batch_id) == written, "nothing changed"
+    assert store.connect().execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0] == 0, "nothing remembered"
+    assert (TEAM, availo.id) not in stores, "its knowledge base is not made again"
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_products_questionnaire_can_still_be_read_and_filled(
     stores, user, availo, answering, tmp_path
 ) -> None:
-    batch = tools.open_form(user, shapes.simple(tmp_path / "vendor.xlsx"), product_id=availo.id)
-    await tools.answer(user, batch.id)
-    written = batches.answers(batch.id)
-    conversation = assistant.start(user, "Hello", availo.id)
+    batch_id, _ = await worked_on(user, availo, tmp_path)
+    delete(availo)
 
-    products.delete(identity.add_user("lead@example.test", role=roles.LEAD), TEAM, availo.id, confirm="confirm")
+    assert tools.inspect(user, batch_id)["counts"]["questions"] == 4
+    assert tools.column_roles(user, batch_id), "where the answers go, to read"
+    filled = tools.fill(user, batch_id)
+    assert filled.written and tools._filled_path(batches.load(batch_id)).exists()
+    general = tools.open_form(user, shapes.simple(tmp_path / "again.xlsx"))
+    assert tools.inspect(user, general.id)["read_only"] is False, "General's work is as it was"
 
-    assert batches.load(batch.id).product_id == ""
-    assert batches.answers(batch.id) == written, "with their answers"
-    assert conversations.load(conversation.id).product_id == ""
 
-
-def test_a_turn_that_outlives_a_products_deletion_does_not_bring_it_back(stores, user, availo) -> None:
-    """A turn saves the conversation it loaded when the message arrived. Saving
-    its product too wrote a product deleted during the turn back over General,
-    and with the product fixed nothing could put that right."""
+def test_a_deleted_products_chat_keeps_its_product(stores, user, availo) -> None:
+    """A turn saves the conversation it loaded when the message arrived; it never
+    writes the product, so the chat stays the deleted product's, read-only."""
     conversation = assistant.start(user, "Hello", availo.id)
     stale = conversations.load(conversation.id)
 
-    products.delete(identity.add_user("lead@example.test", role=roles.LEAD), TEAM, availo.id, confirm="confirm")
+    delete(availo)
     stale.messages = [HumanMessage("Hello"), AIMessage("Hello again.")]
     conversations.save(stale)
 
     saved = conversations.load(conversation.id)
-    assert saved.product_id == "" and [m.content for m in saved.messages] == ["Hello", "Hello again."]
+    assert saved.product_id == availo.id and [m.content for m in saved.messages] == ["Hello", "Hello again."]
+
+
+@pytest.mark.asyncio
+async def test_a_turn_running_when_its_product_is_deleted_is_told_so(stores, user, availo, answering, tmp_path) -> None:
+    """The assistant's tools go through the same gate: the refusal is reported to
+    the model, and the turn carries on rather than failing."""
+    batch_id, question_id = await worked_on(user, availo, tmp_path)
+    state: dict = {"batch_id": batch_id, "product_id": availo.id, "pending_upload": "", "steps": []}
+    tool = {t.__name__: t for t in assistant._tools(user, state)}
+    delete(availo)
+
+    said = tool["write_one_answer"]("No.", question_id=question_id)
+
+    assert said.startswith("Availo was deleted, so this is kept read-only")
+    assert "refreshed" not in state
+    assert batches.answers(batch_id)[question_id].answer == "Yes, every backup is encrypted."
 
 
 def test_a_version_12_database_upgrades_and_its_work_is_general() -> None:
@@ -496,3 +583,71 @@ def test_another_teams_product_is_absent_from_every_route(stores, availo, theirs
         ),
     ):
         assert (response.status_code, response.json()["code"]) == (404, "product_not_found"), response.request.url
+
+
+def test_the_questionnaire_routes_keep_a_deleted_products_work_read_only(stores, availo, alice, tmp_path) -> None:
+    batch_id, question_id = approved_by_hand(identity.find_user(ALICE), availo, tmp_path)
+    delete(availo)
+
+    form, asked = f"/api/forms/{batch_id}", {"question_id": question_id}
+    for method, path, body in (
+        ("post", "/answer", {}),
+        ("post", "/revise", {"instruction": "Shorter."}),
+        ("post", f"/skills/{preferences.BUILTIN_SKILLS[0].skill_id}", {}),
+        ("post", "/answers", {**asked, "text": "No."}),
+        ("post", "/blank", asked),
+        ("post", "/answers/draft", asked),
+        ("post", "/answers/length", {**asked, "prefer": "brief"}),
+        ("post", "/detail", {"detail": "brief"}),
+        ("post", "/columns", {"sheet": "Sheet1", "column": "C", "role": "ignore"}),
+        ("patch", "/questions", {"changes": [{"id": question_id, "skip": True}]}),
+        ("post", "/product", {"product": ""}),
+        ("post", "/approve", asked),
+        ("post", "/approve", {**asked, "approved": False}),
+    ):
+        refused = getattr(alice, method)(form + path, json=body)
+        assert (refused.status_code, refused.json()["code"]) == (409, "product_deleted"), path
+        assert refused.json()["detail"].startswith("Availo was deleted, so this is kept read-only")
+
+    opened = alice.get(form).json()
+    assert (opened["product_id"], opened["read_only"]) == (availo.id, True)
+    assert alice.get("/api/forms").json()["forms"][0]["product_id"] == availo.id, "still listed as Availo's"
+    assert alice.get(form + "/columns").status_code == 200
+    assert alice.post(form + "/fill", json={}).status_code == 200, "a filled file can still be made"
+    assert alice.get(form + "/file").status_code == 200, "and downloaded"
+    gone = _upload(alice, shapes.simple(tmp_path / "new.xlsx"), product=availo.id)
+    assert (gone.status_code, gone.json()["code"]) == (404, "product_not_found"), "no new work for it"
+
+
+def test_the_chat_routes_keep_a_deleted_products_chat_read_only(stores, availo, alice, monkeypatch) -> None:
+    async def never(*args, **kwargs):
+        raise AssertionError("the assistant was asked to add to a deleted product's chat")
+
+    monkeypatch.setattr(assistant, "configured", lambda: True)
+    monkeypatch.setattr(assistant, "say", never)
+    conversation = assistant.start(identity.find_user(ALICE), "Hello", availo.id)
+    conversation.messages = [HumanMessage("Hello"), AIMessage("Hello again.")]
+    conversations.save(conversation)
+    delete(availo)
+
+    said = alice.post("/api/chat", json={"message": "Again", "conversation_id": conversation.id})
+    assert (said.status_code, said.json()["code"]) == (409, "product_deleted")
+    uploaded = alice.post(
+        "/api/chat/upload",
+        data={"message": "Read", "conversation_id": conversation.id},
+        files={"file": ("q.xlsx", b"not read", "application/octet-stream")},
+    )
+    assert (uploaded.status_code, uploaded.json()["code"]) == (409, "product_deleted")
+    folder = settings.user_upload_dir(TEAM, ALICE)
+    assert not folder.exists() or not any(folder.iterdir()), "refused before the file was kept"
+    chose = alice.post(f"/api/chat/{conversation.id}/product", json={"product": ""})
+    assert (chose.status_code, chose.json()["code"]) == (409, "product_deleted")
+    started = alice.post("/api/chat", json={"message": "Hi", "product": availo.id})
+    assert (started.status_code, started.json()["code"]) == (404, "product_not_found"), "no new chat for it"
+
+    opened = alice.get(f"/api/chat/{conversation.id}").json()
+    assert (opened["product_id"], opened["read_only"]) == (availo.id, True)
+    assert [m["text"] for m in opened["messages"]] == ["Hello", "Hello again."]
+    assert alice.get("/api/chat").json()["conversations"][0]["product_id"] == availo.id
+    assert [m.content for m in conversations.load(conversation.id).messages] == ["Hello", "Hello again."]
+    assert alice.delete(f"/api/chat/{conversation.id}").status_code == 200, "forgetting one's own chat is allowed"

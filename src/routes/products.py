@@ -59,11 +59,16 @@ def _manager(user: User, team: str) -> None:
 
 @router.get("/api/products")
 def list_products(team: str | None = None, user: User = Depends(current_user)) -> dict[str, Any]:
-    """The team's products, and whether the caller may change them."""
+    """The team's products, and whether the caller may change them.
+
+    `deleted` are the products deleted since plan 027, by name and colour: the
+    pages label the questionnaires and chats kept, read-only, from each.
+    """
     which = _team(user, team)
     return {
         "team": which,
         "products": [product.as_dict() for product in products.list_products(which)],
+        "deleted": list(products.deleted(which).values()),
         "can_manage": roles.manages_products(user.role, user.team_id, which),
         "palette": list(products.PALETTE),
     }
@@ -106,7 +111,7 @@ def delete_product(
     """Delete a product, with its documents and their files, and its remembered answers. Needs `confirm=confirm`.
 
     The remembered answers include those moved in from the shared memory. Its
-    questionnaires and chats become General. `removed` says how many of each.
+    questionnaires and chats are kept, read-only (plan 027). `removed` says how many of each.
     """
     which = _team(user, team)
     _manager(user, which)

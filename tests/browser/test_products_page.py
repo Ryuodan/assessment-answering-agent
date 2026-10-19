@@ -90,7 +90,11 @@ def test_a_lead_adds_a_product_and_deletes_it_only_after_typing_confirm(page: Pa
     expect(warning).to_contain_text("Availo policy.pdf")
     expect(warning).to_contain_text("1 remembered answer, including 1 moved here from Shared")
     expect(warning).to_contain_text("not moved back to Shared")
-    expect(dialog.locator("#deleteStays")).to_contain_text("1 questionnaire and 0 chats for Availo become General")
+    # Decided 2026-10-19 (plan 027): they stay, read-only, rather than becoming General.
+    expect(dialog.locator("#deleteStays")).to_contain_text(
+        "1 questionnaire and 0 chats for Availo stay listed, marked as from a deleted product, and become read-only"
+    )
+    expect(dialog.locator("#deleteStays")).to_contain_text("can be read and filled files downloaded")
     # The warning is in the page's error colour, whichever theme is on: the same
     # computed colour as an element painted with var(--err).
     colour, error = warning.evaluate(
@@ -116,10 +120,30 @@ def test_a_lead_adds_a_product_and_deletes_it_only_after_typing_confirm(page: Pa
     expect(dialog).to_be_hidden()
     expect(page.locator(".product", has_text="Availo")).to_have_count(0)
     expect(page.locator("#listStatus")).to_contain_text(
-        "Deleted Availo: 1 file and 1 remembered answer removed; 1 questionnaire and 0 chats are now General."
+        "Deleted Availo: 1 file and 1 remembered answer removed; 1 questionnaire and 0 chats are kept, read-only."
     )
     assert products.list_products(TEAM) == []
     assert not settings.product_upload_dir(TEAM, availo.id).exists()
+    expect(page.locator(".product", has_text="Availo")).to_have_count(0)  # deleted products are not listed here
+
+
+def test_the_warning_says_which_files_stay_because_something_else_uses_them(page: Page, team: None) -> None:
+    """A product file from before it had a folder, that the shared knowledge base
+    also indexes, stays (one name is one document); the warning said it left."""
+    availo = products.add(identity.find_user(LEAD), TEAM, "Availo")
+    folder = settings.team_upload_dir(TEAM)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Shared policy.pdf").write_bytes(b"%PDF-1.4 shared")
+    record = {"text": "policy", "metadata": {"source_name": "Shared policy.pdf", "source_type": "guideline"}}
+    knowledge.get_store(TEAM, product_id=availo.id)._store.records.append({**record, "id": "own"})
+    knowledge.get_store(TEAM)._store.records.append({**record, "id": "shared"})
+    sign_in(page, LEAD)
+
+    page.locator(".product", has_text="Availo").get_by_role("button", name="Delete").click()
+    warning = page.locator("#deleteDialog .danger-box")
+    expect(warning).to_contain_text("1 document (1 passage).")
+    expect(warning).to_contain_text("1 document keeps its file, because the shared knowledge base")
+    expect(warning).not_to_contain_text("leaves the document library")
 
 
 def test_the_delete_dialog_still_warns_when_the_counts_cannot_be_read(page: Page, team: None) -> None:
@@ -135,7 +159,9 @@ def test_the_delete_dialog_still_warns_when_the_counts_cannot_be_read(page: Page
     warning = dialog.locator(".danger-box")
     expect(warning).to_contain_text("every document, and its file on the server")
     expect(warning).to_contain_text("every remembered answer, including any moved here from Shared")
-    expect(dialog.locator("#deleteStays")).to_contain_text("Its questionnaires and chats become General")
+    expect(dialog.locator("#deleteStays")).to_contain_text(
+        "its questionnaires and chats stay listed, marked as from a deleted product, and become read-only"
+    )
     expect(dialog.locator("#deleteStatus")).to_contain_text("Could not count what would be deleted (It broke.)")
 
     go = dialog.get_by_role("button", name="Delete permanently")

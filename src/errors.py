@@ -194,3 +194,14 @@ class QuestionnaireNotFound(NotFound, ToolError):
     """
 
     code = "questionnaire_not_found"
+
+
+# Raised by src.products and src.scoped_knowledge (plan 027).
+class ProductDeleted(Conflict, ToolError):
+    """A deleted product's questionnaire or chat: kept to be read, and its filled file downloaded.
+
+    A Conflict, so the API answers 409; also a ToolError, so a chat turn still
+    running when the product goes reports it to the model as a refusal.
+    """
+
+    code = "product_deleted"

@@ -120,7 +120,7 @@ The use cases the web interface, the command line and the chat assistant share.
 | `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
 | `src/selection.py` | Which questions an operation applies to, and when an answer counts as settled. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |
-| `src/tools.py` | The operations the interface performs, and the agent will later call. |
+| `src/tools.py` | The operations the interface performs, and the chat assistant calls. |
 
 ## 6. interfaces
 

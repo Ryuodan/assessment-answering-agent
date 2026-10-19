@@ -146,10 +146,9 @@ def load(
 def save(conversation: Conversation) -> None:
     """Write back the messages, the title and the current questionnaire.
 
-    Not the product: it is fixed when the conversation is created (TD-040). A
-    turn still running when its product was deleted would otherwise write the
-    deleted product back over the General it had been returned to, and with
-    the product fixed nothing could put that right.
+    Not the product: it is fixed when the conversation is created (TD-040), and
+    kept when the product is deleted, so that the chat stays listed, read-only,
+    as that product's (plan 027). Nothing a turn saves can change it.
     """
     conn = store.connect()
     conn.execute(

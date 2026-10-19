@@ -22,6 +22,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `ProductNotFound` | 404 | `product_not_found` | No such product in this team. |
 | `QuestionnaireNotFound` | 404 | `questionnaire_not_found` | No such questionnaire for this person: absent, or a colleague's (TD-026). |
 | `Conflict` | 409 | `conflict` | The request would clash with something that already exists, such as a name in use. |
+| `ProductDeleted` | 409 | `product_deleted` | A deleted product's questionnaire or chat: kept to be read, and its filled file downloaded. |
 | `ProductLocked` | 409 | `product_locked` | A questionnaire's or a chat's product is fixed once chosen. |
 | `ProductNameTaken` | 409 | `product_name_taken` | The team already has a product of that name, whatever its case. |
 | `UnsupportedFile` | 415 | `unsupported_file` | A file of a type this cannot take. |

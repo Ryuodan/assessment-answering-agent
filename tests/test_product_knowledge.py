@@ -8,12 +8,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from src import batches, events, identity, knowledge, products, roles, scoped_knowledge, service, uploads
+from src import answer_memory, batches, events, identity, knowledge, memory_sweep, products, roles, scoped_knowledge
+from src import service, uploads
 from src.api import app
 from src.config import settings
+from src.errors import ProductDeleted
 from src.forms.model import DetectedForm
+from src.graph import nodes
 from src.identity import User
-from src.models import IngestResult, SourceType
+from src.models import IngestResult, Question, SourceType
 from src.vector_names import collection_for
 from tests.conftest import FakeDocument, FakeVectorStore, bare_store
 
@@ -267,7 +270,8 @@ def test_deleting_a_product_removes_its_files_from_before_it_had_a_folder(stores
         User(email=ALICE, team_id=TEAM), folder / "Claimed.pdf", DetectedForm(source_name="Claimed.pdf", format="xlsx")
     )
 
-    assert products.deletion_preview(TEAM, availo.id)["documents"]["names"] == ["Legacy.pdf"]
+    counted = products.deletion_preview(TEAM, availo.id)["documents"]
+    assert (counted["names"], counted["kept"]) == (["Legacy.pdf"], 3), "three are kept, and said to be"
     deletion = products.delete(lead, TEAM, availo.id, confirm="confirm")
 
     assert not (folder / "Legacy.pdf").exists()
@@ -278,6 +282,160 @@ def test_deleting_a_product_removes_its_files_from_before_it_had_a_folder(stores
         "Unindexed.pdf",
     ]
     assert deletion.files_removed == 1
+
+
+def test_a_shared_file_of_the_same_name_as_a_products_own_is_not_taken_for_its_legacy_one(stores, availo) -> None:
+    """The product's document is its own folder's copy; the team folder's file of
+    that name is a shared upload the shared index no longer lists (it was cleared,
+    and a cleared shared file stays). Deleting the product used to take it too."""
+    lead = identity.find_user("lead@example.test")
+    shared = service.save_upload("X.pdf", b"%PDF-1.4 the same", TEAM)
+    own = service.save_upload("X.pdf", b"%PDF-1.4 the same", TEAM, product_id=availo.id)
+    staged(knowledge.get_store(TEAM, product_id=availo.id), "X.pdf", 0.9)
+
+    counted = products.deletion_preview(TEAM, availo.id)["documents"]
+    assert (counted["files"], counted["names"], counted["kept"]) == (1, ["X.pdf"], 0), "counted once"
+    assert products.delete(lead, TEAM, availo.id, confirm="confirm").files_removed == 1
+
+    assert shared.exists() and not own.exists()
+
+
+# --- a product's files from before it had a folder, removed and cleared (plan 027) ----
+
+
+def legacy(*names: str) -> list[Path]:
+    """Files in the team's folder that only Availo's knowledge base indexes, as every product file was before."""
+    folder = settings.team_upload_dir(TEAM)
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (folder / name).write_bytes(b"%PDF-1.4 " + name.encode())
+    return [folder / name for name in names]
+
+
+def test_removing_a_products_document_from_before_it_had_a_folder_removes_its_file(stores, availo, alice) -> None:
+    lead = identity.find_user("lead@example.test")
+    old, other, shared = legacy("Old policy.pdf", "Old standard.pdf", "Shared.pdf")
+    read_out = uploads.extracted_text_cache_path(old)
+    read_out.parent.mkdir(parents=True, exist_ok=True)
+    read_out.write_text("the old policy", encoding="utf-8")
+    for path in (old, other, shared):
+        staged(knowledge.get_store(TEAM, product_id=availo.id), path.name, 0.9)
+    staged(knowledge.get_store(TEAM), "Shared.pdf", 0.9)
+
+    removed = alice.delete(f"/api/knowledge/sources/{old.name}?product={availo.id}")
+    assert removed.json() == {"deleted": old.name, "files_left": []}
+    assert not old.exists() and not read_out.exists(), "its file and the text read out of it"
+    assert other.exists(), "only the document removed"
+    assert alice.delete(f"/api/knowledge/sources/Shared.pdf?product={availo.id}").status_code == 200
+    assert shared.exists(), "the shared knowledge base still uses it"
+    assert [doc["name"] for doc in service.list_documents(TEAM)] == ["Old standard.pdf", "Shared.pdf"]
+
+    # Deleting the product afterwards still finds the one it has left.
+    deletion = products.delete(lead, TEAM, availo.id, confirm="confirm")
+    assert deletion.files_removed == 1 and not other.exists()
+    assert shared.exists()
+
+
+def test_clearing_a_products_knowledge_base_removes_its_files_from_before_it_had_a_folder(
+    stores, availo, alice
+) -> None:
+    msegat = products.add(None, TEAM, "Msegat")
+    old, both, claimed, shared = legacy("Old.pdf", "Both.pdf", "Claimed.pdf", "Shared.pdf")
+    own = service.save_upload("New.pdf", b"%PDF-1.4 new", TEAM, product_id=availo.id)
+    for name in ("Old.pdf", "Both.pdf", "Claimed.pdf", "Shared.pdf", "New.pdf"):
+        staged(knowledge.get_store(TEAM, product_id=availo.id), name, 0.9)
+    staged(knowledge.get_store(TEAM, product_id=msegat.id), "Both.pdf", 0.9)
+    staged(knowledge.get_store(TEAM), "Shared.pdf", 0.9)
+    batches.create(User(email=ALICE, team_id=TEAM), claimed, DetectedForm(source_name="Claimed.pdf", format="xlsx"))
+
+    assert alice.delete(f"/api/knowledge?product={availo.id}").json() == {"cleared": True, "files_left": []}
+
+    assert not old.exists() and not own.exists()
+    assert both.exists() and claimed.exists() and shared.exists(), "kept: another product, a questionnaire, Shared"
+
+
+def test_a_file_that_cannot_be_removed_is_reported_by_remove_and_clear(stores, availo, alice, monkeypatch) -> None:
+    [stuck] = legacy("Old.pdf")
+    own = service.save_upload("New.pdf", b"%PDF-1.4 new", TEAM, product_id=availo.id)
+    for name in ("Old.pdf", "New.pdf"):
+        staged(knowledge.get_store(TEAM, product_id=availo.id), name, 0.9)
+    unlink = Path.unlink
+
+    def in_use(path, missing_ok=False):
+        if path.name in ("Old.pdf", "New.pdf"):
+            raise PermissionError("open in another program")
+        return unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", in_use)
+
+    removed = alice.delete(f"/api/knowledge/sources/New.pdf?product={availo.id}").json()
+    assert removed == {"deleted": "New.pdf", "files_left": ["New.pdf"]}
+    cleared = alice.delete(f"/api/knowledge?product={availo.id}").json()
+    assert cleared == {"cleared": True, "files_left": ["New.pdf", "Old.pdf"]}, "the one still there, and the old one"
+    assert stuck.exists() and own.exists()
+
+
+def test_a_product_upload_that_did_not_go_in_leaves_no_file(stores, availo, alice, monkeypatch) -> None:
+    """A product's folder holds its knowledge base and nothing else; a file kept
+    there that is not in it was listed with its badge and nothing could remove it."""
+    outcomes = {
+        "Broken.pdf": {"error": "Could not read it."},
+        "Copy.pdf": {"duplicate_of": "Policy.pdf"},
+        "Policy.pdf": {"chunks_indexed": 3},
+    }
+
+    async def indexed(path, source_type, authority="ours", team_id=None, **scope):
+        return IngestResult(
+            **{"source_name": path.name, "source_type": source_type, "chunks_indexed": 0} | outcomes[path.name]
+        )
+
+    monkeypatch.setattr("src.routes.knowledge.service.ingest", indexed)
+    files = [("files", (name, b"%PDF-1.4 " + name.encode(), "application/pdf")) for name in outcomes]
+    assert alice.post("/api/knowledge/guidelines", files=files, data={"product": availo.id}).status_code == 200
+
+    folder = settings.product_upload_dir(TEAM, availo.id)
+    assert [path.name for path in uploads.document_files(folder)] == ["Policy.pdf"]
+    assert alice.post("/api/knowledge/guidelines", files=files).status_code == 200
+    assert len(uploads.document_files(settings.team_upload_dir(TEAM))) == 3, "the shared knowledge base as before"
+
+
+# --- a deleted product's knowledge base is never made again (plan 027) ------------------
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_products_knowledge_base_is_not_made_again(stores, availo, monkeypatch) -> None:
+    """Its questionnaires, chats and remembered answers keep its id, and asking for
+    its knowledge base built an empty collection that nothing would drop again."""
+    lead = identity.find_user("lead@example.test")
+    entry = answer_memory.record("Is MFA enforced?", "Yes.", team_id=TEAM, product_id=availo.id, index=False)
+    products.delete(lead, TEAM, availo.id, confirm="confirm")
+    assert (TEAM, availo.id) not in stores
+
+    for ask in (
+        lambda: scoped_knowledge.own_store(TEAM, availo.id),
+        lambda: scoped_knowledge.store_for(TEAM, availo.id),
+        lambda: scoped_knowledge.knowledge_stats(TEAM, product_id=availo.id),
+    ):
+        with pytest.raises(ProductDeleted, match="Availo was deleted"):
+            ask()
+    with pytest.raises(ProductDeleted):
+        await service.search_knowledge("backups", team_id=TEAM, product_id=availo.id)
+    with pytest.raises(ProductDeleted):
+        await memory_sweep.scan(entry)
+
+    def no_model(*args, **kwargs):
+        raise AssertionError("a model was called")
+
+    monkeypatch.setattr(settings, "query_expansion", False)
+    monkeypatch.setattr(nodes, "chat_llm", no_model)
+    monkeypatch.setattr(nodes, "structured_llm", no_model)
+    [answered] = await service.answer_questions(
+        [Question(id="q1", text="Backups?")], team_id=TEAM, product_id=availo.id
+    )
+    assert "Availo was deleted" in answered.error
+
+    assert (TEAM, availo.id) not in stores, "never made again"
+    assert scoped_knowledge.store_for(TEAM) is knowledge.get_store(TEAM), "the shared one is untouched"
 
 
 def test_a_file_that_cannot_be_removed_does_not_stop_the_delete(stores, availo, monkeypatch, caplog) -> None:

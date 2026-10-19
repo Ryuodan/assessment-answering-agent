@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from src import knowledge, products
+from src import knowledge, products, service
 from src.config import settings
 from src.models import IngestResult
 from tests.conftest import FakeVectorStore, bare_store
@@ -68,6 +68,44 @@ def test_the_selector_decides_which_knowledge_base_is_listed_and_uploaded_to(
 
     page.select_option("#kbScope", "")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+
+
+def test_removing_and_clearing_a_products_documents_takes_their_files_and_their_library_cards(
+    page: Page, stores
+) -> None:
+    """Through the confirm each asks first (plan 027), including a file from
+    before products had folders of their own, which used to stay for good."""
+    availo = products.add(None, TEAM, "Availo")
+    own = service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=availo.id)
+    old = settings.team_upload_dir(TEAM) / "Old policy.pdf"
+    old.write_bytes(b"%PDF-1.4 from before")
+    record = {"text": "old", "metadata": {"source_name": old.name, "source_type": "guideline"}, "id": old.name}
+    knowledge.get_store(TEAM, product_id=availo.id)._store.records.append(record)
+    asked: list[str] = []
+
+    def accept(dialog) -> None:
+        asked.append(dialog.message)
+        dialog.accept()
+
+    page.goto("/workbench")
+    page.select_option("#kbScope", availo.id)
+    sources, library = page.locator("#kbSources"), page.locator("#uploadedDocuments .document-card")
+    expect(sources).to_contain_text("Old policy.pdf")
+    expect(library.filter(has_text="Old policy.pdf")).to_have_count(1)
+
+    page.once("dialog", accept)
+    sources.locator("li", has_text="Old policy.pdf").get_by_role("button", name="remove").click()
+    expect(page.locator("#kbStatus")).to_have_text("Removed Old policy.pdf.")
+    assert "Its file is deleted too" in asked[0] and "unless the shared knowledge base" in asked[0]
+    expect(sources).not_to_contain_text("Old policy.pdf")
+    expect(library.filter(has_text="Old policy.pdf")).to_have_count(0)  # the library was read again
+    assert not old.exists()
+
+    page.once("dialog", accept)
+    page.click("#kbClear")
+    expect(page.locator("#kbStatus")).to_have_text("Removed every policy document from Availo's knowledge base.")
+    expect(library.filter(has_text="Availo policy.pdf")).to_have_count(0)
+    assert not own.exists()
 
 
 def test_the_assistants_drawer_has_the_same_selector(page: Page, stores) -> None:

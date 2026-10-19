@@ -226,7 +226,7 @@ def a_product_with_work(lead: TestClient) -> products.Product:
     return availo
 
 
-def test_the_deletion_preview_counts_what_goes_and_what_returns_to_general(gated, stores) -> None:
+def test_the_deletion_preview_counts_what_goes_and_what_stays_read_only(gated, stores) -> None:
     lead, member = signed_in(LEAD), signed_in(MEMBER)
     availo = a_product_with_work(lead)
 
@@ -240,6 +240,7 @@ def test_the_deletion_preview_counts_what_goes_and_what_returns_to_general(gated
         "names": ["Availo legacy.pdf", "Availo policy.pdf", "Availo standard.docx"],
         "indexed": 3,
         "chunks": 4,
+        "kept": 0,
     }
     assert preview["answers"] == {"remembered": 3, "moved_from_shared": 1}
     assert (preview["questionnaires"], preview["conversations"]) == (2, 1), "everyone's, not only the lead's"
@@ -276,6 +277,71 @@ def test_deleting_reports_what_it_removed(gated, stores) -> None:
     assert events.recent(TEAM, kind=events.PRODUCT_DELETED)[0].payload == {"name": "Availo", **response["removed"]}
     assert not settings.product_upload_dir(TEAM, availo.id).exists()
     assert not (settings.team_upload_dir(TEAM) / "Availo legacy.pdf").exists()
+
+
+def test_a_deleted_product_is_listed_as_deleted_and_its_name_is_free_again(gated, stores) -> None:
+    """Its questionnaires and chats keep its id (plan 027): they are labelled with
+    the name it had, and stay read-only even when a new product takes the name."""
+    lead, member = signed_in(LEAD), signed_in(MEMBER)
+    availo = a_product_with_work(lead)
+    assert lead.delete(f"/api/products/{availo.id}?confirm=confirm").status_code == 200
+
+    listed = member.get("/api/products").json()
+    assert listed["products"] == []
+    assert [(p["id"], p["name"], p["color"]) for p in listed["deleted"]] == [(availo.id, "Availo", availo.color)]
+    for response in (
+        lead.patch(f"/api/products/{availo.id}", json={"name": "Back again"}),
+        lead.get(f"/api/products/{availo.id}/deletion"),
+        lead.delete(f"/api/products/{availo.id}?confirm=confirm"),
+    ):
+        assert (response.status_code, response.json()["code"]) == (404, "product_not_found")
+
+    again = lead.post("/api/products", json={"name": "Availo"}).json()["product"]
+    assert again["id"] != availo.id, "the name can be used again, as a new product"
+    [kept] = batches.recent(TEAM, actor_email=MEMBER)
+    assert kept["product_id"] == availo.id, "the old work is still the deleted one's"
+    assert member.get(f"/api/forms/{kept['id']}").json()["read_only"] is True
+    assert [p["name"] for p in member.get("/api/products").json()["deleted"]] == ["Availo"]
+
+
+def test_a_version_13_database_upgrades_with_nothing_deleted() -> None:
+    conn = store.connect()
+    tables = [
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    ]
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.executescript("".join(f"DROP TABLE IF EXISTS {name};" for name in tables))
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA user_version = 0")
+    for index, step in enumerate(store.MIGRATIONS[:13]):
+        getattr(store.migrations, step)(conn) if step.startswith("_") else conn.executescript(step)
+        conn.execute(f"PRAGMA user_version = {index + 1}")
+    conn.execute(
+        "INSERT INTO products (product_id, team_id, name, color, created_at, updated_at)"
+        " VALUES ('p1', ?, 'Availo', '#2563eb', 't', 't')",
+        (TEAM,),
+    )
+    conn.execute(
+        "INSERT INTO form_batches (batch_id, team_id, actor_email, source_name, source_path, format, detected, "
+        "created_at, updated_at, product_id) VALUES ('b1', ?, 'a@example.test', 'f.xlsx', 'f.xlsx', 'xlsx', '{}', "
+        "'t', 't', 'p1')",
+        (TEAM,),
+    )
+    conn.execute(
+        "INSERT INTO conversations (conversation_id, team_id, actor_email, created_at, updated_at, product_id) "
+        "VALUES ('c1', ?, 'a@example.test', 't', 't', 'p1')",
+        (TEAM,),
+    )
+    conn.commit()
+    store.reset_connection()
+
+    upgraded = store.connect()
+    assert upgraded.execute("PRAGMA user_version").fetchone()[0] == len(store.MIGRATIONS) >= 14
+    assert upgraded.execute("SELECT COUNT(*) FROM deleted_products").fetchone()[0] == 0
+    assert products.deleted(TEAM) == {}
+    assert [p.name for p in products.list_products(TEAM)] == ["Availo"]
+    assert upgraded.execute("SELECT product_id FROM form_batches WHERE batch_id = 'b1'").fetchone()[0] == "p1"
+    assert upgraded.execute("SELECT product_id FROM conversations WHERE conversation_id = 'c1'").fetchone()[0] == "p1"
 
 
 def test_an_administrator_can_make_someone_a_team_lead_but_not_demote_the_last_administrator(gated) -> None:
