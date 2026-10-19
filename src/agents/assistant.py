@@ -52,7 +52,10 @@ from src.formatting import without_reasoning
 from src.identity import User
 from src.llm import chat_llm
 from src.models import Question
+from src.agents import assistant_turn
 from src.agents.assistant_prompt import FOR_PRODUCT, IN_ARABIC as IN_ARABIC, SYSTEM as SYSTEM
+from src.agents.assistant_turn import CORRECTION as CORRECTION, UI_KEY as UI_KEY, is_correction as _is_correction
+from src.agents.assistant_turn import tidy_reply as tidy_reply, without_repetition as without_repetition
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +237,10 @@ def _tools(user: User, state: dict) -> list:
         )
 
     def open_questionnaire(file_name: str = "") -> str:
-        """Read the questionnaire that was just uploaded, and report what is in it.
+        """Read the questionnaire attached to this message, and report what is in it.
+
+        Only a file the person attached. It cannot open a knowledge-base
+        document: what one of those says comes from `search_policies`.
 
         Args:
             file_name: the file to open. Leave empty for the one most recently
@@ -243,10 +249,7 @@ def _tools(user: User, state: dict) -> list:
         _log(f"open_questionnaire({file_name!r})")
         path = state.get("pending_upload")
         if not path:
-            return (
-                "No file has been uploaded to this conversation. Ask the person to "
-                "attach the questionnaire to their message."
-            )
+            return assistant_turn.nothing_attached(user, state, file_name)
         try:
             batch = tools.open_form(user, Path(path), product_id=state.get("product_id", ""))
         except Exception as failed:
@@ -921,12 +924,20 @@ def _tools(user: User, state: dict) -> list:
         return " ".join(lines)
 
     async def search_policies(query: str) -> str:
-        """Look something up in the organisation's own policy documents.
+        """Look something up in the organisation's own documents, and read the clauses found.
+
+        Search with the plain words of the question, without quotation marks: a
+        quoted phrase matches only that exact text. Then quote the sentence that
+        answers it word for word and name its document. At most three searches
+        a turn; more, or the same one again, are refused.
 
         Args:
-            query: what to look for.
+            query: what to look for, in plain words.
         """
         _log(f"search_policies({query!r})")
+        refused = assistant_turn.search_refused(state, query)
+        if refused:
+            return refused
         try:
             found = await tools.search(query, team_id=user.team_id, product_id=state.get("product_id", ""))
         except Exception as failed:
@@ -940,10 +951,8 @@ def _tools(user: User, state: dict) -> list:
         # it, and a person reading the reply should be able to open that clause
         # rather than take the sentence on trust -- the same bargain every
         # answer card makes.
-        state.setdefault("sources", []).extend(hits)
-        return "\n\n".join(
-            f"[{hit.get('locator') or hit.get('source_name')}] {(hit.get('snippet') or '')[:400]}" for hit in hits
-        )
+        assistant_turn.add_sources(state, hits)
+        return assistant_turn.clauses(hits)
 
     async def answer_directly(questions: str, skill: str = "") -> str:
         """Draft this organisation's answer to a question asked in conversation.
@@ -997,6 +1006,7 @@ def _tools(user: User, state: dict) -> list:
                 for index, text in enumerate(asked)
             ],
             team_id=user.team_id,
+            product_id=state.get("product_id", ""),
         )
 
         # Worded after drafting and never before, exactly as a questionnaire's
@@ -1042,7 +1052,7 @@ def _tools(user: User, state: dict) -> list:
             # from" a few messages later is answered from this and not from a
             # new search that finds something similar.
             lines.extend(_sources_of(result.model_dump(), detailed=True))
-            state.setdefault("sources", []).extend(item.model_dump() for item in result.evidence[:SOURCES_SHOWN])
+            assistant_turn.add_sources(state, (item.model_dump() for item in result.evidence[:SOURCES_SHOWN]))
         return "\n".join(lines)
 
     return [
@@ -1094,61 +1104,6 @@ def _account(state: dict, turn: Turn) -> None:
         if usage:
             turn.input_tokens += usage.get("input_tokens", 0) or 0
             turn.output_tokens += usage.get("output_tokens", 0) or 0
-
-
-_JOINED = re.compile(r"(?<=[.!?\u061f])(?=[A-Z\u0600-\u06FF*\"'])")
-_WORD = re.compile(r"[\w\u0600-\u06FF]+")
-
-
-def without_repetition(text: str) -> str:
-    """A reply once, when the model wrote it twice back to back.
-
-    Seen on the real model three times in twenty turns of one conversation:
-    "The background-check question has been set aside and will not be written
-    to the file.The background-check question has been set aside and will be
-    excluded from the final submission." -- one message, two phrasings of the
-    same sentence, joined with no space, which is what two of the model's output
-    channels concatenated look like. Only a join like that is considered, and
-    only when the two halves are mostly the same words, so two different
-    sentences that happen to lack a space are left alone. The later half is kept.
-
-    Four in ten words shared is the bar: "…has been restored to the
-    questionnaire.The background-check question (question 4) is now back in the
-    questionnaire." shares 43%, and two unrelated sentences share almost none.
-    """
-    text = (text or "").strip()
-    for match in _JOINED.finditer(text):
-        head, tail = text[: match.start()].strip(), text[match.start() :].strip()
-        first, second = set(_WORD.findall(head.casefold())), set(_WORD.findall(tail.casefold()))
-        if len(first) < 4 or len(second) < 4:
-            continue
-        if len(first & second) / len(first | second) >= 0.4:
-            return tail
-    return text
-
-
-_CITATION_MARK = re.compile(r"\s*\u3010[^\u3011]{0,120}\u3011")
-
-
-def tidy_reply(text: str, earlier: list[str] | tuple[str, ...] = ()) -> str:
-    """The reply as a person should read it.
-
-    Three things the model adds that nobody should see, each found reading a
-    long conversation turn by turn:
-
-    * a copy of a previous reply appended to this one -- "The background-check
-      question has been set aside…" followed, with no space, by the last turn's
-      "No answers are currently flagged…";
-    * the same reply written twice in two phrasings (see `without_repetition`);
-    * a citation marker in the model's own format, "【search_policies result #2】",
-      which points at nothing a person can open.
-    """
-    text = _CITATION_MARK.sub("", text or "").strip()
-    for before in earlier:
-        before = (before or "").strip()
-        if len(before) >= 20 and before in text and text != before:
-            text = text.replace(before, "", 1).strip()
-    return without_repetition(text)
 
 
 def _reply_from(state: dict) -> str:
@@ -1252,7 +1207,16 @@ async def say(
     tools_bound = _tools(user, state)
     # Named in the prompt only when there is one, so a General conversation's is unchanged.
     product = next((p.name for p in products.list_products(user.team_id) if p.id == conversation.product_id), "")
+    earlier = [str(message.content) for message in history if _said(message)][-3:]
+
+    def reply_now() -> str:
+        # This turn's reply and no other: one that stopped used to repeat the last turn's.
+        return tidy_reply(_reply_from({"messages": _this_turn(history, final)}), earlier)
+
+    unquoted: list[str] = []
+    asked_again = False
     for attempt in range(1 + CARRY_ON):
+        unquoted = []
         try:
             async for chunk in _agent(tools_bound, **({"product": product} if product else {})).astream(
                 {"messages": sending},
@@ -1260,7 +1224,6 @@ async def say(
                 stream_mode="values",
             ):
                 final = chunk
-            break
         except Exception as failed:
             if attempt < CARRY_ON and _invented_a_tool(failed):
                 # Carried on from what the turn had finished, not started again:
@@ -1271,14 +1234,24 @@ async def say(
             logger.warning("The assistant stopped early: %s", failed)
             turn.stopped_early = True
             break
+        # A quotation no source contains is asked about once, the draft dropped unseen (TD-043).
+        unquoted = assistant_turn.unquoted(reply_now(), final, turn.sources)
+        if not unquoted or asked_again or attempt == CARRY_ON:
+            break
+        asked_again = True
+        sending = _resume_from(history, assistant_turn.without_reply(final)) + [
+            assistant_turn.quote_correction(unquoted)
+        ]
 
     _account(final, turn)
-    earlier = [str(message.content) for message in history if _said(message)][-3:]
-    turn.reply = tidy_reply(_reply_from(final), earlier) or (
-        "I ran out of room part way through that. What I did finish is in the answers beside this."
+    language = _language_of_the_turn(history)
+    turn.reply = reply_now() or (
+        assistant_turn.stopped_reply(state, language)
         if turn.stopped_early
         else "I could not work out what to do with that. Could you say it another way?"
     )
+    if unquoted:
+        turn.reply = assistant_turn.as_paraphrase(turn.reply, unquoted, language, listed=bool(turn.sources))
     turn.batch_id = state.get("batch_id", "")
     turn.refreshed = bool(state.get("refreshed"))
 
@@ -1303,15 +1276,6 @@ async def say(
     turn.seconds = time.monotonic() - started
     progress.finish(run_id)
     return turn
-
-
-UI_KEY = "ui"
-"""Where a turn's steps and sources ride on its reply message.
-
-`additional_kwargs` is serialised with the message, so what the interface draws
-under a reply is stored with the reply rather than beside it, and the two
-cannot drift apart.
-"""
 
 
 def _remember(messages: list[BaseMessage], turn: Turn) -> list[BaseMessage]:
@@ -1406,10 +1370,8 @@ def _invented_a_tool(failed: Exception) -> bool:
 
 
 CARRY_ON = 2
-"""How many times a turn carries on after the model calls a tool that does not exist."""
-
-CORRECTION = "correction"
-"""Marks the note that tells the model so. It is sent, never stored or shown."""
+"""How many times a turn carries on: after the model calls a tool that does not
+exist, or, once, after its reply quoted what no source says."""
 
 
 def _correction(failed: Exception) -> HumanMessage:
@@ -1426,10 +1388,6 @@ def _correction(failed: Exception) -> HumanMessage:
         "Carry on with what they asked, using only the tools you have.]",
         additional_kwargs={CORRECTION: True},
     )
-
-
-def _is_correction(message: BaseMessage) -> bool:
-    return bool((getattr(message, "additional_kwargs", None) or {}).get(CORRECTION))
 
 
 def _this_turn(sent: list[BaseMessage], final: dict) -> list[BaseMessage]:
@@ -1481,26 +1439,16 @@ def start(user: User, message: str = "", product_id: str = "") -> Conversation:
 
 
 def choose_product(user: User, conversation: Conversation, product_id: str) -> None:
-    """Answer this chat, and its questionnaire, for a product or General ("") from now on.
+    """Refused unless it is the chat's own product: a chat's product is fixed once it starts (TD-040).
 
-    The two are kept equal (plan 023): a chat's questionnaire was uploaded in it,
-    and the chip beside the chat box is the one place the choice is made.
-    Answers already written stay as they are. Another team's product is
-    `product_not_found`.
+    So are the questionnaires opened in it, which take the chat's product. Another
+    team's product, or a deleted one, is still `product_not_found`.
     """
-    product_id = products.chosen(user.team_id, product_id)
-    if product_id == conversation.product_id:
-        return
-    if conversation.batch_id and batches.load(conversation.batch_id, team_id=user.team_id, actor_email=user.email):
-        tools.set_product(user, conversation.batch_id, product_id)
-    conversation.product_id = product_id
-    conversations.save(conversation)
-    events.record(
-        user,
-        events.PRODUCT_CHOSEN,
-        subject_type=conversations.SUBJECT,
-        subject_id=conversation.id,
-        product_id=product_id,
+    products.refuse_change(
+        user.team_id,
+        conversation.product_id,
+        product_id,
+        "A chat's product is fixed once it starts. To work on another product, start a new chat with it chosen.",
     )
 
 

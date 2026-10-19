@@ -23,7 +23,7 @@ from typing import Any
 
 from src import answer_memory, batches, events, knowledge, scoped_knowledge, store, uploads
 from src.config import settings
-from src.errors import Invalid, ProductNameTaken, ProductNotFound
+from src.errors import Invalid, ProductLocked, ProductNameTaken, ProductNotFound
 from src.identity import User
 from src.logs import get_logger
 
@@ -324,6 +324,17 @@ def chosen(team_id: str, product_id: str) -> str:
     Another team's product, or one that was deleted, is `product_not_found`.
     """
     return get(team_id, product_id).id if product_id else ""
+
+
+def refuse_change(team_id: str, fixed: str, asked: str, message: str) -> None:
+    """Refuse any product but `fixed`: a questionnaire's or a chat's is fixed once chosen (TD-040).
+
+    The product asked for is checked first, so another team's, or one that was
+    deleted, is still `product_not_found`. Asking for the one it already has is
+    accepted, and changes nothing. `message` says what to do instead.
+    """
+    if chosen(team_id, asked) != fixed:
+        raise ProductLocked(message)
 
 
 def seed() -> list[Product]:

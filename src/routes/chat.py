@@ -38,10 +38,9 @@ class SayRequest(BaseModel):
     product: str = Field(default="", max_length=64)
     """The product a new conversation is for: an id, or "" for General (plan 023).
 
-    Read only when this message starts the conversation. An existing one's is
-    changed with `POST /api/chat/{id}/product`, which the multipart upload route
-    could not do itself: a form sends General and "not given" as the same
-    empty field."""
+    Read only when this message starts the conversation, and fixed after that
+    (TD-040): `POST /api/chat/{id}/product` refuses any other product. The
+    multipart upload route reads it the same way."""
 
 
 class ChooseChatProductRequest(BaseModel):
@@ -220,9 +219,10 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
 def choose_chat_product(
     conversation_id: str, request: ChooseChatProductRequest, user: User = Depends(current_user)
 ) -> dict[str, Any]:
-    """Answer this conversation, and its questionnaire, for another product or General (plan 023).
+    """Refused unless it is the conversation's own product: a chat's product is fixed once it starts.
 
-    Answers already written stay; anything answered afterwards uses the new one.
+    Another product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.
+    Kept so a page opened before the change, or a script, is told why rather than finding no route.
     """
     conversation = _conversation(conversation_id, user)
     assistant.choose_product(user, conversation, request.product)

@@ -423,9 +423,9 @@ class ChooseProductRequest(BaseModel):
 def choose_questionnaire_product(
     batch_id: str, request: ChooseProductRequest, user: User = Depends(current_user)
 ) -> dict[str, Any]:
-    """Answer a questionnaire for another product, or General, from now on (plan 023).
+    """Refused unless it is the questionnaire's own product: a product is fixed when the file is opened.
 
-    The answers already written stay; answering again is a separate request.
+    Another product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.
     """
     tools.set_product(user, batch_id, request.product)
     return tools.inspect(user, batch_id)

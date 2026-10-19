@@ -156,6 +156,17 @@ def test_sources_block_labels_prior_answers_distinctly():
     assert "PREVIOUS ANSWER \u2014 SAMA CSF (1446H)" in block
 
 
+def test_sources_block_marks_a_products_external_requirement_as_its_own():
+    """A regulation filed in a product's knowledge base is still not our document,
+    and still the product's (TD-040): both labels, the shared copy neither mark."""
+    own = guideline(1, authority="external", product_id="p1", source_name="SAMA CSF.pdf")
+    shared = guideline(2, authority="external", source_name="NCA ECC.pdf")
+    block = format_sources_block([own, shared])
+    assert "[1] EXTERNAL REQUIREMENT (not our document), FOR THIS PRODUCT " in block
+    assert "[2] EXTERNAL REQUIREMENT (not our document) " in block
+    assert block.count("FOR THIS PRODUCT") == 2, "the note above the sources, and the one mark"
+
+
 def test_sources_block_handles_no_sources():
     assert "no relevant sources" in format_sources_block([])
 

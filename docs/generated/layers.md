@@ -108,13 +108,14 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 
 The use cases the web interface, the command line and the chat assistant share.
 
-- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.search`, `src.selection`, `src.service`, `src.tools`
+- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_turn`, `src.search`, `src.selection`, `src.service`, `src.tools`
 - **Owns:** `langchain`
 
 | Module | What it is |
 |---|---|
 | `src/agents/assistant.py` | The assistant: one conversation, over everything the system can do. |
 | `src/agents/assistant_prompt.py` | What the assistant is told: who it works for, what its tools do, and how to speak. |
+| `src/agents/assistant_turn.py` | What one assistant turn may do, and what its reply may claim (plan 027, TD-043). |
 | `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
 | `src/selection.py` | Which questions an operation applies to, and when an answer counts as settled. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |

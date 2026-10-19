@@ -42,7 +42,6 @@ CODE_ROTATED = "access_code_rotated"
 PRODUCT_ADDED = "product_added"
 PRODUCT_UPDATED = "product_updated"
 PRODUCT_DELETED = "product_deleted"
-PRODUCT_CHOSEN = "product_chosen"  # for a questionnaire or a chat (plan 023)
 # Questionnaires: a file opened, answered, revised, and written back.
 FORM_OPENED = "form_opened"
 BATCH_ANSWERED = "batch_answered"

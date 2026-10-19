@@ -14,9 +14,9 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from src import batches, conversations, events, identity, tools
+from src import batches, conversations, events, identity, service, tools
 from src.agents import assistant
-from src.models import AnsweredQuestion
+from src.models import AnsweredQuestion, Evidence, SourceType
 from tests import forms_fixtures as shapes
 
 
@@ -220,7 +220,7 @@ def test_every_tool_says_so_when_no_questionnaire_is_open(kit):
 
     tool, state = kit
     state["pending_upload"] = ""
-    assert "No file has been uploaded" in tool["open_questionnaire"]("")
+    assert tool["open_questionnaire"]("").startswith("Nothing was opened: no file is attached")
     assert "No questionnaire is open" in tool["describe_form"]()
     assert "No questionnaire is open" in tool["propose_fill"]()
     assert "No questionnaire is open" in asyncio.run(tool["answer_questions"]())
@@ -333,7 +333,8 @@ def scripted(monkeypatch):
     """Drive the assistant through a fixed sequence of tool calls."""
 
     def run(script):
-        monkeypatch.setattr(assistant, "_agent", lambda tool_list: _graph(script)(tool_list))
+        # `product` is named only in a product's chat; the script runs the same.
+        monkeypatch.setattr(assistant, "_agent", lambda tool_list, **named: _graph(script)(tool_list))
 
     return run
 
@@ -769,6 +770,292 @@ async def test_answering_directly_leaves_the_open_questionnaire_alone(kit, answe
 
     report = tools.inspect(identity.local_user(), state["batch_id"])
     assert report["counts"]["answered"] == 0, "a question asked aloud is not a row in the file"
+
+
+@pytest.mark.asyncio
+async def test_a_product_chats_direct_answer_is_drafted_for_its_product(kit, monkeypatch):
+    """TD-037. A product chat's searches took its product and its direct answers
+    did not: asked in an Ole5 chat whether it supports single sign-on, the
+    assistant found nothing documented, where the Ole5 questionnaire answered yes
+    from the Ole5 fact sheet."""
+    asked_for: list[str] = []
+
+    async def answer_one_question(question, language, *, run_id="", team_id=None, product_id=""):
+        asked_for.append(product_id)
+        said = _evidence("Ole5 facts.docx", "Single sign-on is supported through SAML 2.0.", product_id=product_id)
+        return AnsweredQuestion(question=question, answer="Yes, through SAML.", confidence=0.9, evidence=[said])
+
+    monkeypatch.setattr(service, "answer_one_question", answer_one_question)
+    tool, state = kit
+    state["product_id"] = "p-ole5"
+    await tool["answer_directly"]("Do you support single sign-on?")
+
+    assert asked_for == ["p-ole5"]
+    assert [source["product_id"] for source in state["sources"]] == ["p-ole5"], "its clause, marked as its own"
+
+    state["product_id"] = ""
+    await tool["answer_directly"]("Do you support single sign-on?")
+    assert asked_for[-1] == "", "a General chat's are answered as they always were"
+
+
+# --- searching the documents ---------------------------------------------------------
+#
+# A search-only question in an Ole5 chat made nineteen searches, eighteen of them
+# quoted phrases, until the turn ran out of steps (TD-043). The sentence that
+# answered it was in the first result, past the 400 characters it was shown.
+
+
+def _evidence(name: str, snippet: str, *, chunk: int = 0, product_id: str = "") -> Evidence:
+    return Evidence(
+        source_type=SourceType.GUIDELINE, source_name=name, snippet=snippet, chunk=chunk, product_id=product_id
+    )
+
+
+def _hit(name: str, snippet: str, *, chunk: int = 0, product_id: str = "") -> dict:
+    """A search result, as `tools.search` returns one."""
+    return _evidence(name, snippet, chunk=chunk, product_id=product_id).model_dump()
+
+
+@pytest.fixture
+def searching(monkeypatch):
+    """Stand in for the search: every query returns `found`, and is recorded."""
+    queries: list[str] = []
+    found: list[dict] = []
+
+    async def search(query, mode="hybrid", limit=8, *, team_id=None, product_id=""):
+        queries.append(query)
+        return {"results": list(found)}
+
+    monkeypatch.setattr(tools, "search", search)
+    return queries, found
+
+
+@pytest.mark.asyncio
+async def test_a_search_shows_the_whole_clause(kit, searching):
+    _queries, found = searching
+    decisive = "Penetration test reports are given to customers on request, after an NDA is signed."
+    found.append(_hit("Ole5 facts.docx", "Ole5 is tested every year by an outside firm. " * 9 + decisive))
+    assert found[0]["snippet"].index(decisive) > 400
+    tool, _state = kit
+
+    said = await tool["search_policies"]("pentest reports for customers")
+    assert decisive in said
+
+
+@pytest.mark.asyncio
+async def test_a_search_marks_the_products_own_clauses(kit, searching):
+    """As the drafter's sources are marked (TD-040): the product's own clause is
+    told apart from the shared one, so the prompt's "where they differ, the
+    product's applies" can be acted on."""
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Single sign-on is supported through SAML 2.0.", product_id="p-ole5"))
+    found.append(_hit("Access Control Policy.pdf", "Single sign-on is required for every system."))
+    tool, _state = kit
+
+    own, shared = (await tool["search_policies"]("single sign-on")).split("\n\n")
+    assert own == "[Ole5 facts.docx, FOR THIS PRODUCT] Single sign-on is supported through SAML 2.0."
+    assert shared == "[Access Control Policy.pdf] Single sign-on is required for every system."
+
+
+@pytest.mark.asyncio
+async def test_a_turn_searches_at_most_three_times(kit, searching):
+    queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Penetration tests run every year."))
+    tool, state = kit
+    for query in ("pentest", "penetration test report", "security testing"):
+        assert "Penetration tests run every year." in await tool["search_policies"](query)
+
+    said = await tool["search_policies"]("pen test results under NDA")
+
+    assert queries == ["pentest", "penetration test report", "security testing"], "the fourth was not run"
+    assert said.startswith("Not searched: this turn has already searched 3 times")
+    assert "Reply now from the clauses those searches returned" in said and "word for word" in said
+    assert sum(step.startswith("search_policies(") for step in state["steps"]) == 4, "the refused one is shown too"
+
+
+@pytest.mark.asyncio
+async def test_the_same_search_twice_in_a_turn_is_not_run_again(kit, searching):
+    queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Penetration tests run every year."))
+    tool, _state = kit
+    await tool["search_policies"]("Penetration test report")
+
+    said = await tool["search_policies"]('  "penetration  TEST report" ')
+
+    assert queries == ["Penetration test report"]
+    assert said.startswith("Already searched for that this turn")
+
+
+@pytest.mark.asyncio
+async def test_a_turns_sources_are_listed_once(kit, searching, monkeypatch):
+    """Nineteen searches put 114 clauses under one reply, 14 of them distinct.
+    Three of those were chunks of one fact sheet with no clause numbers, so one
+    locator: told apart by chunk, not merged by locator."""
+    _queries, found = searching
+    first = _hit("Ole5 facts.docx", "Penetration tests run every year.", chunk=3)
+    second = _hit("Ole5 facts.docx", "Reports are shared under an NDA.", chunk=4)
+    assert first["locator"] == second["locator"]
+    found.extend([first, second])
+    tool, state = kit
+    await tool["search_policies"]("pentest")
+    await tool["search_policies"]("pentest reports")
+    assert [source["chunk"] for source in state["sources"]] == [3, 4]
+
+    async def drafted(questions, language=None, run_id=None, **extra):
+        cited = _evidence("Ole5 facts.docx", "Penetration tests run every year.", chunk=3)
+        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, evidence=[cited]) for q in questions]
+
+    monkeypatch.setattr(tools.service, "answer_questions", drafted)
+    await tool["answer_directly"]("Do you run penetration tests?")
+    assert len(state["sources"]) == 2, "evidence a search already found is not listed again"
+
+
+# --- a knowledge-base document is not a questionnaire --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_opening_a_knowledge_base_document_is_refused_and_says_why(kit, searching):
+    """Asked to search the knowledge base only, the assistant searched, then
+    called open_questionnaire on the document it had found. Nothing was attached,
+    so nothing opened, and told to "ask the person to attach the questionnaire"
+    it asked them to attach a document the knowledge base already held."""
+    _queries, found = searching
+    found.append(_hit("Availo facts.docx", "Availo keeps its audit logs for a year."))
+    tool, state = kit
+    state["pending_upload"] = ""
+    await tool["search_policies"]("log retention")
+
+    said = tool["open_questionnaire"]("availo FACTS.docx")
+
+    assert said.startswith("Nothing was opened. 'availo FACTS.docx' is a document in the knowledge base")
+    assert "quote the sentences search_policies returned from it, word for word" in said
+    assert "Do not ask them to attach it." in said and "meant to send a questionnaire" not in said
+    assert state["batch_id"] == ""
+
+
+def test_a_document_in_the_index_is_known_by_name_without_a_search(kit, monkeypatch):
+    """Named from an earlier turn, a document is looked up in the knowledge bases
+    the chat draws on: the shared one and its product's."""
+    asked: list[str] = []
+
+    def knowledge_stats(team_id=None, *, product_id=""):
+        asked.append(product_id)
+        return {"sources": [{"name": "Availo facts.docx" if product_id else "Shared policy.pdf"}]}
+
+    monkeypatch.setattr(service, "knowledge_stats", knowledge_stats)
+    tool, state = kit
+    state.update(pending_upload="", product_id="p-availo")
+
+    assert "is a document in the knowledge base" in tool["open_questionnaire"]("Availo facts.docx")
+    assert "is a document in the knowledge base" in tool["open_questionnaire"]("Shared policy.pdf")
+    assert tool["open_questionnaire"]("Last year.xlsx").startswith("Nothing was opened: no file is attached")
+    assert set(asked) == {"", "p-availo"}
+
+    def unreadable(team_id=None, *, product_id=""):
+        raise RuntimeError("the index is not there")
+
+    monkeypatch.setattr(service, "knowledge_stats", unreadable)
+    said = tool["open_questionnaire"]("Availo facts.docx")
+    assert said.startswith("Nothing was opened: no file is attached"), "unknown is the plain refusal, never a failure"
+
+
+def test_with_nothing_attached_nothing_is_opened(kit):
+    tool, state = kit
+    state["pending_upload"] = ""
+
+    said = tool["open_questionnaire"]("")
+
+    assert said.startswith("Nothing was opened: no file is attached to this message.")
+    assert "It cannot open a knowledge-base document" in said
+    assert "If they meant to send a questionnaire, ask them to attach it." in said
+    assert state["batch_id"] == ""
+
+
+# --- a turn that stopped part way ------------------------------------------------------
+
+
+def _stops_after(script):
+    """A stand-in agent that makes these calls with the real tools, then runs out of steps."""
+
+    class Stopping:
+        def __init__(self, tool_list):
+            self.tools = {t.__name__: t for t in tool_list}
+
+        async def astream(self, payload, config=None, stream_mode=None):
+            messages = list(payload["messages"])
+            for index, (name, kwargs) in enumerate(script):
+                result = self.tools[name](**kwargs)
+                if hasattr(result, "__await__"):
+                    result = await result
+                messages.append(AIMessage("", tool_calls=[{"name": name, "args": kwargs, "id": f"call-{index}"}]))
+                messages.append(ToolMessage(str(result), tool_call_id=f"call-{index}"))
+                yield {"messages": list(messages)}
+            raise RuntimeError("Recursion limit of 40 reached without hitting a stop condition.")
+
+    return lambda tool_list, **named: Stopping(tool_list)
+
+
+@pytest.mark.asyncio
+async def test_a_turn_stopped_after_searching_says_what_it_searched(user, monkeypatch, searching):
+    """It said "What I did finish is in the answers beside this" after a turn of
+    searches that changed nothing, in a chat with no answers beside it."""
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    script = [("search_policies", {"query": "pentest"}), ("search_policies", {"query": "penetration test report"})]
+    monkeypatch.setattr(assistant, "_agent", _stops_after(script))
+    conversation = assistant.start(user, "")
+
+    turn = await assistant.say(user, conversation, "What do the Ole5 documents say about pentest reports?")
+
+    assert turn.stopped_early
+    assert "ran out of room" in turn.reply and "answers beside this" not in turn.reply
+    assert "nothing was answered or changed" in turn.reply
+    assert "searched the documents twice" in turn.reply and "Ole5 facts.docx" in turn.reply
+    saved = conversations.load(conversation.id, team_id=user.team_id)
+    assert [m.content for m in saved.messages if assistant._said(m)] == [turn.reply]
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_turn_that_changed_answers_still_points_at_them(user, tmp_path, monkeypatch, answers_yes):
+    script = [("open_questionnaire", {"file_name": ""}), ("answer_questions", {})]
+    monkeypatch.setattr(assistant, "_agent", _stops_after(script))
+    path = shapes.status_and_comment(tmp_path / "HR.xlsx")
+
+    turn = await assistant.say(user, assistant.start(user, ""), "Answer this", upload=path)
+
+    assert turn.stopped_early and turn.refreshed
+    assert turn.reply == "I ran out of room part way through that. What I did finish is in the answers beside this."
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_turn_does_not_repeat_the_previous_reply(user, monkeypatch):
+    """The reply was the last thing said anywhere in the history, so a turn that
+    stopped having said nothing gave the person the previous turn's reply again."""
+    conversation = assistant.start(user, "")
+    conversation.messages = [
+        HumanMessage("Answer the governance ones"),
+        AIMessage("Answered 3 of 4 governance questions."),
+    ]
+    monkeypatch.setattr(assistant, "_agent", _stops_after([("list_skills", {})]))
+
+    turn = await assistant.say(user, conversation, "Now the privacy ones")
+
+    assert turn.stopped_early
+    assert turn.reply == (
+        "I ran out of room part way through that, and nothing was changed. Could you try again, one step at a time?"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_turn_in_arabic_is_told_in_arabic(user, monkeypatch, searching):
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    monkeypatch.setattr(assistant, "_agent", _stops_after([("search_policies", {"query": "pentest"})]))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "ماذا تقول مستندات Ole5 عن تقارير اختبار الاختراق؟")
+
+    assert turn.reply.startswith("نفدت المساحة المتاحة لي قبل أن أُكمل ذلك")
+    assert "مرة واحدة" in turn.reply and "Ole5 facts.docx" in turn.reply
 
 
 def test_what_a_turn_did_is_stored_with_its_reply(user, scripted, tmp_path):
