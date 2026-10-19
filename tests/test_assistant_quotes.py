@@ -17,8 +17,9 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src import conversations, tools
-from src.agents import assistant, assistant_turn
+from src.agents import assistant, assistant_quotes, assistant_turn
 from src.models import Evidence, SourceType
+from tests import forms_fixtures as shapes
 from tests.test_assistant import user  # noqa: F401 - pytest fixture, used by name
 
 SOURCE = (
@@ -49,26 +50,26 @@ INVENTED = "Ole5 integrates directly with the customer's SIEM over syslog."
     ids=["case", "markdown", "dashes", "line-break-and-split-word", "ellipsis", "bracketed-ellipsis"],
 )
 def test_a_quotation_found_in_a_source_is_left_alone(reply):
-    assert assistant_turn.unfound(reply, [SOURCE]) == []
+    assert assistant_quotes.unfound(reply, [SOURCE]) == []
 
 
 def test_the_invented_blockquote_is_caught():
     reply = f"The fact sheet says:\n\n> **5.3 Integration with the customer's SIEM**\n> {INVENTED}\n"
 
-    assert assistant_turn.unfound(reply, [SOURCE]) == [INVENTED], "the heading is genuine; the line under it is not"
+    assert assistant_quotes.unfound(reply, [SOURCE]) == [INVENTED], "the heading is genuine; the line under it is not"
 
     as_it_was = (
         "> **5.3 Integration with the customer's SIEM** (direct integration with the customer's SIEM is supported)"
     )
-    assert assistant_turn.unfound(as_it_was, [SOURCE]) == [as_it_was[2:]], "an invented parenthetical is no citation"
+    assert assistant_quotes.unfound(as_it_was, [SOURCE]) == [as_it_was[2:]], "an invented parenthetical is no citation"
 
 
 def test_a_quotation_cannot_be_stitched_across_two_sources():
     first, second = "Backups are encrypted at rest", "using keys rotated every year by the vendor"
     reply = f"“{first} {second}”"
 
-    assert assistant_turn.unfound(reply, [f"{first}.", f"{second}."]) == [f"{first} {second}"]
-    assert assistant_turn.unfound(reply, [f"{first} {second}."]) == []
+    assert assistant_quotes.unfound(reply, [f"{first}.", f"{second}."]) == [f"{first} {second}"]
+    assert assistant_quotes.unfound(reply, [f"{first} {second}."]) == []
 
 
 @pytest.mark.parametrize(
@@ -84,7 +85,7 @@ def test_a_quotation_cannot_be_stitched_across_two_sources():
 def test_a_quotation_attributed_to_its_document_is_still_found(reply):
     """Told to quote the sentence and name its document, the model names it on
     the same line. The name is not part of the quotation."""
-    assert assistant_turn.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == []
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == []
 
 
 def test_arabic_quotations_are_checked():
@@ -94,15 +95,129 @@ def test_arabic_quotations_are_checked():
     copied = "تقول الوثيقة: «يرسل تقرير اختبار الاختراق الى العملاء عند الطلب، لا قبل توقيع اتفاقية»."
     invented = "تقول الوثيقة: «يرسل تقرير اختبار الاختراق إلى أي عميل يطلبه دون أي اتفاقية»."
 
-    assert assistant_turn.unfound(copied, [source]) == []
-    assert assistant_turn.unfound(invented, [source]) == ["يرسل تقرير اختبار الاختراق إلى أي عميل يطلبه دون أي اتفاقية"]
+    assert assistant_quotes.unfound(copied, [source]) == []
+    assert assistant_quotes.unfound(invented, [source]) == [
+        "يرسل تقرير اختبار الاختراق إلى أي عميل يطلبه دون أي اتفاقية"
+    ]
 
 
 def test_short_quoted_terms_are_not_checked():
     """Titles and terms are put in quotation marks too, and are not claims."""
     reply = 'Under the "Acceptable Use Policy", "no shared accounts" applies; see "Annex B access control rules".'
 
-    assert assistant_turn.unfound(reply, [SOURCE]) == []
+    assert assistant_quotes.unfound(reply, [SOURCE]) == []
+
+
+# --- the ways round it a review found ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("reply", "invented"),
+    [
+        (
+            "> \"5.3 Integration with the customer's SIEM\" (Ole5 supports direct integration with the customer's SIEM)",
+            "(Ole5 supports direct integration with the customer's SIEM)",
+        ),
+        (f"> **“5.3 Integration with the customer's SIEM”** — {INVENTED}", INVENTED),
+        (f'> Under "Integration", {INVENTED}', INVENTED),
+    ],
+    ids=["parenthetical", "after-a-dash", "after-a-quoted-term"],
+)
+def test_the_rest_of_a_blockquote_line_is_checked_beside_its_quoted_heading(reply, invented):
+    """The D1-22 shape with the heading in quotation marks: the heading is genuine,
+    and was the only thing checked on its line."""
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == [invented]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        '> "Direct integration with a customer\'s SIEM is not supported" (Ole5 facts.docx, §5.3)',
+        "> “Direct integration with a customer's SIEM is not supported” — Ole5 facts.docx, section 5.3, page 4",
+        "> According to Ole5 facts.docx, section 5.3: “Direct integration with a customer's SIEM is not supported.”",
+        "> The fact sheet says: «Direct integration with a customer's SIEM is not supported»",
+    ],
+    ids=["parenthesis", "dash", "named-before", "said-before"],
+)
+def test_a_quotation_on_a_blockquote_line_beside_where_it_is_from_is_found(reply):
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == []
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "“Direct integration with a customer's SIEM is … supported”",
+        "“Direct integration with a customer's SIEM is … supported; customers receive a monthly summary report instead”",
+    ],
+    ids=["ending-on-it", "going-on-after-it"],
+)
+def test_an_ellipsis_cannot_leave_out_a_negation(reply):
+    assert assistant_quotes.unfound(reply, [SOURCE]) == [reply[1:-1]]
+
+
+def test_a_negation_left_out_is_one_of_the_clauses_quoted_however_it_is_split():
+    source = "Backups are encrypted every night. Keys are not rotated by the vendor."
+
+    assert assistant_quotes.unfound("“Backups are encrypted every night … rotated by the vendor”", [source]) != []
+    assert assistant_quotes.unfound("“Backups are encrypted every night … Keys are not rotated”", [source]) == []
+
+
+def test_the_pieces_of_an_ellipsis_are_in_one_text_in_order():
+    first, second = "Backups are encrypted at rest", "keys are rotated every year by the vendor"
+
+    assert assistant_quotes.unfound(f"“{first} … {second}”", [f"{first}.", f"{second}."]) == [f"{first} … {second}"]
+    assert assistant_quotes.unfound(f"“{second} … {first}”", [f"{first}; and {second}."]) == [f"{second} … {first}"]
+    assert assistant_quotes.unfound(f"“{first} … {second}”", [f"{first}; and {second}."]) == []
+
+
+@pytest.mark.parametrize(
+    ("said", "documents"),
+    [
+        ("(security teams may enable it on request for any customer)", ["Security.pdf"]),
+        ("(Ole5 facts says syslog forwarding is available on request)", ["Ole5 facts.docx"]),
+        ("- Ole5 facts, but syslog is offered instead", ["Ole5 facts.docx"]),
+    ],
+    ids=["a-generic-name", "a-claim-after-the-name", "a-claim-after-a-dash"],
+)
+def test_a_claim_beside_a_document_name_is_no_citation(said, documents):
+    span = f"Direct integration with a customer's SIEM is not supported {said}"
+
+    assert assistant_quotes.unfound(f"> {span}", [SOURCE], documents) == [span]
+
+
+def test_a_label_holding_a_claim_is_no_citation():
+    span = "Ole5 facts.docx confirms Ole5 supports direct SIEM integration: Direct integration with a customer's SIEM"
+
+    assert assistant_quotes.unfound(f"> {span}", [SOURCE], ["Ole5 facts.docx"]) == [span]
+
+
+def test_what_a_search_says_back_is_not_a_source():
+    """The model's own query, said back by the tool, would pass for a document's words.
+    Stored conversations still hold searches that said their query back."""
+    query = "Ole5 integrates directly with the customer's SIEM over syslog"
+    call = AIMessage("", tool_calls=[{"name": "search_policies", "args": {"query": query}, "id": "s1"}])
+    said_back = ToolMessage(f"Nothing in the indexed policies matched {query!r}.", tool_call_id="s1")
+
+    assert assistant_quotes.unquoted(f"> {query}", [HumanMessage("Does it?"), call, said_back], []) == [query]
+
+
+def test_the_reasoning_an_answer_was_drafted_with_is_not_a_source():
+    reasoning = "The policy implies that backups are encrypted with keys the vendor holds."
+    read_back = ToolMessage(
+        "#1  q1 -- Are backups encrypted?\n"
+        "      it says: Backups shall be encrypted at rest using AES-256 everywhere.\n"
+        f"    {assistant_quotes.RATIONALE} {reasoning}",
+        tool_call_id="r1",
+        name="read_answers",
+    )
+
+    assert assistant_quotes.unquoted(f'The card says "{reasoning}"', [read_back], []) == [reasoning]
+    assert (
+        assistant_quotes.unquoted(
+            'It cites "Backups shall be encrypted at rest using AES-256 everywhere."', [read_back], []
+        )
+        == []
+    )
 
 
 # --- asking again, then marking ------------------------------------------------------
@@ -124,10 +239,15 @@ def searched(monkeypatch):
     monkeypatch.setattr(tools, "search", search)
 
 
-def _passes(monkeypatch, *replies: str) -> list[list]:
-    """An agent that searches on its first pass, and replies with the next of `replies` on each.
+SEARCH = (("search_policies", {"query": "customer SIEM integration"}),)
 
-    Returns what every pass was sent.
+
+def _passes(monkeypatch, *replies, script=SEARCH, fails: str = "") -> list[list]:
+    """An agent that makes `script`'s calls on its first pass, and replies with the next of `replies` on each.
+
+    A reply may be a message, to carry what it cost. `fails` is how a second
+    pass fails: "" not at all, "at-once" before its first chunk, "part-way" after
+    it. Returns what every pass was sent.
     """
     sent: list[list] = []
 
@@ -139,10 +259,20 @@ def _passes(monkeypatch, *replies: str) -> list[list]:
             messages = list(payload["messages"])
             sent.append(list(messages))
             if len(sent) == 1:
-                result = await self.tools["search_policies"](query="customer SIEM integration")
-                call = {"name": "search_policies", "args": {"query": "customer SIEM integration"}, "id": "s1"}
-                messages += [AIMessage("", tool_calls=[call]), ToolMessage(result, tool_call_id="s1")]
-            yield {"messages": messages + [AIMessage(replies[len(sent) - 1])]}
+                for index, (name, args) in enumerate(script):
+                    result = self.tools[name](**args)
+                    result = await result if hasattr(result, "__await__") else result
+                    call = {"name": name, "args": args, "id": f"c{index}"}
+                    messages += [
+                        AIMessage("", tool_calls=[call]),
+                        ToolMessage(result, tool_call_id=f"c{index}", name=name),
+                    ]
+            elif fails:
+                if fails == "part-way":
+                    yield {"messages": messages}
+                raise RuntimeError("the provider is down")
+            reply = replies[len(sent) - 1]
+            yield {"messages": messages + [reply if isinstance(reply, AIMessage) else AIMessage(reply)]}
 
     monkeypatch.setattr(assistant, "_agent", lambda tool_list, **named: Agent(tool_list))
     return sent
@@ -201,3 +331,60 @@ async def test_the_note_is_in_the_language_of_the_turn(user, monkeypatch, search
 
     assert "«" not in turn.reply and "يتكامل نظام Ole5 مباشرة" in turn.reply
     assert "ملاحظة:" in turn.reply and "المقاطع نفسها مدرجة تحت هذه الرسالة." in turn.reply
+
+
+@pytest.mark.asyncio
+async def test_a_clause_found_turns_ago_can_still_be_quoted(user, monkeypatch):
+    """The model is shown the last few turns whole and older ones as words only,
+    so their clauses were not looked in: a correct re-quotation was asked about
+    again, and could be taken back."""
+    found = Evidence(source_type=SourceType.GUIDELINE, source_name="Ole5 facts.docx", snippet=SOURCE).model_dump()
+    conversation = assistant.start(user, "")
+    conversation.messages = [
+        HumanMessage("Does Ole5 integrate with our SIEM?"),
+        AIMessage("It does not.", additional_kwargs={assistant.UI_KEY: {"steps": [], "sources": [found]}}),
+    ]
+    for n in range(assistant.TURNS_IN_FULL):
+        conversation.messages += [HumanMessage(f"Something else, {n}"), AIMessage(f"Said {n}.")]
+    reply = 'As found earlier, the fact sheet says "Direct integration with a customer\'s SIEM is not supported".'
+    sent = _passes(monkeypatch, reply, reply, script=())
+
+    turn = await assistant.say(user, conversation, "Remind me what it said?")
+
+    assert len(sent) == 1, "found in one pass"
+    assert turn.reply == reply
+
+
+@pytest.mark.asyncio
+async def test_a_reply_may_quote_the_answer_it_just_wrote(user, monkeypatch, tmp_path):
+    """Composed by the model rather than copied from the message, the words written
+    were in no tool result, so the confirmation quoting them was marked a paraphrase."""
+    written = "Yes. All customer data is encrypted at rest with AES-256."
+    reply = f'Done. Question 1 now reads: "{written}"'
+    script = (("open_questionnaire", {"file_name": ""}), ("write_one_answer", {"text": written, "position": "1"}))
+    sent = _passes(monkeypatch, reply, reply, script=script)
+    path = shapes.status_and_comment(tmp_path / "HR.xlsx")
+
+    turn = await assistant.say(
+        user, assistant.start(user, ""), "Set the first answer to say we encrypt at rest", upload=path
+    )
+
+    assert len(sent) == 1
+    assert turn.reply == reply
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fails", ["at-once", "part-way"])
+async def test_a_second_pass_that_fails_leaves_the_first_reply_marked(user, monkeypatch, searched, fails):
+    """It gave the dropped draft unmarked, or threw a whole reply away for "nothing
+    was answered or changed", and the draft's tokens were never counted."""
+    draft = AIMessage(DRAFTED, usage_metadata={"input_tokens": 700, "output_tokens": 50, "total_tokens": 750})
+    sent = _passes(monkeypatch, draft, fails=fails)
+
+    turn = await assistant.say(user, assistant.start(user, ""), "Does Ole5 integrate with our SIEM?")
+
+    assert len(sent) == 2
+    assert not turn.stopped_early
+    assert INVENTED in turn.reply.splitlines(), "the first reply, its unfound quotation no longer one"
+    assert turn.reply.endswith("so treat it as a paraphrase. The clauses themselves are listed under this reply.")
+    assert (turn.input_tokens, turn.output_tokens) == (700, 50), "the dropped draft was paid for, once"

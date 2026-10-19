@@ -37,7 +37,6 @@ job.
 from __future__ import annotations
 
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,9 +51,10 @@ from src.formatting import without_reasoning
 from src.identity import User
 from src.llm import chat_llm
 from src.models import Question
-from src.agents import assistant_turn
+from src.agents import assistant_quotes, assistant_turn
 from src.agents.assistant_prompt import FOR_PRODUCT, IN_ARABIC as IN_ARABIC, SYSTEM as SYSTEM
-from src.agents.assistant_turn import CORRECTION as CORRECTION, UI_KEY as UI_KEY, is_correction as _is_correction
+from src.agents.assistant_turn import CARRY_ON as CARRY_ON, CORRECTION as CORRECTION, UI_KEY as UI_KEY
+from src.agents.assistant_turn import is_correction as _is_correction, tool_correction as _correction
 from src.agents.assistant_turn import tidy_reply as tidy_reply, without_repetition as without_repetition
 
 logger = logging.getLogger(__name__)
@@ -211,6 +211,11 @@ def _tools(user: User, state: dict) -> list:
     def _batch_id() -> str:
         return state.get("batch_id") or ""
 
+    def _changed(written: int = 1) -> None:
+        # The panel re-reads either way; a turn that stops says answers changed only when some did (TD-043).
+        state["refreshed"] = True
+        state["changed"] = bool(state.get("changed") or written)
+
     def _scope(
         part: str,
         matching: str,
@@ -257,7 +262,7 @@ def _tools(user: User, state: dict) -> list:
 
         state["batch_id"] = batch.id
         state["pending_upload"] = ""
-        state["refreshed"] = True
+        state["refreshed"], state["opened"] = True, batch.source_name
         return _describe(batch.id)
 
     def describe_form() -> str:
@@ -541,8 +546,8 @@ def _tools(user: User, state: dict) -> list:
                 said = said[:SOURCE_CHARS].rsplit(" ", 1)[0] + " ..."
             lines.append(f"    cited: {citation} ({kind})")
             lines.append(f"      it says: {said}")
-        if (answered.get("rationale") or "").strip():
-            lines.append(f"    reasoning when it was drafted: {answered['rationale'].strip()[:800]}")
+        if (answered.get("rationale") or "").strip():  # on one line, which a quotation may not come from
+            lines.append(f"    {assistant_quotes.RATIONALE} {' '.join(answered['rationale'].split())[:800]}")
         return lines
 
     def put_back_drafts(question_ids: str = "", matching: str = "", position: str = "") -> str:
@@ -573,7 +578,7 @@ def _tools(user: User, state: dict) -> list:
             return "None of those answers has been reworded since it was drafted, so nothing was put back."
         for question in reworded:
             tools.restore_draft(user, _batch_id(), question["id"])
-        state["refreshed"] = True
+        _changed()
         return f"Put {len(reworded)} answer(s) back as they were first drafted."
 
     def read_existing(question_ids: str = "", matching: str = "", limit: int = 20) -> str:
@@ -647,7 +652,7 @@ def _tools(user: User, state: dict) -> list:
             )
         except tools.ToolError as refused:
             return str(refused)
-        state["refreshed"] = True
+        _changed(outcome.answered)
         if outcome.nothing_matched:
             return (
                 f"Nothing matched {scope.describe()}. Call describe_form to see what "
@@ -727,7 +732,7 @@ def _tools(user: User, state: dict) -> list:
             )
         except tools.ToolError as refused:
             return str(refused)
-        state["refreshed"] = True
+        _changed(outcome.answered)
         return _reworded(outcome, scope)
 
     def _reworded(outcome: tools.Outcome, scope: tools.Scope, skill: str = "") -> str:
@@ -826,7 +831,7 @@ def _tools(user: User, state: dict) -> list:
             )
         except tools.ToolError as refusal:
             return str(refusal)
-        state["refreshed"] = True
+        _changed(outcome.answered)
         return _reworded(outcome, scope, skill=found.name)
 
     def write_one_answer(text: str, question_id: str = "", position: str = "") -> str:
@@ -852,8 +857,11 @@ def _tools(user: User, state: dict) -> list:
             tools.set_answer(user, _batch_id(), question_id, text)
         except tools.ToolError as refused:
             return str(refused)
-        state["refreshed"] = True
-        return f"Replaced the answer to {question_id} with the words given."
+        _changed()
+        # The words themselves, so that a reply quoting what the answer now says quotes a tool result.
+        if not text.strip():
+            return f"Cleared the answer to {question_id}."
+        return f"Replaced the answer to {question_id}. It now reads: {text}"
 
     def set_aside(question_ids: str = "", include: bool = False, position: str = "") -> str:
         """Leave questions out of the file, or bring them back in.
@@ -877,7 +885,7 @@ def _tools(user: User, state: dict) -> list:
             tools.set_questions(user, _batch_id(), [{"id": qid, "skip": not include} for qid in chosen])
         except tools.ToolError as refused:
             return str(refused)
-        state["refreshed"] = True
+        _changed()
         verb = "brought back" if include else "set aside"
         return f"{len(chosen)} question(s) {verb}. Set-aside questions are never written to the file."
 
@@ -929,30 +937,26 @@ def _tools(user: User, state: dict) -> list:
         Search with the plain words of the question, without quotation marks: a
         quoted phrase matches only that exact text. Then quote the sentence that
         answers it word for word and name its document. At most three searches
-        a turn; more, or the same one again, are refused.
+        a turn, a direct answer counting as one; more, or the same one again,
+        are refused, and asking again after a refusal ends the turn.
 
         Args:
             query: what to look for, in plain words.
         """
         _log(f"search_policies({query!r})")
-        refused = assistant_turn.search_refused(state, query)
+        refused = assistant_turn.refused(state, query)
         if refused:
             return refused
         try:
             found = await tools.search(query, team_id=user.team_id, product_id=state.get("product_id", ""))
         except Exception as failed:
-            return f"The search failed: {failed}"
-        hits = found.get("results", [])[:SOURCES_SHOWN]
-        if not hits:
-            return f"Nothing in the indexed policies matched {query!r}."
-
-        # Kept for the interface as well as returned to the model. A claim about
-        # what the policies say is worth exactly as much as the clause behind
-        # it, and a person reading the reply should be able to open that clause
-        # rather than take the sentence on trust -- the same bargain every
-        # answer card makes.
-        assistant_turn.add_sources(state, hits)
-        return assistant_turn.clauses(hits)
+            return assistant_turn.searched(state, query, failed=failed)
+        # Its clauses are kept for the interface as well as returned to the
+        # model. A claim about what the policies say is worth exactly as much as
+        # the clause behind it, and a person reading the reply should be able to
+        # open that clause rather than take the sentence on trust -- the same
+        # bargain every answer card makes.
+        return assistant_turn.searched(state, query, found.get("results", [])[:SOURCES_SHOWN])
 
     async def answer_directly(questions: str, skill: str = "") -> str:
         """Draft this organisation's answer to a question asked in conversation.
@@ -995,6 +999,9 @@ def _tools(user: User, state: dict) -> list:
                 f"That is {len(asked)} questions. Answer at most {DIRECT_QUESTIONS} at a "
                 "time this way; a list this long belongs in a questionnaire file."
             )
+        refused = assistant_turn.refused(state, "\n".join([skill.strip(), *asked]), kind="answer")  # it searches too
+        if refused:
+            return refused
 
         drafted = await service.answer_questions(
             [
@@ -1093,6 +1100,7 @@ def _agent(tool_list: list, product: str = ""):
         tools=tool_list,
         middleware=[
             in_their_language,
+            assistant_turn.ends_when_spent(),
             ContextEditingMiddleware(edits=[ClearToolUsesEdit(trigger=40_000, keep=6)]),
         ],
     )
@@ -1214,9 +1222,8 @@ async def say(
         return tidy_reply(_reply_from({"messages": _this_turn(history, final)}), earlier)
 
     unquoted: list[str] = []
-    asked_again = False
+    asked_again, draft = False, ""  # the reply asked about again, until another arrives
     for attempt in range(1 + CARRY_ON):
-        unquoted = []
         try:
             async for chunk in _agent(tools_bound, **({"product": product} if product else {})).astream(
                 {"messages": sending},
@@ -1225,33 +1232,40 @@ async def say(
             ):
                 final = chunk
         except Exception as failed:
-            if attempt < CARRY_ON and _invented_a_tool(failed):
+            if attempt < CARRY_ON and assistant_turn.invented_a_tool(failed):
                 # Carried on from what the turn had finished, not started again:
                 # an answer_questions that already ran is not paid for twice.
                 logger.info("The model called a tool that does not exist; carrying on")
                 sending = _resume_from(history, final) + [_correction(failed)]
                 continue
             logger.warning("The assistant stopped early: %s", failed)
-            turn.stopped_early = True
+            turn.stopped_early = not draft  # asked again and failed: the first reply stands, marked
+            break
+        if assistant_turn.spent(final.get("messages", [])) and not reply_now():
+            turn.stopped_early = not draft  # it kept asking for searches it was refused (TD-043)
             break
         # A quotation no source contains is asked about once, the draft dropped unseen (TD-043).
-        unquoted = assistant_turn.unquoted(reply_now(), final, turn.sources)
+        quotable = [*conversation.messages, said, *_this_turn(history, final)]
+        draft, unquoted = "", assistant_quotes.unquoted(reply_now(), quotable, turn.sources)
         if not unquoted or asked_again or attempt == CARRY_ON:
             break
-        asked_again = True
-        sending = _resume_from(history, assistant_turn.without_reply(final)) + [
-            assistant_turn.quote_correction(unquoted)
-        ]
+        asked_again, draft, kept = True, reply_now(), assistant_quotes.without_reply(final)
+        _account({"messages": final["messages"][len(kept["messages"]) :]}, turn)  # the dropped draft, paid for
+        final, sending = kept, _resume_from(history, kept) + [assistant_quotes.quote_correction(unquoted)]
 
     _account(final, turn)
     language = _language_of_the_turn(history)
-    turn.reply = reply_now() or (
-        assistant_turn.stopped_reply(state, language)
-        if turn.stopped_early
-        else "I could not work out what to do with that. Could you say it another way?"
+    turn.reply = (
+        draft
+        or reply_now()
+        or (
+            assistant_turn.stopped_reply(state, language)
+            if turn.stopped_early
+            else "I could not work out what to do with that. Could you say it another way?"
+        )
     )
     if unquoted:
-        turn.reply = assistant_turn.as_paraphrase(turn.reply, unquoted, language, listed=bool(turn.sources))
+        turn.reply = assistant_quotes.as_paraphrase(turn.reply, unquoted, language, listed=bool(turn.sources))
     turn.batch_id = state.get("batch_id", "")
     turn.refreshed = bool(state.get("refreshed"))
 
@@ -1354,40 +1368,6 @@ def _window(messages: list[BaseMessage]) -> list[BaseMessage]:
         if reply is not None:
             window.append(AIMessage(str(reply.content)))
     return window
-
-
-def _invented_a_tool(failed: Exception) -> bool:
-    """Whether the provider refused a call to a tool that was never offered.
-
-    The model on Groq now and then calls `repo_browser.open_file` -- a tool from
-    its own training, not from this request -- and Groq rejects the whole
-    request. In the assistant evaluation that ended two turns, one of them a
-    turn that had already answered four questions, and the next turn then
-    reported the broken one instead of doing what was asked.
-    """
-    text = str(failed)
-    return "tool_use_failed" in text or "not in request.tools" in text
-
-
-CARRY_ON = 2
-"""How many times a turn carries on: after the model calls a tool that does not
-exist, or, once, after its reply quoted what no source says."""
-
-
-def _correction(failed: Exception) -> HumanMessage:
-    """A note that the last step called something that is not there.
-
-    Carrying on with the same messages is not enough: the model runs at
-    temperature 0, and in the evaluation it made the identical call again every
-    time. Something in front of it has to be different.
-    """
-    named = re.search(r"call tool '([^']{1,80})'", str(failed))
-    tool = f"`{named.group(1)}`" if named else "a tool"
-    return HumanMessage(
-        f"[Not from the person: your last step called {tool}, which does not exist here. "
-        "Carry on with what they asked, using only the tools you have.]",
-        additional_kwargs={CORRECTION: True},
-    )
 
 
 def _this_turn(sent: list[BaseMessage], final: dict) -> list[BaseMessage]:

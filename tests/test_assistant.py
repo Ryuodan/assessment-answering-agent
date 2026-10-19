@@ -15,7 +15,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src import batches, conversations, events, identity, service, tools
-from src.agents import assistant
+from src.agents import assistant, assistant_turn
 from src.models import AnsweredQuestion, Evidence, SourceType
 from tests import forms_fixtures as shapes
 
@@ -793,7 +793,7 @@ async def test_a_product_chats_direct_answer_is_drafted_for_its_product(kit, mon
     assert asked_for == ["p-ole5"]
     assert [source["product_id"] for source in state["sources"]] == ["p-ole5"], "its clause, marked as its own"
 
-    state["product_id"] = ""
+    state.update(product_id="", searches=[])  # another chat's turn: the same question again in one is refused
     await tool["answer_directly"]("Do you support single sign-on?")
     assert asked_for[-1] == "", "a General chat's are answered as they always were"
 
@@ -883,7 +883,157 @@ async def test_the_same_search_twice_in_a_turn_is_not_run_again(kit, searching):
     said = await tool["search_policies"]('  "penetration  TEST report" ')
 
     assert queries == ["Penetration test report"]
-    assert said.startswith("Already searched for that this turn")
+    assert said.startswith("Already searched for that this turn; its clauses are above.")
+
+
+@pytest.mark.asyncio
+async def test_a_search_that_found_nothing_does_not_say_the_query_back(kit, searching):
+    """Said back in a tool result, the model's own words passed for a document's
+    when a reply quoted them (TD-043). The c7b loop was made of quoted phrases."""
+    queries, _found = searching
+    tool, _state = kit
+    query = "Ole5 integrates directly with the customer SIEM over syslog"
+
+    assert await tool["search_policies"](query) == "Nothing in the indexed policies matched that search."
+    again = await tool["search_policies"](query)
+    assert again.startswith("Already searched for that this turn, and it found nothing.")
+    for other in ("syslog forwarding", "SIEM connectors"):
+        await tool["search_policies"](other)
+    refused = await tool["search_policies"]("one more")
+
+    assert refused.startswith("Not searched: this turn has already searched 3 times")
+    assert "syslog" not in refused and "SIEM" not in refused, "the limit is said without the queries"
+    assert len(queries) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_failed_search_is_said_as_failed(user, monkeypatch):
+    """Retried, a search that had failed was told "its clauses are above" with none
+    above, and the turn that stopped then said it had found nothing."""
+
+    async def search(query, mode="hybrid", limit=8, *, team_id=None, product_id=""):
+        raise RuntimeError("the index is locked")
+
+    monkeypatch.setattr(tools, "search", search)
+    script = [("search_policies", {"query": "pentest"}), ("search_policies", {"query": "pentest"})]
+    monkeypatch.setattr(assistant, "_agent", _stops_after(script))
+    conversation = assistant.start(user, "")
+
+    turn = await assistant.say(user, conversation, "What do the Ole5 documents say about pentest reports?")
+
+    results = [m.content for m in conversations.load(conversation.id).messages if isinstance(m, ToolMessage)]
+    assert results[0] == "The search failed: the index is locked"
+    assert results[1].startswith("Already searched for that this turn, and the search failed. Do not try it again")
+    assert turn.reply == (
+        "I ran out of room part way through that, and nothing was answered or changed. I tried to search the "
+        "documents once, but the search failed. Asking about one point at a time usually works better."
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_direct_answer_counts_against_the_turns_searches(kit, searching, answers_with_evidence):
+    """It runs the whole retrieval pipeline, so it was a way round the limit."""
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Penetration tests run every year."))
+    tool, _state = kit
+    await tool["answer_directly"]("Do you run penetration tests?")
+    await tool["search_policies"]("pentest")
+    await tool["search_policies"]("penetration test report")
+
+    said = await tool["answer_directly"]("Are the reports shared?")
+    refused = await tool["search_policies"]("security testing")
+
+    assert said.startswith("Not answered: this turn has already searched 3 times") and "relay" not in said
+    assert refused.startswith("Not searched: this turn has already searched 3 times")
+
+
+@pytest.mark.asyncio
+async def test_the_same_direct_answer_twice_in_a_turn_is_not_drafted_again(kit, monkeypatch, answers_with_evidence):
+    drafted = []
+    pipeline = service.answer_questions
+
+    async def counted(questions, **named):
+        drafted.append([question.text for question in questions])
+        return await pipeline(questions, **named)
+
+    monkeypatch.setattr(service, "answer_questions", counted)
+    tool, _state = kit
+    await tool["answer_directly"]("Do we encrypt our backups?")
+
+    said = await tool["answer_directly"]("  do we encrypt our BACKUPS? ")
+
+    assert said.startswith("Already answered that this turn; the answer is above.")
+    assert drafted == [["Do we encrypt our backups?"]]
+
+
+def _scripted_model(monkeypatch, *replies: AIMessage) -> list[AIMessage]:
+    """The agent's own graph, driven by a model that replays `replies`; returns those it never reached."""
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+
+    class Scripted(GenericFakeChatModel):
+        def bind_tools(self, tools, **kwargs):
+            return self
+
+    left = iter(replies)
+    monkeypatch.setattr(assistant, "chat_llm", lambda **kwargs: Scripted(messages=left))
+    return left  # type: ignore[return-value]
+
+
+def _searches(*queries: str) -> AIMessage:
+    calls = [{"name": "search_policies", "args": {"query": q}, "id": f"search-{q}"} for q in queries]
+    return AIMessage("", tool_calls=calls)
+
+
+@pytest.mark.asyncio
+async def test_a_model_that_keeps_searching_is_stopped_after_one_refusal(user, monkeypatch, searching):
+    """Refused a fourth search, a model that ignored "Do not search again" could go
+    on calling search_policies until the turn's forty steps ran out, each step
+    re-sending every clause found (TD-043). One refusal is answered; asking again
+    ends the turn, before the model is asked anything more."""
+    queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    left = _scripted_model(monkeypatch, *(_searches(f"pentest reports, try {n}") for n in range(10)))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "What do the Ole5 documents say about pentest reports?")
+
+    assert len(queries) == assistant_turn.SEARCHES_PER_TURN == 3
+    assert len(list(left)) == 5, "asked five times: three searches, a refusal answered, and the one that ended it"
+    assert sum(step.startswith("search_policies(") for step in turn.steps) == 5
+    assert turn.stopped_early
+    assert turn.reply == (
+        "I ran out of room part way through that, and nothing was answered or changed. I searched the documents "
+        "3 times without settling it. The clauses found are listed under this reply, from Ole5 facts.docx. "
+        "Asking about one point at a time usually works better."
+    )
+
+
+@pytest.mark.asyncio
+async def test_searches_asked_for_at_once_past_the_limit_end_the_turn(user, monkeypatch, searching):
+    """Six at once: three run, and the turn ends once all six are answered, not part way through them."""
+    queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    left = _scripted_model(monkeypatch, _searches(*(f"pentest {n}" for n in range(6))), AIMessage("Unreached."))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "What do the Ole5 documents say about pentest reports?")
+
+    assert len(queries) == 3
+    assert [message.content for message in left] == ["Unreached."]
+    assert turn.stopped_early and "searched the documents 3 times" in turn.reply and "Ole5 facts.docx" in turn.reply
+
+
+@pytest.mark.asyncio
+async def test_a_model_that_replies_after_one_refusal_is_not_stopped(user, monkeypatch, searching):
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    _scripted_model(
+        monkeypatch,
+        *(_searches(f"pentest {n}") for n in range(4)),
+        AIMessage("The fact sheet says reports are shared."),
+    )
+
+    turn = await assistant.say(user, assistant.start(user, ""), "What do the Ole5 documents say about pentest reports?")
+
+    assert not turn.stopped_early and turn.reply == "The fact sheet says reports are shared."
 
 
 @pytest.mark.asyncio
@@ -1025,6 +1175,22 @@ async def test_a_stopped_turn_that_changed_answers_still_points_at_them(user, tm
 
     assert turn.stopped_early and turn.refreshed
     assert turn.reply == "I ran out of room part way through that. What I did finish is in the answers beside this."
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_turn_that_only_opened_a_file_does_not_claim_answers(user, tmp_path, monkeypatch):
+    """Opening a file refreshes the panel, and a turn that stopped then said "What I
+    did finish is in the answers beside this" with nothing answered."""
+    monkeypatch.setattr(assistant, "_agent", _stops_after([("open_questionnaire", {"file_name": ""})]))
+    path = shapes.status_and_comment(tmp_path / "HR.xlsx")
+
+    turn = await assistant.say(user, assistant.start(user, ""), "Answer this", upload=path)
+
+    assert turn.stopped_early and turn.refreshed, "the panel still shows the file"
+    assert turn.reply == (
+        "I ran out of room part way through that. I opened HR.xlsx, but nothing in it was answered or changed yet. "
+        "Could you try again, one step at a time?"
+    )
 
 
 @pytest.mark.asyncio
