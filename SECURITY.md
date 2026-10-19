@@ -66,7 +66,10 @@ the person who made them. With no users added the API runs open, as
 `local@localhost`; adding the first user closes it. Roles are member, team
 lead and administrator (`src/roles.py`). A team lead manages their own team's
 products and nothing else. Deleting a product needs `confirm=confirm` on the
-request, as well as the word typed on the page.
+request, as well as the word typed on the page. It deletes the product's
+knowledge-base files and its remembered answers. Its questionnaires and chats
+are kept read-only, so its wording cannot later be approved into the shared
+memory (D-019).
 
 ## Security-sensitive code, and the tests that hold it
 

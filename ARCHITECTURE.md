@@ -131,8 +131,9 @@ which is untouched. `src/scoped_knowledge.py` chooses between them:
 answering for a scope searches. For General that is the shared store itself;
 for a product it is a `ScopedStore`, which embeds the query once and lists
 the product's hits before the shared ones. The knowledge routes
-(`src/routes/knowledge.py`) take an optional `product`. Deleting a product
-drops its collection.
+(`src/routes/knowledge.py`) take an optional `product`. A product's files are
+kept in its own folder (`Settings.product_upload_dir`, `src/uploads.py`).
+Removing a product document deletes its file; a shared document's file stays.
 
 A product's answer memory is the team's `memory_entries` rows that carry its
 id (`product_id`, `''` for the shared memory), indexed in that product's
@@ -140,15 +141,18 @@ collection. The disagreement sweep (`src/memory_sweep.py`) searches only an
 entry's own memory, so supersession and conflicts never cross memories.
 `answer_memory.move` moves an entry between memories. The memory routes
 (`src/routes/memory.py`) read and teach one memory at a time, Shared by
-default. Deleting a product forgets its entries.
+default.
 
 A questionnaire and a chat are each for a product or General
 (`form_batches.product_id`, `conversations.product_id`; `''` is General).
 `products.chosen` checks that a product asked for is the caller's team's.
 
-- **Answering.** `tools.open_form` takes the product, and `tools.set_product`
-  changes it, keeping the answers already written. The questionnaire's product
-  goes through `service.answer_questions`, or the whole-document flow, into the
+The product is fixed when the questionnaire is opened or the chat starts
+(D-018). `products.refuse_change` refuses any other product with 409
+`product_locked`.
+
+- **Answering.** `tools.open_form` takes the product. The questionnaire's
+  product goes through `service.answer_questions`, or the whole-document flow, into the
   graph's state. There `retrieve` asks `scoped_knowledge.store_for` for it.
 - **The drafter.** Evidence from the product's knowledge base carries its
   `product_id`. When any does, `prompts.format_sources_block` marks it FOR THIS
@@ -156,18 +160,30 @@ A questionnaire and a chat are each for a product or General
   questionnaire's prompt is unchanged.
 - **Approval.** A hand-written answer is remembered in the questionnaire's
   memory.
-- **The chat.** A chat's product is its questionnaire's too:
-  - `assistant.choose_product` sets both, from `POST /api/chat/{id}/product`;
-  - an upload in the chat takes it;
+- **The chat.** A chat's product is chosen with its first message:
+  - an upload in the chat is opened for it;
   - `search_policies` searches the product's knowledge base beside the shared
-    one;
+    one and marks the product's own clauses FOR THIS PRODUCT;
+  - `answer_directly` drafts with it;
   - the prompt names the product (`agents/assistant_prompt.py`).
-- **Deletion.** Deleting a product returns its questionnaires and chats to
-  General, with their answers.
+
+  A turn's searches, its budget, its stopped reply and the quotation check are
+  in `agents/assistant_turn.py` and `agents/assistant_quotes.py`.
+- **Deletion** (D-019). Deleting a product, behind a counted warning
+  (`GET /api/products/{id}/deletion`), removes:
+  - its collection, its folder, and its files from before the folder existed;
+  - its memory entries.
+
+  Its questionnaires and chats keep its id and become read-only. The name they
+  are labelled with is kept in `deleted_products`. `products.refuse_deleted`
+  and the store guard in `scoped_knowledge` refuse writes with 409
+  `product_deleted`.
 - **The pages** (plan 024). The choice is made in two places:
-  - a coloured chip beside the chat box (`chat.html`);
+  - a coloured chip beside the chat box (`chat.html`), which can be changed
+    until the first message;
   - a Product selector at the top of the workbench's questionnaire panel
-    (`index.html`).
+    (`index.html`), fixed while a questionnaire is open. Close questionnaire
+    frees it.
 
   `Cards.productBadge` (`cards.js`) puts a product's name, in its colour, on
   the chats and questionnaires in the lists, and on an answer's sources that

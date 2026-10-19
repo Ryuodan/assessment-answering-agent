@@ -312,6 +312,7 @@ or docs and has not been verified by running anything.
 - **What:** found 2026-10-19 by the pre-deploy tests (tracks A-api, B-browser, D1 and D3, each confirmed by a second opinion, two of them offline repros). `answer_directly` in `src/agents/assistant.py` calls `service.answer_questions(..., team_id=user.team_id)` without `product_id`. The same chat's `search_policies` and `open_questionnaire` do pass it (plan 023 wired those two and missed this one).
 - **Impact:** in a chat set to a product, a typed "do we do X" question is drafted from the shared knowledge base and memory only. An Ole5 chat answered that there was no documented single sign-on, against Ole5's own facts. In another case it said no policy covered patching, while the product's knowledge base held the Patch Management Policy.
 - **Fix (needs approval):** pass `product_id=state.get("product_id", "")`, and add a test that a product chat's direct answer reaches the product's store.
+- **Resolved** 2026-10-19 (plan 027): `answer_directly` passes the chat's product. `tests/test_assistant.py::test_a_product_chats_direct_answer_is_drafted_for_its_product` follows it through `service.answer_questions` to the pipeline.
 
 ## TD-038: An empty SEED_PRODUCTS uses up the product seeding
 
@@ -325,6 +326,11 @@ or docs and has not been verified by running anything.
 - **What:** found 2026-10-19 (tracks A-api, C and D1). A product's knowledge-base files are saved in the team's upload folder with no product marker. After the product is deleted, its vectors are gone, but the files are still listed, opened and downloaded in the document library. The delete dialog says the product's documents are deleted.
 - **Impact:** a person who deleted a product to get rid of its material still has the files on the server, listed for the whole team.
 - **Fix (a product decision):** keep product uploads in a per-product folder and remove it with the product, or say plainly in the dialog that the files stay.
+- **Resolved** 2026-10-19 (plan 027, D-019):
+  - Product files live in the product's own folder and are deleted with it. That includes files uploaded before the folder existed, when nothing else uses them.
+  - Removing or clearing a product document deletes its file.
+  - The library shows the product's badge.
+  - The delete dialog is a counted warning.
 
 ## TD-040: Product-related behaviour that needs a decision
 
@@ -339,6 +345,11 @@ Found 2026-10-19 by the pre-deploy tests. Each item works as specified, but a us
   - A questionnaire's or chat's product is chosen once and cannot be changed afterwards, which removes the switch-before-approving path.
   - Deleting a product deletes its remembered answers, including those moved in from Shared, and the warning says so.
   - Member rights stay as they are.
+- **Resolved** 2026-10-19 (plan 027, D-018, D-019):
+  - The product is fixed at creation (409 `product_locked`).
+  - The chat's search results are marked FOR THIS PRODUCT as the drafter's are, and tests pin the marking.
+  - The delete dialog counts the remembered answers, including those moved in from Shared.
+  - A deleted product's work is kept read-only.
 
 ## TD-041: Chat page issues found in the browser tests
 
@@ -348,6 +359,12 @@ Found 2026-10-19 (track B, confirmed):
 - **Wide history column.** The history column doubles in width when a conversation has a long title. This predates products.
 - **Chip not restored on refusal.** When changing a chat's product is refused (a stale tab offering a deleted product), the chip keeps showing the refused product, and the error is drawn as an assistant turn.
 - **Polish.** Product badges are missing on chat source chips, the memory page's "Move to…" menu is full width, and some header links are inconsistent.
+- **Resolved** 2026-10-19 (plan 027):
+  - Every page's header wraps and has the same links. The chat page gained Sign out.
+  - The history column is fixed at 250 px.
+  - A deleted product chosen before the first message is refused beside the box, and the chip goes back to General.
+  - Chat sources carry the product badge, and the Move menu sits with Edit and Forget.
+  - `tests/browser/test_layout.py` checks the header at 1280 and 900 px, and the history width.
 
 ## TD-042: Upgrade and operations visibility
 
@@ -366,6 +383,17 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Invented quotation.** Asked what a product document says, the assistant quoted a paraphrase that stated the opposite of the source.
 - **Document opened as a questionnaire.** The assistant once tried to open a knowledge-base document as a questionnaire.
 - **Excel agent.** It returned no questions for a small, clean sheet twice in three opens.
+- **Resolved** 2026-10-19 (plan 027):
+  - **Search loop.** The cause was that the model saw only the first 400 characters of each clause, so the sentence that answered it was cut off. Searches now show whole clauses, up to 1,500 characters, with the product's own marked. A message searches at most three times, and a repeated search is not run again. A model that asks again after a refusal ends the turn, with a reply that says what it searched. A turn's sources are listed once.
+  - **Stopped turns.** A turn that stops early says what it did, and never claims answers that were not written. It no longer repeats the previous reply: `_reply_from` scanned the whole history.
+  - **Invented quotation.** Words set out as a quotation, in quotation marks or a blockquote, are checked against every source and tool result in the conversation (`src/agents/assistant_quotes.py`). Unfound words make the model write the reply again, once. Words still unfound are shown as a paraphrase, with a note.
+  - **Opening a document.** `open_questionnaire` with nothing attached says that it cannot open knowledge-base documents, and names the document when it is one.
+  - **Excel reader.**
+    - The causes: the rules needed three question rows, so a one- or two-question sheet had no floor under `guarded`; and the agent's round could end on a prose reply.
+    - Now the rules read a short numbered form under Question and Answer headings. A guard inside the model call keeps the agent calling tools until every sheet is recorded: one reminder, then an ordinary end, so the second round still runs. Near-empty sheets are not shown to the agent.
+    - The workbench says why a file yields no questions.
+    - Not changed, as behaviour the user has not asked to change: which reading wins when the agent and the rules find the same number of questions, and short unnumbered sheets (pinned as a reference table).
+    - Not yet seen on a live open: how gpt-oss behaves under `tool_choice=required`. Look for `excel_agent.reminded` in the server log.
 
 ## TD-044: Nobody can reach a former member's questionnaires and chats
 
@@ -373,3 +401,29 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Impact:** nothing is lost, and owners keep their own work. But colleagues who used to share questionnaires lose sight of each other's, and a former member's questionnaires and chats cannot be reached or handed over.
 - **Fix (a product decision):** at least a release note for the upgrade. Possibly a read-only or reassign view for administrators.
 - **Decision** 2026-10-19, by the user: intended; each person has their own history. Nothing to change beyond the release note.
+
+## TD-045: Work already running when its product is deleted is not stopped
+
+- **What:** read 2026-10-19 (Claude, plan 027's design for read-only work).
+  - An answer run, a reword or a chat turn that started before a product was deleted can still save what it finished into the now read-only questionnaire or conversation. Most of that work will have failed, because the product's knowledge base is gone.
+  - An approval caught between its check and `answer_memory.record` can leave a memory row for the deleted product.
+- **Impact:** small. Nothing reaches the shared memory, because approving is refused. A stray row is never listed or retrieved, but the conflict sweep logs `memory.scan_failed` for it on every pass.
+- **Fix:** check the product again before `batches.save_answers` and before `answer_memory.record`.
+
+## TD-046: `src/migrations.py` is at its 400-line limit
+
+- **What:** migration 14 (plan 027) brought the module to exactly 400 lines, the default ARCH-SIZE limit.
+- **Impact:** the next migration fails `poe arch`.
+- **Fix:** before adding one, move `_team_the_answer_memory` (migration 12's data step) into a module of its own, with no change in behaviour.
+
+## TD-047: With hybrid search on, a superseded remembered answer can come back
+
+- **What:** found 2026-10-19 by plan 027's review. `knowledge._fuse_with_lexical` builds evidence for keyword-only hits from the keyword index and never applies `_still_standing`. The same was already true for imported answers. Since each remembered answer is now its own evidence, the keyword index holds every one, not only the last one indexed.
+- **Impact:** none with the default `HYBRID_SEARCH=false`, which is also the local setting. With it on, an answer the sweep marked superseded can reach the drafter.
+- **Fix (needs approval):** filter keyword-only prior-answer hits through `_still_standing` before fusion, with a hybrid test. `knowledge.py` is at its size ceiling, so make room first.
+
+## TD-048: Text extracted under older settings stays after its file is deleted
+
+- **What:** read 2026-10-19 (plan 027's review). Extracted text is cached under a key that includes `EXTRACTION_VERSION` and the Docling settings. Deleting a file removes only the cache under today's key.
+- **Impact:** text from a deleted product's documents can remain in `data/extracted` when the conversion settings changed while the files existed. The storage sweep has the same limitation.
+- **Fix:** key the cache by the file's path and content hash only, or sweep cache entries whose file no longer exists.

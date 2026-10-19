@@ -254,7 +254,8 @@ a plan relies on it.
   - Approved answers go to the questionnaire's product.
   - The team's leads and administrators manage products.
   - Deleting a product takes its documents and answers, behind a typed
-    "confirm"; questionnaires that used it become General.
+    "confirm"; questionnaires that used it become General. *Amended by D-019:
+    they are kept read-only instead.*
   - `SEED_PRODUCTS` applies once.
 - **Consequences:** no stored vector is migrated, and deleting a product drops
   one collection. The routes and records that products need go into new modules
@@ -277,3 +278,59 @@ a plan relies on it.
   the one rule the routes and pages check.
 - **Date:** 2026-10-06. **Status:** accepted. **Decided by:** the user (the role); Claude (its name, which the user left open).
 
+
+## D-018: a questionnaire's and a chat's product is fixed when it is created
+
+- **Context:** the pre-deploy tests (TD-040) found a way for a product's wording
+  to leak into the shared answer memory. Someone switched a product
+  questionnaire to General and then approved an answer drafted from the
+  product's material, and that answer was filed as shared. The user preferred
+  removing the switch to policing it.
+- **Decision:**
+  - The product is chosen when a questionnaire is opened or a chat starts, and
+    it cannot be changed afterwards.
+  - The two routes that changed it now refuse any other product with 409
+    `product_locked`. Another team's or a deleted product is still 404
+    `product_not_found`, checked first.
+  - The workbench can close a questionnaire, so the file can be opened again
+    for another product.
+  - The chat's product chip can be changed until the first message.
+  - `conversations.save` no longer writes the product, so a turn that outlives
+    a change cannot write an old value back.
+- **Consequences:** only creation and product deletion write a questionnaire's
+  or chat's product. Evidence precedence still rests on the FOR THIS PRODUCT
+  label in the drafter's prompt; the pipeline orders evidence by score
+  (TD-040's first item, accepted as it is).
+- **Date:** 2026-10-19. **Status:** accepted. **Decided by:** the user (plan 027). Supersedes plan 018's decision 8.
+
+## D-019: a deleted product takes its files, and leaves its work read-only
+
+- **Context:** deleting a product left its uploaded files on the server and in
+  the document library (TD-039). Its questionnaires and chats also became
+  General and stayed usable, so approving an answer in one would file the
+  product's wording as a shared answer.
+- **Decision:**
+  - A product's knowledge-base files live in its own folder,
+    `<uploads parent>/products/<product id>/`. One file name is still one
+    document across the team and its products: a different file under a name
+    already used gets " (2)".
+  - Deleting a product removes, after the database commit:
+    - its knowledge base, its folder and the text read from its files;
+    - files uploaded before the folder existed, but only those that nothing
+      else indexes or claims;
+    - its remembered answers, including those moved in from Shared.
+  - Removing a product document, or clearing a product's knowledge base, deletes
+    those files too. Shared documents keep their files, as before.
+  - The delete dialog is a red warning that counts what goes and still needs
+    the typed word.
+  - The product's questionnaires and chats are kept and keep its id. A
+    `deleted_products` table (migration 14) holds the name they are labelled
+    with. They can be read, and filled files downloaded, but every write is
+    refused with 409 `product_deleted`: answering, editing, approving and
+    chatting. Forgetting one's own chat is still allowed.
+  - A deleted product's knowledge base is never created again by a late
+    request.
+- **Consequences:** the name can be reused by a new product. Answer runs or
+  approvals already in flight when a product is deleted are not stopped
+  (TD-045). `migrations.py` is at its 400-line limit (TD-046).
+- **Date:** 2026-10-19. **Status:** accepted. **Decided by:** the user (files and warning, TD-039; read-only work, plan 027); Claude (the folder layout, the tombstone table).

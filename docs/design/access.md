@@ -186,7 +186,10 @@ gate every operation on a questionnaire passes) and `runs.load`.
 Uploads follow. A questionnaire is saved under the person who uploaded it --
 `data/people/<name>-<hash>/uploads`, or `data/teams/<team>/people/…` for a
 second team -- while a **policy for the knowledge base still goes to the team's
-folder**, because that is who it answers for. The document list shows a person
+folder**, because that is who it answers for. A policy for one product's
+knowledge base goes to that product's folder, beside the team's
+(`<uploads parent>/products/<product id>/`), so that it can be deleted with the
+product (plan 027, D-019). Every member of the team may list and open it. The document list shows a person
 their own files and the team's; `resolve_document` applies the same rule, so a
 colleague's questionnaire cannot be opened by typing its name.
 

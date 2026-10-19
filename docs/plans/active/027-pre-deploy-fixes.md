@@ -58,6 +58,20 @@ next plan (028).
   - **Product deletion** (`62f6f5c`): new `src/uploads.py`; `service.py` 614 → 591 lines; `check` passed.
   - **Pages** (`80e8a50`): `check` passed, with 22 browser tests, up from 13.
   - The reviews of three branches were cut off by a usage limit and are re-run on the merged code.
+- 2026-10-19: the second round. Reviewers re-read the merged code per area and across areas, and two readers designed the user's new decisions.
+  - **Findings fixed:**
+    - the Excel guard: no extra graph step, and the reply is checked;
+    - the assistant: the search budget ends a turn that keeps searching, and the quotation check covers blockquotes and the whole conversation;
+    - legacy product files go on remove and clear;
+    - page fixes.
+  - **Built:**
+    - **read-only deleted products:** the `deleted_products` tombstone (migration 14), 409 `product_deleted`, and a store guard;
+    - **the collision fix:** `Evidence.key` includes the entry id, so each remembered answer is its own evidence.
+  - Four branches were merged with no conflicts. `check` passes: 2,049 tests and 36 browser tests.
+- 2026-10-19: the collision measurement, run A (before the fix, commit `3f6d505`).
+  - **The copy:** the dev split ran on a copy of the index. In the copy, the 694 shared answers were re-filed as the app files remembered answers ("Answer memory", chunk 0, same entry id and text, no re-embedding). The live index has no such entries, so a run on it could not show the defect.
+  - **Result:** 82 cases graded; agreement 81.7%; verdicts: 59 broader, 13 contradicts, 6 same, 3 narrower, 1 declined.
+  - **Live data:** the hashes of `chroma_db/chroma.sqlite3` and `data/app.db` were unchanged before and after.
 
 ## Decision log
 
