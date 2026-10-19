@@ -664,3 +664,31 @@ the Arabic fix had just recovered. Six wins, five regressions is a coin flip,
 and the coin lands on the failure mode that matters most here: a confident "the
 policy does not specify". The code, the flag and its tests are kept because the
 trade-off is corpus-dependent, not because it is dormant.
+
+## Remembered answers as their own evidence (plan 027)
+
+Every answer the memory files itself is indexed under the same name, "Answer
+memory", chunk 0. That covers approved answers, answers added by hand, edited
+answers and moved answers. Evidence was de-duplicated by name and chunk, so
+only one remembered answer per question ever reached the drafter, and a shared
+one could hide a product's own. The fix keys previous answers by their entry
+id as well (`Evidence.key`).
+
+The live index could not show the effect, because its 694 shared answers came
+from the bulk import, which gives each a distinct name and chunk. So the dev
+split was run on a copy in which those 694 answers were re-filed as the app
+files remembered answers: the same entry ids, text and vectors. Two runs, one
+on each code version, on the same copy, 82 cases each, none failed:
+
+| | before (`3f6d505`) | after (`92d4b7e`) |
+|---|---|---|
+| agreement with the team | 81.7% | 84.1% |
+| where the memory had been asked something similar (16) | 87.5% | 91.2% |
+| where it had not (66) | 80.3% | 82.4% |
+| contradicts | 13 | 11 |
+
+Item by item: 3 better, 0 worse, 74 the same, 5 within noise. The 2.4 points
+are below the 4.9 that one run each needs (above), so this shows no harm and a
+consistent direction, not a proven gain. The tests prove the mechanism
+(`tests/test_previous_answers.py`). The live index and database were hashed
+before and after and are unchanged.
