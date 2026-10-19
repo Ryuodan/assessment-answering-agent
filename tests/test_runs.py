@@ -68,7 +68,7 @@ def _result(run_id: str = "r1", *, answers: list[AnsweredQuestion] | None = None
     answers = [_answer(1), _answer(2)] if answers is None else answers
     return AssessmentResult(
         run_id=run_id,
-        source_name="PSAT Questionnaire v2.1.xlsx",
+        source_name="Litware Questionnaire v2.1.xlsx",
         language="en",
         questions_found=len(answers),
         answers=answers,
@@ -83,7 +83,7 @@ def test_a_saved_run_reloads_intact():
     stored = runs.load("r1")
 
     assert stored is not None
-    assert stored.summary.source_name == "PSAT Questionnaire v2.1.xlsx"
+    assert stored.summary.source_name == "Litware Questionnaire v2.1.xlsx"
     assert stored.summary.actor_email == ALICE.email
     assert stored.summary.team_id == ALICE.team_id
     assert [answer.answer for answer in stored.answers] == ["Answer 1.", "Answer 2."]

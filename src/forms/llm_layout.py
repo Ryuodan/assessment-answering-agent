@@ -241,7 +241,7 @@ def thin(sheet: Sheet, part: Part, layout_row: int) -> bool:
     """Whether a sheet was read, but read badly.
 
     Seven questions on a sheet of 133 rows is a wrong column, not a short
-    questionnaire -- that is the ISRA workbook, whose sections are headed 'HR
+    questionnaire -- that is the Woodgrove workbook, whose sections are headed 'HR
     Security' and 'Physical Security' and which no word list anticipates. The
     test is coverage: what share of the rows below the header became questions.
     """

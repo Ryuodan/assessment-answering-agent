@@ -256,7 +256,7 @@ def test_it_can_be_shown_only_some_sheets(tmp_path):
 
 
 def test_a_second_round_is_asked_about_the_sheets_it_forgot(tmp_path, monkeypatch):
-    """On the Zain form the agent recorded five sheets of seven and stopped --
+    """On the Tailspin form the agent recorded five sheets of seven and stopped --
     not out of budget, just finished -- and the two it never mentioned held
     twelve questions between them."""
     rounds: list[set] = []

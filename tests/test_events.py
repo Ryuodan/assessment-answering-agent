@@ -46,13 +46,13 @@ def test_the_payload_round_trips():
         events.RUN_FINISHED,
         subject_type="run",
         subject_id="r1",
-        source_name="PSAT Questionnaire v2.1.xlsx",
+        source_name="Litware Questionnaire v2.1.xlsx",
         questions=183,
         needs_review=4,
     )
     [event] = events.recent(ALICE.team_id)
     assert event.payload == {
-        "source_name": "PSAT Questionnaire v2.1.xlsx",
+        "source_name": "Litware Questionnaire v2.1.xlsx",
         "questions": 183,
         "needs_review": 4,
     }

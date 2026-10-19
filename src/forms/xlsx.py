@@ -467,7 +467,7 @@ def _ownership_banners(workbook: Workbook, sheet: Sheet, header_row: int) -> dic
 
     One workbook says who owns what a row *above* its column headings:
     'To be Filled by the Vendor' merged across D:E, 'To be Filled by Bank
-    Albilad' across F:G. Read only the headings and column F is a compliance
+    Northwind' across F:G. Read only the headings and column F is a compliance
     dropdown like any other -- and answering it would put our words in the
     assessing bank's own column, on every sheet of the file.
 

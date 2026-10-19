@@ -34,13 +34,13 @@
           "verdict": "answer"
         },
         {
-          "because": "'Compliance Code\\n(Give a compliance level code that best suits the answer)': a banner on row 4 says this column is 'Bank Albilad''s",
+          "because": "'Compliance Code\\n(Give a compliance level code that best suits the answer)': a banner on row 4 says this column is 'Northwind Bank''s",
           "confident": true,
           "subject": "column F",
           "verdict": "theirs"
         },
         {
-          "because": "'Comments and Required Next Steps': a banner on row 4 says this column is 'Bank Albilad''s",
+          "because": "'Comments and Required Next Steps': a banner on row 4 says this column is 'Northwind Bank''s",
           "confident": true,
           "subject": "column G",
           "verdict": "theirs"

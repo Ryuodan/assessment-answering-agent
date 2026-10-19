@@ -76,7 +76,7 @@ def test_an_inline_dropdown_resolves_to_its_words(tmp_path):
 def test_a_dropdown_pointing_at_a_hidden_sheet_resolves(tmp_path):
     """One workbook keeps its compliance levels on a hidden sheet and points
     fifteen validations at it."""
-    path = shapes.status_and_comment(tmp_path / "isra.xlsx")
+    path = shapes.status_and_comment(tmp_path / "woodgrove.xlsx")
     with Workbook(path) as workbook:
         assert workbook.vocabulary_for(workbook["Human Resources"], "C") == [
             "Fully Compliant",
@@ -96,7 +96,7 @@ def test_merged_cells_report_the_value_they_display(tmp_path):
 
 
 def test_formula_cells_are_recognised(tmp_path):
-    path = shapes.status_and_comment(tmp_path / "isra.xlsx")
+    path = shapes.status_and_comment(tmp_path / "woodgrove.xlsx")
     with Workbook(path) as workbook:
         assert (7, "C") in workbook["Score"].formulas
 
@@ -134,7 +134,7 @@ def test_arabic_questions_are_marked_arabic(tmp_path):
 
 
 def test_a_status_column_carries_the_files_own_vocabulary(tmp_path):
-    form = forms.detect(shapes.status_and_comment(tmp_path / "isra.xlsx"))
+    form = forms.detect(shapes.status_and_comment(tmp_path / "woodgrove.xlsx"))
     status = form.questions[0].targets[Role.STATUS]
     assert status.vocabulary == ["Fully Compliant", "Partially Compliant", "Non Compliant", "Not Applicable"]
     assert form.questions[0].targets[Role.ANSWER].id.endswith("!D2")
@@ -143,12 +143,12 @@ def test_a_status_column_carries_the_files_own_vocabulary(tmp_path):
 def test_a_question_column_is_found_without_a_matching_heading(tmp_path):
     """Fifteen sheets head their questions 'HR Security', 'Physical Security'
     and so on. No word list anticipates those; the shape of the column does."""
-    form = forms.detect(shapes.status_and_comment(tmp_path / "isra.xlsx"))
+    form = forms.detect(shapes.status_and_comment(tmp_path / "woodgrove.xlsx"))
     assert len(form.questions) == 4
 
 
 def test_a_banner_above_the_headings_assigns_ownership(tmp_path):
-    """'To be Filled by Bank Albilad' merged across F:G. Read the headings alone
+    """'To be Filled by Northwind Bank' merged across F:G. Read the headings alone
     and column F is a compliance dropdown like any other."""
     form = forms.detect(shapes.ownership_banner(tmp_path / "banner.xlsx"))
     written = {target.id.split("!")[1][0] for q in form.questions for target in q.writable}
@@ -283,7 +283,7 @@ def test_a_short_form_without_a_numbering_column_is_still_a_reference_table(tmp_
 
 
 def test_a_hidden_sheet_is_skipped(tmp_path):
-    form = forms.detect(shapes.status_and_comment(tmp_path / "isra.xlsx"))
+    form = forms.detect(shapes.status_and_comment(tmp_path / "woodgrove.xlsx"))
     assert [part.kind for part in form.parts if part.name == "Score"] == ["hidden"]
 
 
@@ -362,7 +362,7 @@ def test_every_package_part_survives(tmp_path):
 def test_a_formula_cell_is_refused(tmp_path):
     """One workbook scores itself from 93 formulas on a hidden sheet. A value
     dropped into one would look filled in and be wrong."""
-    path = shapes.status_and_comment(tmp_path / "isra.xlsx")
+    path = shapes.status_and_comment(tmp_path / "woodgrove.xlsx")
     report = forms.write(path, tmp_path / "out.xlsx", {"Score!C7": "overwritten"})
     assert report.written == 0
     assert report.skipped == {"Score!C7": "That cell holds a formula."}
@@ -405,7 +405,7 @@ def test_written_text_is_marked_space_preserving(simple, tmp_path):
 # Excel declares half a dozen namespaces on every worksheet and lists four of
 # them in `mc:Ignorable`. Re-serialising the part renamed them ns1, ns2... and
 # dropped the unused ones, leaving `mc:Ignorable` naming prefixes that no longer
-# existed -- and Excel refused to open the filled file. The team's own Zain form
+# existed -- and Excel refused to open the filled file. The team's own Tailspin form
 # was one of those.
 
 EXCEL_SHEET = (

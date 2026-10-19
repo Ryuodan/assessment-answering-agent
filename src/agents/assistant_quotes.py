@@ -348,6 +348,11 @@ def as_paraphrase(reply: str, spans: list[str], language: str, *, listed: bool) 
         for opening, closing in _MARKS:
             text = re.sub(rf"{re.escape(opening)}\s*{re.escape(span)}\s*{re.escape(closing)}", lambda _: span, text)
         text = re.sub(rf"^({_LEAD})>[ \t]?(?=.*{re.escape(span)})", r"\1", text, flags=re.MULTILINE)
+    if text == reply:
+        # Nothing in this reply was set out as those words, so a note would point at
+        # quotations it cannot show (seen once in plan 028's rehearsal, not reproduced).
+        logger.warning("assistant.quote_unlocated", spans=len(spans))
+        return reply
     logger.info("assistant.quote_unverified", spans=len(spans))
     note, where = _NOT_QUOTED["ar" if language == "ar" else "en"]
     return f"{text}\n\n{note}{where if listed else ''}"

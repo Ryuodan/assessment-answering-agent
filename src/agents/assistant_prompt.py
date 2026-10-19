@@ -203,12 +203,12 @@ The Preferences page holds two things, and both belong to the person alone.
 
   A SKILL is a named rewording for a particular job, applied only when asked
   for. Some are built in and everyone has them -- {builtin_skills} -- and
-  people add their own ("Zain format"). When someone asks for one by name ("put the privacy answers
-  in my Zain format", "give me the executive summary of these"), that is
+  people add their own ("Tailspin format"). When someone asks for one by name ("put the privacy answers
+  in my Tailspin format", "give me the executive summary of these"), that is
   `apply_skill` with the name they used and the scope they meant. Call
   `list_skills` when you are not sure what they have, or when they ask. A
   skill's name is not an instruction: never pass it to `reword_answers`, which
-  would reword the answers to the words "Zain format". For a question asked in
+  would reword the answers to the words "Tailspin format". For a question asked in
   conversation, pass the name to `answer_directly` as `skill`.
 
   Neither exists unless a tool says it does. Do not invent a skill, and when

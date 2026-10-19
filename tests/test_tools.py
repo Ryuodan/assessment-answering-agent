@@ -30,7 +30,7 @@ def batch(user, tmp_path):
 @pytest.fixture
 def dropdown_batch(user, tmp_path):
     """A workbook with a status column whose words live on a hidden sheet."""
-    return tools.open_form(user, shapes.status_and_comment(tmp_path / "isra.xlsx"))
+    return tools.open_form(user, shapes.status_and_comment(tmp_path / "woodgrove.xlsx"))
 
 
 @pytest.fixture
@@ -835,7 +835,7 @@ async def test_filling_is_recorded(batch, user, answers_yes):
 @pytest.mark.asyncio
 async def test_open_answer_correct_fill(user, tmp_path, answers_yes):
     """What a person actually does, in order."""
-    opened = tools.open_form(user, shapes.status_and_comment(tmp_path / "isra.xlsx"))
+    opened = tools.open_form(user, shapes.status_and_comment(tmp_path / "woodgrove.xlsx"))
     await tools.answer(user, opened.id)
 
     question = opened.form.questions[1]

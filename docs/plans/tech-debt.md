@@ -435,3 +435,28 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - An attribution worded outside the lists costs one extra model call. If the second reply still uses it, the quotation is marked a paraphrase although it is genuine.
   - A claim made only of listed words still passes. Words outside quotation marks shorter than six words are not checked at all.
 - **Fix (needs a decision):** accept the lists, which tests pin both ways (`tests/test_assistant_quotes.py`), and extend them when a form is seen. Or judge an attribution with a model call, at the cost of one call per quoted reply.
+- **Seen 2026-10-20 in plan 028's rehearsal.**
+  - A reply quoting three policy clauses word for word got the paraphrase note, although its quotation marks stayed. That means the words flagged were not in the reply shown.
+  - It was not reproduced offline from the stored reply and the real chunks.
+  - Since then, `as_paraphrase` adds the note only when it un-quoted something. Otherwise it logs `assistant.quote_unlocated`, which is the event to look for if this recurs.
+
+## TD-050: More customer and organisation names in code, tests and docs
+
+- **What:** found 2026-10-20 (Claude) by scanning the code archive prepared for the server manager. The scan compared the archive's text with the words of the delivered files' names and of the evaluation files' names. Counts only:
+  - one bank's name in 7 files, mostly a questionnaire fixture and its two characterization snapshots;
+  - one organisation's name in 8 files, 52 times, used as the example of a person's own answer format, including in the assistant's prompt;
+  - three customer questionnaires' names, in 7, 7 and 1 files: comments, docs and test names.
+
+  TD-030 replaced the names found then. These were not on its list.
+- **Impact:** the code says who some customers are. That matters for any copy given to someone, and the git history keeps them whatever is done now (as TD-013).
+- **Fix:** by the user's TD-030 decision, replace them with invented names. Only string contents, comments and test names change; snapshots are re-recorded and reviewed.
+- **Resolved** 2026-10-20 (Claude, plan 027):
+  - replaced in 27 files by invented names (Northwind, Tailspin, Woodgrove, Litware, Proseware), and a generic sheet name in one example;
+  - the two characterization snapshots changed by the same strings only, and their tests pass;
+  - the archive was scanned again and none of the names remain. They are still in the git history (TD-013).
+
+## TD-051: A deleted knowledge base leaves its vector-index folder on disk
+
+- **What:** seen 2026-10-20 in plan 028's rehearsal. Deleting a product dropped its Chroma collection, its embeddings and its rows in `chroma.sqlite3`. Chroma left the collection's HNSW segment folder in `chroma_db/`: 4 files, about 424 KB, vectors and labels only, no text. The local data also holds 14 older unreferenced segment folders, dated 2026-10-05.
+- **Impact:** disk space, and vectors of deleted documents remain until removed. The text of those documents is gone.
+- **Fix:** after `delete_collection`, remove segment folders that `chroma.sqlite3` no longer references, with the app stopped or inside the delete. Or sweep them in the storage task.

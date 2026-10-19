@@ -116,8 +116,8 @@ def refuse_deleted(team_id: str, product_id: str) -> None:
     gone = deleted(team_id).get(product_id) if product_id else None
     if gone:
         raise ProductDeleted(
-            f"{gone['name']} was deleted, so this is kept read-only: it can be read and its filled file "
-            "downloaded, but no longer changed."
+            f"{gone['name']} was deleted, so this is kept read-only: it can still be read, and a questionnaire's "
+            "filled file downloaded, but nothing in it can be changed."
         )
 
 

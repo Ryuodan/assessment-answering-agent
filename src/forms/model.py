@@ -107,7 +107,7 @@ class Finding(BaseModel):
 class Target(BaseModel):
     """One writable place in the document."""
 
-    id: str = Field(description="Stable within a document, e.g. 'TPRA!C9' or 'para:142'")
+    id: str = Field(description="Stable within a document, e.g. 'Security!C9' or 'para:142'")
     role: Role
     label: str = Field(default="", description="The column heading, for showing a person")
     vocabulary: list[str] = Field(

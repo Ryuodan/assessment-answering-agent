@@ -256,7 +256,7 @@ def ownership_banner(path: Path) -> Path:
                 {
                     "C3": "General Information",
                     "D4": "To be Filled by the Service Provider/ Third Party",
-                    "F4": "To be Filled by Bank Albilad",
+                    "F4": "To be Filled by Northwind Bank",
                     "A5": "#",
                     "B5": "Question",
                     "C5": "Description",

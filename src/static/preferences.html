@@ -731,14 +731,14 @@
     const name = document.createElement("input");
     name.type = "text";
     name.maxLength = limits.name;
-    name.placeholder = "e.g. Zain format";
+    name.placeholder = "e.g. Tailspin format";
     name.value = skill ? skill.name : "";
     field("Name", name);
 
     const desc = document.createElement("input");
     desc.type = "text";
     desc.maxLength = limits.description;
-    desc.placeholder = "e.g. Zain's supplier questionnaires: short, verdict first";
+    desc.placeholder = "e.g. Tailspin's supplier questionnaires: short, verdict first";
     desc.value = skill ? skill.description : "";
     field("When to use it (optional)", desc);
 

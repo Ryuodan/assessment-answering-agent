@@ -222,11 +222,11 @@ def test_a_built_in_skill_cannot_be_changed_or_removed_but_can_be_copied():
 
 
 def test_your_own_skill_is_kept_found_changed_and_removed():
-    skill = preferences.add_skill(ALICE, "Zain format", "One sentence, verdict first.", "Zain's forms")
-    assert [s.name for s in preferences.own_skills(ALICE)] == ["Zain format"]
+    skill = preferences.add_skill(ALICE, "Tailspin format", "One sentence, verdict first.", "Tailspin's forms")
+    assert [s.name for s in preferences.own_skills(ALICE)] == ["Tailspin format"]
 
     changed = preferences.update_skill(ALICE, skill.skill_id, instruction="Two sentences.")
-    assert changed.instruction == "Two sentences." and changed.name == "Zain format"
+    assert changed.instruction == "Two sentences." and changed.name == "Tailspin format"
 
     assert preferences.remove_skill(ALICE, skill.skill_id) is True
     assert preferences.own_skills(ALICE) == []
@@ -234,22 +234,22 @@ def test_your_own_skill_is_kept_found_changed_and_removed():
 
 
 def test_no_two_skills_share_a_name_whatever_the_case():
-    preferences.add_skill(ALICE, "Zain format", "One sentence.")
+    preferences.add_skill(ALICE, "Tailspin format", "One sentence.")
     with pytest.raises(preferences.PreferenceError, match="already have"):
-        preferences.add_skill(ALICE, "zain FORMAT", "Something else.")
+        preferences.add_skill(ALICE, "tailspin FORMAT", "Something else.")
     with pytest.raises(preferences.PreferenceError, match="built-in"):
         preferences.add_skill(ALICE, "executive SUMMARY", "Mine.")
 
     other = preferences.add_skill(ALICE, "Auditor notes", "Full detail.")
     with pytest.raises(preferences.PreferenceError, match="already have"):
-        preferences.update_skill(ALICE, other.skill_id, name="Zain Format")
+        preferences.update_skill(ALICE, other.skill_id, name="Tailspin Format")
 
 
 def test_a_skill_needs_a_name_and_an_instruction():
     with pytest.raises(preferences.PreferenceError, match="name"):
         preferences.add_skill(ALICE, "   ", "One sentence.")
     with pytest.raises(preferences.PreferenceError, match="instruction"):
-        preferences.add_skill(ALICE, "Zain format", "  \n ")
+        preferences.add_skill(ALICE, "Tailspin format", "  \n ")
 
 
 def test_there_is_a_limit_to_how_many_skills_one_person_writes(monkeypatch):
@@ -262,22 +262,22 @@ def test_there_is_a_limit_to_how_many_skills_one_person_writes(monkeypatch):
 
 def test_your_own_skills_are_personal():
     """A colleague's skill id is indistinguishable from one that does not exist."""
-    mine = preferences.add_skill(ALICE, "Zain format", "One sentence.")
+    mine = preferences.add_skill(ALICE, "Tailspin format", "One sentence.")
 
     assert preferences.own_skills(BOB) == []
     assert preferences.get_skill(BOB, mine.skill_id) is None
     assert preferences.update_skill(BOB, mine.skill_id, name="Stolen") is None
     assert preferences.remove_skill(BOB, mine.skill_id) is False
     assert preferences.copy_skill(BOB, mine.skill_id) is None
-    assert preferences.get_skill(ALICE, mine.skill_id).name == "Zain format"
+    assert preferences.get_skill(ALICE, mine.skill_id).name == "Tailspin format"
 
 
 def test_a_skill_is_found_by_the_name_somebody_actually_says():
-    zain = preferences.add_skill(ALICE, "Zain format", "One sentence.")
+    tailspin = preferences.add_skill(ALICE, "Tailspin format", "One sentence.")
     preferences.add_skill(ALICE, "Auditor notes", "Short.")
 
-    assert preferences.find_skill(ALICE, "zain format")[0] == zain, "exact, any case"
-    assert preferences.find_skill(ALICE, "zain")[0] == zain, "part of exactly one name"
+    assert preferences.find_skill(ALICE, "tailspin format")[0] == tailspin, "exact, any case"
+    assert preferences.find_skill(ALICE, "tailspin")[0] == tailspin, "part of exactly one name"
     assert preferences.find_skill(ALICE, "executive")[0].name == "Executive summary", "built in too"
 
     found, candidates = preferences.find_skill(ALICE, "auditor")
@@ -410,7 +410,7 @@ async def test_the_draft_can_be_put_back(user, batch, drafted, reworded):
 
 async def test_a_skill_can_be_undone_with_no_preferences_set(user, batch, drafted, reworded):
     await tools.answer(user, batch.id)
-    skill = preferences.add_skill(user.email, "Zain format", "One sentence.")
+    skill = preferences.add_skill(user.email, "Tailspin format", "One sentence.")
     await tools.apply_skill(user, batch.id, skill.skill_id)
     question_id = batch.form.questions[0].id
     assert batches.answers(batch.id)[question_id].drafted.startswith("Yes. The organisation")
@@ -556,16 +556,16 @@ async def test_answers_to_a_brief_questionnaire_arrive_with_their_brief_form(use
 
 async def test_a_skill_rewords_with_its_own_instruction(user, batch, drafted, reworded):
     await tools.answer(user, batch.id)
-    skill = preferences.add_skill(user.email, "Zain format", "One sentence, verdict first.")
+    skill = preferences.add_skill(user.email, "Tailspin format", "One sentence, verdict first.")
 
     used, outcome = await tools.apply_skill(user, batch.id, skill.skill_id)
 
-    assert used.name == "Zain format"
+    assert used.name == "Tailspin format"
     assert set(reworded["instructions"]) == {"One sentence, verdict first."}
-    assert reworded["notes"][0] == "Reworded with the skill “Zain format”."
+    assert reworded["notes"][0] == "Reworded with the skill “Tailspin format”."
     assert outcome.answered == len(batch.form.questions)
     [event] = [e for e in events.for_subject(batches.SUBJECT, batch.id) if e.kind == events.SKILL_APPLIED]
-    assert event.payload["skill"] == "Zain format"
+    assert event.payload["skill"] == "Tailspin format"
 
 
 async def test_a_built_in_skill_is_applied_the_same_way(user, batch, drafted, reworded):
@@ -579,7 +579,7 @@ async def test_a_built_in_skill_is_applied_the_same_way(user, batch, drafted, re
 
 
 async def test_a_skill_that_is_not_yours_cannot_be_applied(user, batch, drafted, reworded):
-    theirs = preferences.add_skill(BOB, "Zain format", "One sentence.")
+    theirs = preferences.add_skill(BOB, "Tailspin format", "One sentence.")
     await tools.answer(user, batch.id)
 
     with pytest.raises(tools.ToolError, match="no skill like that"):
@@ -639,13 +639,13 @@ def test_skills_through_the_api():
     added = client.post(
         "/api/skills",
         json={
-            "name": "Zain format",
-            "description": "Zain's forms",
+            "name": "Tailspin format",
+            "description": "Tailspin's forms",
             "instruction": "One sentence.",
         },
     ).json()
     assert added["builtin"] is False
-    assert client.post("/api/skills", json={"name": "zain format", "instruction": "Again."}).status_code == 400
+    assert client.post("/api/skills", json={"name": "tailspin format", "instruction": "Again."}).status_code == 400
 
     edited = client.patch(f"/api/skills/{added['skill_id']}", json={"instruction": "Two sentences."})
     assert edited.json()["instruction"] == "Two sentences."
@@ -670,7 +670,7 @@ def test_built_in_skills_through_the_api():
 def test_nobody_sees_anybody_elses_skills_or_preferences(team):
     alice, bob = as_person(ALICE), as_person(BOB)
     alice.put("/api/preferences", json={"refer_to": "T2"})
-    skill = alice.post("/api/skills", json={"name": "Zain format", "instruction": "One sentence."}).json()
+    skill = alice.post("/api/skills", json={"name": "Tailspin format", "instruction": "One sentence."}).json()
 
     theirs = bob.get("/api/preferences").json()
     assert theirs["preferences"]["refer_to"] == ""
@@ -678,7 +678,9 @@ def test_nobody_sees_anybody_elses_skills_or_preferences(team):
     assert bob.patch(f"/api/skills/{skill['skill_id']}", json={"name": "Mine now"}).status_code == 404
     assert bob.delete(f"/api/skills/{skill['skill_id']}").status_code == 404
     assert bob.post(f"/api/skills/{skill['skill_id']}/copy").status_code == 404
-    assert [s["name"] for s in alice.get("/api/preferences").json()["skills"] if not s["builtin"]] == ["Zain format"]
+    assert [s["name"] for s in alice.get("/api/preferences").json()["skills"] if not s["builtin"]] == [
+        "Tailspin format"
+    ]
 
 
 def test_preferences_need_a_session(team):
@@ -781,21 +783,21 @@ def test_listing_skills_separates_built_in_from_theirs_and_hides_instructions(ki
     assert "Built in:" in listed and "- Executive summary:" in listed
     assert "have not written any of their own" in listed
 
-    preferences.add_skill(user.email, "Zain format", "SECRET-INSTRUCTION", "Zain's forms")
+    preferences.add_skill(user.email, "Tailspin format", "SECRET-INSTRUCTION", "Tailspin's forms")
     listed = tool["list_skills"]()
 
-    assert "Their own:\n- Zain format: Zain's forms" in listed
+    assert "Their own:\n- Tailspin format: Tailspin's forms" in listed
     assert "SECRET-INSTRUCTION" not in listed
 
 
 async def test_applying_a_skill_from_the_conversation(kit, user, drafted, reworded):
     tool, state = kit
     await tool["answer_questions"]()
-    preferences.add_skill(user.email, "Zain format", "One sentence, verdict first.")
+    preferences.add_skill(user.email, "Tailspin format", "One sentence, verdict first.")
 
-    said = await tool["apply_skill"]("zain")
+    said = await tool["apply_skill"]("tailspin")
 
-    assert "Reworded 4 of 4 with the skill 'Zain format'" in said
+    assert "Reworded 4 of 4 with the skill 'Tailspin format'" in said
     assert "One sentence, verdict first." in reworded["instructions"]
     assert state["refreshed"] is True
 
@@ -805,10 +807,10 @@ async def test_an_unknown_or_ambiguous_skill_is_asked_about_not_guessed(kit, use
     await tool["answer_questions"]()
     preferences.add_skill(user.email, "Auditor notes", "Short.")
 
-    unknown = await tool["apply_skill"]("Zain format")
+    unknown = await tool["apply_skill"]("Tailspin format")
     ambiguous = await tool["apply_skill"]("auditor")
 
-    assert "no skill called 'Zain format'" in unknown and "'Executive summary'" in unknown
+    assert "no skill called 'Tailspin format'" in unknown and "'Executive summary'" in unknown
     assert "More than one skill matches" in ambiguous
     assert reworded["instructions"] == []
 
@@ -825,10 +827,10 @@ async def test_answering_in_the_conversation_reports_the_preferences(kit, user, 
 async def test_a_question_asked_in_conversation_gets_preferences_or_the_named_skill(kit, user, drafted, reworded):
     tool, _state = kit
     instruction = choose(user.email, refer_to="T2")
-    preferences.add_skill(user.email, "Zain format", "One sentence.")
+    preferences.add_skill(user.email, "Tailspin format", "One sentence.")
 
     styled = await tool["answer_directly"]("Do you review access rights?")
-    skilled = await tool["answer_directly"]("Do you review access rights?", skill="zain")
+    skilled = await tool["answer_directly"]("Do you review access rights?", skill="tailspin")
 
     assert "STYLED:" in styled and "reworded to your preferences" in styled
     assert reworded["instructions"] == [instruction, "One sentence."]

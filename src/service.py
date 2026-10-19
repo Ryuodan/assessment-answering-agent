@@ -131,7 +131,7 @@ async def answered_pairs(path: str | Path, text: str | None = None) -> list[Extr
     again, kept only if they find more answers. Opening a questionnaire to
     answer it and harvesting what somebody already wrote in it are different
     jobs: over the team's seventeen filled questionnaires the guarded reading
-    relabels PSAT's answer column and finds none of its 183 answers, where the
+    relabels Litware's answer column and finds none of its 183 answers, where the
     rules find all of them. Together the two find 1,087; either alone, at most
     1,055. Only the command line imports this way now; in the app an answer
     reaches the memory one at a time, written or approved by a person.

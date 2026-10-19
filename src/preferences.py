@@ -353,7 +353,7 @@ def get_skill(email: str, skill_id: str) -> Skill | None:
 def find_skill(email: str, name: str) -> tuple[Skill | None, list[Skill]]:
     """A skill by the name somebody used for it, and what else it could have meant.
 
-    People say "use my Zain one" for a skill saved as "Zain format", so an exact
+    People say "use my Tailspin one" for a skill saved as "Tailspin format", so an exact
     name wins and a name that is part of exactly one skill's name is taken as
     that skill. Anything looser is a guess, and applying the wrong style to a
     whole questionnaire is not something to guess about: when more than one

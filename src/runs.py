@@ -2,7 +2,7 @@
 
 A run is one pass over a questionnaire: the questions, the answers, and the
 evidence behind each. Today this backs the history list — "what did we send to
-Bank Albilad last month?" — and it is the substrate the later phases need, since
+Northwind Bank last month?" — and it is the substrate the later phases need, since
 revising answer 12 requires answer 12 to still exist somewhere.
 
 The full `AnsweredQuestion` goes into `payload`, evidence included, and the

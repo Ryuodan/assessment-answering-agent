@@ -336,7 +336,7 @@ class Workbook:
         """The values a dropdown on this column allows, if there is one.
 
         Two shapes appear in the samples: an inline quoted list, and a reference
-        to a range on another sheet -- the ISRA workbook keeps its compliance
+        to a range on another sheet -- the Woodgrove workbook keeps its compliance
         levels on a hidden 'Score' sheet and points fifteen validations at it.
         Both resolve here so the drafter is handed actual words either way.
         """
@@ -385,7 +385,7 @@ class Workbook:
         nothing was put there.
 
         A cell holding a formula is refused by default. Overwriting one is how
-        a workbook quietly stops adding up: the ISRA file scores itself from 93
+        a workbook quietly stops adding up: the Woodgrove file scores itself from 93
         formulas on a hidden sheet, and a value dropped into the wrong cell
         would look filled in and be wrong.
         """

@@ -448,7 +448,7 @@ def read_workbook(
             tools = _make_tools(workbook, run, wanted)
             _round(workbook, run, path, wanted, tools, max_steps or budget(len(wanted)))
 
-        # A second round, for sheets it simply forgot. On the Zain form the
+        # A second round, for sheets it simply forgot. On the Tailspin form the
         # agent recorded five sheets of seven and stopped -- not out of budget,
         # just finished -- and the two it never mentioned held twelve questions.
         #

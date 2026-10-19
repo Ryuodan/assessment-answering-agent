@@ -326,6 +326,16 @@ def test_a_blockquote_starting_with_a_number_or_nested_is_still_checked(line):
     assert assistant_quotes.unfound(line, [SOURCE]) != []
 
 
+def test_no_note_is_added_for_words_the_reply_does_not_hold():
+    """In plan 028's rehearsal a reply quoting three clauses word for word got the note,
+    while its quotation marks and blockquotes stayed: the words flagged were not in it.
+    A note that points at no quotation is only wrong, so none is added."""
+    reply = "> “Direct integration with a customer's SIEM is not supported.” – *Ole5 facts.docx*"
+
+    assert assistant_quotes.as_paraphrase(reply, [INVENTED], "en", listed=True) == reply
+    assert assistant_quotes.as_paraphrase(f"> {INVENTED}", [INVENTED], "en", listed=True) != f"> {INVENTED}"
+
+
 @pytest.mark.parametrize(
     "reply",
     [

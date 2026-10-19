@@ -59,7 +59,7 @@ def isolated_storage(tmp_path, monkeypatch):
     `data/app.db` would pollute a real history without failing.
 
     The upload directory was added after this fixture let eleven test fixtures
-    -- `vendor.xlsx`, `isra - answered.xlsx` and friends -- accumulate in
+    -- `vendor.xlsx`, `woodgrove - answered.xlsx` and friends -- accumulate in
     `data/uploads` beside a hundred real policy documents. Nothing failed;
     a later test simply found a file an earlier one had left, and passed for
     the wrong reason.

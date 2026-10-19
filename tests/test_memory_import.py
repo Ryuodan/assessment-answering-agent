@@ -124,7 +124,7 @@ async def test_a_blank_questionnaire_gives_nothing(tmp_path):
 
 async def test_the_configured_reading_is_used_and_the_rules_only_when_they_find_more(tmp_path, monkeypatch):
     """Guarded is how questionnaires are opened and it stays that way. Reading
-    back what somebody already wrote is a different job: on PSAT the guarded
+    back what somebody already wrote is a different job: on Litware the guarded
     reading found none of 183 answers, and the rules found all of them."""
     monkeypatch.setattr(settings, "detection_strategy", "guarded")
     path = shapes.already_answered(tmp_path / "hr.xlsx")
@@ -135,7 +135,7 @@ async def test_the_configured_reading_is_used_and_the_rules_only_when_they_find_
         asked.append(strategy)
         found = real(path, "rules")
         if strategy == "guarded":
-            for question in found.form.questions:  # the PSAT failure, staged
+            for question in found.form.questions:  # the Litware failure, staged
                 question.targets = {}
         return found
 

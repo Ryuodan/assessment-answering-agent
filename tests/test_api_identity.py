@@ -332,7 +332,7 @@ def test_answering_leaves_a_run_behind(client, monkeypatch):
         json={
             "questions": [{"text": "Do you encrypt data at rest?"}],
             "run_id": "run-abc",
-            "source_name": "PSAT Questionnaire v2.1.xlsx",
+            "source_name": "Litware Questionnaire v2.1.xlsx",
         },
     )
     assert response.status_code == 200

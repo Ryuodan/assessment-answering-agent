@@ -86,15 +86,15 @@ def test_an_entry_keeps_its_provenance_and_is_filed_under_one_name(memory_index)
     it came from would add a one-chunk file to the knowledge base for a file
     nobody uploaded, where a `remove` would delete a memory entry.
     """
-    answer_memory.adopt_file("PSAT Questionnaire.xlsx", [Pair("Do you run drills?", "Yes.")])
+    answer_memory.adopt_file("Litware Questionnaire.xlsx", [Pair("Do you run drills?", "Yes.")])
     entry = answer_memory.entries()[0]
 
     answer_memory.update(entry.entry_id, answer="Yes, twice a year.")
 
     [indexed] = [r for r in memory_index.records if r["metadata"]["entry_id"] == entry.entry_id]
     assert indexed["metadata"]["source_name"] == answer_memory.MEMORY_SOURCE
-    assert indexed["metadata"]["from_file"] == "PSAT Questionnaire.xlsx"
-    assert answer_memory.get(entry.entry_id).from_file == "PSAT Questionnaire.xlsx"
+    assert indexed["metadata"]["from_file"] == "Litware Questionnaire.xlsx"
+    assert answer_memory.get(entry.entry_id).from_file == "Litware Questionnaire.xlsx"
 
 
 def test_forgetting_an_entry_takes_its_vector_with_it(memory_index):

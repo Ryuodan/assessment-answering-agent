@@ -309,7 +309,7 @@ def test_filling_reports_what_was_left_blank_and_why(client, tmp_path, answers_y
 
 
 def test_a_status_column_is_filled_from_the_files_own_words(client, tmp_path, answers_yes):
-    batch_id = _upload(client, shapes.status_and_comment(tmp_path / "isra.xlsx")).json()["id"]
+    batch_id = _upload(client, shapes.status_and_comment(tmp_path / "woodgrove.xlsx")).json()["id"]
     client.post(f"/api/forms/{batch_id}/answer", json={})
     client.post(f"/api/forms/{batch_id}/fill")
 
@@ -352,7 +352,7 @@ def test_the_routes_need_a_session_when_sign_in_is_on(client, tmp_path):
 
 def test_the_column_mapping_is_reported(client, tmp_path):
     """Detection proposes; this is the other half of that sentence."""
-    batch_id = _upload(client, shapes.status_and_comment(tmp_path / "isra.xlsx")).json()["id"]
+    batch_id = _upload(client, shapes.status_and_comment(tmp_path / "woodgrove.xlsx")).json()["id"]
     [sheet] = client.get(f"/api/forms/{batch_id}/columns").json()["sheets"]
     assert sheet["sheet"] == "Human Resources"
     assert {c["column"]: c["role"] for c in sheet["columns"]} == {"C": "status", "D": "answer"}

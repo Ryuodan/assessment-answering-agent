@@ -173,7 +173,7 @@ def test_a_reading_that_yields_no_questions_is_discarded(book):
 
 def test_a_banner_saying_a_column_belongs_to_the_sender_beats_the_model(tmp_path):
     """The one mistake worse than leaving a question unanswered. 'To be Filled
-    by Bank Albilad' is merged over F:G; a model that has not noticed it must
+    by Northwind Bank' is merged over F:G; a model that has not noticed it must
     not be able to hand us the assessing bank's own column."""
     with Workbook(shapes.ownership_banner(tmp_path / "banner.xlsx")) as workbook:
         sheet = workbook["General Information"]

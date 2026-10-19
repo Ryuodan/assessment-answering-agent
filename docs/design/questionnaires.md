@@ -81,7 +81,7 @@ dropped the declarations it did not see used -- so the `mc:Ignorable="x14ac xr
 xr2 xr3"` that Excel writes on every worksheet named prefixes that no longer
 existed, and **Excel refused to open the filled file**. Google Sheets exports do
 not carry that attribute, which is why the files tested day to day never showed
-it; the team's Zain form does. Checked with Excel itself: the Zain form's filled
+it; the team's Tailspin form does. Checked with Excel itself: the Tailspin form's filled
 copy failed to open before and opens now, as do all twenty-one real
 questionnaires filled in every writable cell, and an Excel-saved form taken
 through the assistant, the fill button and the download. A sheet shaped in a way
@@ -199,9 +199,9 @@ without losing a package part, so all four are equally safe to *write*. What
 separates them is what they see and what they cost.
 
 The agent is the only one that loses questions, and it loses them the way an
-agent does rather than the way a parser does: on the Zain form it read six of
+agent does rather than the way a parser does: on the Tailspin form it read six of
 seven sheets, decided it was finished, and dropped `7. 3TG + Cobalt` (5
-questions) without noticing. It also found two questions on the Murabbah sheet
+questions) without noticing. It also found two questions on the Proseware sheet
 the other three did not -- two rescues or two section headings, and only
 somebody with the file open can say which. That is the shape of the risk: not
 malformed output, which is caught, but a confident and quiet omission.
@@ -211,7 +211,7 @@ Two of its failures were worth fixing and were fixed. It used to stop after
 time, on a fresh conversation, naming the sheets it never recorded -- fresh
 because handing back the conversation it had just decided it was finished with
 put it straight back into the same state. And a fixed step budget was the first
-thing to break at all: 60 steps ran out halfway through the eighteen-sheet ISRA
+thing to break at all: 60 steps ran out halfway through the eighteen-sheet Woodgrove
 workbook, and the six sheets it never reached came back empty against 53
 questions the rules had found in them. The budget now scales with the sheet
 count, between a floor and a ceiling, and a run that overruns still applies
@@ -227,7 +227,7 @@ not the context length.
 
 `hybrid` exists because the exploring is worth keeping and the re-reading is
 not. The rules read the sheets they understand; the agent is shown only the
-ones they lost. On the ISRA workbook that is 3.3 seconds and 5,684 tokens
+ones they lost. On the Woodgrove workbook that is 3.3 seconds and 5,684 tokens
 against the full agent's 58 seconds and 342,000, for the same answer. Across
 all nineteen it is a ninth of the agent's tokens and finds three more
 questions, because the sheets the rules read are simply never at risk.
@@ -318,7 +318,7 @@ for reading it with an agent is exactly the argument that was true before.
 So the agent generalises best, and that is what to optimise for -- the next
 questionnaire will be in a shape nobody has seen either. But its characteristic
 mistake is not malformed output, which is caught, but a **quiet omission**: on
-the Zain workbook it read six sheets of seven, decided it was finished, and
+the Tailspin workbook it read six sheets of seven, decided it was finished, and
 dropped `7. 3TG + Cobalt` and its five questions without saying so.
 
 `guarded` runs the rules as well and lets no sheet come back with fewer

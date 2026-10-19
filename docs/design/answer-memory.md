@@ -131,7 +131,7 @@ questionnaires for answering. The configured detection strategy (`guarded`)
 reads it, and the rules alone read it again, kept only when they find more:
 harvesting what somebody wrote is a different job from opening a form to answer
 it, and on the team's seventeen filled questionnaires `guarded` finds none of
-PSAT's 183 answers while the rules find all of them.
+Litware's 183 answers while the rules find all of them.
 
 A cell holding only an unticked box (☐), a dash or punctuation is empty. The
 team's BCM form asks for Yes or No by ticking a box and ships with "☐" in every
