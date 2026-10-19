@@ -31,6 +31,8 @@ next plan (028).
 - [ ] **TD-040, fixed product.** A questionnaire's and a chat's product cannot be changed after it is created: the server refuses with 409 `product_locked`. The pages show the product as fixed. The workbench can close a questionnaire to open another file for another product.
 - [ ] **TD-040, marking.** Product evidence is marked FOR THIS PRODUCT in the drafter's and reviewer's prompt, shared evidence carries no mark, and tests pin both.
 - [ ] **TD-041.** Every page's header wraps without clipping and has the same links. The history column keeps its width. A deleted product chosen before the first message is refused beside the message box, and the chip goes back to General. Chat sources carry the product badge. The memory page's Move menu sits with Edit and Forget.
+- [ ] **Deleted product's work.** A deleted product's questionnaires and chats stay listed, marked as from a deleted product, and are read-only. Reading them and downloading filled files work; answering, editing, approving and chatting are refused. The pages say so.
+- [ ] **Previous-answer collision.** Each remembered answer reaches the drafter as its own evidence, and a shared one no longer hides a product's. A test pins this, and the effect is measured on the dev split before and after.
 - [ ] The decisions on TD-038, TD-040's member rights and TD-044 are recorded.
 - [ ] `uv run poe check` passes. The tech-debt entries, ARCHITECTURE.md, decisions.md and the generated docs are updated.
 
@@ -50,6 +52,12 @@ next plan (028).
 ## Progress log
 
 - 2026-10-19: decisions recorded in tech-debt (TD-038 handled through the deploy's `.env`; TD-040's precedence, lock, deletion and member rights; TD-044 intended). Six readers mapped the areas. Each design names its code sites, tests and risks; the outputs stay in the session's scratchpad.
+- 2026-10-19: built in four branches, merged into main with no conflicts.
+  - **Assistant and lock** (`e24fa93`): new `src/agents/assistant_turn.py`; `assistant.py` 1524 → 1472 lines. On its branch, `check` passed everything except two browser tests, which pinned the old product switching and were rewritten by the pages branch.
+  - **Excel reader** (`2386c2e`, `178f6aa`, `f296722`): `check` passed. Its reviewer found that the guard's extra graph node costs each read a third step, so multi-sheet workbooks run out of steps. The reviewer also found that Groq does not enforce `tool_choice=required` for gpt-oss. Both are to be fixed.
+  - **Product deletion** (`62f6f5c`): new `src/uploads.py`; `service.py` 614 → 591 lines; `check` passed.
+  - **Pages** (`80e8a50`): `check` passed, with 22 browser tests, up from 13.
+  - The reviews of three branches were cut off by a usage limit and are re-run on the merged code.
 
 ## Decision log
 
@@ -62,6 +70,11 @@ next plan (028).
   - New chat keeps the last product chosen, and the chip can be changed until the first message;
   - the chat page gets Sign out like the other pages;
   - removing one product document deletes its file. Shared documents keep today's behaviour.
+- 2026-10-19, by the user, answering Claude's questions:
+  - A deleted product's questionnaires and chats are kept but become read-only. People can read them and download filled files, but cannot answer, edit, approve or chat in them. Rejected: keeping them usable as General, which would let a later approval file the product's wording as a shared answer; and deleting them.
+  - The previous-answer collision is to be fixed and measured. Today every remembered answer is indexed as "Answer memory", chunk 0, and evidence is de-duplicated by name and chunk, so only one reaches the drafter per question.
+  - The 49 cleaned answer pairs go into production's memory typed by hand on the memory page, not through an import feature or a server script.
+  - The clean data is imported into a copy of the local data for testing. Production gets it after the deploy, and the local data is unchanged.
 - 2026-10-19, Claude: deliberately not changed here, because they are behaviour changes the user has not asked for:
   - which reading wins when the Excel agent and the rules find the same number of questions;
   - reading short unnumbered sheets.
