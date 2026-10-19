@@ -59,7 +59,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/agents/excel_agent.py"
-max_lines = 525
+max_lines = 521
 debt = "TD-006"
 
 [[size]]

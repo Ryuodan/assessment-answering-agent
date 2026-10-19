@@ -86,13 +86,14 @@ What the system remembers about people and their work: identity, events, runs, q
 
 Turning a question into a grounded answer: the LangGraph pipeline, question extraction, relevance, rewording, and reading a questionnaire with a model's help.
 
-- **Modules:** `src.agents`, `src.agents.excel_agent`, `src.extraction`, `src.forms.reading`, `src.relevance`, `src.rewrite`, `src.graph.*`
+- **Modules:** `src.agents`, `src.agents.excel_agent`, `src.agents.excel_guard`, `src.extraction`, `src.forms.reading`, `src.relevance`, `src.rewrite`, `src.graph.*`
 - **Owns:** `langchain`, `langgraph`
 
 | Module | What it is |
 |---|---|
 | `src/agents/__init__.py` | Agents that read files by exploring them, rather than by rule. |
 | `src/agents/excel_agent.py` | Reading a questionnaire workbook by exploring it. |
+| `src/agents/excel_guard.py` | Holding the Excel agent to its job: a reading for every sheet it was asked about. |
 | `src/extraction.py` | Turn raw document text into structured questions or question/answer pairs. |
 | `src/forms/reading.py` | The five ways a questionnaire can be read, behind one call. |
 | `src/graph/__init__.py` | LangGraph workflow for answering assessments. |
