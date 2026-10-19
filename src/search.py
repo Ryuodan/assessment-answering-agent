@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src import knowledge
+from src import knowledge, scoped_knowledge
 from src.lexical import reciprocal_rank_fusion
 from src.logs import get_logger
 from src.models import Evidence, SourceType
@@ -52,7 +52,7 @@ async def search_knowledge(
         return {"query": "", "mode": mode, "results": [], "documents": []}
 
     shared = knowledge.get_store(team_id)
-    stores = [(knowledge.get_store(team_id, product_id=product_id), product_id)] if product_id else []
+    stores = [(scoped_knowledge.own_store(team_id, product_id), product_id)] if product_id else []
     stores.append((shared, ""))
     limit = max(1, min(limit, 50))
     # An empty collection still costs an embedding round trip to search, and

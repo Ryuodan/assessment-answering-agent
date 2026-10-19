@@ -535,7 +535,7 @@ OOXML_TYPES = {
 @app.get("/api/forms/{batch_id}/file")
 def download_filled_questionnaire(batch_id: str, user: User = Depends(current_user)) -> FileResponse:
     """The filled copy. Produced by `/fill`, which must have run first."""
-    batch = tools._require(user, batch_id)
+    batch = tools._require(user, batch_id, reading=True)  # a deleted product's too (plan 027)
     filled = tools._filled_path(batch)
     if not filled.exists():
         raise NotFound("Fill the questionnaire first.", code="filled_file_missing")

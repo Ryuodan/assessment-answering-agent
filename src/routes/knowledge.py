@@ -13,7 +13,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from src import events, products, service
+from src import events, products, service, uploads
+from src.config import settings
 from src.documents import SUPPORTED_SUFFIXES
 from src.errors import Invalid, NotFound, UnsupportedFile
 from src.identity import User
@@ -57,10 +58,20 @@ async def _ingest_files(
         check_suffix(upload.filename or "")
 
     # A product's file is kept in the product's own folder, and goes with it (plan 027).
+    # That folder holds its knowledge base and nothing else, so a file this call
+    # saved there that did not go in -- unreadable, or the same bytes as one that
+    # is in already -- is removed again rather than listed with nothing to remove it.
+    folder = settings.product_upload_dir(team_id, scope["product_id"]) if scope else None
+    there = set(uploads.document_files(folder)) if folder else set()
     results = []
     for upload in files:
         path = service.save_upload(upload.filename or "upload", await upload.read(), team_id, **(scope or {}))
-        results.append(await service.ingest(path, source_type, authority, team_id, **(scope or {})))
+        result = await service.ingest(path, source_type, authority, team_id, **(scope or {}))
+        if folder and (result.error or result.duplicate_of) and path not in there:
+            uploads.remove([path])
+        else:
+            there.add(path)
+        results.append(result)
     return results
 
 
@@ -129,10 +140,17 @@ def _record_indexing(user: User, results: list[IngestResult], **payload: str) ->
 
 @router.delete("/api/knowledge/sources/{source_name}")
 def remove_source(source_name: str, product: str = "", user: User = Depends(current_user)) -> dict[str, Any]:
-    """Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file)."""
+    """Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file).
+
+    `files_left` names a product's file that could not be removed from the server.
+    """
     scope = _scope(user, product)
     try:
-        service.delete_source(source_name, user.team_id, **scope)
+        left = (
+            products.remove_documents(user.team_id, scope["product_id"], source_name)
+            if scope
+            else service.delete_source(source_name, user.team_id)
+        )
     except KeyError as missing:
         raise NotFound(f"{source_name!r} is not in the knowledge base.", code="source_not_found") from missing
     events.record(
@@ -142,13 +160,18 @@ def remove_source(source_name: str, product: str = "", user: User = Depends(curr
         subject_id=source_name,
         **scope,
     )
-    return {"deleted": source_name}
+    return {"deleted": source_name, "files_left": left or []}
 
 
 @router.delete("/api/knowledge")
 def clear_knowledge(product: str = "", user: User = Depends(current_user)) -> dict[str, Any]:
-    """Remove every policy document, shared or a `product`'s (with their files). The answer memory stays."""
+    """Remove every policy document, shared or a `product`'s (with their files). The answer memory stays.
+
+    `files_left` names a product's files that could not be removed from the server.
+    """
     scope = _scope(user, product)
-    service.clear_knowledge(user.team_id, **scope)
+    left = (
+        products.remove_documents(user.team_id, scope["product_id"]) if scope else service.clear_knowledge(user.team_id)
+    )
     events.record(user, events.SOURCE_REMOVED, subject_type="document", subject_id="*", all=True, **scope)
-    return {"cleared": True}
+    return {"cleared": True, "files_left": left or []}

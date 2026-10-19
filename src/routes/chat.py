@@ -60,6 +60,12 @@ def _conversation(conversation_id: str, user: User) -> Conversation:
     return conversation
 
 
+def _open(conversation: Conversation, user: User) -> Conversation:
+    """A conversation that can still be added to: not a deleted product's, which is kept read-only (plan 027)."""
+    products.refuse_deleted(user.team_id, conversation.product_id)
+    return conversation
+
+
 def _turn_response(turn: assistant.Turn, conversation: Conversation, user: User) -> dict[str, Any]:
     return {
         "reply": turn.reply,
@@ -102,7 +108,7 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
     if not assistant.configured():
         raise Unavailable("No model is configured for the assistant.", code="assistant_unconfigured")
     conversation = (
-        _conversation(request.conversation_id, user)
+        _open(_conversation(request.conversation_id, user), user)
         if request.conversation_id
         else assistant.start(user, request.message, request.product)
     )
@@ -139,14 +145,12 @@ async def say_with_a_file(
             f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
             f"Supported: {', '.join(forms.SUPPORTED)}."
         )
-    if not conversation_id:
-        products.chosen(user.team_id, product)  # a new conversation's, checked before the file is kept
+    # Checked before the file is kept: the conversation's, or a new one's product.
+    existing = _open(_conversation(conversation_id, user), user) if conversation_id else None
+    if existing is None:
+        products.chosen(user.team_id, product)
     path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
-    conversation = (
-        _conversation(conversation_id, user)
-        if conversation_id
-        else assistant.start(user, message or f"Read {name}", product)
-    )
+    conversation = existing or assistant.start(user, message or f"Read {name}", product)
     turn = await assistant.say(
         user,
         conversation,
@@ -210,6 +214,8 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
         "title": conversation.title,
         "batch_id": conversation.batch_id,
         "product_id": conversation.product_id,
+        # A deleted product's: kept to be read, and refused anything new (plan 027).
+        "read_only": conversation.product_id in products.deleted(user.team_id),
         "messages": transcript,
         "answers": assistant.answers_for(user, conversation),
     }
@@ -222,16 +228,17 @@ def choose_chat_product(
     """Refused unless it is the conversation's own product: a chat's product is fixed once it starts.
 
     Another product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.
-    Kept so a page opened before the change, or a script, is told why rather than finding no route.
+    A deleted product's chat is 409 `product_deleted` (plan 027). Kept so a page opened before the
+    change, or a script, is told why rather than finding no route.
     """
-    conversation = _conversation(conversation_id, user)
+    conversation = _open(_conversation(conversation_id, user), user)
     assistant.choose_product(user, conversation, request.product)
     return {"id": conversation.id, "product_id": conversation.product_id, "batch_id": conversation.batch_id}
 
 
 @router.delete("/api/chat/{conversation_id}")
 def forget_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
-    """Delete one of the caller's conversations. Its questionnaire and the answers in it stay."""
+    """Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay."""
     _conversation(conversation_id, user)
     conversations.delete(conversation_id, actor_email=user.email)
     return {"deleted": conversation_id}

@@ -31,3 +31,21 @@ def test_a_questionnaire_with_no_questions_says_why(page: Page, tmp_path: Path) 
     expect(status).to_contain_text("No questions were read from notes.xlsx")
     expect(status).to_contain_text(batch.form.warnings[0])
     expect(status).to_have_class("status error")
+
+
+def test_a_spreadsheet_uploaded_with_no_questions_says_why_and_nothing_false(page: Page, tmp_path: Path) -> None:
+    """The main path, not only "Or pick up". A spreadsheet has no text path to
+    fall back to, and trying one opened the status with "'notes.xlsx' is not
+    supported. Upload .pdf or .docx." above the reader's real reason."""
+    notes = shapes.build(tmp_path / "notes.xlsx", [shapes.SheetSpec("Security", {"A1": "Security review notes"})])
+
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(notes))
+    page.click("#extractBtn")
+
+    status = page.locator("#extractStatus")
+    expect(status).to_contain_text("No questions were read from notes.xlsx")
+    expect(status).to_contain_text("No questions were found. The sheets were read as")
+    expect(status).not_to_contain_text("not supported")
+    expect(status).to_have_class("status error")
+    expect(page.locator("#formReport")).to_be_visible()  # what was found, to check

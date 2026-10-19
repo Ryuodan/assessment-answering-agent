@@ -247,6 +247,28 @@ def test_another_teams_product_files_cannot_be_listed_or_opened(teams):
     assert carol.get("/api/documents/uploaded/uploaded/Their product policy.pdf/file").status_code == 200
 
 
+def test_one_teams_deleted_products_are_its_own(teams, monkeypatch):
+    """The names a deleted product's kept work is labelled with (plan 027) are listed for its team only."""
+    made: dict[tuple[str, str], knowledge.KnowledgeStore] = {}
+
+    def get_store(team_id=None, *, product_id=""):
+        key = (team_id or settings.default_team, product_id)
+        if key not in made:
+            made[key] = bare_store(FakeVectorStore([]))
+            made[key]._store.delete_collection = lambda key=key: made.pop(key, None)
+        return made[key]
+
+    monkeypatch.setattr("src.knowledge.get_store", get_store)
+    theirs = products.add(None, OTHER, "Their product")
+    products.delete(identity.find_user(CAROL), OTHER, theirs.id, confirm="confirm")
+    alice, carol = as_person(ALICE, CODE), as_person(CAROL, OTHER_CODE)
+
+    assert alice.get("/api/products").json()["deleted"] == []
+    assert [p["name"] for p in carol.get("/api/products").json()["deleted"]] == ["Their product"]
+    assert products.deleted(settings.default_team) == {}
+    products.refuse_deleted(settings.default_team, theirs.id)  # another team's id is nothing to this one
+
+
 def test_an_admin_cannot_create_a_team_that_would_name_a_path(teams):
     identity.add_user("boss@example.com", role=identity.ADMIN, password="a-long-password")
     admin = as_person("boss@example.com", "a-long-password")

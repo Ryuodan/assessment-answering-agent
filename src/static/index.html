@@ -351,6 +351,17 @@
 
   body.answering .qrow textarea:disabled { opacity: .7; }
   body.answering #questionListPanel, body.answering .composer { position: relative; }
+  /* A deleted product's questionnaire, kept to read (plan 027): said calmly,
+     and everything that would change it is out of the way rather than greyed
+     out -- Close, filling and the downloads stay. */
+  #formReadOnly {
+    margin: 0 0 12px; padding: 9px 12px; border-radius: 8px;
+    background: var(--surface-sunken); border: 1px solid var(--line-strong); color: var(--ink-soft);
+  }
+  #formReadOnly[hidden] { display: none; }
+  body.read-only .changes-it, body.read-only #detailPick, body.read-only #reviseRow,
+  body.read-only #retryFailed, body.read-only #composer, body.read-only #clearQuestions,
+  body.read-only label.file[data-drop="assessment"], body.read-only #extractBtn { display: none !important; }
   /* --- fill a questionnaire ---------------------------------------------- */
   .qn-empty { color: var(--ink-faint); font-size: 13.5px; }
   .qn-recent { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -622,6 +633,7 @@
         <button class="ghost" id="kbRefresh">Refresh</button>
         <button class="ghost" id="kbClear" title="The answer memory is not affected">Remove every policy document</button>
       </div>
+      <div class="status" id="kbStatus"></div>
     </div>
 
     <div class="panel" style="margin-top:14px">
@@ -665,6 +677,8 @@
         <button class="quiet" id="closeForm" hidden
                 title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
       </div>
+      <!-- A deleted product's questionnaire (plan 027): read, filled and downloaded, never changed. -->
+      <div class="status" id="formReadOnly" role="status" hidden></div>
       <label class="file" data-drop="assessment">
         <input type="file" id="assessmentInput" accept=".xlsx,.xlsm,.docx,.pdf" />
         Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
@@ -699,7 +713,7 @@
 
       <div id="questionList"></div>
 
-      <div class="row" style="margin-top:14px">
+      <div class="row changes-it" style="margin-top:14px">
         <button class="ghost" id="addQuestionBtn">+ Add a question</button>
         <span class="divider"></span>
         <select id="languageSelect" title="Output language">
@@ -709,12 +723,12 @@
         </select>
         <button id="answerBtn" disabled>Answer questions</button>
       </div>
-      <div class="row" style="margin-top:10px">
+      <div class="row changes-it" style="margin-top:10px">
         <input type="text" id="answerStyle" style="flex:1 1 320px;min-width:0"
                title="Applied as a rewording pass once the answers are written"
                placeholder="How should they be written? — optional, e.g. one sentence each, formal, no bullet points">
       </div>
-      <p class="hint" style="margin:6px 0 0">Left blank, answers come out in the house style. Anything
+      <p class="hint changes-it" style="margin:6px 0 0">Left blank, answers come out in the house style. Anything
         typed here is applied as a rewording pass once the answers are written, so the facts and the
         citations are settled first and only the wording follows the instruction.</p>
       <div class="status" id="answerStatus"></div>
@@ -737,7 +751,7 @@
          every card below is showing, not only what the button will write. -->
     <div id="detailPick" class="pick-row" hidden></div>
 
-    <div class="status" style="margin-bottom:18px">Edits you make here are kept, and go into
+    <div class="status changes-it" style="margin-bottom:18px">Edits you make here are kept, and go into
       the filled file and every download.</div>
 
     <div id="results"></div>
@@ -1352,16 +1366,34 @@
     el.append(document.createTextNode(message == null ? "" : String(message)));
   }
 
+  /* Requests about one questionnaire still on their way. Close waits for them:
+     each one redraws the questionnaire when it returns, and one returning after
+     Close opened again what had just been closed. */
+  let batchRequests = 0;
+
   async function request(url, options) {
-    const response = await fetch(url, options);
-    const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      const detail = body && body.detail;
-      // Validation failures arrive as a list; a person needs the sentence.
-      const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
-      throw new Error(typeof said === "string" && said ? said : "Request failed (" + response.status + ")");
+    const aboutABatch = url.startsWith("/api/forms/") || (url === "/api/forms" && options && options.method === "POST");
+    if (aboutABatch) { batchRequests += 1; paintClose(); }
+    try {
+      const response = await fetch(url, options);
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = body && body.detail;
+        // Validation failures arrive as a list; a person needs the sentence.
+        const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
+        // With the server's code, so a caller can tell a refusal it can do
+        // something about -- a product deleted since the page loaded -- from
+        // one it can only report.
+        const failure = new Error(typeof said === "string" && said ? said : "Request failed (" + response.status + ")");
+        failure.code = body && body.code;
+        failure.status = response.status;
+        if (failure.code === "product_deleted") nowReadOnly();
+        throw failure;
+      }
+      return body;
+    } finally {
+      if (aboutABatch) { batchRequests -= 1; paintClose(); }
     }
-    return body;
   }
 
 
@@ -1712,11 +1744,13 @@
         remove.onclick = async () => {
           // A product's document goes with its file (TD-039), so that one asks
           // first; a shared one is taken out of the index as it always was.
+          // Its file stays only if something else uses it too: one name is one document (plan 027).
           if (kbScope() && !confirm("Remove " + source.name + " from " + kbScopeName() +
-              "'s knowledge base?\n\nIts file is deleted too, and cannot be recovered from here.")) return;
-          await request("/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
-            { method: "DELETE" });
-          loadKnowledge();
+              "'s knowledge base?\n\nIts file is deleted too, and cannot be recovered from here — unless " +
+              "the shared knowledge base, another product or a questionnaire also uses it.")) return;
+          await removeFromKnowledge(
+            "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
+            "Removed " + source.name + ".");
         };
 
         item.append(tag, name, view, remove);
@@ -2056,7 +2090,7 @@
     // An answered question is kept visible for context but cannot be edited:
     // changing the words under an existing answer would make the pair a lie.
     text.dataset.answered = String(entry.status === "answered");
-    text.disabled = entry.status === "answered" || answering;
+    text.disabled = entry.status === "answered" || answering || readOnly();
     text.title = entry.status === "answered"
       ? "Already answered — delete it to ask something else"
       : answering ? "Answering — wait for the run to finish" : "";
@@ -2086,7 +2120,8 @@
        offers to redo it by accident -- but somebody who knows it is out of date
        must be able to say so, and this is the row they are looking at when they
        decide. It answers this one question and nothing else. */
-    if (fromFile) {
+    const changeable = !readOnly();  // a deleted product's questionnaire: nothing here changes it (plan 027)
+    if (fromFile && changeable) {
       const again = document.createElement("button");
       again.className = "quiet";
       again.textContent = "Answer it again";
@@ -2097,7 +2132,7 @@
       actions.append(again);
     }
 
-    if (entry.formId) {
+    if (entry.formId && changeable) {
       const aside = document.createElement("button");
       aside.className = "quiet";
       aside.textContent = entry.skip ? "Include" : "Set aside";
@@ -2108,7 +2143,7 @@
       aside.disabled = answering;
       aside.onclick = () => setAside(entry, !entry.skip);
       actions.append(aside);
-    } else if (entry.status !== "answered") {
+    } else if (entry.status !== "answered" && changeable) {
       // An answered question is deleted from its answer card, where the thing
       // being thrown away is actually visible. Offering it here as well would
       // be two buttons for one action, in two places, with different context.
@@ -2205,7 +2240,7 @@
     const locked = answering;
     document.querySelectorAll("[data-qkey]").forEach((node) => {
       if (node.tagName !== "TEXTAREA") return;
-      node.disabled = locked || node.dataset.answered === "true";
+      node.disabled = locked || readOnly() || node.dataset.answered === "true";
       if (locked) node.title = "Answering — wait for the run to finish";
     });
     document.querySelectorAll("[data-mutates]").forEach((node) => { node.disabled = locked; });
@@ -2213,10 +2248,10 @@
     // These have enable rules of their own -- "Index guidelines" is disabled
     // until a file is chosen. Overwrite the flag while locked, then put back
     // exactly what was there, or unlocking would enable a button whose own
-    // logic wanted it off.
+    // logic wanted it off. Close has its own rule: `paintClose`.
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
      "composerAdd", "composerInput", "extractBtn", "assessmentInput",
-     "guidelinesBtn", "kbClear", "retryFailed", "closeForm",
+     "guidelinesBtn", "kbClear", "retryFailed",
      "fillFormBtn", "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
@@ -2403,6 +2438,8 @@
       ? "Questions (" + questions.length + ")" : "Questions";
     $("questionListHint").textContent = !questions.length
       ? "Read them from a file above, or write your own — you do not need a file to ask a question."
+      : readOnly()
+        ? answered + " answered. Kept to read: nothing here can be answered or changed."
       : answered
         ? answered + " answered · " + pending + " waiting. Edit or add below, then answer the rest."
         : "Edit anything that came out wrong, delete what is not a question, then answer.";
@@ -2446,6 +2483,7 @@
   let answering = false;
 
   const FILLABLE = [".xlsx", ".xlsm", ".docx"];
+  const SPREADSHEETS = [".xlsx", ".xlsm"];  // read as a questionnaire or not at all: no text path takes them
 
   /* One door for every questionnaire. A spreadsheet or Word form is read as a
      *fillable* form first -- questions plus the places the answers go -- and a
@@ -2463,22 +2501,37 @@
 
     let why = "";  // the questionnaire reader's own reason, when it found nothing
     try {
-      const form = FILLABLE.includes(suffix) ? await loadAsForm(file) : null;
+      const form = FILLABLE.includes(suffix) ? await loadAsForm(file, suffix) : null;
       if (form && form.opened) return;
       why = form ? form.why : "";
       await loadAsText(file);
     } catch (error) {
-      setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
+      if (error.code === "product_not_found") await productGone($("extractStatus"), "the file was not opened for it");
+      else setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
     } finally {
       $("extractBtn").disabled = false;
       loadDocuments();
     }
   }
 
+  /* The product chosen was deleted after this page listed it (TD-041, as the
+     chat does it). The server refused before keeping anything; the selector
+     goes back to General, and the page says so where the person is looking. */
+  async function productGone(status, what) {
+    const gone = formProduct();
+    const name = (Cards.product(gone) || {}).name || "That product";
+    teamProducts = teamProducts.filter((p) => p.id !== gone);  // said by the server, whether or not the list reloads
+    await loadFormProducts();
+    if (formBatch && formBatch.product_id === gone) await redrawBatch();  // the open one is read-only now
+    setStatus(status, name + " has been deleted, so " + what + ". Nothing was kept" +
+      (formBatch ? "." : ", and the product is back on General."), "error");
+  }
+
   /* A questionnaire outlives the page that uploaded it: the answers are stored
      against the file's own cells, so somebody who closes the tab halfway
      through 183 questions should not have to start again. Uploading the same
      file a second time would make a second batch and orphan the first. */
+  let lastClosed = null;  // the questionnaire Close put away, as the list shows one
   async function listRecentForms() {
     const line = $("formRecent");
     let forms = [];
@@ -2488,7 +2541,12 @@
       line.replaceChildren();
       return;
     }
-    const open = forms.filter((form) => !formBatch || form.id !== formBatch.id).slice(0, 3);
+    // The one just closed first, so "it stays in Or pick up" is true however
+    // far back it was picked up from.
+    const others = forms.filter((form) => !formBatch || form.id !== formBatch.id);
+    const closed = lastClosed && !(formBatch && formBatch.id === lastClosed.id)
+      ? [others.find((form) => form.id === lastClosed.id) || lastClosed] : [];
+    const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id)).slice(0, 3);
     line.replaceChildren();
     if (!open.length) return;
     line.append(document.createTextNode("Or pick up: "));
@@ -2519,8 +2577,13 @@
   /* `opened` when the file is open as a questionnaire. Otherwise the text path
      is tried next, and `why` is what the reader said about a file it read but
      found no questions in -- the reason a person needs if the text path finds
-     none either. */
-  async function loadAsForm(file) {
+     none either.
+
+     A spreadsheet has no text path: the extractor refuses one, and falling
+     back to it opened the status with "not supported, upload .pdf or .docx"
+     above the reader's real reason. So a spreadsheet is opened whatever the
+     reader found, and its "no questions were read, and why" is what is said. */
+  async function loadAsForm(file, suffix) {
     const body = new FormData();
     body.append("file", file);
     body.append("product", formProduct());
@@ -2529,10 +2592,14 @@
       batch = await request("/api/forms", { method: "POST", body });
     } catch (error) {
       // A Word file with no answerable structure is not a failure -- it is a
-      // document to read questions out of, which is the other path.
+      // document to read questions out of, which is the other path. A refusal
+      // about the product is not about the file.
+      if (SPREADSHEETS.includes(suffix) || error.code === "product_not_found") throw error;
       return { opened: false, why: "" };
     }
-    if (!batch.counts.questions) return { opened: false, why: (batch.warnings || []).join("\n") };
+    if (!batch.counts.questions && !SPREADSHEETS.includes(suffix)) {
+      return { opened: false, why: (batch.warnings || []).join("\n") };
+    }
     await adoptBatch(batch);
     return { opened: true, why: "" };
   }
@@ -2542,12 +2609,15 @@
      announced or scroll away from the control that was just used. */
   async function adoptBatch(batch, { quiet = false } = {}) {
     if (!formBatch || formBatch.id !== batch.id) {
-      // What was written for the last file says nothing about this one.
+      // What was written for the last file says nothing about this one, and
+      // nor does what filling it did.
       Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+      forgetFilling();
     }
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
     sourceName = batch.source_name || sourceName;
+    paintReadOnly();
     showFormProduct(batch.product_id || "");
 
     /* Questions somebody typed into the list beside the file's own rows are
@@ -2660,8 +2730,10 @@
       result = null;
       $("results").innerHTML = "";
       $("resultsCard").hidden = true;
+      forgetFilling();
     }
     formBatch = null;
+    paintReadOnly();
     $("formReport").hidden = true;
     refreshFormControls();
     data.questions.forEach((q) => addQuestion(q.text, q));
@@ -2757,6 +2829,7 @@
         wrap.append(document.createTextNode(
           "column " + column.column + (column.label ? " — " + column.label : "")));
         const picker = document.createElement("select");
+        picker.disabled = readOnly();  // shown, to read, on a deleted product's questionnaire
         ROLE_LABELS.forEach(function (pair) {
           const option = document.createElement("option");
           option.value = pair[0];
@@ -3020,12 +3093,21 @@
     });
   }
 
+  /* What filling the last questionnaire said, and its download: they go with it. */
+  function forgetFilling() {
+    $("formFilled").hidden = true;
+    $("formFilled").replaceChildren();
+    setStatus($("composerStatus"), "");
+  }
+
   async function fillTheForm(includeUnreviewed = false) {
     if (!formBatch) return;
+    // The questionnaire this filled, whatever is open by the time its file is downloaded.
+    const id = formBatch.id;
     const button = $("fillFormBtn");
     button.disabled = true;
     try {
-      const filled = await request("/api/forms/" + formBatch.id + "/fill", {
+      const filled = await request("/api/forms/" + id + "/fill", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ include_unreviewed: Boolean(includeUnreviewed) }),
       });
@@ -3090,7 +3172,7 @@
         download.style.marginTop = "10px";
         download.textContent = "Download the filled file";
         download.addEventListener("click", () => {
-          window.location.href = "/api/forms/" + formBatch.id + "/file";
+          window.location.href = "/api/forms/" + id + "/file";
         });
         panel.append(download);
       }
@@ -3212,7 +3294,10 @@
         $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
       }
     } catch (error) {
-      setStatus(status, error.message, "error");
+      stop();
+      answering = false;
+      if (error.code === "product_not_found") await productGone(status, "they were not answered for it");
+      else setStatus(status, error.message, "error");
     } finally {
       stop();
       answering = false;
@@ -3438,12 +3523,29 @@
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
     const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
-    const files = kbScope() ? "\n\nTheir files are deleted too, and cannot be recovered from here." : "";
+    const files = kbScope() ? "\n\nTheir files are deleted too, and cannot be recovered from here — except " +
+      "any the shared knowledge base, another product or a questionnaire also uses." : "";
     if (!confirm("Remove every policy document from " + which + "?" + files +
         "\n\nThe answer memory is not affected.")) return;
-    await request("/api/knowledge" + kbScopeQuery("?"), { method: "DELETE" });
-    loadKnowledge();
+    await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), "Removed every policy document from " + which + ".");
   };
+
+  /* Removing a product's document, or all of them, takes their files: the
+     library drops them too, and a file that could not be removed is said. */
+  async function removeFromKnowledge(url, done) {
+    try {
+      const removed = await request(url, { method: "DELETE" });
+      const left = (removed && removed.files_left) || [];
+      setStatus($("kbStatus"), left.length
+        ? done + " " + left.length + " file(s) could not be removed from the server (" + left.join(", ") +
+          "); see the log."
+        : done, left.length ? "error" : "ok");
+    } catch (error) {
+      setStatus($("kbStatus"), error.message, "error");
+    }
+    loadKnowledge();
+    loadDocuments();
+  }
 
   // --- which knowledge base: shared, or a product's (plan 021) -------------
 
@@ -3468,6 +3570,7 @@
   // --- which product a questionnaire is for (plan 024) ----------------------
 
   let teamProducts = [];
+  let deletedProducts = [];  // since plan 027: their questionnaires are kept, read-only
   function formProduct() { return $("formProduct").value; }
   /* The selector chooses the product the next file is opened for. Once a
      questionnaire is open its product is fixed (TD-040), and so is a typed
@@ -3476,48 +3579,126 @@
      any of the three changes. */
   function describeFormProduct() {
     const product = teamProducts.find((p) => p.id === formProduct());
+    const gone = !product && Cards.product(formProduct());
     const fixed = Boolean(formBatch) || answering || questions.some((q) => q.status === "answered");
     $("formProduct").disabled = fixed;
-    $("closeForm").hidden = !formBatch;
+    paintClose();
     $("formProductSwatch").style.background = product ? (product.color || "var(--accent)") : "var(--line-strong)";
-    $("formProductHint").textContent = (product
-      ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
-      : "Answered from the shared knowledge base and answer memory.") +
-      (formBatch
-        ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
-        : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
+    $("formProductHint").textContent = gone
+      ? "Answered from " + gone.name + "'s knowledge base and answer memory, which were deleted with it."
+      : (product
+        ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
+        : "Answered from the shared knowledge base and answer memory.") +
+        (formBatch
+          ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
+          : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
   }
+  /* A deleted product cannot be chosen, so it is offered only to show the
+     product of a questionnaire kept from it: disabled, and named as deleted,
+     rather than the selector falling back to General and saying the wrong thing. */
   function showFormProduct(productId) {
     const select = $("formProduct");
+    [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
+    const gone = Cards.product(productId);
+    if (formBatch && gone && gone.deleted && formBatch.product_id === productId) {
+      const option = new Option(gone.name + " (deleted)", productId);
+      option.disabled = true;
+      option.dataset.deleted = "true";
+      select.append(option);
+    }
     select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
     describeFormProduct();
   }
+  /* The team's products, again. Returns the name of the product the selector
+     was on if it has since been deleted -- the selector is then back on
+     General, which the caller says -- and "" otherwise. A failed fetch keeps
+     what the page had. */
   async function loadFormProducts() {
+    const chosen = formProduct();
+    const was = teamProducts.find((p) => p.id === chosen);
     try {
-      teamProducts = (await request("/api/products")).products || [];
-    } catch (error) { teamProducts = []; }
-    Cards.setProducts(teamProducts);
+      const listed = await request("/api/products");
+      teamProducts = listed.products || [];
+      deletedProducts = listed.deleted || [];
+    } catch (error) { /* as it was */ }
+    Cards.setProducts(teamProducts, deletedProducts);
     if (documents.length) renderDocuments();  // the library's product badges, in their colours
     const select = $("formProduct");
     select.replaceChildren(new Option("General", ""));
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
-    showFormProduct(formBatch ? formBatch.product_id || "" : "");
+    showFormProduct(formBatch ? formBatch.product_id || "" : chosen);
+    paintReadOnly();  // its note names the product, which may only now be known
     listRecentForms();
+    return was && !formBatch && formProduct() !== chosen ? was.name : "";
   }
   // What the next questionnaire is opened and answered for. Nothing is sent:
   // an open one's product was fixed when it was opened.
   $("formProduct").onchange = describeFormProduct;
 
+  /* A deleted product's questionnaire: kept so its answers can be read and its
+     filled file downloaded, and changed by nothing on this page (plan 027). */
+  function readOnly() { return Boolean(formBatch && formBatch.read_only); }
+  function paintReadOnly() {
+    const on = readOnly();
+    Cards.readOnly = on;
+    document.body.classList.toggle("read-only", on);
+    const note = $("formReadOnly");
+    note.hidden = !on;
+    if (!on) return;
+    const name = (Cards.product(formBatch.product_id) || {}).name || "Its product";
+    note.textContent = name + " was deleted. This questionnaire is kept so its answers can be read and its " +
+      "filled file downloaded; it can no longer be answered, edited or approved. To answer the file again, " +
+      "close it and open the file for another product or General.";
+  }
+  /* Drawn again from the server, quietly: what a refusal or another tab says has changed. */
+  async function redrawBatch() {
+    if (!formBatch) return;
+    const id = formBatch.id;
+    try {
+      const batch = await request("/api/forms/" + id);
+      if (formBatch && formBatch.id === id) await adoptBatch(batch, { quiet: true });
+    } catch (error) { /* the next look will say */ }
+  }
+  /* A refusal said the product was deleted after this page opened its
+     questionnaire: shown read-only from here on, with the product's name. */
+  async function nowReadOnly() {
+    if (!formBatch || formBatch.read_only) return;
+    await loadFormProducts();
+    await redrawBatch();
+  }
+  // A tab left open while somebody deleted a product corrects itself when the
+  // person comes back to it, rather than on the click that is refused.
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible") return;
+    const gone = await loadFormProducts();
+    if (formBatch && !formBatch.read_only && (Cards.product(formBatch.product_id) || {}).deleted) redrawBatch();
+    else if (gone) setStatus($("extractStatus"), gone + " has been deleted; the product is back on General.", "error");
+  });
+
+  /* Close waits while answering, or while any request about the questionnaire
+     is on its way: a late reply would open again what was just closed. */
+  function paintClose() {
+    $("closeForm").hidden = !formBatch;
+    $("closeForm").disabled = answering || batchRequests > 0;
+  }
+
   /* Put the open questionnaire away, so another file -- or the same one, for
      another product -- can be opened. Its answers stay on the server and it
      stays in "Or pick up"; only questions typed beside it, which the
-     questionnaire does not hold, would be lost, so only those are asked about. */
+     questionnaire does not hold, would be lost -- with their answers, which
+     only this page holds -- so only those are asked about. */
   $("closeForm").onclick = () => {
-    if (!formBatch) return;
-    const typed = questions.filter((q) => !q.formId && q.text.trim()).length;
-    if (typed && !confirm("Close " + formBatch.source_name + "?\n\n" + typed +
-        " question(s) typed beside it are not part of the file and will go.")) return;
-    const closed = formBatch.source_name;
+    if (!formBatch || answering || batchRequests > 0) return;
+    const typed = questions.filter((q) => !q.formId && q.text.trim());
+    const answered = typed.filter((q) => q.status === "answered").length;
+    if (typed.length && !confirm("Close " + formBatch.source_name + "?\n\n" + typed.length +
+        " question(s) typed beside it are not part of the file and will go" +
+        (answered ? ", and so will the answers to " + answered + " of them" : "") + ".")) return;
+    const closed = formBatch;
+    lastClosed = {
+      id: closed.id, source_name: closed.source_name, product_id: closed.product_id,
+      created_at: closed.created_at, answered: (closed.counts || {}).answered || 0,
+    };
     formBatch = null;
     questions = [];
     result = null;
@@ -3525,12 +3706,16 @@
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
     $("formReport").hidden = true;
+    forgetFilling();
     setStatus($("answerStatus"), "");
+    paintReadOnly();
+    // A deleted product's questionnaire showed its product; the next file is for a live one.
+    if (closed.read_only) showFormProduct("");
     renderDetailPicker();
     renderQuestions();
     refreshFormControls();
     listRecentForms();
-    setStatus($("extractStatus"), "Closed " + closed + ". It stays in “Or pick up” below.", "ok");
+    setStatus($("extractStatus"), "Closed " + closed.source_name + ". It stays in “Or pick up” below.", "ok");
   };
   loadFormProducts();
 

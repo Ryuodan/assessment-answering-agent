@@ -322,6 +322,9 @@ MIGRATIONS: list[str] = [
     ALTER TABLE form_batches ADD COLUMN product_id TEXT NOT NULL DEFAULT '';
     ALTER TABLE conversations ADD COLUMN product_id TEXT NOT NULL DEFAULT '';
     """,
+    # 14 -- what is left of a deleted product: the name its kept, read-only work is labelled with (plan 027).
+    "CREATE TABLE deleted_products (product_id TEXT PRIMARY KEY, team_id TEXT NOT NULL, name TEXT NOT NULL,"
+    " color TEXT NOT NULL DEFAULT '', deleted_at TEXT NOT NULL);",
 ]
 
 

@@ -527,22 +527,35 @@
     const forgotten = (one) => (one ? " It is" : " They are") + " deleted, not moved back to Shared.";
     if (!preview) {
       return [
-        consequence("Its knowledge base: every document, and its file on the server." + gone(false)),
+        consequence("Its knowledge base: every document, and its file on the server unless the shared " +
+          "knowledge base, another product or a questionnaire also uses it." + gone(false)),
         consequence("Its answer memory: every remembered answer, including any moved here from Shared." +
           forgotten(false)),
       ];
     }
     const docs = preview.documents, answers = preview.answers;
+    const kept = docs.kept || 0;
     const items = [];
     if (!docs.indexed && !docs.files) {
       items.push(consequence("Its knowledge base: no documents."));
     } else {
       const documents = docs.indexed || docs.files;
       const more = docs.files > 5 ? " and " + (docs.files - 5) + " more" : "";
+      /* A file that the shared knowledge base, another product or a
+         questionnaire also uses stays (one name is one document), so the files
+         said to leave are only those that do. */
+      const files = !docs.files ? "."
+        : !kept && docs.files === docs.indexed
+          ? ", " + (documents === 1 ? "and its file" : "and their files") + " on the server." + gone(documents === 1)
+          : ", and " + plural(docs.files, "file") + " on the server." + gone(docs.files === 1);
+      const stays = kept
+        ? " " + plural(kept, "document") + (kept === 1 ? " keeps its file" : " keep their files") +
+          ", because the shared knowledge base, another product or a questionnaire also uses " +
+          (kept === 1 ? "it." : "them.")
+        : "";
       items.push(consequence(
-        "Its knowledge base: " + plural(documents, "document") + " (" + plural(docs.chunks, "passage") + "), " +
-        (documents === 1 ? "and its file" : "and their files") + " on the server" +
-        (docs.files !== docs.indexed ? " (" + plural(docs.files, "file") + ")" : "") + "." + gone(documents === 1),
+        "Its knowledge base: " + plural(documents, "document") + " (" + plural(docs.chunks, "passage") + ")" +
+        files + stays,
         docs.names.slice(0, 5).join(", ") + more,
       ));
     }
@@ -559,20 +572,22 @@
   }
 
   /* What becomes of the product's questionnaires and chats, before and after.
-     Kept to these two sentences, in this one place, because that is still
-     being decided; today they become General. */
+     Kept to these two sentences, in this one place. Decided 2026-10-19 (plan
+     027): they stay read-only. Made General, a later approval in one would
+     have filed the product's wording as a shared answer. */
   const ITS_WORK = {
     before(product, preview) {
       const work = preview
         ? plural(preview.questionnaires, "questionnaire") + " and " + plural(preview.conversations, "chat") +
           " for " + product.name
-        : "Its questionnaires and chats";
-      return "What stays: " + work + " become General and keep the answers already written; anything " +
-        "answered in them from now on uses only the shared knowledge base and memory.";
+        : "its questionnaires and chats";
+      return "What stays: " + work + " stay listed, marked as from a deleted product, and become read-only. " +
+        "Their answers can be read and filled files downloaded, but nothing in them can be answered, edited, " +
+        "approved or chatted in again.";
     },
     after(removed) {
       return plural(removed.questionnaires || 0, "questionnaire") + " and " +
-        plural(removed.conversations || 0, "chat") + " are now General.";
+        plural(removed.conversations || 0, "chat") + " are kept, read-only.";
     },
   };
 
