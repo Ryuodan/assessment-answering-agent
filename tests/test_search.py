@@ -90,6 +90,43 @@ def test_hybrid_returns_the_union_without_duplicates(store):
     assert set(keys) == {("a.pdf", 1), ("a.pdf", 2), ("b.pdf", 9)}
 
 
+def remembered(entry_id: str, score: float, lexical: bool = False) -> Evidence:
+    """A remembered answer as the memory files it: every one is "Answer memory", chunk 0."""
+    return Evidence(
+        source_type=SourceType.PRIOR_ANSWER,
+        source_name="Answer memory",
+        snippet=f"Q: {entry_id}?\nA: Yes.",
+        chunk=0,
+        entry_id=entry_id,
+        score=score,
+        is_lexical=lexical,
+    )
+
+
+class MemoryStore(FakeStore):
+    """Remembered answers only, found by both the vectors and the text."""
+
+    async def search(self, query, source_type, k, *, expand=True):
+        return [remembered("mem-a", 0.80), remembered("mem-b", 0.70)] if source_type is SourceType.PRIOR_ANSWER else []
+
+    def text_search(self, query, source_type, k):
+        if source_type is not SourceType.PRIOR_ANSWER:
+            return []
+        return [remembered("mem-b", 1.0, lexical=True), remembered("mem-a", 0.5, lexical=True)]
+
+    def counts_by_type(self):
+        return {SourceType.PRIOR_ANSWER.value: 2}
+
+
+def test_hybrid_returns_each_remembered_answer_once(monkeypatch):
+    """Plan 027: fused by name and chunk, two remembered answers were one result."""
+    monkeypatch.setattr(knowledge, "get_store", lambda team_id=None: MemoryStore())
+
+    body = get(q="mfa", mode="hybrid").json()
+
+    assert sorted(r["entry_id"] for r in body["results"]) == ["mem-a", "mem-b"]
+
+
 def test_a_search_does_not_expand_units(store):
     """The answering path completes a split series so the drafter never takes a
     fragment for the whole list. A search result should be what matched."""

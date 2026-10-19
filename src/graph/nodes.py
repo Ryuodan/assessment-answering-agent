@@ -186,7 +186,7 @@ async def retrieve(state: QuestionState) -> dict:
     # signal is free: it falls out of retrieval that has already run.
     agreement: Counter = Counter()
     for batch in results:
-        agreement.update({(item.source_name, item.chunk) for item in batch})
+        agreement.update({item.key for item in batch})
 
     def collapse(batches: list[list[Evidence]]) -> list[Evidence]:
         """One entry per chunk, carrying how many searches returned it.
@@ -201,7 +201,7 @@ async def retrieve(state: QuestionState) -> dict:
         best: dict[tuple, Evidence] = {}
         for batch in batches:
             for item in batch:
-                key = (item.source_name, item.chunk)
+                key = item.key
                 if key not in best or item.score > best[key].score:
                     best[key] = item
         for key, item in best.items():

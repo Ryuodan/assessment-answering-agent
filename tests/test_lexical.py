@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import pytest
 
+from src import answer_memory
 from src.config import settings
 from src.lexical import LexicalIndex, reciprocal_rank_fusion, tokenize
-from src.models import SourceType
-from tests.conftest import FakeVectorStore, bare_store
+from src.memory import Entry
+from src.models import Evidence, SourceType
+from tests.conftest import FakeDocument, FakeVectorStore, bare_store
 
 
 # --- tokenising ------------------------------------------------------------
@@ -173,3 +175,85 @@ def test_weighting_still_promotes_a_chunk_both_systems_found():
     fused = reciprocal_rank_fusion([dense, lexical], weights=[1.0, 0.4])
 
     assert fused[0] == "buried"
+
+
+# --- remembered answers -----------------------------------------------------
+#
+# The memory files every answer it indexes itself under one name at chunk 0, so
+# the keyword index and fusion must tell remembered answers apart by entry id
+# (plan 027). Keyed by name and chunk, the index held only the last one indexed,
+# and fusion kept the last dense hit of that name rather than the best.
+
+
+def _remembered(entry_id: str, question: str) -> dict:
+    entry = Entry(entry_id=entry_id, question=question, answer="Yes.", origin="approved", approved_on="2026-10-01")
+    document = answer_memory._document(entry)
+    return {"text": document.page_content, "metadata": document.metadata, "id": entry_id}
+
+
+def _imported(name: str, chunk: int, question: str) -> dict:
+    """A pair from an ingested file of previous answers, as `add_prior_answers` files it."""
+    metadata = {
+        "source_type": SourceType.PRIOR_ANSWER.value,
+        "source_name": name,
+        "chunk": chunk,
+        "entry_id": f"{name}::{chunk}",
+        "question": question,
+        "answer": "Yes.",
+    }
+    return {"text": f"Q: {question}\nA: Yes.", "metadata": metadata, "id": f"{name}::{chunk}"}
+
+
+def _memory_store():
+    records = [
+        _remembered("mem-a", "Do you enforce MFA for administrators?"),
+        _remembered("mem-b", "Is MFA required for remote access?"),
+        _remembered("mem-c", "Are customers offered MFA?"),
+        _imported("vendor.xlsx", 4, "Do you rotate encryption keys?"),
+    ]
+    fake = FakeVectorStore(records)
+    scores = (0.83, 0.80, 0.78, 0.70)
+    fake._staged = [(FakeDocument(r["text"], r["metadata"]), score) for r, score in zip(records, scores)]
+    return bare_store(fake)
+
+
+def test_the_keyword_index_holds_every_remembered_answer(hybrid):
+    index, documents = _memory_store()._lexical(SourceType.PRIOR_ANSWER)
+
+    assert len(index) == 4
+    assert sorted(meta["entry_id"] for _, meta in documents.values()) == ["mem-a", "mem-b", "mem-c", "vendor.xlsx::4"]
+
+
+async def test_fusion_returns_each_remembered_answer_once_with_its_own_score(hybrid):
+    hits = await _memory_store().search("MFA administrators", SourceType.PRIOR_ANSWER, 5, expand=False)
+
+    assert len(hits) == 4
+    assert {hit.entry_id: hit.raw_score for hit in hits} == {
+        "mem-a": 0.83,
+        "mem-b": 0.8,
+        "mem-c": 0.78,
+        "vendor.xlsx::4": 0.7,
+    }, "the best dense hit is kept, not replaced by a later one"
+
+
+BULK = "Answer memory — the security team's own answers"
+PRIOR = SourceType.PRIOR_ANSWER
+
+
+@pytest.mark.parametrize(
+    ("metadata", "source_type", "entry"),
+    [
+        (_remembered("mem-a", "MFA?")["metadata"], PRIOR, "mem-a"),
+        (_imported("vendor.xlsx", 4, "Keys?")["metadata"], PRIOR, "vendor.xlsx::4"),
+        ({"source_type": "prior_answer", "source_name": BULK, "chunk": 41, "entry_id": "T-041"}, PRIOR, "T-041"),
+        ({"source_type": "prior_answer", "source_name": "old.xlsx", "chunk": 7}, PRIOR, "old.xlsx::7"),
+        ({"source_type": "guideline", "source_name": "policy.pdf", "chunk": 5}, SourceType.GUIDELINE, ""),
+    ],
+    ids=["memory entry", "ingested file", "bulk import", "legacy without entry id", "policy"],
+)
+def test_a_stored_chunk_is_keyed_as_its_evidence_will_be(metadata, source_type, entry):
+    """The keyword index is keyed from metadata and fusion matches it against Evidence; the two must agree."""
+    evidence = bare_store(FakeVectorStore([]))._evidence(FakeDocument("text", metadata), 0.5, source_type)
+
+    assert Evidence.key_of(metadata, source_type) == evidence.key
+    assert evidence.key[2] == entry

@@ -71,7 +71,7 @@ def test_duplicate_does_not_downgrade_an_existing_score():
 
 
 def test_same_chunk_index_in_different_documents_is_not_a_duplicate():
-    """De-duplication keys on (source_name, chunk), not chunk alone."""
+    """De-duplication keys on (source_name, chunk, entry_id), not chunk alone."""
     merged = merge_evidence([guideline(1, source_name="a.pdf")], [guideline(1, source_name="b.pdf")])
     assert len(merged) == 2
 
@@ -90,6 +90,33 @@ def test_merge_is_idempotent():
 def test_three_rounds_accumulate():
     merged = merge_evidence(merge_evidence([guideline(1)], [guideline(2)]), [guideline(3)])
     assert {item.chunk for item in merged} == {1, 2, 3}
+
+
+def remembered(entry_id: str, score: float = 0.5, **overrides) -> Evidence:
+    """A remembered answer as the memory files it: every one is "Answer memory", chunk 0."""
+    return prior(0, score=score, source_name="Answer memory", entry_id=entry_id, snippet=entry_id, **overrides)
+
+
+def test_two_remembered_answers_are_two_items():
+    """Plan 027: keyed by name and chunk alone, only one of them reached the drafter."""
+    merged = merge_evidence([remembered("mem-a", 0.71, product_id="p1")], [remembered("mem-b", 0.83)])
+    assert sorted(item.entry_id for item in merged) == ["mem-a", "mem-b"]
+
+
+def test_one_remembered_answer_found_in_two_rounds_is_still_one_item():
+    merged = merge_evidence([remembered("mem-a", 0.6, query_hits=2)], [remembered("mem-a", 0.8, query_hits=1)])
+    assert [(item.entry_id, item.score, item.query_hits) for item in merged] == [("mem-a", 0.8, 3)]
+
+
+def test_each_remembered_answer_is_ranked_by_its_own_score():
+    """One group for all of them made every remembered answer rank as the best one did."""
+    ordered = order_evidence([remembered("mem-a", 0.5), remembered("mem-b", 0.9), guideline(1, score=0.95)])
+    assert [item.entry_id for item in ordered] == ["mem-b", "mem-a", ""]
+
+
+def test_remembered_answers_scoring_alike_are_in_a_fixed_order():
+    ordered = order_evidence([remembered("mem-b", 0.7), remembered("mem-a", 0.7)])
+    assert [item.entry_id for item in ordered] == ["mem-a", "mem-b"]
 
 
 # --- Step 3: ordering ------------------------------------------------------

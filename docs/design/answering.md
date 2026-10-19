@@ -310,7 +310,11 @@ by how many phrasings found a chunk rather than by how well it matched. Fixed by
 collapsing duplicates in `retrieve`; measured afterwards, retrieval was
 unchanged, because the evidence budget is rarely the binding constraint --
 roughly 37 distinct chunks are retrieved and 38 are allowed through, so almost
-nothing was being cut and ordering had little to decide.
+nothing was being cut and ordering had little to decide. Duplicates are told
+apart by `Evidence.key` (file, chunk and remembered answer), not by file and
+chunk alone, because the memory files every answer it indexes itself as "Answer
+memory", chunk 0, and keyed without the entry id only one remembered answer per
+question reached the drafter (plan 027).
 
 **The search drawer, and two views of a chunk.** `GET /api/search` runs the
 same retrieval the drafter uses, but returns the passages rather than an answer

@@ -8,12 +8,29 @@ system stores and returns. What a structured model call is asked to produce
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field
 
 Language = Literal["ar", "en"]
+
+
+def entry_id_of(metadata: Mapping[str, Any]) -> str:
+    """The entry id of an indexed prior answer, including the older ones.
+
+    Entries indexed before the answer memory existed carry no `entry_id`, but they
+    do carry the two fields their Chroma id was built from, so the id is
+    recoverable rather than lost. Without this the 698 imported answers would
+    all have to be re-embedded to become manageable.
+    """
+    stated = str(metadata.get("entry_id") or "")
+    if stated:
+        return stated
+    name = metadata.get("source_name", "")
+    chunk = metadata.get("chunk", -1)
+    return f"{name}::{chunk}" if name else ""
 
 
 class SourceType(str, Enum):
@@ -210,6 +227,28 @@ class Evidence(BaseModel):
     def is_fragment(self) -> bool:
         """True when this chunk is one part of a unit that was split."""
         return self.parts > 1
+
+    @property
+    def key(self) -> tuple[str, int, str]:
+        """What makes two retrieved items one: document, chunk and remembered answer.
+
+        The answer because the memory files every answer it indexes itself under one
+        name at chunk 0 (`answer_memory._document`). Keyed by name and chunk alone,
+        two remembered answers were one item, and only one reached the drafter. A
+        policy's entry is "", and an imported answer's follows from its name and chunk.
+        """
+        return (self.source_name, self.chunk, self.entry_id)
+
+    @property
+    def unit_key(self) -> tuple[str, str, str]:
+        """The unit this chunk is ranked, kept and judged with: its split series, or itself."""
+        return (self.source_name, self.unit_id or f"chunk-{self.chunk}", self.entry_id)
+
+    @staticmethod
+    def key_of(metadata: Mapping[str, Any], source_type: SourceType) -> tuple[str, int, str]:
+        """The `key` a stored chunk's Evidence will have, read from its metadata (which names its source)."""
+        entry = entry_id_of(metadata) if source_type is SourceType.PRIOR_ANSWER else ""
+        return (metadata.get("source_name", ""), int(metadata.get("chunk", -1)), entry)
 
 
 class AnsweredQuestion(BaseModel):

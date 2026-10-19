@@ -40,7 +40,7 @@ from langchain_core.documents import Document
 from src import store
 from src.config import settings
 from src.memory import Entry, Finding
-from src.models import SourceType
+from src.models import SourceType, entry_id_of as entry_id_of  # moved to models (the evidence key)
 
 logger = logging.getLogger(__name__)
 
@@ -120,22 +120,6 @@ def _conflict(row) -> Conflict:
 
 def new_id() -> str:
     return f"mem-{uuid.uuid4().hex[:12]}"
-
-
-def entry_id_of(metadata: dict) -> str:
-    """The entry id of an indexed prior answer, including the older ones.
-
-    Entries indexed before this module existed carry no `entry_id`, but they do
-    carry the two fields their Chroma id was built from, so the id is
-    recoverable rather than lost. Without this the 698 imported answers would
-    all have to be re-embedded to become manageable.
-    """
-    stated = str(metadata.get("entry_id") or "")
-    if stated:
-        return stated
-    name = metadata.get("source_name", "")
-    chunk = metadata.get("chunk", -1)
-    return f"{name}::{chunk}" if name else ""
 
 
 # ---------------------------------------------------------------------------
