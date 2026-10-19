@@ -52,7 +52,9 @@ _QUOTED = re.compile(
 )
 _LEAD = r"[^\S\n]*(?:(?:[-*\u2022]|\d{1,3}[.)])[^\S\n]+)?"
 """What may come before a blockquote's `>`: any indent, and a list item's marker, which the chat page shows trimmed."""
-_QUOTE_LINE = re.compile(rf"^{_LEAD}>[ \t]?(.*)$")
+_QUOTE_LINE = re.compile(r"^[^\S\n]*(?:(?:[-*\u2022]|\d{1,3}[.)])[^\S\n]+>(?![\d=%<])|>)[ \t]?(.*)$")
+"""A blockquote line, indented or in a list item. After a list item's marker, a `>` before a number or
+`=` is "more than", as in "- >99.9% uptime", not a quotation; at the start of a line it is always one."""
 _BESIDE = " \t*_,;:\u2014\u2013-"
 """What is trimmed from the words beside a quotation on a blockquote line."""
 _ELLIPSIS = re.compile(r"\[\s*(?:\u2026|\.\.\.)\s*\]|\u2026|\.\.\.")
@@ -73,18 +75,34 @@ _ATTRIBUTION = frozenset(
     "according to as per in at on of from by under see above below here this that these it its is are was were be "
     "s and also the a an where which document documents file files text wording fact facts sheet policy policies "
     "standard procedure heading headed titled quoted quote quotes quotation verbatim word for exactly stated "
-    "states state says say said reads read notes noted puts put sets set out written writes found appears "
-    "mentioned described specified cited given shown "
-    "وفقا وفق طبقا حسب بحسب كما لما ورد وردت يرد جاء جاءت ذكر ذكرت يذكر تذكر المذكور مذكور نص نصه ينص تنص النص "
+    "states state says say said reads read notes noted out written writes found appears "
+    "mentioned described specified cited given shown relevant exact clearly explicitly directly outlined detailed "
+    "defined documented indicates indicate excerpt extract words "
+    "يلي التالي الاتي بوضوح صراحة نصا موضح مبين يشير تشير استنادا نقلا "
+    "وفقا وفق طبقا حسب بحسب كما ورد وردت يرد جاء جاءت ذكر ذكرت يذكر تذكر المذكور مذكور نص نصه ينص تنص النص "
     "يقول تقول قال في من عن الي علي هذا هذه ذلك تلك هو هي الذي التي ان انه حرفيا اقتباس مستند المستند مستندات "
     "المستندات وثيقة الوثيقة ملف الملف سياسة السياسة عنوان بعنوان تحت ضمن اعلاه ادناه هنا منه فيه فيها موجود".split()
 )
 """Words that only say a document said something, in English and in Arabic: "as stated in", "وفقاً لما ورد في".
 
-No negation -- not "ما" either, which can be one -- and nothing a document
-could be said to do, "supports", "يدعم": a claim beside a quotation cannot be
-made of these alone.
+No negation -- not "ما" or "لما" either, which can be one ("لمّا يرد", not yet
+said) -- and nothing a document could be said to do, "supports", "يدعم", or
+that could carry a value or a claim, "set", "puts", "answer", "follows": a
+claim beside a quotation cannot be made of these alone. The phrases that need
+one of them are `_PHRASES`.
 """
+_SAID = ("ورد", "وردت", "جاء", "جاءت")
+_PHRASES = frozenset(
+    {("set", "out"), ("sets", "out"), ("as", "follows"), ("the", "following"), ("answer", "is", "in")}
+    | {(verb, "it", "as", "follows") for verb in ("put", "puts")}
+    | {("ما", "يلي"), ("ما", "نصه"), ("فيما", "يلي"), ("وفيما", "يلي"), ("منصوص", "عليه")}
+    | {("لما", said) for said in _SAID}
+    | {(by, "ما", said) for by in ("حسب", "بحسب", "وفق", "وفقا", "طبقا") for said in _SAID}
+)
+"""Words that only say where something is said together, though one of them alone could say more."""
+_LONGEST = max(map(len, _PHRASES))
+_A_PHRASE = ""
+"""What stands where one of `_PHRASES` was taken out."""
 _JOINED_TO = "وفبلك"
 """Arabic letters written joined to the next word: "and", "so", "with", "for", "like"."""
 _NEGATIONS = frozenset(
@@ -203,15 +221,34 @@ def _cites(text: str, documents: list[list[str]]) -> bool:
     word of one counts.
     """
     named = {word for name in documents for word in name}
+    words = _without_phrases(_words(text))
 
-    def citing(word: str) -> bool:
+    def citing(position: int, word: str) -> bool:
+        if word.isdigit():
+            # A number says where only right after a place or a name, or after a number
+            # that does: "section 5 3", "Ole5 facts 5". Anywhere else it is a value: "it is 365".
+            before = words[position - 1] if position else ""
+            return before in _PLACES or before in named or (before.isdigit() and citing(position - 1, before))
         if word in _NEGATIONS:
             return False
-        said = word in _ATTRIBUTION or (word[:1] in _JOINED_TO and word[1:] in _ATTRIBUTION)
-        return said or word in named or word in _PLACES or word.isdigit()
+        said = word == _A_PHRASE or word in _ATTRIBUTION or (word[:1] in _JOINED_TO and word[1:] in _ATTRIBUTION)
+        return said or word in named or word in _PLACES
 
-    words = _words(text)
-    return bool(words) and all(map(citing, words))
+    return bool(words) and all(citing(i, word) for i, word in enumerate(words))
+
+
+def _without_phrases(words: list[str]) -> list[str]:
+    """`words` with each of `_PHRASES` taken out, the longest first, so that its parts are not judged one by one.
+
+    Its place is kept, so that a number after it is not taken to follow the word before it.
+    """
+    kept: list[str] = []
+    i = 0
+    while i < len(words):
+        size = next((n for n in range(_LONGEST, 1, -1) if tuple(words[i : i + n]) in _PHRASES), 0)
+        kept.append(_A_PHRASE if size else words[i])
+        i += size or 1
+    return kept
 
 
 def _found(span: str, corpus: list[_Source], documents: list[list[str]]) -> bool:

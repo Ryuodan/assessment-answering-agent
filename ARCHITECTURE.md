@@ -167,8 +167,9 @@ The product is fixed when the questionnaire is opened or the chat starts
   - `answer_directly` drafts with it;
   - the prompt names the product (`agents/assistant_prompt.py`).
 
-  A turn's searches, its budget, its stopped reply and the quotation check are
-  in `agents/assistant_turn.py` and `agents/assistant_quotes.py`.
+  A turn's searches and their budget are in `agents/assistant_turn.py`. What a
+  stopped turn says is in `agents/assistant_stopped.py`, and the quotation check
+  is in `agents/assistant_quotes.py`.
 - **Deletion** (D-019). Deleting a product, behind a counted warning
   (`GET /api/products/{id}/deletion`), removes:
   - its collection, its folder, and its files from before the folder existed;

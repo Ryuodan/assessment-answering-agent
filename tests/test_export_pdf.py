@@ -363,3 +363,11 @@ def test_the_supporting_sections_are_labelled():
     text = _text(render_pdf(_result(), ExportOptions(include_reasoning=True)))
     assert "SOURCES" in text
     assert "REASONING" in text
+
+
+def test_two_remembered_answers_of_one_name_are_listed_once():
+    """As in the Word export: one line for a name two cited remembered answers share (plan 027)."""
+    result = _result()
+    result.answers[0].citations = ["Answer memory (2026-10-19)", "Answer memory (2026-10-19)"]
+
+    assert _text(render_pdf(result)).count("Answer memory (2026-10-19)") == 1

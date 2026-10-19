@@ -94,6 +94,10 @@ next plan (028).
   - The previous-answer collision is to be fixed and measured. Today every remembered answer is indexed as "Answer memory", chunk 0, and evidence is de-duplicated by name and chunk, so only one reaches the drafter per question.
   - The 49 cleaned answer pairs go into production's memory typed by hand on the memory page, not through an import feature or a server script.
   - The clean data is imported into a copy of the local data for testing. Production gets it after the deploy, and the local data is unchanged.
+- 2026-10-19, Claude, on further defaults from the review rounds (each can be reversed):
+  - **The search budget.** Searches and direct answers share one budget of three per message. A single model step that asks for more is answered once: three run and the rest are refused. A refused call in a later step ends the turn. A stopped turn relays the answers it drafted, word for word.
+  - **Attributions.** A quotation's attribution counts as a citation when every word in it names a document found, says where (a section, a page, a number beside either), or only says that a document said it, in English or Arabic. "set", "put" and "لما" count only in "set out", "puts it" and "لما ورد/جاء". A `>` before a number is "more than", not a quotation.
+  - **Exports.** The Word and PDF exports list a citation name once, even when two remembered answers share it. The answer card and the chat list each one.
 - 2026-10-19, Claude: deliberately not changed here, because they are behaviour changes the user has not asked for:
   - which reading wins when the Excel agent and the rules find the same number of questions;
   - reading short unnumbered sheets.

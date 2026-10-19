@@ -211,3 +211,12 @@ def test_a_character_xml_cannot_hold_does_not_cost_the_export():
     text = _text(render_docx(result, ExportOptions(include_flagged=True, include_reasoning=True)))
 
     assert "we do" in text and "Because the policy says so." in text
+
+
+def test_two_remembered_answers_of_one_name_are_listed_once():
+    """Two cited remembered answers share the name "Answer memory (date)" (plan 027).
+    The card shows each; the file sent to an assessor lists the name once, as before."""
+    result = _result()
+    result.answers[0].citations = ["Answer memory (2026-10-19)", "Answer memory (2026-10-19)"]
+
+    assert _text(render_docx(result)).count("Answer memory (2026-10-19)") == 1

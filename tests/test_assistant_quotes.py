@@ -210,6 +210,125 @@ def test_a_claim_in_an_attribution_is_still_caught(reply, invented):
 @pytest.mark.parametrize(
     "reply",
     [
+        f'> Ole5 facts.docx, section 5.3, states the following: "{NOT_SUPPORTED}"',
+        f"> Ole5 facts.docx puts it as follows in section 5.3: “{NOT_SUPPORTED}”",
+        f"> The relevant clause in Ole5 facts.docx (section 5.3) reads: “{NOT_SUPPORTED}”",
+        f"> Ole5 facts.docx explicitly states in section 5.3: “{NOT_SUPPORTED}”",
+        f"> Here is the exact wording from Ole5 facts.docx, section 5.3: “{NOT_SUPPORTED}”",
+        f"> The answer is in Ole5 facts.docx, section 5.3, which says: “{NOT_SUPPORTED}”",
+        f"> As set out in Ole5 facts.docx, section 5.3: “{NOT_SUPPORTED}”",
+        f"> جاء في البند 5.3 من مستند Ole5 facts.docx ما يلي: «{NOT_SUPPORTED}»",
+        f"> جاء في القسم 5.3 من مستند Ole5 facts.docx ما نصه: «{NOT_SUPPORTED}»",
+        f"> تنص الفقرة 5.3 من مستند Ole5 facts.docx بوضوح على: «{NOT_SUPPORTED}»",
+    ],
+    ids=[
+        "the-following",
+        "puts-it-as-follows",
+        "relevant-clause-reads",
+        "explicitly-states",
+        "exact-wording",
+        "the-answer-is-in",
+        "set-out-in",
+        "ar-what-follows",
+        "ar-its-wording",
+        "ar-clearly",
+    ],  # fmt: skip
+)
+def test_an_ordinary_attribution_cites(reply):
+    """A second review found each of these, correct quotations all, still asked about
+    again: one ordinary word outside the list made the attribution a claim."""
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == []
+
+
+@pytest.mark.parametrize(
+    ("reply", "invented"),
+    [
+        (f"> “{NOT_SUPPORTED}” (Ole5 facts.docx, section 5.3: it is set to 90 in the policy)",
+         "(Ole5 facts.docx, section 5.3: it is set to 90 in the policy)"),
+        (f"> “{NOT_SUPPORTED}” (Ole5 facts.docx, section 4: it is set to 90)",
+         "(Ole5 facts.docx, section 4: it is set to 90)"),
+        (f"> «{NOT_SUPPORTED}» (لمّا يرد في مستند Ole5 facts.docx)", "(لمّا يرد في مستند Ole5 facts.docx)"),
+    ],
+    ids=["a-value-set", "a-value-set-short", "ar-not-yet-said"],
+)  # fmt: skip
+def test_a_value_or_a_negation_beside_a_quotation_is_no_citation(reply, invented):
+    """ "set" and "put" count only in "set out" and "puts it"; "لما" only before "ورد" or
+    "جاء", since "لمّا يرد" means "not yet said"."""
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == [invented]
+
+
+def test_more_than_is_not_a_quotation():
+    """A list item starting with ">99.9%" is a comparison the model wrote, not a quotation."""
+    reply = "Ole5 commits to:\n- >99.9% availability for the hosted service each month\n- 24/7 support"
+
+    assert assistant_quotes.unfound(reply, ["Ole5 availability is 99.9%."], ["Ole5 facts.docx"]) == []
+
+
+@pytest.mark.parametrize(
+    "lead",
+    [
+        "As outlined in Ole5 facts.docx, section 5.3:",
+        "As detailed in Ole5 facts.docx, section 5.3:",
+        "As defined in Ole5 facts.docx, section 5.3:",
+        "As documented in Ole5 facts.docx, section 5.3:",
+        "Excerpt from Ole5 facts.docx, section 5.3:",
+        "Ole5 facts.docx, section 5.3, indicates the following:",
+        "In the words of Ole5 facts.docx, section 5.3:",
+        "حسب ما ورد في مستند Ole5 facts.docx، القسم 5.3:",
+        "بحسب ما جاء في مستند Ole5 facts.docx، القسم 5.3:",
+        "وفق ما ورد في القسم 5.3 من مستند Ole5 facts.docx:",
+        "كما هو موضح في القسم 5.3 من مستند Ole5 facts.docx:",
+        "كما هو منصوص عليه في القسم 5.3 من مستند Ole5 facts.docx:",
+        "وفيما يلي نص القسم 5.3 من مستند Ole5 facts.docx:",
+        "استناداً إلى القسم 5.3 من مستند Ole5 facts.docx:",
+        "نقلاً عن مستند Ole5 facts.docx، القسم 5.3:",
+        "يشير مستند Ole5 facts.docx في القسم 5.3 إلى ما يلي:",
+    ],
+)
+def test_more_ordinary_attributions_cite(lead):
+    """A third review's list of attributions that still cost a second pass and a false note."""
+    assert assistant_quotes.unfound(f"> {lead} “{NOT_SUPPORTED}”", [SOURCE], ["Ole5 facts.docx"]) == []
+
+
+RETAINED = "7.2 Log retention\nAudit logs are retained for 90 days and then deleted automatically by the platform."
+KEPT = "Audit logs are retained for 90 days and then deleted automatically by the platform."
+POLICIES = ["Ole5 facts.docx", "Data Retention Policy.docx", "Encryption Standard.pdf"]
+
+
+@pytest.mark.parametrize(
+    ("reply", "invented"),
+    [
+        (f"> The answer is 365, as stated in Ole5 facts.docx, section 7.2: “{KEPT}”",
+         "The answer is 365, as stated in Ole5 facts.docx, section 7.2"),
+        (f"> “{KEPT}” (Ole5 facts.docx, section 7.2: the answer is 365)", "(Ole5 facts.docx, section 7.2: the answer is 365)"),
+        (f"> “{KEPT}” (Data Retention Policy.docx, section 7.2: it is 365 in the policy)",
+         "(Data Retention Policy.docx, section 7.2: it is 365 in the policy)"),
+        (f"> “{KEPT}” (Ole5 data retention is 365, per the Data Retention Policy)",
+         "(Ole5 data retention is 365, per the Data Retention Policy)"),
+        (f"> «{KEPT}» (هو 365 كما ورد في مستند Ole5 facts.docx)", "(هو 365 كما ورد في مستند Ole5 facts.docx)"),
+        (f"> “{KEPT}” (Ole5 facts.docx, section 7.2, puts it at 365)", "(Ole5 facts.docx, section 7.2, puts it at 365)"),
+        (f"> “{KEPT}” (Ole5 facts.docx sets out 365 in section 7.2)", "(Ole5 facts.docx sets out 365 in section 7.2)"),
+        (f"> Ole5 follows the Encryption Standard, as stated in Ole5 facts.docx, section 7.2: “{KEPT}”",
+         "Ole5 follows the Encryption Standard, as stated in Ole5 facts.docx, section 7.2"),
+    ],
+    ids=["the-answer-is", "the-answer-is-after", "it-is-in-the-policy", "a-value-between-names", "ar-a-value",
+         "puts-it-at", "sets-out-a-value", "follows-a-standard"],
+)  # fmt: skip
+def test_a_value_or_a_compliance_claim_beside_a_quotation_is_caught(reply, invented):
+    """A number counts as a place only right after a place word or a document's name;
+    "answer", "follows" and "puts it" only in phrases that say where something is said."""
+    assert assistant_quotes.unfound(reply, [RETAINED], POLICIES) == [invented]
+
+
+@pytest.mark.parametrize("line", [f">5.3 {INVENTED}", f">> {INVENTED}"], ids=["clause-number-after-the-mark", "nested"])
+def test_a_blockquote_starting_with_a_number_or_nested_is_still_checked(line):
+    """ "More than" is read only after a list item's marker; at the start of a line `>` is a quotation."""
+    assert assistant_quotes.unfound(line, [SOURCE]) != []
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
         f"    > {INVENTED}",
         f"- > {INVENTED}",
         f"* > {INVENTED}",

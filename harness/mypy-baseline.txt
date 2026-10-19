@@ -17,7 +17,6 @@ src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dic
 src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
 src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
 src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
-src/agents/assistant.py: [type-arg] Missing type arguments for generic type "dict"
 src/agents/assistant.py: [type-arg] Missing type arguments for generic type "list"
 src/agents/assistant.py: [type-arg] Missing type arguments for generic type "list"
 src/agents/assistant.py: [type-arg] Missing type arguments for generic type "list"

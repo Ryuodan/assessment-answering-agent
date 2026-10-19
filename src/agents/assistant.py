@@ -517,13 +517,13 @@ def _tools(user: User, state: dict) -> list:
             return []
         cited = [c for c in (answered.get("citations") or []) if c]
 
-        found: dict[str, dict] = {}
-        for item in answered.get("evidence") or []:
-            found.setdefault(item.get("locator") or item.get("source_name") or "", item)
+        unused = list(answered.get("evidence") or [])  # each citation takes the next of its name, as the card does
         lines = [] if cited else ["    sources cited: none"]
         for citation in cited:
-            item = found.get(citation)
-            if item is None:
+            item = next((e for e in unused if (e.get("locator") or e.get("source_name") or "") == citation), None)
+            if item is not None:  # two remembered answers can share a name; each is listed (plan 027)
+                unused.remove(item)
+            else:
                 lines.append(f"    cited: {citation} -- named in the answer; the text of it was not kept")
                 continue
             kind = (

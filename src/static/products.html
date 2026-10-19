@@ -548,9 +548,11 @@
         : !kept && docs.files === docs.indexed
           ? ", " + (documents === 1 ? "and its file" : "and their files") + " on the server." + gone(documents === 1)
           : ", and " + plural(docs.files, "file") + " on the server." + gone(docs.files === 1);
+      /* Said of the team's copy, which is what stays: it may be in use, or it may
+         only be impossible to tell from a shared upload of the same name. */
       const stays = kept
-        ? " " + plural(kept, "document") + (kept === 1 ? " keeps its file" : " keep their files") +
-          ", because the shared knowledge base, another product or a questionnaire also uses " +
+        ? " " + plural(kept, "file") + " of the same name in the team's folder " + (kept === 1 ? "stays" : "stay") +
+          ", because the shared knowledge base, another product or a questionnaire may use " +
           (kept === 1 ? "it." : "them.")
         : "";
       items.push(consequence(

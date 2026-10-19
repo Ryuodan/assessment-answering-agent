@@ -142,7 +142,9 @@ def test_the_warning_says_which_files_stay_because_something_else_uses_them(page
     page.locator(".product", has_text="Availo").get_by_role("button", name="Delete").click()
     warning = page.locator("#deleteDialog .danger-box")
     expect(warning).to_contain_text("1 document (1 passage).")
-    expect(warning).to_contain_text("1 document keeps its file, because the shared knowledge base")
+    expect(warning).to_contain_text(
+        "1 file of the same name in the team's folder stays, because the shared knowledge base"
+    )
     expect(warning).not_to_contain_text("leaves the document library")
 
 

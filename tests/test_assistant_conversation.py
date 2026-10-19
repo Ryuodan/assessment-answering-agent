@@ -328,6 +328,37 @@ async def test_a_citation_whose_text_was_not_kept_is_still_named(user, tmp_path,
     assert "cited: An older policy §2 -- named in the answer; the text of it was not kept" in said
 
 
+async def test_two_cited_remembered_answers_are_each_read_back(user, tmp_path, monkeypatch):
+    """Every remembered answer is filed as "Answer memory", so two cited ones share a
+    name. Read back by name, the first was told twice and the second -- perhaps the
+    product's own -- never (plan 027)."""
+    from src.models import AnsweredQuestion, Evidence, SourceType
+
+    shared, own = (
+        Evidence(source_type=SourceType.PRIOR_ANSWER, source_name="Answer memory", chunk=0, snippet=text,
+                 entry_id=entry, product_id=product)
+        for text, entry, product in (("Yes, for every customer.", "mem-shared", ""), ("Yes, in Ole5 by AD.", "mem-own", "p1"))
+    )  # fmt: skip
+    assert shared.locator == own.locator
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, needs_review=False,
+                             citations=[shared.locator, own.locator], evidence=[shared, own])
+            for q in questions
+        ]  # fmt: skip
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+    path = shapes.status_and_comment(tmp_path / "HR Assessment.xlsx")
+    state: dict = {"batch_id": "", "pending_upload": str(path), "steps": [], "refreshed": False}
+    tool = {t.__name__: t for t in assistant._tools(user, state)}
+    tool["open_questionnaire"]("")
+    await tool["answer_questions"]()
+
+    said = tool["read_answers"](position="1", with_sources=True)
+    assert "it says: Yes, for every customer." in said and "it says: Yes, in Ole5 by AD." in said
+
+
 async def test_an_answer_drafted_in_conversation_carries_its_sources_forward(cited):
     """Its sources go into the reply's history, so a question about them later is
     answered from what it cited rather than from a new search."""

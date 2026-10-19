@@ -193,7 +193,7 @@ def _answer(document, answered: AnsweredQuestion, options: ExportOptions) -> Non
 
     if options.include_citations and answered.citations:
         _label(document, "Sources", ACCENT)
-        for citation in answered.citations:
+        for citation in dict.fromkeys(answered.citations):  # two remembered answers can share one name
             _body_line(document, f"•  {citation}")
 
     if options.include_reasoning and answered.rationale:

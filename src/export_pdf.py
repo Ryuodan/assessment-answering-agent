@@ -640,7 +640,7 @@ def _answer_flow(answered: AnsweredQuestion, styles: dict, options: "ExportOptio
 
     if options.include_citations and answered.citations:
         items = [Spacer(1, 2)]
-        for citation in answered.citations:
+        for citation in dict.fromkeys(answered.citations):  # two remembered answers can share one name
             style = styles["meta_rtl"] if has_arabic(citation) else styles["meta"]
             items.append(_paragraph(f"\u2022  {citation}", style, _SECTION_WIDTH))
         flow.append(Spacer(1, 8))

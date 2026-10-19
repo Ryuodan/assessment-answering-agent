@@ -427,3 +427,11 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** read 2026-10-19 (plan 027's review). Extracted text is cached under a key that includes `EXTRACTION_VERSION` and the Docling settings. Deleting a file removes only the cache under today's key.
 - **Impact:** text from a deleted product's documents can remain in `data/extracted` when the conversion settings changed while the files existed. The storage sweep has the same limitation.
 - **Fix:** key the cache by the file's path and content hash only, or sweep cache entries whose file no longer exists.
+
+## TD-049: The quotation check judges an attribution from word lists
+
+- **What:** plan 027's quotation check (`src/agents/assistant_quotes.py`) has to tell an attribution beside a genuine quotation ("As stated in the Ole5 fact sheet, section 5.3:") from a claim made beside it ("Ole5 follows the Encryption Standard, as stated in ..."). It does this from closed lists, in English and Arabic: attribution words, attribution phrases, place words, and the words of the found documents' names. Three review rounds added forms both ways.
+- **Impact:**
+  - An attribution worded outside the lists costs one extra model call. If the second reply still uses it, the quotation is marked a paraphrase although it is genuine.
+  - A claim made only of listed words still passes. Words outside quotation marks shorter than six words are not checked at all.
+- **Fix (needs a decision):** accept the lists, which tests pin both ways (`tests/test_assistant_quotes.py`), and extend them when a form is seen. Or judge an attribution with a model call, at the cost of one call per quoted reply.
