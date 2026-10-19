@@ -309,6 +309,22 @@ def test_guarded_rescues_a_short_sheet_the_agent_did_not_record(tmp_path, monkey
     assert "'Security'" in " ".join(result.notes)
 
 
+def test_guarded_reads_no_short_unnumbered_sheet_the_agent_did_not_record(tmp_path, monkeypatch):
+    """The floor's boundary: the rules leave a short sheet with no numbering
+    column as a reference table, so there is nothing to rescue it with, and
+    the file says so rather than opening with questions nobody decided to read."""
+    from src.agents import excel_agent
+
+    def records_nothing(workbook, run, path, sheets, tools, steps):
+        return None
+
+    monkeypatch.setattr(excel_agent, "_round", records_nothing)
+    result = read(shapes.short_unnumbered(tmp_path / "unnumbered.xlsx"), "guarded")
+
+    assert result.questions == 0
+    assert "No questions were found" in " ".join(result.form.warnings)
+
+
 def test_hybrid_reads_a_short_sheet_without_the_agent(tmp_path, monkeypatch):
     """A short form the rules read is not 'lost', so it costs nothing extra."""
     from src.agents import excel_agent

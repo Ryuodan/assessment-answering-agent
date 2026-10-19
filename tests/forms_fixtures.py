@@ -389,6 +389,32 @@ def short_numbered(path: Path) -> Path:
     )
 
 
+def short_unnumbered(path: Path) -> Path:
+    """Two questions under `Question | Answer | Domain`, with no numbering column.
+
+    The boundary of `short_numbered`: reading this shape was left undecided
+    (TD-043), because two rows of prose without numbers are exactly what a
+    ratings legend looks like, so it stays a reference table.
+    """
+    return build(
+        path,
+        [
+            SheetSpec(
+                "Security",
+                {
+                    "A1": "Question",
+                    "B1": "Answer",
+                    "C1": "Domain",
+                    "A2": "Is data encrypted at rest, and with which algorithm?",
+                    "C2": "Cryptography",
+                    "A3": "How long are backups retained?",
+                    "C3": "Backup",
+                },
+            )
+        ],
+    )
+
+
 def with_extra_parts(path: Path) -> Path:
     """A questionnaire carrying the parts a library round-trip would drop."""
     return build(
