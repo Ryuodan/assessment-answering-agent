@@ -37,6 +37,19 @@ like questions, with a matching heading as a tiebreak rather than a requirement.
 Sheets with no headings at all are read from their numbering, and everything
 inferred that way is marked as a proposal for someone to confirm.
 
+**A form of one or two questions is read from its headings alone.** A column
+needs three question rows before its shape counts, because below that a column
+of sentences under a heading is usually a legend -- two workbooks explain their
+compliance ratings that way. So a shorter one is read only when its header row
+says so twice: a column headed as the questions, and a column headed as an
+answer, a status or evidence. `# | Question | Answer` over two numbered rows is
+a form; `# | Question | Domain` is a list. It is the reading of last resort,
+taken only when no other column and no headless reading was found, so no sheet
+the rules already read reads any differently, and a short sheet without a
+numbering column is still refused as a reference table. Every two-question
+questionnaire the end-to-end checks uploaded was this shape, and the rules read
+each one as nothing (TD-043); the fixture is `short_numbered`.
+
 Against the eleven real workbooks it finds **831 questions where counting the
 printed item numbers by hand finds 824** -- all of them, plus seven extras.
 Erring that way is deliberate: a confirmation step can remove a row it was

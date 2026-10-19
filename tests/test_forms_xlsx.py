@@ -196,6 +196,80 @@ def test_a_ratings_legend_is_not_a_questionnaire(tmp_path):
     assert [part.kind for part in form.parts if part.name == "Compliance Levels"] == ["reference table"]
 
 
+# --- a form of one or two questions -------------------------------------------
+#
+# Three question rows were needed before a column counted as questions, which
+# is what keeps a ratings legend out. It also kept out every two-question form,
+# so the guarded reading had no floor under them: when the agent recorded
+# nothing, the file opened with 0 questions (TD-043). A short form is read when
+# its header row says so twice -- a column headed as the questions, and a
+# column headed as somewhere to write.
+
+
+def test_a_two_question_form_under_question_and_answer_headings_is_read(tmp_path):
+    form = forms.detect(shapes.short_numbered(tmp_path / "short.xlsx"))
+    [part] = form.parts
+
+    assert [q.id for q in form.questions] == ["Security!2", "Security!3"]
+    assert [q.targets[Role.ANSWER].id for q in form.questions] == ["Security!C2", "Security!C3"]
+    assert part.kind == "questions"
+    assert all(finding.confident for finding in part.findings)
+    assert part.findings[0].because == "headings on row 1; questions in column B"
+
+
+def test_a_short_arabic_form_is_read(tmp_path):
+    path = shapes.build(
+        tmp_path / "short-ar.xlsx",
+        [
+            shapes.SheetSpec(
+                "الأمن",
+                {
+                    "A1": "رقم",
+                    "B1": "السؤال",
+                    "C1": "الإجابة",
+                    "A2": "1",
+                    "B2": "هل يتم تشفير البيانات أثناء التخزين؟",
+                    "A3": "2",
+                    "B3": "ما مدة الاحتفاظ بالنسخ الاحتياطية؟",
+                },
+            )
+        ],
+    )
+    form = forms.detect(path)
+
+    assert len(form.questions) == 2
+    assert {q.language for q in form.questions} == {"ar"}
+    assert [q.targets[Role.ANSWER].id for q in form.questions] == ["الأمن!C2", "الأمن!C3"]
+
+
+def test_a_short_question_column_without_an_answer_heading_is_still_skipped(tmp_path):
+    """A column headed as questions is not enough on its own: with nowhere
+    headed for an answer, two rows of it are a list, not a form."""
+    path = shapes.build(
+        tmp_path / "list.xlsx",
+        [
+            shapes.SheetSpec(
+                "Security",
+                {
+                    "A1": "#",
+                    "B1": "Question",
+                    "C1": "Domain",
+                    "A2": "1",
+                    "B2": "Is data encrypted at rest, and with which algorithm?",
+                    "C2": "Cryptography",
+                    "A3": "2",
+                    "B3": "How long are backups retained?",
+                    "C3": "Backup",
+                },
+            )
+        ],
+    )
+    form = forms.detect(path)
+
+    assert form.questions == []
+    assert form.parts[0].kind == "no questions"
+
+
 def test_a_hidden_sheet_is_skipped(tmp_path):
     form = forms.detect(shapes.status_and_comment(tmp_path / "isra.xlsx"))
     assert [part.kind for part in form.parts if part.name == "Score"] == ["hidden"]
@@ -482,6 +556,7 @@ def test_a_shape_the_splice_does_not_know_still_writes(tmp_path):
         shapes.ownership_banner,
         shapes.headless_numbered,
         shapes.legend_sheet,
+        shapes.short_numbered,
     ],
 )
 def test_detection_is_unchanged_by_answering(shape, tmp_path):

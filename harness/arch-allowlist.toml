@@ -24,7 +24,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/forms/xlsx.py"
-max_lines = 935
+max_lines = 924
 debt = "TD-006"
 
 [[size]]

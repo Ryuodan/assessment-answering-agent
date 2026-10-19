@@ -364,8 +364,13 @@ def _find_layout(sheet: Sheet) -> Layout | None:
     So the question column is the one that *behaves* like questions: the most
     rows of real prose beneath a plausible header. A matching heading still
     counts, as a tiebreak rather than a requirement.
+
+    A form of one or two questions is too short for any of that, and is read
+    only when nothing else is found: the first column headed as the questions,
+    in a header row that also heads somewhere for us to write.
     """
     best: tuple[float, int, str] | None = None
+    short: Layout | None = None
 
     for header_row in sheet.rows[:HEADER_SEARCH_ROWS]:
         headings = sheet.row_values(header_row)
@@ -387,6 +392,11 @@ def _find_layout(sheet: Sheet) -> Layout | None:
                 # whose questions are 'Industry', 'Contact email address' and
                 # 'Organization's legal name'.
                 if filled < MIN_QUESTION_ROWS:
+                    # Two numbered questions under `# | Question | Answer` read
+                    # as nothing at all, so the guarded reading had no floor
+                    # when the agent recorded nothing (TD-043).
+                    if filled and short is None and _heads_an_answer(headings):
+                        short = Layout(header_row=header_row, question_column=column, headed=True)
                     continue
                 score = heading_score + 100 + min(filled, 40)
                 best = best if best and best[0] > score else (score, header_row, column)
@@ -410,7 +420,16 @@ def _find_layout(sheet: Sheet) -> Layout | None:
 
     if best is not None:
         return Layout(header_row=best[1], question_column=best[2], headed=True)
-    return _find_headless_layout(sheet)
+    return _find_headless_layout(sheet) or short
+
+
+def _heads_an_answer(headings: dict[str, str]) -> bool:
+    """Whether a header row names a column we write in: an answer, a status or evidence."""
+    return any(
+        len(_label(text)) <= HEADING_LABEL_LIMIT
+        and _role_for(text, has_dropdown=False)[0] in (Role.ANSWER, Role.STATUS, Role.EVIDENCE)
+        for text in headings.values()
+    )
 
 
 # --- questions -------------------------------------------------------------
