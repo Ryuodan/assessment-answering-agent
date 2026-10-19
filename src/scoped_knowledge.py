@@ -21,10 +21,14 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src import knowledge
+from src import knowledge, uploads
+from src.config import settings
 from src.errors import NotADocument
 from src.knowledge import KnowledgeStore
+from src.logs import get_logger
 from src.models import Evidence, SourceType
+
+logger = get_logger(__name__)
 
 
 def own_store(team_id: str | None, product_id: str = "") -> KnowledgeStore:
@@ -89,6 +93,9 @@ def delete_source(source_name: str, team_id: str | None = None, *, product_id: s
     Only documents. Previous answers are indexed too, but they belong to the
     answer memory, where each has a row -- who approved it, what it replaced --
     that a delete by source name would orphan by the hundred.
+
+    A product's document takes its file with it (plan 027); a shared one's
+    file stays in the team's folder, as it always has.
     """
     store = own_store(team_id, product_id)
     kind = store.source_type_of(source_name)
@@ -99,6 +106,8 @@ def delete_source(source_name: str, team_id: str | None = None, *, product_id: s
         # or already removed by somebody else, is not something this removed.
         raise KeyError(source_name)
     store.delete_source(source_name)
+    if product_id:
+        _remove_files(team_id, product_id, [source_name])
 
 
 def clear_knowledge(team_id: str | None = None, *, product_id: str = "") -> None:
@@ -108,5 +117,23 @@ def clear_knowledge(team_id: str | None = None, *, product_id: str = "") -> None
     with it and left their rows on the memory page -- listed, and never
     retrieved again. Clearing the corpus and forgetting what the team has said
     are different decisions, made in different places.
+
+    A product's documents take their files with them (plan 027); the shared
+    ones' files stay in the team's folder.
     """
     own_store(team_id, product_id).delete_type(SourceType.GUIDELINE)
+    if product_id:
+        _remove_files(team_id, product_id)
+
+
+def _remove_files(team_id: str | None, product_id: str, names: list[str] | None = None) -> None:
+    """Delete files from a product's folder, those named or all of them, with the text read out of each.
+
+    Only a product's: its folder holds its knowledge base and nothing else. The
+    team's folder also holds questionnaires from before they were kept per
+    person, which is why a shared document's file is left where it is.
+    """
+    files = uploads.document_files(settings.product_upload_dir(team_id, product_id))
+    left = uploads.remove(path for path in files if names is None or path.name in names)
+    if left:
+        logger.warning("knowledge.files_remove_failed", product=product_id, files=left)

@@ -35,6 +35,7 @@ modules = [
     "src.embeddings",
     "src.docling_client",
     "src.documents",
+    "src.uploads",
     "src.store",
     "src.migrations",
     "src.diagnostics",

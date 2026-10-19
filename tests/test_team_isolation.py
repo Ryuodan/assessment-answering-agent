@@ -16,7 +16,7 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from src import answer_memory, identity, knowledge, service, store
+from src import answer_memory, identity, knowledge, products, service, store
 from src.api import app
 from src.config import settings
 from src.models import IngestResult
@@ -226,6 +226,25 @@ def test_a_team_id_that_is_not_a_directory_name_is_refused(team):
         return
     with pytest.raises(ValueError):
         settings.team_upload_dir(team)
+
+
+@pytest.mark.parametrize("product", ["../x", "", "A/B", "a\\b", "..", "x" * 65])
+def test_a_product_folder_needs_an_id_that_can_name_a_directory(product):
+    with pytest.raises(ValueError):
+        settings.product_upload_dir(settings.default_team, product)
+
+
+def test_another_teams_product_files_cannot_be_listed_or_opened(teams):
+    theirs = products.add(None, OTHER, "Their product")
+    service.save_upload("Their product policy.pdf", b"%PDF-1.4 theirs", OTHER, product_id=theirs.id)
+    alice, carol = as_person(ALICE, CODE), as_person(CAROL, OTHER_CODE)
+
+    their_folder = settings.upload_dir.parent / "teams" / OTHER / "products" / theirs.id
+    assert (their_folder / "Their product policy.pdf").is_file(), "beside the team's own folder, never in another's"
+    assert [d["name"] for d in carol.get("/api/documents").json()["documents"]] == ["Their product policy.pdf"]
+    assert alice.get("/api/documents").json()["documents"] == []
+    assert alice.get("/api/documents/uploaded/uploaded/Their product policy.pdf/file").status_code == 404
+    assert carol.get("/api/documents/uploaded/uploaded/Their product policy.pdf/file").status_code == 200
 
 
 def test_an_admin_cannot_create_a_team_that_would_name_a_path(teams):

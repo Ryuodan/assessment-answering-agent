@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
-from src import service
+from src import knowledge, products, service
 from src.api import app
 from src.config import settings
+from tests.conftest import FakeVectorStore, bare_store
+
+TEAM = settings.default_team
+
+
+@pytest.fixture
+def stores(monkeypatch):
+    """A fake index per (team, product), so deleting a product never waits on Chroma."""
+    made: dict[tuple[str, str], knowledge.KnowledgeStore] = {}
+
+    def get_store(team_id=None, *, product_id=""):
+        key = (team_id or TEAM, product_id)
+        if key not in made:
+            made[key] = bare_store(FakeVectorStore([]))
+            made[key]._store.delete_collection = lambda key=key: made.pop(key, None)
+        return made[key]
+
+    monkeypatch.setattr("src.knowledge.get_store", get_store)
+    return made
 
 
 def _temporary_document_storage(monkeypatch, tmp_path):
@@ -31,6 +51,34 @@ def test_the_catalog_lists_what_was_uploaded_and_nothing_else(monkeypatch, tmp_p
 
     assert [document["name"] for document in documents] == ["customer-policy.pdf"]
     assert documents[0]["origin"] == "uploaded"
+
+
+def test_the_library_shows_which_product_a_file_belongs_to(stores):
+    availo = products.add(None, TEAM, "Availo")
+    service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=availo.id)
+    service.save_upload("Shared policy.pdf", b"%PDF-1.4 shared", TEAM)
+
+    listed = {doc["name"]: (doc["product_id"], doc["product_name"]) for doc in service.list_documents(TEAM)}
+    assert listed == {"Availo policy.pdf": (availo.id, "Availo"), "Shared policy.pdf": ("", "")}
+
+    with TestClient(app) as client:
+        documents = client.get("/api/documents").json()["documents"]
+    assert {doc["name"]: (doc["product_id"], doc["product_name"]) for doc in documents} == listed
+
+
+def test_a_product_file_opens_by_name_until_its_product_is_deleted(stores):
+    availo = products.add(None, TEAM, "Availo")
+    service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=availo.id)
+
+    with TestClient(app) as client:
+        opened = client.get("/api/documents/uploaded/uploaded/Availo policy.pdf/file")
+        assert (opened.status_code, opened.content) == (200, b"%PDF-1.4 availo")
+
+        assert client.delete(f"/api/products/{availo.id}?confirm=confirm").status_code == 200
+
+        gone = client.get("/api/documents/uploaded/uploaded/Availo policy.pdf/file")
+        assert (gone.status_code, gone.json()["code"]) == (404, "document_not_found")
+        assert client.get("/api/documents").json()["documents"] == []
 
 
 def test_document_resolution_rejects_traversal(monkeypatch, tmp_path):

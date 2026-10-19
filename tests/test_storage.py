@@ -20,6 +20,7 @@ from src import batches, events, identity, storage
 from src.config import settings
 from src.forms.model import DetectedForm
 from src.identity import User
+from src.uploads import extracted_text_cache_path
 from tests.conftest import FakeVectorStore, bare_store
 
 NOW = datetime(2026, 9, 20, tzinfo=timezone.utc)
@@ -121,9 +122,7 @@ def test_over_the_limit_the_longest_unused_work_goes_first_until_under(indexed, 
     oldest = questionnaire(ALICE, "Oldest.xlsx", 1, days_old=400)
     middle = questionnaire(ALICE, "Middle.xlsx", 1, days_old=200)
     newest = questionnaire(ALICE, "Newest.xlsx", 0.5, days_old=100)
-    from src.service import _extracted_text_cache_path
-
-    read_out = _extracted_text_cache_path(oldest.source_path)
+    read_out = extracted_text_cache_path(oldest.source_path)
     read_out.parent.mkdir(parents=True, exist_ok=True)
     read_out.write_text("the other company's answers", encoding="utf-8")
 
@@ -200,6 +199,24 @@ def test_the_knowledge_bases_own_documents_are_never_removed(indexed, limit):
     checked = storage.enforce(ALICE, now=NOW)
 
     assert policy.exists() and checked.removed == [] and checked.over
+
+
+def test_a_products_documents_count_against_nobody_and_are_never_removed(indexed, limit):
+    """A product's knowledge base is kept in a folder of its own (plan 027),
+    which no person's limit walks: its files go with the product, not with age."""
+    limit(1)
+    old = questionnaire(ALICE, "Old.xlsx", 1.5, days_old=400)
+    folder = settings.product_upload_dir(ALICE.team_id, "a1b2c3d4e5f6")
+    folder.mkdir(parents=True)
+    policy = folder / "Availo policy.pdf"
+    policy.write_bytes(b"x" * MB)
+    _age(policy, 900)
+
+    checked = storage.enforce(ALICE, now=NOW)
+
+    assert not old.source_path.exists(), "the person's own old work goes"
+    assert policy.exists() and checked.removed == ["questionnaire: Old.xlsx"]
+    assert checked.used_bytes == 0, "and the product's file never counted against them"
 
 
 def test_each_person_has_their_own_limit_and_only_their_own_files_count(indexed, limit):

@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src import service
+from src import identity, products, service
 from src.api import app
 from src.config import settings
 
@@ -111,6 +111,32 @@ def test_an_upload_lands_inside_the_upload_directory(client, isolated, monkeypat
     assert written, "the upload should have been saved"
     for path in written:
         assert path.parent == isolated, f"{path} escaped {isolated}"
+
+
+@pytest.mark.parametrize("name", ["../../.env.pdf", "a/b/c.pdf", r"..\..\evil.pdf"])
+def test_a_product_upload_lands_inside_its_products_folder(client, isolated, monkeypatch, name):
+    """The same for a product's knowledge base, whose folder is beside the team's (plan 027)."""
+
+    async def stub(path, source_type, authority="ours", team_id=None, **scope):
+        from src.models import IngestResult
+
+        return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=0)
+
+    monkeypatch.setattr(service, "ingest", stub)
+    identity.ensure_team(settings.default_team)
+    product = products.add(None, settings.default_team, "Availo")
+    folder = settings.product_upload_dir(settings.default_team, product.id)
+    response = client.post(
+        "/api/knowledge/guidelines",
+        files={"files": (name, b"%PDF-1.4 stub", "application/pdf")},
+        data={"product": product.id},
+    )
+
+    assert response.status_code == 200
+    written = [path for path in isolated.parent.rglob("*.pdf") if path.is_file()]
+    assert written, "the upload should have been saved"
+    for path in written:
+        assert path.parent == folder, f"{path} escaped {folder}"
 
 
 @pytest.mark.parametrize("name", [".", "..", "", "notes.txt", "archive.zip", "script.sh"])

@@ -35,7 +35,8 @@ Errors: [errors.md](errors.md).
 | `GET` | `/api/products` | The team's products, and whether the caller may change them. |
 | `POST` | `/api/products` | Add a product to the team. Its leads and administrators only. |
 | `PATCH` | `/api/products/{product_id}` | Rename, recolour or redescribe a product. Its team's leads and administrators only. |
-| `DELETE` | `/api/products/{product_id}` | Delete a product, with its documents and remembered answers. Needs `confirm=confirm`. |
+| `DELETE` | `/api/products/{product_id}` | Delete a product, with its documents and their files, and its remembered answers. Needs `confirm=confirm`. |
+| `GET` | `/api/products/{product_id}/deletion` | What deleting a product would remove, counted, for the page's warning. Changes nothing. |
 
 ## `/admin`
 
@@ -84,9 +85,9 @@ Errors: [errors.md](errors.md).
 | Method | Path | What it does |
 |---|---|---|
 | `GET` | `/api/knowledge` | What is currently indexed for the caller's team, shared or for one `product`. |
-| `DELETE` | `/api/knowledge` | Remove every policy document, shared or a `product`'s. The answer memory is left as it is. |
+| `DELETE` | `/api/knowledge` | Remove every policy document, shared or a `product`'s (with their files). The answer memory stays. |
 | `POST` | `/api/knowledge/guidelines` | Index policy and guideline documents. |
-| `DELETE` | `/api/knowledge/sources/{source_name}` | Remove one indexed policy document, from the shared knowledge base or a `product`'s. |
+| `DELETE` | `/api/knowledge/sources/{source_name}` | Remove one indexed policy document, from the shared knowledge base or a `product`'s (with its file). |
 
 ## `/api/memory`
 

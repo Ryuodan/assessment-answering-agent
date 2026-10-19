@@ -168,6 +168,24 @@ def test_another_teams_product_is_absent_from_the_memory_routes(stores, availo, 
         assert (response.status_code, response.json()["code"]) == (404, "product_not_found")
 
 
+def test_a_shared_answer_moved_into_a_product_is_counted_and_forgotten_with_it(stores, availo, alice) -> None:
+    """As the user confirmed (TD-040): an answer moved in from Shared is the
+    product's now, and goes with it rather than back to Shared. The warning
+    before the delete counts it, so it is not forgotten silently."""
+    entry = answer_memory.record("Is MFA enforced?", "Yes, for every account.", team_id=TEAM)
+    answer_memory.record("Do you pen-test?", "Yes, yearly.", team_id=TEAM, product_id=availo.id)
+    assert alice.post(f"/api/memory/{entry.entry_id}/move", json={"product": availo.id}).status_code == 200
+    assert products.deletion_preview(TEAM, availo.id)["answers"] == {"remembered": 2, "moved_from_shared": 1}
+
+    lead = identity.add_user("lead@example.test", role=roles.LEAD)
+    deletion = products.delete(lead, TEAM, availo.id, confirm="confirm")
+
+    assert (deletion.answers_forgotten, deletion.moved_from_shared) == (2, 1)
+    assert answer_memory.get(entry.entry_id, TEAM) is None
+    assert entry.entry_id not in ids(answer_memory.entries(product_id=""))
+    assert (TEAM, availo.id) not in stores, "and its collection"
+
+
 def test_a_version_11_database_upgrades_and_its_answers_stay_shared() -> None:
     conn = store.connect()
     tables = [

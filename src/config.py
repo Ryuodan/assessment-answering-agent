@@ -489,6 +489,25 @@ class Settings(BaseSettings):
             raise ValueError(f"{team!r} cannot name a directory.")
         return self.upload_dir.parent / "teams" / team / "uploads"
 
+    def products_upload_root(self, team_id: str | None = None) -> Path:
+        """Where a team's products keep their knowledge-base files, a folder each.
+
+        Beside the team's own folder and its people's, never inside either: so
+        nothing that walks those (the document library, the storage limit)
+        mistakes a product's policy for a team policy or a questionnaire.
+        """
+        return self.team_upload_dir(team_id).parent / "products"
+
+    def product_upload_dir(self, team_id: str | None, product_id: str) -> Path:
+        """Where one product's knowledge-base files are kept, and go with it when it is deleted (plan 027).
+
+        Named by the product's id, which a rename does not change. The id is
+        checked before it becomes part of a path, as a team's is.
+        """
+        if not re.fullmatch(r"[a-z0-9]{1,64}", product_id or ""):
+            raise ValueError(f"{product_id!r} cannot name a directory.")
+        return self.products_upload_root(team_id) / product_id
+
     def ensure_directories(self) -> None:
         """Create the directories the app writes to. Safe to call repeatedly."""
         self.chroma_dir.mkdir(parents=True, exist_ok=True)

@@ -32,7 +32,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
 
-- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.vector_names`, `src.forms.*`
+- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.uploads`, `src.vector_names`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
 | Module | What it is |
@@ -59,6 +59,7 @@ Everything that talks to something outside the process: model providers, the emb
 | `src/rerank.py` | Cross-encoder reranking of retrieved evidence. |
 | `src/scoped_knowledge.py` | A team's knowledge base, shared or for one product (plan 021). |
 | `src/store.py` | SQLite storage for identity, the event log, and answered runs. |
+| `src/uploads.py` | Uploaded files on disk: which folders hold them, how one is named, and how they go. |
 | `src/vector_names.py` | What the vector store calls things, and how it scores them. |
 
 ## 3. records
@@ -150,7 +151,6 @@ Each is on `harness/arch-allowlist.toml` against a tech-debt item, and may only 
 | Rule | Module | Imports | Debt |
 |---|---|---|---|
 | ARCH-LAYER | `src.knowledge` | `src.answer_memory` | TD-007 |
-| ARCH-LAYER | `src.storage` | `src.service` | TD-007 |
 | ARCH-OWNER | `src.config` | `phoenix` | TD-009 |
 | ARCH-OWNER | `src.config` | `openinference` | TD-009 |
 | ARCH-OWNER | `src.service` | `docx` | TD-019 |

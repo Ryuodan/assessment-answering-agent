@@ -203,6 +203,7 @@
   .document-card .doc-title { font-weight: 600; font-size: 13.5px; word-break: break-word; }
   .document-card .doc-name { color: var(--ink-faint); font-size: 11.5px; word-break: break-all; }
   .document-card .doc-meta { color: var(--ink-faint); font-size: 11.5px; }
+  .document-card .doc-meta .tag { margin-inline-start: 4px; }
   .document-card .row { margin-top: auto; gap: 7px; }
   .document-card button { padding: 6px 11px; font-size: 12.5px; }
 
@@ -1749,6 +1750,8 @@
     meta.className = "doc-meta";
     meta.textContent = doc.label + " · " + doc.extension.toUpperCase() +
       (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
+    const product = productOfDocument(doc);
+    if (product) meta.append(product);
 
     const actions = document.createElement("div");
     actions.className = "row";
@@ -1761,6 +1764,21 @@
 
     card.append(title, name, meta, actions);
     return card;
+  }
+
+  /* A product's file is its knowledge base, badged like its sources and
+     questionnaires (plan 027). Until the team's products have loaded, the name
+     the library gave is shown without the product's colour. */
+  function productOfDocument(doc) {
+    if (!doc.product_id) return null;
+    const title = "In " + doc.product_name + "'s knowledge base. It goes if the product is deleted.";
+    const badge = Cards.productBadge(doc.product_id, title);
+    if (badge) return badge;
+    const tag = document.createElement("span");
+    tag.className = "tag product";
+    tag.textContent = doc.product_name;
+    tag.title = title;
+    return tag;
   }
 
   function renderDocuments() {
@@ -3443,6 +3461,7 @@
       teamProducts = (await request("/api/products")).products || [];
     } catch (error) { teamProducts = []; }
     Cards.setProducts(teamProducts);
+    if (documents.length) renderDocuments();  // the library's product badges, in their colours
     const select = $("formProduct");
     select.replaceChildren(new Option("General", ""));
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));

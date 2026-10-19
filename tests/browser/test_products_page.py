@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from src import identity, knowledge, products, roles
+from src import answer_memory, batches, events, identity, knowledge, products, roles, service
 from src.config import settings
+from src.forms.model import DetectedForm
+from src.identity import User
 from tests.conftest import FakeVectorStore, bare_store
 
 pytestmark = pytest.mark.browser
@@ -14,6 +16,7 @@ pytestmark = pytest.mark.browser
 CODE = "BROWSER-TEST-CODE"
 LEAD = "lead@example.test"
 MEMBER = "member@example.test"
+TEAM = settings.default_team
 
 
 @pytest.fixture(autouse=True)
@@ -52,6 +55,22 @@ def sign_in(page: Page, email: str) -> None:
     expect(page.locator("#authGate")).to_be_hidden()
 
 
+def give_it_work(product: products.Product) -> None:
+    """A document with its file, an answer moved in from Shared, and a questionnaire."""
+    service.save_upload("Availo policy.pdf", b"%PDF-1.4 availo", TEAM, product_id=product.id)
+    metadata = {"source_name": "Availo policy.pdf", "source_type": "guideline"}
+    knowledge.get_store(TEAM, product_id=product.id)._store.records.append(
+        {"text": "policy", "metadata": metadata, "id": "policy"}
+    )
+    lead = identity.find_user(LEAD)
+    entry = answer_memory.record("Is MFA enforced?", "Yes.", team_id=TEAM, product_id=product.id, index=False)
+    events.record(
+        lead, events.MEMORY_EDITED, subject_type="memory_entry", subject_id=entry.entry_id, moved_to=product.id
+    )
+    form = DetectedForm(source_name="Vendor.xlsx", format="xlsx")
+    batches.create(User(email=MEMBER, team_id=TEAM), settings.upload_dir / "Vendor.xlsx", form, product.id)
+
+
 def test_a_lead_adds_a_product_and_deletes_it_only_after_typing_confirm(page: Page, team: None) -> None:
     sign_in(page, LEAD)
     page.fill("#productName", "Availo")
@@ -59,12 +78,19 @@ def test_a_lead_adds_a_product_and_deletes_it_only_after_typing_confirm(page: Pa
     page.click("#addProduct")
     card = page.locator(".product", has_text="Availo")
     expect(card).to_be_visible()
+    availo = products.list_products(TEAM)[0]
+    give_it_work(availo)
 
     card.get_by_role("button", name="Delete").click()
     dialog = page.locator("#deleteDialog")
     expect(dialog).to_be_visible()
     warning = dialog.locator(".danger-box")
-    expect(warning).to_contain_text("permanently deletes Availo's documents and its remembered answers")
+    expect(warning).to_contain_text("This cannot be undone")
+    expect(warning).to_contain_text("1 document (1 passage), and its file on the server")
+    expect(warning).to_contain_text("Availo policy.pdf")
+    expect(warning).to_contain_text("1 remembered answer, including 1 moved here from Shared")
+    expect(warning).to_contain_text("not moved back to Shared")
+    expect(dialog.locator("#deleteStays")).to_contain_text("1 questionnaire and 0 chats for Availo become General")
     # The warning is in the page's error colour, whichever theme is on: the same
     # computed colour as an element painted with var(--err).
     colour, error = warning.evaluate(
@@ -79,7 +105,7 @@ def test_a_lead_adds_a_product_and_deletes_it_only_after_typing_confirm(page: Pa
     )
     assert colour == error, f"the warning is {colour}, the error colour is {error}"
 
-    go = dialog.get_by_role("button", name="Delete product")
+    go = dialog.get_by_role("button", name="Delete permanently")
     expect(go).to_be_disabled()
     page.fill("#deleteConfirm", "conf")
     expect(go).to_be_disabled()
@@ -89,7 +115,37 @@ def test_a_lead_adds_a_product_and_deletes_it_only_after_typing_confirm(page: Pa
 
     expect(dialog).to_be_hidden()
     expect(page.locator(".product", has_text="Availo")).to_have_count(0)
-    assert products.list_products(settings.default_team) == []
+    expect(page.locator("#listStatus")).to_contain_text(
+        "Deleted Availo: 1 file and 1 remembered answer removed; 1 questionnaire and 0 chats are now General."
+    )
+    assert products.list_products(TEAM) == []
+    assert not settings.product_upload_dir(TEAM, availo.id).exists()
+
+
+def test_the_delete_dialog_still_warns_when_the_counts_cannot_be_read(page: Page, team: None) -> None:
+    products.add(identity.find_user(LEAD), TEAM, "Msegat")
+    page.route(
+        "**/deletion",
+        lambda route: route.fulfill(status=500, content_type="application/json", body='{"detail": "It broke."}'),
+    )
+    sign_in(page, LEAD)
+
+    page.locator(".product", has_text="Msegat").get_by_role("button", name="Delete").click()
+    dialog = page.locator("#deleteDialog")
+    warning = dialog.locator(".danger-box")
+    expect(warning).to_contain_text("every document, and its file on the server")
+    expect(warning).to_contain_text("every remembered answer, including any moved here from Shared")
+    expect(dialog.locator("#deleteStays")).to_contain_text("Its questionnaires and chats become General")
+    expect(dialog.locator("#deleteStatus")).to_contain_text("Could not count what would be deleted (It broke.)")
+
+    go = dialog.get_by_role("button", name="Delete permanently")
+    expect(go).to_be_disabled()
+    page.fill("#deleteConfirm", "confirm")
+    expect(go).to_be_enabled()
+    go.click()
+
+    expect(dialog).to_be_hidden()
+    assert products.list_products(TEAM) == []
 
 
 def test_a_member_sees_the_products_but_nothing_to_change_them_with(page: Page, team: None) -> None:
