@@ -279,6 +279,27 @@ def test_deleting_reports_what_it_removed(gated, stores) -> None:
     assert not (settings.team_upload_dir(TEAM) / "Availo legacy.pdf").exists()
 
 
+def test_a_file_from_before_the_folder_uploaded_again_to_the_product_is_said_to_stay(gated, stores) -> None:
+    """A product's file from before it had a folder, refreshed with the same bytes: its folder now
+    has a copy, and the team folder's -- which nothing tells from a shared upload of that name -- is
+    not taken for its own. It stays in the library, so the warning must not promise it leaves."""
+    lead = identity.find_user(LEAD)
+    availo = products.add(lead, TEAM, "Availo")
+    legacy = settings.team_upload_dir(TEAM) / "Policy.pdf"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_bytes(b"%PDF-1.4 the same")
+    own = service.save_upload("Policy.pdf", b"%PDF-1.4 the same", TEAM, product_id=availo.id)
+    metadata = {"source_name": "Policy.pdf", "source_type": "guideline", "chunk": 0}
+    knowledge.get_store(TEAM, product_id=availo.id)._store.records.append(
+        {"text": "policy", "metadata": metadata, "id": "policy"}
+    )
+
+    counted = products.deletion_preview(TEAM, availo.id)["documents"]
+    assert (counted["files"], counted["names"], counted["kept"]) == (1, ["Policy.pdf"], 1), "its copy goes; one stays"
+    assert products.delete(lead, TEAM, availo.id, confirm="confirm").files_removed == 1
+    assert legacy.exists() and not own.exists(), "as the warning said"
+
+
 def test_a_deleted_product_is_listed_as_deleted_and_its_name_is_free_again(gated, stores) -> None:
     """Its questionnaires and chats keep its id (plan 027): they are labelled with
     the name it had, and stay read-only even when a new product takes the name."""

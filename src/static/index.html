@@ -3312,15 +3312,25 @@
      Both run the same rewrite over the answer and the sources it was built
      from, so nothing is retrieved or reviewed again. */
   async function applyWording(instruction, answers, status, scope) {
+    /* The questionnaire this was asked for. Close does not wait for the first,
+       loose step -- it rewords only questions typed beside the file, which
+       Close asks about and takes away -- so by the time that step returns the
+       page may have put this one away, or opened another. What comes back is
+       then for nothing on the page: it is dropped, and the questionnaire's own
+       step is not asked for. Read off a closed one, it raised "Cannot read
+       properties of null" into the status line. By id: every change to the
+       open questionnaire brings a new copy of it. */
+    const batch = formBatch;
+    const putAway = () => Boolean(batch) && (!formBatch || formBatch.id !== batch.id);
     const covering = answers || (result ? result.answers : []);
     // Split the same way answering does: a questionnaire's own rows go through
     // the batch, so the reworded text reaches the cells; a question typed
     // beside them has no cell, so its answer goes out and comes back.
     const loose = covering.filter((answer) => {
       const entry = questions.find((q) => q.key === answer.__key);
-      return answer.answer && !answer.error && !(formBatch && entry && entry.formId);
+      return answer.answer && !answer.error && !(batch && entry && entry.formId);
     });
-    const throughBatch = formBatch &&
+    const throughBatch = batch &&
       covering.some((answer) => !loose.includes(answer) && answer.answer && !answer.error);
 
     if (!loose.length && !throughBatch) {
@@ -3329,10 +3339,16 @@
     }
 
     setStatus(status, "Rewording the answers…", "busy");
-    const stop = watchProgress(formBatch ? formBatch.id : rewordRunId(), (state) => {
+    const stop = watchProgress(batch ? batch.id : rewordRunId(), (state) => {
       status.innerHTML = progressMessage(state);
       status.className = "status busy";
     });
+    // Takes its progress off the status line Close cleared, unless an answering run has it now.
+    const dropped = () => {
+      stop();
+      if (!answering) setStatus(status, "");
+      return 0;
+    };
     let done = 0;
     try {
       if (loose.length) {
@@ -3349,6 +3365,7 @@
             run_id: rewordRunId(),
           }),
         });
+        if (putAway()) return dropped();
         // Positional, the same contract the answering endpoint keeps: the keys
         // ride back onto the answers so the cards stay tied to their rows.
         reply.answers.forEach((revised, index) => {
@@ -3359,11 +3376,12 @@
       }
 
       if (throughBatch) {
-        const outcome = await request("/api/forms/" + formBatch.id + "/revise", {
+        const outcome = await request("/api/forms/" + batch.id + "/revise", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ instruction: instruction, scope: scope || {} }),
         });
+        if (putAway()) return dropped();  // Close waits for this step; another file opened meanwhile does not
         // `adoptBatch` rebuilds from the file's rows and carries the typed
         // questions and their answers across, so the reworded loose answers
         // above are still there afterwards.
@@ -3376,6 +3394,7 @@
       setStatus(status, "Reworded " + done + " answer(s).", "ok");
       return done;
     } catch (error) {
+      if (putAway()) return dropped();
       setStatus(status, error.message, "error");
       return done;
     } finally {

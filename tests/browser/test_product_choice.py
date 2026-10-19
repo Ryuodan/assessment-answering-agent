@@ -14,6 +14,7 @@ workbench (TD-041).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -217,7 +218,10 @@ def test_a_deleted_product_chosen_before_the_first_message_is_refused_beside_the
     assert conversations.recent(TEAM) == [], "nothing was saved"
 
     page.click("#send")  # as General, now
-    expect(page.locator("#thread .turn.assistant")).to_have_count(1)
+    # The reply itself, not the "working" placeholder drawn before the request is sent:
+    # the chat is saved only by the time the reply arrives.
+    expect(page.locator("#thread .turn.assistant:not(.working)")).to_have_count(1)
+    expect(page.locator("#thread .turn.working")).to_have_count(0)
     expect(note).to_be_hidden()
     [chat] = conversations.recent(TEAM)
     assert chat["product_id"] == ""
@@ -364,6 +368,43 @@ def test_close_waits_for_a_request_about_the_questionnaire(
     close.click()
     expect(close).to_be_hidden()
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(0)
+
+
+def test_closing_while_typed_questions_are_reworded_drops_what_comes_back(
+    page: Page, tmp_path: Path, availo: products.Product, answers_from_availo: None
+) -> None:
+    """Close does not wait for the rewording of questions typed beside the file: Close takes them
+    away. Their reply, arriving after, went on to the questionnaire's own step, read the closed
+    one's id, and said "Cannot read properties of null (reading 'id')" in the status line."""
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    page.click("#addQuestionBtn")
+    page.get_by_role("textbox", name="Type a question").last.fill("Do you test your backups?")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(5, timeout=15_000)
+    held, asked = [], []
+    page.route("**/api/assessments/revise", lambda route: held.append(route))
+    page.on("request", lambda request: asked.append(request.url) if request.url.endswith("/revise") else None)
+
+    page.fill("#reviseInstruction", "Shorter, please.")
+    page.click("#reviseBtn")
+    page.wait_for_function("() => document.querySelector('#reviseBtn').disabled")
+    assert len(held) == 1
+    page.once("dialog", lambda dialog: dialog.accept())  # the typed question goes with it
+    page.click("#closeForm")
+    expect(page.locator("#closeForm")).to_be_hidden()
+    held[0].fulfill(json={"answers": json.loads(held[0].request.post_data or "{}")["answers"]})
+
+    expect(page.locator("#reviseBtn")).to_be_enabled()  # the rewording has finished
+    status = page.locator("#answerStatus")
+    expect(status).not_to_contain_text("Cannot read properties")
+    expect(status).not_to_contain_text("Reworded")
+    assert [url for url in asked if "/api/forms/" in url] == [], "the closed questionnaire is not reworded"
+    expect(page.locator("#resultsCard")).to_be_hidden()
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(0)
+    expect(page.locator("#extractStatus")).to_contain_text("Closed vendor.xlsx")
 
 
 def test_chat_sources_from_a_product_carry_its_badge(

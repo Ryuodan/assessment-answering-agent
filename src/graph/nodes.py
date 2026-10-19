@@ -326,9 +326,9 @@ async def finalize(state: QuestionState) -> dict:
     # Recover the sources the drafter used but did not list; see `evidence_for`.
     cited = evidence_for(drafted.answer, cited, shown or retrieved)
 
-    # Clause-level locators for the sources that survived. Order-preserving and
-    # de-duplicated, because several chunks of one clause collapse to one citation.
-    citations = list(dict.fromkeys(item.locator for item in cited))
+    # Clause-level locators for the sources that survived, in order. Several chunks of one clause are one citation;
+    # remembered answers approved on one day share "Answer memory (date)", and each is still its own (plan 027).
+    citations = [locator for locator, _ in dict.fromkeys((item.locator, item.entry_id) for item in cited)]
 
     confidence, needs_review, review_reasons = assess(
         drafted.answer,

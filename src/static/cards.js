@@ -733,6 +733,22 @@ const Cards = (window.Cards = {
       "From this product's own knowledge base. The drafter was told it takes precedence over the shared one.");
   }
 
+  /* The source behind each citation, in the citations' order. A citation is a
+     locator, and remembered answers approved on one day share one -- "Answer
+     memory (2026-10-19)" -- so each is cited, and here takes the next source
+     with that locator not yet taken (plan 027). Found by locator alone, every
+     such chip opened the first, and a product's own answer cited after a
+     shared one could not be read. Several chunks of one clause are one
+     citation, which takes the first of them, as it always did. */
+  function citedSources(item) {
+    const taken = new Set();
+    return item.citations.map((citation) => {
+      const source = (item.evidence || []).find((e) => !taken.has(e) && (e.locator || e.source_name) === citation);
+      if (source) taken.add(source);
+      return source;
+    });
+  }
+
   function citationsField(item) {
     const field = labelledField("Sources cited — click to read the clause", "accent");
     const cites = document.createElement("div");
@@ -743,9 +759,10 @@ const Cards = (window.Cards = {
 
     let openButton = null;
     const sourceTypes = new Set();
+    const sources = citedSources(item);
 
-    item.citations.forEach((citation) => {
-      const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
+    item.citations.forEach((citation, position) => {
+      const source = sources[position];
       const mark = authorityBadge(source && source.authority);
       const kind = source ? source.source_type : "unknown";
       if (source) sourceTypes.add(kind);
@@ -780,7 +797,7 @@ const Cards = (window.Cards = {
         if (openButton) openButton.setAttribute("aria-expanded", "false");
         openButton = chip;
         chip.setAttribute("aria-expanded", "true");
-        showChunk(panel, item, citation);
+        showChunk(panel, citation, source);
       };
 
       cites.append(chip);
@@ -1055,8 +1072,9 @@ const Cards = (window.Cards = {
     return /^\|?[\s:|-]+\|?$/.test(line.trim()) && line.indexOf("-") >= 0;
   }
 
-  function showChunk(panel, item, citation) {
-    const source = (item.evidence || []).find((e) => (e.locator || e.source_name) === citation);
+  /* `source` is the citation's own, from `citedSources`; undefined when the
+     chunk behind it was not kept. */
+  function showChunk(panel, citation, source) {
     panel.innerHTML = "";
     panel.hidden = false;
 

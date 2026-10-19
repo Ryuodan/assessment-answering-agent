@@ -234,7 +234,11 @@ def move_memory_entry(
     entry_id: str, body: MoveRequest, tasks: BackgroundTasks, user: User = Depends(current_user)
 ) -> dict[str, Any]:
     """Move an entry to the shared memory (`product` empty) or a product's, and compare it again there."""
-    moved = answer_memory.move(entry_id, _scope(user, body.product), user.team_id)
+    scope = _scope(user, body.product)
+    # Where from as well as where to: a product's delete counts only the answers moved into it from
+    # Shared as such (plan 027), not one moved in from another product.
+    before = answer_memory.get(entry_id, user.team_id)
+    moved = answer_memory.move(entry_id, scope, user.team_id)
     if moved is None:
         raise NotFound("No such entry in the answer memory.", code="memory_entry_not_found")
     events.record(
@@ -242,6 +246,7 @@ def move_memory_entry(
         events.MEMORY_EDITED,
         subject_type=tools.SUBJECT_MEMORY,
         subject_id=entry_id,
+        moved_from=before.product_id if before else "",
         moved_to=moved.product_id,
     )
     tasks.add_task(scan_memory)
