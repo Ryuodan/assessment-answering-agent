@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src import answer_memory, identity, knowledge, memory_sweep, products, roles, store
+from src import answer_memory, events, identity, knowledge, memory_sweep, products, roles, store
 from src.api import app
 from src.config import settings
 from src.models import Evidence, SourceType
@@ -184,6 +184,38 @@ def test_a_shared_answer_moved_into_a_product_is_counted_and_forgotten_with_it(s
     assert answer_memory.get(entry.entry_id, TEAM) is None
     assert entry.entry_id not in ids(answer_memory.entries(product_id=""))
     assert (TEAM, availo.id) not in stores, "and its collection"
+
+
+def test_only_answers_moved_in_from_shared_are_counted_as_such(stores, availo, alice) -> None:
+    """The move records where from (plan 027). An answer moved in from another product was
+    counted, in the delete dialog and its event, as "moved here from Shared"."""
+    msegat = products.add(None, TEAM, "Msegat")
+    from_shared = answer_memory.record("Is MFA enforced?", "Yes, for every account.", team_id=TEAM)
+    from_msegat = answer_memory.record("Do you pen-test?", "Yes, yearly.", team_id=TEAM, product_id=msegat.id)
+    for entry in (from_shared, from_msegat, from_shared):  # the last to where it already is: no move
+        assert alice.post(f"/api/memory/{entry.entry_id}/move", json={"product": availo.id}).status_code == 200
+
+    query = "SELECT subject_id, payload FROM events WHERE kind = ? ORDER BY id"
+    moves = [
+        (r["subject_id"], store.loads(r["payload"])) for r in store.connect().execute(query, (events.MEMORY_EDITED,))
+    ]
+    assert [(entry, move["moved_from"], move["moved_to"]) for entry, move in moves] == [
+        (from_shared.entry_id, "", availo.id),
+        (from_msegat.entry_id, msegat.id, availo.id),
+        (from_shared.entry_id, availo.id, availo.id),
+    ]
+    assert products.deletion_preview(TEAM, availo.id)["answers"] == {"remembered": 2, "moved_from_shared": 1}
+
+
+def test_a_move_recorded_before_it_said_where_from_counts_as_from_shared(stores, availo) -> None:
+    """Events from before plan 027 name only `moved_to`; their answers are counted as they were."""
+    entry = answer_memory.record("Is MFA enforced?", "Yes.", team_id=TEAM, product_id=availo.id)
+    lead = identity.add_user("lead@example.test", role=roles.LEAD)
+    events.record(
+        lead, events.MEMORY_EDITED, subject_type="memory_entry", subject_id=entry.entry_id, moved_to=availo.id
+    )
+
+    assert products.deletion_preview(TEAM, availo.id)["answers"] == {"remembered": 1, "moved_from_shared": 1}
 
 
 def test_a_version_11_database_upgrades_and_its_answers_stay_shared() -> None:

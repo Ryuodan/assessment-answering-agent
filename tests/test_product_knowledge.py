@@ -294,7 +294,7 @@ def test_a_shared_file_of_the_same_name_as_a_products_own_is_not_taken_for_its_l
     staged(knowledge.get_store(TEAM, product_id=availo.id), "X.pdf", 0.9)
 
     counted = products.deletion_preview(TEAM, availo.id)["documents"]
-    assert (counted["files"], counted["names"], counted["kept"]) == (1, ["X.pdf"], 0), "counted once"
+    assert (counted["files"], counted["names"], counted["kept"]) == (1, ["X.pdf"], 1), "counted once; the team's stays"
     assert products.delete(lead, TEAM, availo.id, confirm="confirm").files_removed == 1
 
     assert shared.exists() and not own.exists()

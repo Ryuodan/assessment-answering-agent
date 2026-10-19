@@ -189,6 +189,38 @@ def test_a_deleted_products_chat_is_shown_read_only(page: Page, availo: products
     expect(page.locator("#send")).to_be_enabled()
 
 
+def test_a_deleted_products_chat_shows_its_questionnaire_read_only_and_can_still_fill_it(
+    page: Page, tmp_path: Path, availo: products.Product
+) -> None:
+    """The answers beside the chat: drawn without the controls that would change them, and
+    without the length and skill pickers; Fill and Download still work."""
+    user = identity.local_user()
+    batch = tools.open_form(user, shapes.simple(tmp_path / "vendor.xlsx"), product_id=availo.id)
+    question = next(q for q in batch.form.questions if q.writable)
+    tools.set_answer(user, batch.id, question.id, WRITTEN)  # typed, and not approved: a live card offers Approve
+    conversation = assistant.start(user, "Open vendor.xlsx", availo.id)
+    conversation.batch_id = batch.id
+    conversation.messages = [HumanMessage("Open vendor.xlsx"), AIMessage("It has 4 questions.")]
+    conversations.save(conversation)
+    delete(availo)
+
+    page.goto("/")
+    page.locator("#historyList .convo").click()
+    expect(page.locator("#composerNote")).to_contain_text("Availo was deleted")
+    pane = page.locator("#answers")
+    card = pane.locator(".answer", has_text=WRITTEN)
+    expect(card).to_be_visible()
+    expect(card.get_by_role("button", name="Approve")).to_have_count(0)
+    expect(card.get_by_role("button", name="Leave blank")).to_have_count(0)
+    expect(pane.locator(".pick-row")).to_have_count(0)  # the length and skill pickers change every answer
+
+    page.click("#fillBtn")
+    expect(page.locator("#thread .turn.assistant").last).to_contain_text("Wrote 1 value(s) into")
+    with page.expect_download() as download:
+        page.click("#downloadBtn")
+    assert download.value.suggested_filename.endswith(".xlsx")
+
+
 def test_a_chat_open_when_its_product_is_deleted_becomes_read_only_on_the_next_message(
     page: Page, availo: products.Product, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -199,7 +231,8 @@ def test_a_chat_open_when_its_product_is_deleted_becomes_read_only_on_the_next_m
     page.select_option("#productPick", availo.id)
     page.fill("#prompt", "Hello")
     page.click("#send")
-    expect(page.locator("#thread .turn.assistant")).to_have_count(1)
+    # The reply, not the "working" placeholder drawn before the request is sent: the chat is saved by then.
+    expect(page.locator("#thread .turn.assistant:not(.working)")).to_have_count(1)
     [chat] = conversations.recent(TEAM)
     delete(availo)  # in another tab, by a lead
 

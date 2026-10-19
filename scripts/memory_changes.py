@@ -95,10 +95,13 @@ def apply(changes: Changes, user: User) -> int:
             made += 1
     for move in changes.move:
         target = named[move.product.casefold()] if move.product else ""
+        before = answer_memory.get(move.entry_id, user.team_id)
         moved = answer_memory.move(move.entry_id, target, user.team_id)
         if moved is not None and moved.product_id == target:
+            # Where from, as the page records it: a product's delete counts the moves in from Shared (plan 027).
             events.record(user, events.MEMORY_EDITED, subject_type=SUBJECT, subject_id=move.entry_id,
-                          moved_to=target, reason=move.reason, via="scripts.memory_changes")  # fmt: skip
+                          moved_from=before.product_id if before else "", moved_to=target,
+                          reason=move.reason, via="scripts.memory_changes")  # fmt: skip
             made += 1
     return made
 

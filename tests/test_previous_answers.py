@@ -19,6 +19,7 @@ from src.graph.state import merge_evidence
 from src.memory import Entry
 from src.models import Evidence, Question, SourceType
 from src.prompts import format_sources_block
+from src.schemas import AnswerReview, DraftedAnswer
 from tests.conftest import FakeDocument, FakeVectorStore, bare_store
 
 TEAM = settings.default_team
@@ -133,6 +134,48 @@ async def test_no_answer_is_credited_with_the_searches_that_found_another(collec
     evidence = await retrieved()
 
     assert {item.entry_id: item.query_hits for item in evidence} == {"mem-a": 1, "mem-b": 1, "mem-c": 2}
+
+
+@pytest.mark.asyncio
+async def test_each_cited_remembered_answer_is_its_own_citation(collections) -> None:
+    """Approved on one day, both are "Answer memory (2026-10-01)". The citations were
+    de-duplicated by that locator, so the card showed one chip for the two, and the
+    product's own, cited after the shared one, could not be read (plan 027)."""
+    own = remembered("mem-own", 0.71, product_id=PRODUCT)
+    shared = remembered("mem-shared", 0.83)
+    state = {
+        "question": Question(id="q1", text=QUERIES[0]),
+        "language": "en",
+        "evidence": await retrieved(PRODUCT),
+        "draft": DraftedAnswer(answer="Yes, MFA is enforced.", confidence=0.9, used_source_ids=[1, 2]),
+        "review": AnswerReview(grounded=True, confidence=0.9),
+    }
+
+    answered = (await nodes.finalize(state))["answered"]
+
+    assert [(item.entry_id, item.product_id) for item in answered.evidence] == [(shared, ""), (own, PRODUCT)]
+    assert answered.citations == ["Answer memory (2026-10-01)", "Answer memory (2026-10-01)"], "one each"
+
+
+@pytest.mark.asyncio
+async def test_several_chunks_of_one_clause_are_still_one_citation() -> None:
+    """The rule the citations were de-duplicated for, which stays."""
+    clause = {"source_type": SourceType.GUIDELINE, "source_name": "std.pdf", "clause_start": "7.2.1", "page": 4}
+    state = {
+        "question": Question(id="q1", text=QUERIES[0]),
+        "language": "en",
+        "evidence": [
+            Evidence(**clause, snippet="first part", chunk=3, score=0.8),
+            Evidence(**clause, snippet="second part", chunk=4, score=0.7),
+        ],
+        "draft": DraftedAnswer(answer="Yes.", confidence=0.9, used_source_ids=[1, 2]),
+        "review": AnswerReview(grounded=True, confidence=0.9),
+    }
+
+    answered = (await nodes.finalize(state))["answered"]
+
+    assert len(answered.evidence) == 2
+    assert answered.citations == ["std.pdf §7.2.1 (Page: 4)"]
 
 
 @pytest.mark.asyncio

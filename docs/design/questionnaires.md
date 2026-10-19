@@ -49,8 +49,10 @@ the rules already read reads any differently, and a short sheet without a
 numbering column is still refused as a reference table. Every two-question
 questionnaire the end-to-end checks uploaded was this shape, and the rules read
 each one as nothing (TD-043); the fixture is `short_numbered`, and
-`short_unnumbered` pins the boundary: 0 questions, read as a reference table,
-under the rules and under `guarded` alike.
+`short_unnumbered` pins the boundary: the rules read it as a reference table
+with 0 questions, so under `guarded` there is no floor to rescue it when the
+agent records nothing. When the agent does record it as a questionnaire, that
+reading stands: the floor only adds what the rules found.
 
 Against the eleven real workbooks it finds **831 questions where counting the
 printed item numbers by hand finds 824** -- all of them, plus seven extras.

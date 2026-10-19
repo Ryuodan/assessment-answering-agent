@@ -78,7 +78,20 @@ def test_applied_changes_match_the_memory_page_and_are_recorded(ole5, stores, tm
     rows = store.connect().execute("SELECT kind, actor_email, subject_id, payload FROM events ORDER BY id").fetchall()
     recorded = [(r["kind"], r["actor_email"], r["subject_id"]) for r in rows if r["subject_id"].startswith("MEM-")]
     assert recorded == [("memory_removed", LEAD, "MEM-1"), ("memory_edited", LEAD, "MEM-2")]
-    assert json.loads(rows[-1]["payload"])["moved_to"] == ole5.id
+    move = json.loads(rows[-1]["payload"])
+    assert (move["moved_from"], move["moved_to"]) == ("", ole5.id), "where from too, as the page records it"
+
+
+def test_a_move_out_of_a_product_records_where_from(ole5, stores, tmp_path, monkeypatch) -> None:
+    """So a product's delete does not count it as moved in from Shared (plan 027)."""
+    monkeypatch.setattr(memory_changes, "app_running", lambda port: False)
+    answer_memory.move("MEM-2", ole5.id, TEAM)
+    back = {"move": [{"entry_id": "MEM-2", "product": "", "reason": "true of every product"}]}
+    assert memory_changes.main([changes(tmp_path, **back), "--by", LEAD, "--apply"]) == 0
+
+    [row] = store.connect().execute("SELECT payload FROM events WHERE subject_id = 'MEM-2'").fetchall()
+    move = json.loads(row["payload"])
+    assert (move["moved_from"], move["moved_to"]) == (ole5.id, "")
 
 
 def test_nothing_is_applied_while_the_app_is_running(ole5, tmp_path, monkeypatch, capsys) -> None:

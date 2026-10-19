@@ -98,11 +98,8 @@ def list_products(team_id: str) -> list[Product]:
 
 def get(team_id: str, product_id: str) -> Product:
     """One of the team's products. Another team's reads as absent."""
-    row = (
-        store.connect()
-        .execute("SELECT * FROM products WHERE team_id = ? AND product_id = ?", (team_id, product_id))
-        .fetchone()
-    )
+    query = "SELECT * FROM products WHERE team_id = ? AND product_id = ?"
+    row = store.connect().execute(query, (team_id, product_id)).fetchone()
     if row is None:
         raise ProductNotFound(f"No product {product_id!r} in this team.")
     return _product(row)
@@ -217,29 +214,34 @@ def _count(table: str, team_id: str, product_id: str) -> int:
 
 
 def _moved_in(team_id: str, product_id: str) -> int:
-    """How many of a product's remembered answers were moved into it, rather than given for it.
+    """How many of a product's remembered answers were moved into it from Shared, rather than given for it.
 
-    The memory keeps no origin. The event a move records (`moved_to`) is the
-    only trace, and it is read here rather than with SQLite's JSON functions,
-    so that it does not depend on how the server's SQLite was built.
+    The memory keeps no origin; the events a move records are the only trace. An answer counts when its last
+    move here came from Shared: `moved_from` "", or absent on a move recorded before plan 027. Read here, not
+    with SQLite's JSON functions, so that it does not depend on how the server's SQLite was built.
     """
     conn = store.connect()
     query = "SELECT entry_id FROM memory_entries WHERE team_id = ? AND product_id = ?"
     own = {row["entry_id"] for row in conn.execute(query, (team_id, product_id))}
     moves = conn.execute(
         "SELECT subject_id, payload FROM events WHERE team_id = ? AND kind = ? AND subject_type = 'memory_entry'"
-        " AND instr(payload, ?) > 0",
+        " AND instr(payload, ?) > 0 ORDER BY id",
         (team_id, events.MEMORY_EDITED, product_id),
     )
-    return len(own & {row["subject_id"] for row in moves if store.loads(row["payload"]).get("moved_to") == product_id})
+    came_from: dict[str, str] = {}  # each answer's last move here, from where; one to where it was is no move
+    for row in moves:
+        move = store.loads(row["payload"])
+        if move.get("moved_to") == product_id != move.get("moved_from"):
+            came_from[row["subject_id"]] = move.get("moved_from", "")
+    return sum(came_from.get(entry) == "" for entry in own)
 
 
 def _in_team_folder(team_id: str, product_id: str, names: set[str] | None) -> set[str]:
-    """The documents of a product's knowledge base (or those of `names`) with a file in the team's folder only."""
-    shared, own = settings.team_upload_dir(team_id), settings.product_upload_dir(team_id, product_id)
+    """The documents of a product's knowledge base (or those of `names`) with a file in the team's folder."""
+    shared = settings.team_upload_dir(team_id)
     sources = {s["name"] for s in scoped_knowledge.knowledge_stats(team_id, product_id=product_id)["sources"]}
     found = sources if names is None else sources & names
-    return {n for n in found if n == Path(n).name and (shared / n).is_file() and not (own / n).exists()}
+    return {n for n in found if n == Path(n).name and (shared / n).is_file()}
 
 
 def legacy_files(team_id: str, product_id: str, names: set[str] | None = None) -> list[Path]:
@@ -249,7 +251,8 @@ def legacy_files(team_id: str, product_id: str, names: set[str] | None = None) -
     another product's also indexes, or a questionnaire reads, is kept: one name is one document. Found
     before the documents leave the index -- removed, cleared or deleted -- after which nothing says whose.
     """
-    found = _in_team_folder(team_id, product_id, names)
+    own = settings.product_upload_dir(team_id, product_id)
+    found = {name for name in _in_team_folder(team_id, product_id, names) if not (own / name).exists()}
     if not found:
         return []  # the usual case, and no other knowledge base is opened for it
     found -= set(knowledge.get_store(team_id).documents_indexed())
@@ -280,14 +283,14 @@ def _files(team_id: str, product_id: str) -> list[Path]:
 def deletion_preview(team_id: str, product_id: str) -> dict[str, Any]:
     """What deleting a product would remove, and what of the team's work would stay. Changes nothing.
 
-    Counted across the whole team, because everyone's work is affected; the
-    page shows it in its warning before anyone types the word. `kept` are its
-    documents whose file stays, because something else uses it too.
+    Counted across the whole team, because everyone's work is affected; the page shows it in its warning
+    before anyone types the word. `kept` are its documents whose file in the team's folder stays: something
+    else uses it, or its own folder holds one of that name, and the team's is not taken for its own.
     """
     product = get(team_id, product_id)
     files = _files(team_id, product_id)
     stats = scoped_knowledge.knowledge_stats(team_id, product_id=product_id)
-    kept = _in_team_folder(team_id, product_id, None) - {path.name for path in files}
+    kept = {n for n in _in_team_folder(team_id, product_id, None) if settings.team_upload_dir(team_id) / n not in files}
     return {
         "product": product.as_dict(),
         "confirm_word": CONFIRM_WORD,
