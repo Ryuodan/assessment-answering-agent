@@ -10,11 +10,13 @@ model; these are tests of the machine around it.
 
 from __future__ import annotations
 
+import itertools
 import logging
 
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
 from src.agents import excel_agent
@@ -362,39 +364,143 @@ def test_a_near_empty_sheet_is_not_put_to_the_agent(tmp_path, monkeypatch):
 
 
 class Scripted(GenericFakeChatModel):
-    """Replays a script of replies, and notes the tool choice of every call."""
+    """Replays a script of replies, raising the ones that are errors, and notes
+    the tool choice and the messages of every call."""
 
+    script: list = Field(default_factory=list)
     choices: list = Field(default_factory=list)
+    seen: list = Field(default_factory=list)
 
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):
         self.choices.append(tool_choice)
         return self
 
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.seen.append(list(messages))
+        reply = self.script.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return ChatResult(generations=[ChatGeneration(message=reply)])
+
+
+_ids = itertools.count()
+
 
 def _call(name: str, **args) -> AIMessage:
-    return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
+    return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{next(_ids)}"}])
+
+
+def _record_call(sheet: str = "Security") -> AIMessage:
+    return _call(
+        "record",
+        sheet_name=sheet,
+        is_questionnaire=True,
+        header_row=1,
+        question_column="B",
+        column_roles="A=number, C=answer",
+        reason="Two numbered questions in column B under row 1.",
+    )
 
 
 def _scripted(monkeypatch, *replies) -> Scripted:
-    model = Scripted(messages=iter(replies))
+    model = Scripted(messages=iter(()), script=list(replies))
     monkeypatch.setattr(excel_agent, "chat_llm", lambda **kwargs: model)
     return model
 
 
-def test_the_agent_must_call_a_tool_while_a_sheet_is_unrecorded(tmp_path, monkeypatch):
+def _refused():
+    """Groq's answer when a reply under tool_choice="required" calls no tool."""
+    import httpx
+    from groq import BadRequestError
+
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    body = {
+        "error": {
+            "message": "Tool choice is required, but model did not call a tool",
+            "type": "invalid_request_error",
+            "code": "tool_use_failed",
+            "failed_generation": "The sheet holds two numbered questions in column B.",
+        }
+    }
+    return BadRequestError(f"Error code: 400 - {body}", response=httpx.Response(400, request=request), body=body)
+
+
+def _one_round(tmp_path) -> excel_agent.Run:
+    path = shapes.short_numbered(tmp_path / "short.xlsx")
+    run = excel_agent.Run()
+    with Workbook(path) as workbook:
+        excel_agent._round(workbook, run, path, {"Security"}, excel_agent._make_tools(workbook, run), 24)
+    return run
+
+
+def test_a_prose_reply_is_asked_again_naming_the_sheets_left(tmp_path, monkeypatch):
+    """Groq does not hold gpt-oss to tool_choice="required": the prose reply
+    comes back as if nothing were wrong, and it ended the round with the sheet
+    unread (TD-043). So the reply itself is checked."""
     model = _scripted(
         monkeypatch,
         _call("list_sheets"),
         _call("look_at", sheet_name="Security"),
         AIMessage(content="The sheet holds two numbered questions in column B."),
+        _record_call(),
     )
-    path = shapes.short_numbered(tmp_path / "short.xlsx")
-    run = excel_agent.Run()
-    with Workbook(path) as workbook:
-        excel_agent._round(workbook, run, path, {"Security"}, excel_agent._make_tools(workbook, run), 24)
+    run = _one_round(tmp_path)
 
-    assert model.choices == ["any", "any", "any"], "every call is bound to require a tool"
-    assert run.readings == {}
+    assert model.choices == ["any"] * 4, "every call is bound to require a tool"
+    assert set(run.readings) == {"Security"}
+    assert not run.stopped_early
+    reminder = model.seen[3][-1]
+    assert isinstance(reminder, HumanMessage) and "'Security'" in reminder.content
+    assert model.seen[3][-2].content.startswith("The sheet holds"), "it sees the reply it is asked again about"
+
+
+def test_a_reply_the_provider_refused_is_asked_again(tmp_path, monkeypatch):
+    """For other models Groq enforces "required" by refusing the turn with a
+    400 `tool_use_failed`. That is the same prose reply, and it was ending the
+    run as "stopped early", with no second round."""
+    model = _scripted(
+        monkeypatch,
+        _call("list_sheets"),
+        _call("look_at", sheet_name="Security"),
+        _refused(),
+        _record_call(),
+    )
+    run = _one_round(tmp_path)
+
+    assert set(run.readings) == {"Security"}
+    assert not run.stopped_early
+    assert "'Security'" in model.seen[3][-1].content
+
+
+@pytest.mark.parametrize(
+    "reply", [lambda: AIMessage(content="Two questions, as I said."), _refused], ids=["prose", "refused"]
+)
+def test_a_round_still_unrecorded_after_asking_again_ends_and_the_next_is_asked(tmp_path, monkeypatch, caplog, reply):
+    """Asked again once, not until it complies: a second reply calling no tool
+    ends the round as an ordinary ending, so the fresh second round still runs."""
+    _scripted(
+        monkeypatch,
+        _call("list_sheets"),
+        _call("look_at", sheet_name="Security"),
+        reply(),
+        reply(),
+        _record_call(),  # the second round
+    )
+    with caplog.at_level(logging.INFO):
+        form, run = excel_agent.read_workbook(shapes.short_numbered(tmp_path / "short.xlsx"))
+
+    assert not run.stopped_early
+    assert "excel_agent.round_ended_unrecorded" in caplog.text
+    assert "Asking the Excel agent again about 'Security'" in caplog.text
+    assert set(run.readings) == {"Security"}
+    assert len(form.questions) == 2
+
+
+def test_an_error_that_is_not_a_refusal_still_stops_the_run(tmp_path, monkeypatch):
+    """A provider that is down would fail a second round in the same place."""
+    _scripted(monkeypatch, _call("list_sheets"), RuntimeError("connection reset"))
+    run = _one_round(tmp_path)
+    assert run.stopped_early
 
 
 def test_the_agent_stops_once_every_sheet_is_recorded(tmp_path, monkeypatch, caplog):
@@ -403,15 +509,7 @@ def test_the_agent_stops_once_every_sheet_is_recorded(tmp_path, monkeypatch, cap
         monkeypatch,
         _call("list_sheets"),
         _call("look_at", sheet_name="Security"),
-        _call(
-            "record",
-            sheet_name="Security",
-            is_questionnaire=True,
-            header_row=1,
-            question_column="B",
-            column_roles="A=number, C=answer",
-            reason="Two numbered questions in column B under row 1.",
-        ),
+        _record_call(),
         AIMessage(content="unreached"),
     )
     with caplog.at_level(logging.INFO, logger=excel_agent.__name__):
@@ -421,6 +519,49 @@ def test_the_agent_stops_once_every_sheet_is_recorded(tmp_path, monkeypatch, cap
     assert len(model.choices) == 3, "the fourth reply is never asked for"
     assert len(form.questions) == 2
     assert "Asking the Excel agent again" not in caplog.text
+
+
+def test_an_eighteen_sheet_workbook_is_recorded_within_its_budget(tmp_path, monkeypatch):
+    """Every model-and-tool cycle must stay two graph steps. A guard that was a
+    graph node of its own made it three, against a budget of six steps a sheet:
+    a workbook needing one `read_rows` a sheet recorded 13 sheets of 18, was
+    marked stopped early, and was never asked again."""
+    names = [f"Domain {n}" for n in range(1, 19)]
+    path = shapes.build(
+        tmp_path / "eighteen.xlsx",
+        [
+            shapes.SheetSpec(
+                name,
+                {
+                    "A1": "#",
+                    "B1": "Question",
+                    "C1": "Answer",
+                    "A2": "1",
+                    "B2": f"Is the {name} policy approved?",
+                    "A3": "2",
+                    "B3": f"Is the {name} policy reviewed yearly?",
+                },
+            )
+            for name in names
+        ],
+    )
+    per_sheet = [
+        reply
+        for name in names
+        for reply in (
+            _call("look_at", sheet_name=name),
+            _call("read_rows", sheet_name=name, first_row=1),
+            _record_call(name),
+        )
+    ]
+    model = _scripted(monkeypatch, _call("list_sheets"), *per_sheet, AIMessage(content="unreached"))
+
+    form, run = excel_agent.read_workbook(path)
+
+    assert not run.stopped_early
+    assert set(run.readings) == set(names)
+    assert len(model.choices) == 1 + 3 * 18, "one model call per tool call, and none to say done"
+    assert len(form.questions) == 36
 
 
 def test_the_conversation_is_pruned_once_it_grows(tmp_path):

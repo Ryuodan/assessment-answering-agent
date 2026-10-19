@@ -48,7 +48,9 @@ taken only when no other column and no headless reading was found, so no sheet
 the rules already read reads any differently, and a short sheet without a
 numbering column is still refused as a reference table. Every two-question
 questionnaire the end-to-end checks uploaded was this shape, and the rules read
-each one as nothing (TD-043); the fixture is `short_numbered`.
+each one as nothing (TD-043); the fixture is `short_numbered`, and
+`short_unnumbered` pins the boundary: 0 questions, read as a reference table,
+under the rules and under `guarded` alike.
 
 Against the eleven real workbooks it finds **831 questions where counting the
 printed item numbers by hand finds 824** -- all of them, plus seven extras.
@@ -339,12 +341,29 @@ round that asked again. Both halves are fixed:
 * the rules read a short form under explicit headings (see
   [Reading it](#reading-it)), so the floor now holds on that shape whatever
   the agent does;
-* `src/agents/excel_guard.py` holds the agent's loop to its job. While a sheet
-  it was asked about has no reading, every model call must call a tool
-  (`tool_choice="any"`, which Groq sends as `required`); once every sheet has
-  one, the loop ends before the model is asked again, which also saves the
-  call that would only have said "done". A sheet still never read is logged
-  with the agent's steps, so the next one shows what it did instead.
+* `src/agents/excel_guard.py` holds the agent's loop to its job, from inside
+  the model call. While a sheet it was asked about has no reading, the model
+  is asked with `tool_choice="any"` (Groq's `required`), and its reply is
+  checked as well, because Groq does not hold every model to that: for gpt-oss
+  a prose reply is reported to come back without an error, and for other
+  models it is a 400 `tool_use_failed`. A reply that calls no tool, or that is
+  refused, is asked again once, naming the sheets still to record. If that
+  one calls no tool either, the round ends as an ordinary ending, not as
+  "stopped early", so the second round still asks about what is missing. Once
+  every sheet has a reading, the round ends without asking the model, which
+  saves the call that would only have said "done". A sheet still never read is
+  logged with the agent's steps, so the next one shows what it did instead,
+  and `excel_agent.reminded` in the server log counts how often the model had
+  to be asked again. Which of the two replies gpt-oss gives under `required`
+  has not yet been seen on a live open.
+
+  The guard adds no step to the graph. A first version ended the loop from a
+  `before_model` hook, which is a graph node of its own: every model-and-tool
+  cycle cost three steps, where the budget of six steps a sheet assumes two,
+  and a scripted eighteen-sheet workbook needing one `read_rows` a sheet
+  recorded 13 sheets of 18, was marked stopped early and was not asked again.
+  `test_an_eighteen_sheet_workbook_is_recorded_within_its_budget` holds it to
+  two.
 
 Near-empty sheets -- under six cells, which no reader opens -- are no longer put
 to the agent either, and a workbook holding nothing else does not run it: a

@@ -270,6 +270,18 @@ def test_a_short_question_column_without_an_answer_heading_is_still_skipped(tmp_
     assert form.parts[0].kind == "no questions"
 
 
+def test_a_short_form_without_a_numbering_column_is_still_a_reference_table(tmp_path):
+    """Where the short form stops. Two rows of prose with no numbers beside
+    them are what a ratings legend looks like, and reading them was left
+    undecided (TD-043), so the headings alone do not make them a form."""
+    form = forms.detect(shapes.short_unnumbered(tmp_path / "unnumbered.xlsx"))
+    [part] = form.parts
+
+    assert form.questions == []
+    assert part.kind == "reference table"
+    assert "no numbering column" in part.findings[0].because
+
+
 def test_a_hidden_sheet_is_skipped(tmp_path):
     form = forms.detect(shapes.status_and_comment(tmp_path / "isra.xlsx"))
     assert [part.kind for part in form.parts if part.name == "Score"] == ["hidden"]
