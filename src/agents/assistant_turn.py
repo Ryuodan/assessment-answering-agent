@@ -1,17 +1,17 @@
-"""What one assistant turn may do, and what it says when it stops (plan 027, TD-043).
+"""What one assistant turn may do (plan 027, TD-043).
 
 Beside `src/agents/assistant.py`, which re-exports `tidy_reply`, `without_repetition`,
 `CORRECTION`, `UI_KEY` and `CARRY_ON` from here. Whether a reply's quotations hold
-is `src/agents/assistant_quotes.py`. Each rule is a turn that went wrong:
+is `src/agents/assistant_quotes.py`; what a turn that stopped says is
+`src/agents/assistant_stopped.py`. Each rule is a turn that went wrong:
 
 * A turn looks in the documents at most three times, a search or a direct
   answer counting once each, and reads each clause whole. Shown 400 characters
   of each, the model never saw the sentence that answered it, and searched
-  nineteen times in quoted phrases until the turn ran out of steps. One refusal
-  is answered; a model that asks again after it ends the turn.
+  nineteen times in quoted phrases until the turn ran out of steps. A step
+  asking for more than that has the rest refused, and is answered; a model
+  that asks again after it has seen a refusal ends the turn.
 * Its sources are listed once: those searches listed 114 clauses, 14 distinct.
-* A turn that stopped says what it did, not "What I did finish is in the
-  answers beside this" after a turn that changed nothing.
 * A knowledge-base document is not opened as a questionnaire, and the model is
   told why, rather than to have the person attach it.
 * A call to a tool that does not exist is carried on from, not fatal.
@@ -23,7 +23,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from src import service
 from src.identity import User
@@ -71,12 +71,17 @@ _AGAIN = {
     "the search failed.",
     "answer": "Already answered that this turn; the answer is above. Relay it word for word.",
 }
-_SPENT = (
-    "{refused}: this turn has already searched {n} times, which is the limit. Do not search again. Reply now "
-    "from the clauses those searches returned: quote the sentence that answers the question word for word and "
-    "name its document. If none says it, say plainly that the documents found do not state it, and name the "
-    "closest clause."
-)
+_SPENT = {
+    "search": "Not searched: this turn has already searched {n} times, which is the limit. Do not search again: "
+    "asking again ends the turn. Reply now from the clauses those searches returned: quote the sentence that "
+    "answers the question word for word and name its document. If none says it, say plainly that the documents "
+    "found do not state it, and name the closest clause.",
+    # Not "reply from the clauses": the model never writes an answer itself.
+    "answer": "Not answered: this turn has already looked in the documents {n} times, which is the limit, so "
+    "this question was not answered. Do not answer it yourself, and do not call answer_directly or "
+    "search_policies again: asking again ends the turn. Tell the person it was not answered this turn, and that "
+    "they can ask it again in their next message.",
+}
 _REFUSED = ("Already searched for that this turn", "Already answered that this turn", "Not searched:", "Not answered:")
 """How a refused search or direct answer begins, so that `spent` can count them."""
 
@@ -95,13 +100,13 @@ def refused(state: dict[str, Any], asked: str, *, kind: str = "search") -> str:
     if earlier is not None:
         return _AGAIN["answer" if kind == "answer" else earlier["outcome"]]
     if len(made) >= SEARCHES_PER_TURN:
-        return _SPENT.format(refused="Not answered" if kind == "answer" else "Not searched", n=len(made))
+        return _SPENT[kind].format(n=len(made))
     made.append({"kind": kind, "key": key, "outcome": "found"})
     return ""
 
 
 def searched(state: dict[str, Any], query: str, hits: list[dict[str, Any]] | None = None, failed: Any = None) -> str:
-    """What one search returns to the model. Its outcome is kept, for a repeat and for `stopped_reply`.
+    """What one search returns to the model. Its outcome is kept, for a repeat and for a turn that stops.
 
     Neither a search that matched nothing nor one that failed says the query
     back: the model's own words in a tool result would pass for a document's.
@@ -119,18 +124,23 @@ def searched(state: dict[str, Any], query: str, hits: list[dict[str, Any]] | Non
 
 
 def spent(messages: Iterable[BaseMessage]) -> bool:
-    """Whether this turn has been refused a search or a direct answer twice.
+    """Whether this turn asked for a search or a direct answer again after it saw one refused.
 
-    One refusal is answered, so the model can reply from what it found. Asking
-    again after that is ignoring what it was told, and every step re-sends each
-    clause found: the turn ends with what it did instead (`stopped_reply`).
+    Refusals are counted by the model step that asked for them. One step that
+    asks for more than the turn allows has the rest refused and is answered:
+    the model reads what the others found, and can reply from it. A refusal in
+    a later step is asking again after being told, and every step re-sends each
+    clause found: the turn ends with what it did instead (`assistant_stopped`).
     """
-    refusals = 0
+    later_steps, refused_in = 0, set[int]()
     for message in reversed(list(messages)):
         if isinstance(message, HumanMessage) and not is_correction(message):
             break
-        refusals += isinstance(message, ToolMessage) and str(message.content).startswith(_REFUSED)
-    return refusals >= 2
+        if isinstance(message, AIMessage) and message.tool_calls:
+            later_steps += 1  # a step's results come after it, so they are met before it here
+        elif isinstance(message, ToolMessage) and str(message.content).startswith(_REFUSED):
+            refused_in.add(later_steps)
+    return len(refused_in) >= 2
 
 
 def ends_when_spent() -> Any:
@@ -213,82 +223,6 @@ def _a_knowledge_base_document(user: User, state: dict[str, Any], name: str) -> 
         logger.warning("assistant.knowledge_unreadable", error=str(failed) or repr(failed))
         return False
     return any(str(source.get("name") or "").casefold() == wanted for stats in listed for source in stats["sources"])
-
-
-# --- a turn that stopped part way -----------------------------------------------------
-
-_STOPPED = {
-    "en": {
-        "changed": "I ran out of room part way through that. What I did finish is in the answers beside this.",
-        "opened": "I ran out of room part way through that. I opened {file}, but nothing in it was answered "
-        "or changed yet.",
-        "untouched": "I ran out of room part way through that, and nothing was answered or changed.",
-        "searched": "I searched the documents {times} without settling it. The clauses found are listed under "
-        "this reply, from {documents}.",
-        "found_nothing": "I searched the documents {times} and found nothing that matched.",
-        "partly_failed": "I searched the documents {times} and found nothing that matched; {failures} the "
-        "search itself failed.",
-        "failed": "I tried to search the documents {times}, but the search failed.",
-        "advice": "Asking about one point at a time usually works better.",
-        "retry": "Could you try again, one step at a time?",
-        "nothing": "I ran out of room part way through that, and nothing was changed. "
-        "Could you try again, one step at a time?",
-    },
-    "ar": {
-        "changed": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك. ما أنجزته موجود في الإجابات بجانب هذه الرسالة.",
-        "opened": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك. فتحت {file}، لكن لم تتم الإجابة عن شيء فيه "
-        "ولم يتغير فيه شيء بعد.",
-        "untouched": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك، ولم تتم الإجابة عن شيء ولم يتغير شيء.",
-        "searched": "بحثت في المستندات {times} دون أن أصل إلى جواب حاسم. المقاطع التي وجدتها مدرجة تحت هذه "
-        "الرسالة، من {documents}.",
-        "found_nothing": "بحثت في المستندات {times} ولم أجد شيئاً مطابقاً.",
-        "partly_failed": "بحثت في المستندات {times} ولم أجد شيئاً مطابقاً، وتعذّر البحث نفسه {failures}.",
-        "failed": "حاولت البحث في المستندات {times}، لكن البحث تعذّر.",
-        "advice": "السؤال عن نقطة واحدة في كل مرة يعطي عادةً نتيجة أفضل.",
-        "retry": "هل يمكنك المحاولة مرة أخرى، خطوة بخطوة؟",
-        "nothing": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك، ولم يتغير شيء. هل يمكنك المحاولة مرة أخرى، خطوة بخطوة؟",
-    },
-}
-_TIMES = {"en": ("once", "twice", "{n} times"), "ar": ("مرة واحدة", "مرتين", "{n} مرات")}
-_AND = {"en": (", ", " and "), "ar": ("، ", " و")}
-
-
-def stopped_reply(state: dict[str, Any], language: str) -> str:
-    """What a turn that ran out of steps says, from what this turn actually did.
-
-    Answers are said to be finished only when a tool wrote some (`state["changed"]`):
-    opening a file is said as that. The documents are named rather than their best
-    clause quoted: the highest score in the turn this was written for belonged to
-    an unrelated clause. A search that failed is not said to have found nothing.
-    """
-    language = "ar" if language == "ar" else "en"
-    said = _STOPPED[language]
-    if state.get("changed"):
-        return said["changed"]
-    opened = state.get("opened") or ""
-    head = said["opened"].format(file=opened) if opened else said["untouched"]
-    searches = state.get("searches") or []
-    if not searches:
-        return f"{head} {said['retry']}" if opened else said["nothing"]
-    once, twice, more = _TIMES[language]
-
-    def times(n: int) -> str:
-        return once if n == 1 else twice if n == 2 else more.format(n=n)
-
-    failed = sum(entry["outcome"] == "failed" for entry in searches)
-    sources = sorted(state.get("sources") or [], key=lambda source: not source.get("product_id"))  # its own first
-    names = list(dict.fromkeys(str(source["source_name"]) for source in sources if source.get("source_name")))[:4]
-    if names:
-        comma, conjunction = _AND[language]
-        documents = comma.join(names[:-1]) + conjunction + names[-1] if len(names) > 1 else names[0]
-        body = said["searched"].format(times=times(len(searches)), documents=documents)
-    elif failed == len(searches):
-        body = said["failed"].format(times=times(len(searches)))
-    else:
-        body = said["partly_failed" if failed else "found_nothing"].format(
-            times=times(len(searches)), failures=times(failed)
-        )
-    return f"{head} {body} {said['advice']}"
 
 
 # --- a call to a tool that is not there -----------------------------------------------

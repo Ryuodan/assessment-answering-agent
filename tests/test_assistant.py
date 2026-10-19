@@ -15,7 +15,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src import batches, conversations, events, identity, service, tools
-from src.agents import assistant, assistant_turn
+from src.agents import assistant, assistant_stopped, assistant_turn
 from src.models import AnsweredQuestion, Evidence, SourceType
 from tests import forms_fixtures as shapes
 
@@ -931,6 +931,24 @@ async def test_a_failed_search_is_said_as_failed(user, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_search_that_failed_beside_one_that_found_nothing_is_said_plainly(user, monkeypatch):
+    """It said "found nothing that matched; once the search itself failed", and "once" read as "when"."""
+
+    async def search(query, mode="hybrid", limit=8, *, team_id=None, product_id=""):
+        if query == "pentest":
+            raise RuntimeError("the index is locked")
+        return {"results": []}
+
+    monkeypatch.setattr(tools, "search", search)
+    script = [("search_policies", {"query": "pentest"}), ("search_policies", {"query": "penetration test"})]
+    monkeypatch.setattr(assistant, "_agent", _stops_after(script))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "What do the Ole5 documents say about pentest reports?")
+
+    assert "I searched the documents twice and found nothing that matched; the search itself failed once." in turn.reply
+
+
+@pytest.mark.asyncio
 async def test_a_direct_answer_counts_against_the_turns_searches(kit, searching, answers_with_evidence):
     """It runs the whole retrieval pipeline, so it was a way round the limit."""
     _queries, found = searching
@@ -943,8 +961,12 @@ async def test_a_direct_answer_counts_against_the_turns_searches(kit, searching,
     said = await tool["answer_directly"]("Are the reports shared?")
     refused = await tool["search_policies"]("security testing")
 
-    assert said.startswith("Not answered: this turn has already searched 3 times") and "relay" not in said
+    assert (
+        said.startswith("Not answered: this turn has already looked in the documents 3 times") and "relay" not in said
+    )
+    assert "Reply now from the clauses" not in said, "told to answer from clauses, it would write the answer itself"
     assert refused.startswith("Not searched: this turn has already searched 3 times")
+    assert "asking again ends the turn" in said and "asking again ends the turn" in refused
 
 
 @pytest.mark.asyncio
@@ -1008,17 +1030,145 @@ async def test_a_model_that_keeps_searching_is_stopped_after_one_refusal(user, m
 
 
 @pytest.mark.asyncio
-async def test_searches_asked_for_at_once_past_the_limit_end_the_turn(user, monkeypatch, searching):
-    """Six at once: three run, and the turn ends once all six are answered, not part way through them."""
+async def test_searches_asked_for_at_once_past_the_limit_are_answered_once(user, monkeypatch, searching):
+    """Five at once: three run and two are refused, and the model reads what the three
+    found. It had never seen a refusal, yet the turn ended before it could reply."""
     queries, found = searching
     found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
-    left = _scripted_model(monkeypatch, _searches(*(f"pentest {n}" for n in range(6))), AIMessage("Unreached."))
+    left = _scripted_model(monkeypatch, _searches(*(f"pentest {n}" for n in range(5))), AIMessage("Shared under NDA."))
+    conversation = assistant.start(user, "")
+
+    turn = await assistant.say(user, conversation, "What do the Ole5 documents say about pentest reports?")
+
+    assert len(queries) == 3
+    assert list(left) == [], "the model was asked again, after the refusals"
+    assert not turn.stopped_early and turn.reply == "Shared under NDA."
+    results = [m.content for m in conversations.load(conversation.id).messages if isinstance(m, ToolMessage)]
+    assert sorted(result.startswith("Not searched:") for result in results) == [False, False, False, True, True]
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_after_one_the_model_has_seen_ends_the_turn(user, monkeypatch, searching):
+    queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    left = _scripted_model(
+        monkeypatch, _searches(*(f"pentest {n}" for n in range(5))), _searches("one more"), AIMessage("Unreached.")
+    )
 
     turn = await assistant.say(user, assistant.start(user, ""), "What do the Ole5 documents say about pentest reports?")
 
     assert len(queries) == 3
     assert [message.content for message in left] == ["Unreached."]
     assert turn.stopped_early and "searched the documents 3 times" in turn.reply and "Ole5 facts.docx" in turn.reply
+
+
+def _answers(*questions: str) -> AIMessage:
+    calls = [
+        {"name": "answer_directly", "args": {"questions": q}, "id": f"answer-{n}"} for n, q in enumerate(questions)
+    ]
+    return AIMessage("", tool_calls=calls)
+
+
+@pytest.mark.asyncio
+async def test_direct_answers_asked_for_at_once_past_the_limit_are_relayed(user, monkeypatch, answers_with_evidence):
+    """Five at once: three drafted, slow and paid for, and then thrown away with the turn."""
+    asked = [f"Do we encrypt backups of system {n}?" for n in range(5)]
+    left = _scripted_model(monkeypatch, _answers(*asked), AIMessage("Here are the three answers."))
+    conversation = assistant.start(user, "")
+
+    turn = await assistant.say(user, conversation, "Five questions about backups")
+
+    assert list(left) == [] and not turn.stopped_early and turn.reply == "Here are the three answers."
+    results = [m.content for m in conversations.load(conversation.id).messages if isinstance(m, ToolMessage)]
+    assert sorted(result.count("relay word for word") for result in results) == [0, 0, 1, 1, 1]
+    for refused in [result for result in results if "relay word for word" not in result]:
+        assert refused.startswith("Not answered: this turn has already looked in the documents 3 times")
+        assert "not answered this turn" in refused and "ask it again" in refused
+        assert "Do not answer it yourself" in refused and "clauses" not in refused and "quote" not in refused
+
+
+@pytest.mark.asyncio
+async def test_a_turn_stopped_after_drafting_relays_what_it_drafted(user, monkeypatch, answers_with_evidence):
+    """It said "nothing was answered" and "I searched the documents 3 times" after
+    three direct answers and no search, and the answers were lost."""
+    asked = [f"Do we encrypt backups of system {n}?" for n in range(5)]
+    _scripted_model(monkeypatch, _answers(*asked), _answers("Do we encrypt laptops?"), AIMessage("Unreached."))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "Five questions about backups")
+
+    assert turn.stopped_early
+    head, relayed = turn.reply.split("\n\n", 1)
+    assert head == "I ran out of room part way through that. Asking about one point at a time usually works better."
+    assert relayed.startswith("Before it stopped, I drafted answers to 3 questions:\n\n")
+    relayed_whole = [f"**{q}**\nYes, backups are encrypted. [{q[:12]}]" in relayed for q in asked]
+    assert sum(relayed_whole) == 3, "each drafted answer word for word"
+    assert sum(q in relayed for q in asked) == 3, "a question refused is not said to be answered"
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_turn_counts_its_searches_apart_from_its_direct_answers(
+    user, monkeypatch, searching, answers_with_evidence
+):
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Reports are shared under an NDA."))
+    script = [("answer_directly", {"questions": "Do we encrypt backups?"}), ("search_policies", {"query": "pentest"})]
+    monkeypatch.setattr(assistant, "_agent", _stops_after(script))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "Do we encrypt backups, and what about pentests?")
+
+    assert turn.reply.startswith(
+        "I ran out of room part way through that. I searched the documents once without settling it."
+    )
+    assert "nothing was answered" not in turn.reply
+    assert turn.reply.endswith(
+        "\n\nBefore it stopped, I drafted an answer to one question:\n\n"
+        "**Do we encrypt backups?**\nYes, backups are encrypted. [Do we encryp]"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_turn_in_arabic_relays_its_answers_in_arabic(user, monkeypatch, answers_with_evidence):
+    monkeypatch.setattr(assistant, "_agent", _stops_after([("answer_directly", {"questions": "هل تشفر النسخ؟"})]))
+
+    turn = await assistant.say(user, assistant.start(user, ""), "هل نشفر النسخ الاحتياطية؟")
+
+    assert turn.reply.startswith("نفدت المساحة المتاحة لي قبل أن أُكمل ذلك.")
+    assert "قبل أن أتوقف، صغت إجابة عن سؤال واحد:" in turn.reply and "Yes, backups are encrypted." in turn.reply
+
+
+@pytest.mark.parametrize(
+    ("n", "language", "counted"),
+    [
+        (2, "en", "answers to two questions"),
+        (12, "en", "answers to 12 questions"),
+        (2, "ar", "إجابتين عن سؤالين"),
+        (5, "ar", "إجابات عن 5 أسئلة"),
+        (12, "ar", "إجابات عن 12 سؤالاً"),
+    ],
+)
+def test_the_answers_a_stopped_turn_relays_are_counted_in_its_language(n, language, counted):
+    """Three direct answers of five questions each make fifteen, and Arabic counts eleven and more in the singular."""
+    drafted = [
+        {"question": f"Q{k}?", "answer": f"A{k}.", "flagged": "low confidence" if k == 0 else ""} for k in range(n)
+    ]
+
+    said = assistant_stopped.stopped_reply({"drafted": drafted}, language)
+
+    assert f" {counted}:\n\n" in said
+    assert (
+        "\nFlagged for review: low confidence\n" if language == "en" else "\nبحاجة إلى مراجعة: low confidence\n"
+    ) in said
+
+
+def test_the_model_is_told_the_budget_where_it_decides():
+    """The prompt said only that a fourth search is refused, and answer_directly's
+    docstring nothing, though a direct answer uses up a search and asking again
+    after a refusal ends the turn."""
+    tools_given = {t.__name__: t for t in assistant._tools(identity.local_user(), {"steps": []})}
+    for told in (assistant.SYSTEM, tools_given["answer_directly"].__doc__, tools_given["search_policies"].__doc__):
+        said = " ".join(told.split())
+        assert "three" in said and "asking again after a refusal ends the turn" in said
+    assert "`answer_directly` call counting once" in " ".join(assistant.SYSTEM.split())
 
 
 @pytest.mark.asyncio

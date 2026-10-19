@@ -11,8 +11,11 @@ round it that was tried:
   a quoted heading beside them vouches for nothing.
 * An ellipsis may leave words out, never a negation of the words it keeps:
   "is … supported" is not a copy of "is not supported".
-* A document's name beside a quotation is no part of it, but a claim beside
-  the name is: "(Ole5 facts says syslog is available)" cites nothing.
+* A document's name beside a quotation is no part of it, nor is "as stated in"
+  or "وفقاً لما ورد في"; but a claim beside the name is: "(Ole5 facts says
+  syslog is available)" cites nothing.
+* A blockquote nested in a list item, or indented, is a blockquote: the chat
+  page shows each line trimmed.
 * Only what a document said counts. A search's own words repeat the model's
   query, and a drafted answer's reasoning is the drafter's.
 """
@@ -47,7 +50,9 @@ _QUOTED = re.compile(
     r"|\u00ab([^\u00ab\u00bb\n]+)\u00bb"  # guillemets, as Arabic is written
     r"|\u201e([^\u201c\u201d\u201e\n]+)[\u201c\u201d]"  # low-high
 )
-_QUOTE_LINE = re.compile(r"^[ \t]{0,3}>[ \t]?(.*)$")
+_LEAD = r"[^\S\n]*(?:(?:[-*\u2022]|\d{1,3}[.)])[^\S\n]+)?"
+"""What may come before a blockquote's `>`: any indent, and a list item's marker, which the chat page shows trimmed."""
+_QUOTE_LINE = re.compile(rf"^{_LEAD}>[ \t]?(.*)$")
 _BESIDE = " \t*_,;:\u2014\u2013-"
 """What is trimmed from the words beside a quotation on a blockquote line."""
 _ELLIPSIS = re.compile(r"\[\s*(?:\u2026|\.\.\.)\s*\]|\u2026|\.\.\.")
@@ -59,10 +64,29 @@ _TRAILING = re.compile(
 )
 _LABEL = re.compile(r"^(?P<label>[^:]{1,120}):[*_]*\s+(?P<said>.+)$")
 _PLACES = frozenset(
-    "section sections clause clauses page pages p pp para paragraph source ref annex appendix table "
-    "pdf docx doc xlsx xls csv txt md pptx البند القسم صفحة الصفحة المادة الفقرة المصدر".split()
+    "section sections clause clauses page pages p pp para paragraph source ref annex appendix table chapter "
+    "line lines item items bullet first second third last pdf docx doc xlsx xls csv txt md pptx "
+    "البند بند القسم قسم صفحة الصفحة المادة مادة الفقرة فقرة الملحق الجدول المصدر".split()
 )
 """Words that say where something is: a clause, a page, a file's kind."""
+_ATTRIBUTION = frozenset(
+    "according to as per in at on of from by under see above below here this that these it its is are was were be "
+    "s and also the a an where which document documents file files text wording fact facts sheet policy policies "
+    "standard procedure heading headed titled quoted quote quotes quotation verbatim word for exactly stated "
+    "states state says say said reads read notes noted puts put sets set out written writes found appears "
+    "mentioned described specified cited given shown "
+    "وفقا وفق طبقا حسب بحسب كما لما ورد وردت يرد جاء جاءت ذكر ذكرت يذكر تذكر المذكور مذكور نص نصه ينص تنص النص "
+    "يقول تقول قال في من عن الي علي هذا هذه ذلك تلك هو هي الذي التي ان انه حرفيا اقتباس مستند المستند مستندات "
+    "المستندات وثيقة الوثيقة ملف الملف سياسة السياسة عنوان بعنوان تحت ضمن اعلاه ادناه هنا منه فيه فيها موجود".split()
+)
+"""Words that only say a document said something, in English and in Arabic: "as stated in", "وفقاً لما ورد في".
+
+No negation -- not "ما" either, which can be one -- and nothing a document
+could be said to do, "supports", "يدعم": a claim beside a quotation cannot be
+made of these alone.
+"""
+_JOINED_TO = "وفبلك"
+"""Arabic letters written joined to the next word: "and", "so", "with", "for", "like"."""
 _NEGATIONS = frozenset(
     "not no never none nor neither cannot cant without except unless isnt arent wasnt werent dont doesnt "
     "didnt wont wouldnt shouldnt couldnt mustnt hasnt havent hadnt neednt "
@@ -169,19 +193,25 @@ def _verbatim(text: str, corpus: list[_Source]) -> bool:
 
 
 def _cites(text: str, documents: list[list[str]]) -> bool:
-    """Whether `text` only says where a quotation is from: a document's name, a clause or a page, and a word or two.
+    """Whether `text` only says where a quotation is from, and nothing else.
 
-    "(Ole5 facts.docx, section 5.3)" and "according to Ole5 facts" cite;
-    "(Ole5 facts says syslog is available on request)" makes a claim.
+    Every word of it names a document found, a clause or a page, or says that a
+    document said it. "(Ole5 facts.docx, section 5.3)", "As stated in the Ole5
+    fact sheet, section 5.3" and "وفقاً لما ورد في مستند Ole5 facts.docx" cite;
+    "(Ole5 facts says syslog is available on request)" and "(Ole5 facts.docx:
+    now supported)" make a claim. A document's name may be shortened, so each
+    word of one counts.
     """
+    named = {word for name in documents for word in name}
+
+    def citing(word: str) -> bool:
+        if word in _NEGATIONS:
+            return False
+        said = word in _ATTRIBUTION or (word[:1] in _JOINED_TO and word[1:] in _ATTRIBUTION)
+        return said or word in named or word in _PLACES or word.isdigit()
+
     words = _words(text)
-    named = False
-    for name in documents:
-        for at in range(len(words) - len(name), -1, -1):
-            if words[at : at + len(name)] == name:
-                words[at : at + len(name)], named = [], True
-    rest = [word for word in words if word not in _PLACES and not word.isdigit()]
-    return (named or len(rest) < len(words)) and len(rest) <= 2
+    return bool(words) and all(map(citing, words))
 
 
 def _found(span: str, corpus: list[_Source], documents: list[list[str]]) -> bool:
@@ -273,13 +303,14 @@ _MARKS = (('"', '"'), ("\u201c", "\u201d"), ("\u00ab", "\u00bb"), ("\u201e", "\u
 def as_paraphrase(reply: str, spans: list[str], language: str, *, listed: bool) -> str:
     """The reply with those spans no longer set out as quotations, and a note saying why.
 
-    A blockquote line holding one is a blockquote no longer, whatever else it holds.
+    A blockquote line holding one is a blockquote no longer, whatever else it
+    holds; a list item it was nested in stays a list item.
     """
     text = reply
     for span in spans:
         for opening, closing in _MARKS:
             text = re.sub(rf"{re.escape(opening)}\s*{re.escape(span)}\s*{re.escape(closing)}", lambda _: span, text)
-        text = re.sub(rf"^[ \t]{{0,3}}>[ \t]?(?=.*{re.escape(span)})", "", text, flags=re.MULTILINE)
+        text = re.sub(rf"^({_LEAD})>[ \t]?(?=.*{re.escape(span)})", r"\1", text, flags=re.MULTILINE)
     logger.info("assistant.quote_unverified", spans=len(spans))
     note, where = _NOT_QUOTED["ar" if language == "ar" else "en"]
     return f"{text}\n\n{note}{where if listed else ''}"

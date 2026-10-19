@@ -143,6 +143,103 @@ def test_a_quotation_on_a_blockquote_line_beside_where_it_is_from_is_found(reply
     assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == []
 
 
+NOT_SUPPORTED = "Direct integration with a customer's SIEM is not supported."
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        f"> As stated in Ole5 facts.docx, section 5.3: “{NOT_SUPPORTED}”",
+        f"> The Ole5 facts.docx document states in section 5.3: “{NOT_SUPPORTED}”",
+        f'> "{NOT_SUPPORTED}" This is stated in Ole5 facts.docx, section 5.3.',
+        f'> "{NOT_SUPPORTED}" (from the Ole5 facts document, section 5.3)',
+        f"> As the Ole5 fact sheet states in section 5.3: “{NOT_SUPPORTED}”",
+        f'> "{NOT_SUPPORTED}" (found in Ole5 facts.docx, section 5.3, last paragraph)',
+        f"> وفقاً لما ورد في مستند Ole5 facts.docx، القسم 5.3: «{NOT_SUPPORTED}»",
+        f"> كما جاء في مستند Ole5 facts.docx، في القسم 5.3: «{NOT_SUPPORTED}»",
+        f"> ينص مستند Ole5 facts.docx في القسم 5.3 على أن: «{NOT_SUPPORTED}»",
+        f"> «{NOT_SUPPORTED}» (من مستند Ole5 facts.docx، القسم 5.3)",
+        f"> «{NOT_SUPPORTED}» (موجود في القسم 5.3 من مستند Ole5 facts.docx)",
+    ],
+    ids=[
+        "as-stated-in",
+        "the-document-states",
+        "stated-after",
+        "from-the-document",
+        "a-shortened-name",
+        "found-in",
+        "ar-according-to",
+        "ar-as-it-came",
+        "ar-the-document-says",
+        "ar-from-the-document",
+        "ar-found-in",
+    ],
+)
+def test_a_quotation_said_to_be_from_its_document_in_a_sentence_is_found(reply):
+    """A review found each of these, correct quotations all, asked about again and then
+    marked a paraphrase: an attribution of three words or more was read as a claim."""
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == []
+
+
+@pytest.mark.parametrize(
+    ("reply", "invented"),
+    [
+        (
+            f"> As stated in Ole5 facts.docx, Ole5 supports syslog forwarding: “{NOT_SUPPORTED}”",
+            "As stated in Ole5 facts.docx, Ole5 supports syslog forwarding",
+        ),
+        (
+            f"> “{NOT_SUPPORTED}” (Ole5 facts.docx, section 5.3: now supported)",
+            "(Ole5 facts.docx, section 5.3: now supported)",
+        ),
+        (
+            f"> وفقاً لمستند Ole5 facts.docx فإن التكامل المباشر مدعوم: «{NOT_SUPPORTED}»",
+            "وفقاً لمستند Ole5 facts.docx فإن التكامل المباشر مدعوم",
+        ),
+        (
+            f"> “{NOT_SUPPORTED}” This is not stated in Ole5 facts.docx, section 5.3.",
+            "This is not stated in Ole5 facts.docx, section 5.3.",
+        ),
+    ],
+    ids=["a-claim-in-the-attribution", "a-short-claim-after-the-name", "ar-a-claim-in-the-attribution", "a-negation"],
+)
+def test_a_claim_in_an_attribution_is_still_caught(reply, invented):
+    assert assistant_quotes.unfound(reply, [SOURCE], ["Ole5 facts.docx"]) == [invented]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        f"    > {INVENTED}",
+        f"- > {INVENTED}",
+        f"* > {INVENTED}",
+        f"1. > {INVENTED}",
+        f"2) > {INVENTED}",
+        f"\t> {INVENTED}",
+    ],
+    ids=["indented", "dash-item", "star-item", "numbered-item", "numbered-paren-item", "tab"],
+)
+def test_a_blockquote_indented_or_in_a_list_is_checked(reply):
+    """The chat page shows each line trimmed, so these all read as "> ..." there,
+    and none of them was checked."""
+    assert assistant_quotes.unfound(reply, [SOURCE]) == [INVENTED]
+
+
+@pytest.mark.parametrize(
+    ("reply", "shown"),
+    [
+        (f"- > {INVENTED}", f"- {INVENTED}"),
+        (f"    > {INVENTED}", f"    {INVENTED}"),
+        (f"1. > {INVENTED}", f"1. {INVENTED}"),
+    ],
+    ids=["dash-item", "indented", "numbered-item"],
+)
+def test_a_blockquote_in_a_list_shown_as_a_paraphrase_stays_a_list_item(reply, shown):
+    said = assistant_quotes.as_paraphrase(reply, [INVENTED], "en", listed=False)
+
+    assert said.splitlines()[0] == shown
+
+
 @pytest.mark.parametrize(
     "reply",
     [
@@ -286,6 +383,26 @@ async def test_a_reply_quoting_what_the_source_says_is_sent_as_it_is(user, monke
 
     assert len(sent) == 1
     assert turn.reply == GENUINE
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reply",
+    [
+        f"The fact sheet is clear:\n\n> As stated in Ole5 facts.docx, section 5.3: “{NOT_SUPPORTED}”",
+        f"الوثيقة واضحة:\n\n> وفقاً لما ورد في مستند Ole5 facts.docx، القسم 5.3: «{NOT_SUPPORTED}»",
+    ],
+    ids=["en", "ar"],
+)
+async def test_a_quotation_with_its_attribution_is_sent_in_one_pass(user, monkeypatch, searched, reply):
+    """It took a second pass, told the model its own attribution was "in no source",
+    and then ended the correct reply with a note calling it a paraphrase."""
+    sent = _passes(monkeypatch, reply, reply)
+
+    turn = await assistant.say(user, assistant.start(user, ""), "Does Ole5 integrate with our SIEM?")
+
+    assert len(sent) == 1
+    assert turn.reply == reply
 
 
 @pytest.mark.asyncio
