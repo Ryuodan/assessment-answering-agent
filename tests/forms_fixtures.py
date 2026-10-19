@@ -362,6 +362,33 @@ def legend_sheet(path: Path) -> Path:
     )
 
 
+def short_numbered(path: Path) -> Path:
+    """Two numbered questions under `# | Question | Answer`, and nothing else.
+
+    The shape of the questionnaires the end-to-end checks upload (TD-043). The
+    rules wanted three question rows before a column counted as questions, so
+    they read this as nothing at all -- and whenever the Excel agent also
+    recorded nothing, the guarded reading opened it with 0 questions.
+    """
+    return build(
+        path,
+        [
+            SheetSpec(
+                "Security",
+                {
+                    "A1": "#",
+                    "B1": "Question",
+                    "C1": "Answer",
+                    "A2": "1",
+                    "B2": "Is data encrypted at rest, and with which algorithm?",
+                    "A3": "2",
+                    "B3": "How long are backups retained?",
+                },
+            )
+        ],
+    )
+
+
 def with_extra_parts(path: Path) -> Path:
     """A questionnaire carrying the parts a library round-trip would drop."""
     return build(

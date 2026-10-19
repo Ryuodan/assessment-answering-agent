@@ -37,6 +37,19 @@ like questions, with a matching heading as a tiebreak rather than a requirement.
 Sheets with no headings at all are read from their numbering, and everything
 inferred that way is marked as a proposal for someone to confirm.
 
+**A form of one or two questions is read from its headings alone.** A column
+needs three question rows before its shape counts, because below that a column
+of sentences under a heading is usually a legend -- two workbooks explain their
+compliance ratings that way. So a shorter one is read only when its header row
+says so twice: a column headed as the questions, and a column headed as an
+answer, a status or evidence. `# | Question | Answer` over two numbered rows is
+a form; `# | Question | Domain` is a list. It is the reading of last resort,
+taken only when no other column and no headless reading was found, so no sheet
+the rules already read reads any differently, and a short sheet without a
+numbering column is still refused as a reference table. Every two-question
+questionnaire the end-to-end checks uploaded was this shape, and the rules read
+each one as nothing (TD-043); the fixture is `short_numbered`.
+
 Against the eleven real workbooks it finds **831 questions where counting the
 printed item numbers by hand finds 824** -- all of them, plus seven extras.
 Erring that way is deliberate: a confirmation step can remove a row it was
@@ -314,6 +327,29 @@ is overruled, and the reading says which sheets had to be rescued.
 
 The rules cost milliseconds and no tokens, so this is the agent's price plus
 nothing. It is the default.
+
+**The floor is only as good as the rules' reading of the sheet.** Where the
+rules read nothing there is nothing to put under the agent, and that is how a
+clean two-question questionnaire opened with 0 questions twice in three opens
+(TD-043). The rules wanted three question rows, so they read nothing; and the
+agent looked at the sheet, described it in prose instead of calling `record`,
+and its round simply ended -- no error, no "stopped early" -- as did the second
+round that asked again. Both halves are fixed:
+
+* the rules read a short form under explicit headings (see
+  [Reading it](#reading-it)), so the floor now holds on that shape whatever
+  the agent does;
+* `src/agents/excel_guard.py` holds the agent's loop to its job. While a sheet
+  it was asked about has no reading, every model call must call a tool
+  (`tool_choice="any"`, which Groq sends as `required`); once every sheet has
+  one, the loop ends before the model is asked again, which also saves the
+  call that would only have said "done". A sheet still never read is logged
+  with the agent's steps, so the next one shows what it did instead.
+
+Near-empty sheets -- under six cells, which no reader opens -- are no longer put
+to the agent either, and a workbook holding nothing else does not run it: a
+one-row workbook used to cost a full round, about 5,300 tokens, to be told it
+was empty.
 
 #### Measuring it on new files
 

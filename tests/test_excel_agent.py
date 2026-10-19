@@ -10,7 +10,12 @@ model; these are tests of the machine around it.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+from pydantic import Field
 
 from src.agents import excel_agent
 from src.forms import llm_layout
@@ -262,11 +267,12 @@ def test_a_second_round_is_asked_about_the_sheets_it_forgot(tmp_path, monkeypatc
             _record(run, "Second")
 
     monkeypatch.setattr(excel_agent, "_round", pretend)
+    numbered = {"A1": "#", "B1": "Question", "A2": "1", "A3": "2"}
     path = shapes.build(
         tmp_path / "two.xlsx",
         [
-            shapes.SheetSpec("Human Resources", {"A1": "#", "B1": "Question", "B2": "Is there a policy?"}),
-            shapes.SheetSpec("Second", {"A1": "#", "B1": "Question", "B2": "Is there another?"}),
+            shapes.SheetSpec("Human Resources", {**numbered, "B2": "Is there a policy?", "B3": "Is it reviewed?"}),
+            shapes.SheetSpec("Second", {**numbered, "B2": "Is there another?", "B3": "Is that reviewed?"}),
         ],
     )
     excel_agent.read_workbook(path)
@@ -287,6 +293,134 @@ def test_a_run_that_stopped_early_is_not_asked_again(tmp_path, monkeypatch):
     monkeypatch.setattr(excel_agent, "_round", pretend)
     excel_agent.read_workbook(shapes.simple(tmp_path / "v.xlsx"))
     assert len(rounds) == 1
+
+
+def test_a_sheet_never_read_is_logged_with_the_agents_steps(tmp_path, monkeypatch, caplog):
+    """So the next sheet that comes back empty says what the agent did instead
+    of recording it, without anybody having to reproduce the run."""
+
+    def pretend(workbook, run, path, sheets, tools, steps):
+        run.steps.extend(["list_sheets", "look_at('Security')"])
+
+    monkeypatch.setattr(excel_agent, "_round", pretend)
+    with caplog.at_level(logging.WARNING, logger=excel_agent.__name__):
+        excel_agent.read_workbook(shapes.short_numbered(tmp_path / "short.xlsx"))
+
+    [line] = [record.getMessage() for record in caplog.records if "never read" in record.getMessage()]
+    assert "'Security'" in line and "look_at('Security')" in line
+
+
+def test_a_near_empty_workbook_does_not_run_the_agent(tmp_path, monkeypatch):
+    """Under six cells is skipped whatever the agent says, so asking it was a
+    round paid for nothing -- three times over for one one-row workbook."""
+
+    def fail(*args, **kwargs):
+        raise AssertionError("the agent should not have been run")
+
+    monkeypatch.setattr(excel_agent, "_round", fail)
+    path = shapes.build(
+        tmp_path / "one-row.xlsx",
+        [shapes.SheetSpec("Memory", {"A1": "#", "B1": "Question", "B2": "Is there a policy?"})],
+    )
+    form, run = excel_agent.read_workbook(path)
+
+    assert [part.kind for part in form.parts] == ["empty"]
+    assert run.calls == 0
+
+
+def test_a_near_empty_sheet_is_not_put_to_the_agent(tmp_path, monkeypatch):
+    seen: dict = {}
+
+    def pretend(workbook, run, path, sheets, tools, steps):
+        seen["sheets"] = set(sheets)
+        seen["listed"] = {tool.__name__: tool for tool in tools}["list_sheets"]()
+
+    monkeypatch.setattr(excel_agent, "_round", pretend)
+    path = shapes.build(
+        tmp_path / "with-cover.xlsx",
+        [
+            shapes.SheetSpec("Cover", {"A1": "Vendor questionnaire"}),
+            shapes.SheetSpec(
+                "Security",
+                {"A1": "#", "B1": "Question", "C1": "Answer", "A2": "1", "B2": "Is data encrypted?", "A3": "2"},
+            ),
+        ],
+    )
+    excel_agent.read_workbook(path)
+
+    assert seen["sheets"] == {"Security"}
+    assert "Cover" not in seen["listed"]
+
+
+# --- the agent is held to recording ------------------------------------------
+#
+# The loop ends the moment the model replies without calling a tool. On a
+# two-question workbook the model looked at the sheet and then described it in
+# prose instead of calling `record`, twice in three opens, and the sheet came
+# back with 0 questions and no error (TD-043). A scripted model stands in for
+# it here; what is tested is how the loop treats the replies.
+
+
+class Scripted(GenericFakeChatModel):
+    """Replays a script of replies, and notes the tool choice of every call."""
+
+    choices: list = Field(default_factory=list)
+
+    def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        self.choices.append(tool_choice)
+        return self
+
+
+def _call(name: str, **args) -> AIMessage:
+    return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
+
+
+def _scripted(monkeypatch, *replies) -> Scripted:
+    model = Scripted(messages=iter(replies))
+    monkeypatch.setattr(excel_agent, "chat_llm", lambda **kwargs: model)
+    return model
+
+
+def test_the_agent_must_call_a_tool_while_a_sheet_is_unrecorded(tmp_path, monkeypatch):
+    model = _scripted(
+        monkeypatch,
+        _call("list_sheets"),
+        _call("look_at", sheet_name="Security"),
+        AIMessage(content="The sheet holds two numbered questions in column B."),
+    )
+    path = shapes.short_numbered(tmp_path / "short.xlsx")
+    run = excel_agent.Run()
+    with Workbook(path) as workbook:
+        excel_agent._round(workbook, run, path, {"Security"}, excel_agent._make_tools(workbook, run), 24)
+
+    assert model.choices == ["any", "any", "any"], "every call is bound to require a tool"
+    assert run.readings == {}
+
+
+def test_the_agent_stops_once_every_sheet_is_recorded(tmp_path, monkeypatch, caplog):
+    """And without the model call that would only have said "done"."""
+    model = _scripted(
+        monkeypatch,
+        _call("list_sheets"),
+        _call("look_at", sheet_name="Security"),
+        _call(
+            "record",
+            sheet_name="Security",
+            is_questionnaire=True,
+            header_row=1,
+            question_column="B",
+            column_roles="A=number, C=answer",
+            reason="Two numbered questions in column B under row 1.",
+        ),
+        AIMessage(content="unreached"),
+    )
+    with caplog.at_level(logging.INFO, logger=excel_agent.__name__):
+        form, run = excel_agent.read_workbook(shapes.short_numbered(tmp_path / "short.xlsx"))
+
+    assert set(run.readings) == {"Security"}
+    assert len(model.choices) == 3, "the fourth reply is never asked for"
+    assert len(form.questions) == 2
+    assert "Asking the Excel agent again" not in caplog.text
 
 
 def test_the_conversation_is_pruned_once_it_grows(tmp_path):

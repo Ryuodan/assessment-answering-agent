@@ -78,6 +78,7 @@ modules = [
     "src.forms.reading",
     "src.agents",
     "src.agents.excel_agent",
+    "src.agents.excel_guard",
 ]
 
 [[layer]]

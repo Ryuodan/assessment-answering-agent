@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -321,9 +322,11 @@ ten times that -- a higher trigger simply never fires.
 CONTEXT_KEEP = 4
 
 
-def _agent(tools: list, model: str | None = None):
+def _agent(tools: list, missing: Callable[[], set[str]], model: str | None = None):
     from langchain.agents import create_agent
     from langchain.agents.middleware import ClearToolUsesEdit, ContextEditingMiddleware
+
+    from src.agents import excel_guard
 
     return create_agent(
         chat_llm(temperature=0.0, model=model),
@@ -332,20 +335,21 @@ def _agent(tools: list, model: str | None = None):
         middleware=[
             ContextEditingMiddleware(
                 edits=[ClearToolUsesEdit(trigger=CONTEXT_TRIGGER, keep=CONTEXT_KEEP)],
-            )
+            ),
+            *excel_guard.until_recorded(missing),
         ],
     )
 
 
 def _round(workbook: Workbook, run: Run, path: Path, sheets: set[str], tools: list, steps: int) -> None:
-    """One conversation with the agent, over the sheets named."""
+    """One conversation with the agent, held by `excel_guard` to recording every sheet named."""
     named = ", ".join(sorted(repr(name) for name in sheets))
     try:
         # Streamed rather than invoked, so a run that hits its budget still
         # reports what it spent. `invoke` raises and takes the whole
         # conversation with it, and a comparison that cannot say what the
         # failures cost is not much of a comparison.
-        for chunk in _agent(tools).stream(
+        for chunk in _agent(tools, lambda: sheets - set(run.readings)).stream(
             {
                 "messages": [
                     (
@@ -437,11 +441,12 @@ def read_workbook(
     started = time.monotonic()
 
     with Workbook(path) as workbook:
-        tools = _make_tools(workbook, run, only)
-        asked = sum(1 for sheet in workbook.sheets if sheet.visible and (only is None or sheet.name in only))
-        steps = max_steps or budget(asked)
-        wanted = {sheet.name for sheet in workbook.sheets if sheet.visible and (only is None or sheet.name in only)}
-        _round(workbook, run, path, wanted, tools, steps)
+        # Not the hidden or near-empty sheets: `_read` skips those whatever the
+        # agent says, and asking anyway cost a one-row workbook a whole round.
+        wanted = {s.name for s in workbook.sheets if unreadable(s) is None and (only is None or s.name in only)}
+        if wanted:
+            tools = _make_tools(workbook, run, wanted)
+            _round(workbook, run, path, wanted, tools, max_steps or budget(len(wanted)))
 
         # A second round, for sheets it simply forgot. On the Zain form the
         # agent recorded five sheets of seven and stopped -- not out of budget,
@@ -460,9 +465,9 @@ def read_workbook(
             )
             _round(workbook, run, path, missed, _make_tools(workbook, run, missed), budget(len(missed)))
 
-        still = sorted(wanted - set(run.readings))
+        still = ", ".join(repr(name) for name in sorted(wanted - set(run.readings)))
         if still:
-            logger.warning("The Excel agent never read %s on %s", ", ".join(repr(name) for name in still), path.name)
+            logger.warning("The Excel agent never read %s on %s; its steps: %s", still, path.name, "; ".join(run.steps))
 
         for sheet in workbook.sheets:
             part, questions = _read(workbook, sheet, run)
@@ -514,12 +519,3 @@ def _read(workbook: Workbook, sheet: Sheet, run: Run) -> tuple[Part, list[FormQu
             findings=[Finding(subject=sheet.name, verdict="skipped", because=because, confident=False)],
         ), []
     return applied
-
-
-def detect(path: str | Path, *, max_steps: int | None = None) -> DetectedForm:
-    """Read a workbook with the agent, discarding the accounting.
-
-    Signature-compatible with `forms.xlsx.detect`, so the two can be swapped in
-    a comparison harness without anything else changing.
-    """
-    return read_workbook(path, max_steps=max_steps)[0]

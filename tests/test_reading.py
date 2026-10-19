@@ -290,6 +290,39 @@ def test_guarded_says_which_sheets_the_rules_had_to_rescue(tmp_path, monkeypatch
     assert "'Human Resources'" in " ".join(result.notes)
 
 
+def test_guarded_rescues_a_short_sheet_the_agent_did_not_record(tmp_path, monkeypatch):
+    """TD-043. A two-question sheet the agent looked at and never recorded came
+    back with 0 questions twice in three opens, because the rules read nothing
+    there either and the floor had nothing to put under it."""
+    from src.agents import excel_agent
+
+    def pretend(path, **kwargs):
+        form = _form(("Security", "not read", 0))
+        form.warnings.append("No questions were found. The sheets were read as: Security (not read)")
+        return form, excel_agent.Run()
+
+    monkeypatch.setattr(excel_agent, "read_workbook", pretend)
+    result = read(shapes.short_numbered(tmp_path / "short.xlsx"), "guarded")
+
+    assert result.questions == 2
+    assert result.form.warnings == []
+    assert "'Security'" in " ".join(result.notes)
+
+
+def test_hybrid_reads_a_short_sheet_without_the_agent(tmp_path, monkeypatch):
+    """A short form the rules read is not 'lost', so it costs nothing extra."""
+    from src.agents import excel_agent
+
+    def fail(*args, **kwargs):
+        raise AssertionError("the agent should not have been run")
+
+    monkeypatch.setattr(excel_agent, "read_workbook", fail)
+    result = read(shapes.short_numbered(tmp_path / "short.xlsx"), "hybrid")
+
+    assert result.questions == 2
+    assert "the agent was not run" in " ".join(result.notes)
+
+
 def test_guarded_is_what_the_application_uses_by_default():
     """Chosen deliberately: the agent generalises best, and this is the agent
     with its one measured failure removed.

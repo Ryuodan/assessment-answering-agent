@@ -364,8 +364,13 @@ def _find_layout(sheet: Sheet) -> Layout | None:
     So the question column is the one that *behaves* like questions: the most
     rows of real prose beneath a plausible header. A matching heading still
     counts, as a tiebreak rather than a requirement.
+
+    A form of one or two questions is too short for any of that, and is read
+    only when nothing else is found: the first column headed as the questions,
+    in a header row that also heads somewhere for us to write.
     """
     best: tuple[float, int, str] | None = None
+    short: Layout | None = None
 
     for header_row in sheet.rows[:HEADER_SEARCH_ROWS]:
         headings = sheet.row_values(header_row)
@@ -387,6 +392,11 @@ def _find_layout(sheet: Sheet) -> Layout | None:
                 # whose questions are 'Industry', 'Contact email address' and
                 # 'Organization's legal name'.
                 if filled < MIN_QUESTION_ROWS:
+                    # Two numbered questions under `# | Question | Answer` read
+                    # as nothing at all, so the guarded reading had no floor
+                    # when the agent recorded nothing (TD-043).
+                    if filled and short is None and _heads_an_answer(headings):
+                        short = Layout(header_row=header_row, question_column=column, headed=True)
                     continue
                 score = heading_score + 100 + min(filled, 40)
                 best = best if best and best[0] > score else (score, header_row, column)
@@ -410,7 +420,16 @@ def _find_layout(sheet: Sheet) -> Layout | None:
 
     if best is not None:
         return Layout(header_row=best[1], question_column=best[2], headed=True)
-    return _find_headless_layout(sheet)
+    return _find_headless_layout(sheet) or short
+
+
+def _heads_an_answer(headings: dict[str, str]) -> bool:
+    """Whether a header row names a column we write in: an answer, a status or evidence."""
+    return any(
+        len(_label(text)) <= HEADING_LABEL_LIMIT
+        and _role_for(text, has_dropdown=False)[0] in (Role.ANSWER, Role.STATUS, Role.EVIDENCE)
+        for text in headings.values()
+    )
 
 
 # --- questions -------------------------------------------------------------
@@ -805,20 +824,6 @@ def _is_repeated_header(values: dict[str, str], headings: dict[str, str]) -> boo
     return all(values[column].strip() == headings[column].strip() for column in shared)
 
 
-def _thin(sheet: Sheet, part: Part, layout_row: int) -> bool:
-    """Whether a sheet was read, but read badly.
-
-    Seven questions on a sheet of 133 rows is a wrong column, not a short
-    questionnaire -- that is the ISRA workbook, whose sections are headed 'HR
-    Security' and 'Physical Security' and which no word list anticipates. The
-    test is coverage: what share of the rows below the header became questions.
-    """
-    below = [row for row in sheet.rows if row > layout_row]
-    if len(below) < settings.detection_assist_min_rows:
-        return False
-    return part.questions / len(below) < settings.detection_assist_coverage
-
-
 def _assist(workbook: Workbook, sheet: Sheet, part: Part, found: int) -> tuple[Part, list] | None:
     """A model's reading of a sheet, if it beats what the rules managed.
 
@@ -859,8 +864,9 @@ def detect(path: str | Path, *, assist: bool | None = None) -> DetectedForm:
             part, questions = _detect_sheet(workbook, sheet)
 
             if assist and unreadable(sheet) is None:
-                header_row = _header_row_of(part)
-                if not questions or _thin(sheet, part, header_row):
+                from src.forms import llm_layout
+
+                if not questions or llm_layout.thin(sheet, part, llm_layout.header_row_of(part)):
                     better = _assist(workbook, sheet, part, len(questions))
                     if better is not None:
                         part, questions = better
@@ -874,23 +880,6 @@ def detect(path: str | Path, *, assist: bool | None = None) -> DetectedForm:
             + ", ".join(f"{part.name} ({part.kind})" for part in form.parts)
         )
     return form
-
-
-_HEADER_ROW = re.compile(r"headings on row (\d+)")
-
-
-def _header_row_of(part: Part) -> int:
-    """The header row the rules settled on, read back off the finding.
-
-    Recovered from the report rather than threaded through the return type,
-    because the header row is of no interest to anything else and a second
-    return value on `_detect_sheet` would be carried by every caller.
-    """
-    for finding in part.findings:
-        match = _HEADER_ROW.search(finding.because)
-        if match:
-            return int(match.group(1))
-    return 0
 
 
 # --- writing ---------------------------------------------------------------
