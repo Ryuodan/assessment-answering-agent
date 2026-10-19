@@ -157,6 +157,13 @@ class ProductNameTaken(Conflict):
     code = "product_name_taken"
 
 
+# Raised by src.products, for a questionnaire or a chat (TD-040).
+class ProductLocked(Conflict):
+    """A questionnaire's or a chat's product is fixed once chosen."""
+
+    code = "product_locked"
+
+
 # Raised by src.preferences.
 class PreferenceError(Invalid, ValueError):
     """A preference or skill that cannot be saved as given. Safe to show."""

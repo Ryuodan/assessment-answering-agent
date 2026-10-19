@@ -90,6 +90,7 @@ modules = [
     "src.tools",
     "src.agents.assistant",
     "src.agents.assistant_prompt",
+    "src.agents.assistant_turn",
 ]
 
 [[layer]]

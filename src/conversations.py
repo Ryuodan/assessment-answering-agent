@@ -144,19 +144,24 @@ def load(
 
 
 def save(conversation: Conversation) -> None:
-    """Write back the messages, the title, the current questionnaire and the product."""
+    """Write back the messages, the title and the current questionnaire.
+
+    Not the product: it is fixed when the conversation is created (TD-040). A
+    turn still running when its product was deleted would otherwise write the
+    deleted product back over the General it had been returned to, and with
+    the product fixed nothing could put that right.
+    """
     conn = store.connect()
     conn.execute(
         """
         UPDATE conversations
-           SET messages = ?, title = ?, batch_id = ?, product_id = ?, updated_at = ?
+           SET messages = ?, title = ?, batch_id = ?, updated_at = ?
          WHERE conversation_id = ?
         """,
         (
             json.dumps(messages_to_dict(conversation.messages), ensure_ascii=False),
             conversation.title,
             conversation.batch_id or None,
-            conversation.product_id,
             store.utcnow(),
             conversation.id,
         ),

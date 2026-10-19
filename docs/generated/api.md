@@ -58,7 +58,7 @@ Errors: [errors.md](errors.md).
 | `POST` | `/api/forms/{batch_id}/columns` | Move a sheet's answers to a different column, or stop writing one. |
 | `PATCH` | `/api/forms/{batch_id}/questions` | Set questions aside, bring them back, or correct their wording. |
 | `POST` | `/api/forms/{batch_id}/detail` | Switch a questionnaire between full and brief answers. |
-| `POST` | `/api/forms/{batch_id}/product` | Answer a questionnaire for another product, or General, from now on (plan 023). |
+| `POST` | `/api/forms/{batch_id}/product` | Refused unless it is the questionnaire's own product: a product is fixed when the file is opened. |
 | `POST` | `/api/forms/{batch_id}/answers/length` | Write this one answer full or brief, whatever the rest of the file does. |
 | `POST` | `/api/forms/{batch_id}/approve` | Release one answer for writing, with the reviewer's name on it. |
 | `POST` | `/api/forms/{batch_id}/fill` | Write the confirmed answers into a copy of the original, and report the rest. |
@@ -156,7 +156,7 @@ Errors: [errors.md](errors.md).
 | `POST` | `/api/chat/upload` | A message with a questionnaire attached. |
 | `GET` | `/api/chat/{conversation_id}` | One conversation, as a transcript plus whatever answers it has produced. |
 | `DELETE` | `/api/chat/{conversation_id}` | Delete one of the caller's conversations. Its questionnaire and the answers in it stay. |
-| `POST` | `/api/chat/{conversation_id}/product` | Answer this conversation, and its questionnaire, for another product or General (plan 023). |
+| `POST` | `/api/chat/{conversation_id}/product` | Refused unless it is the conversation's own product: a chat's product is fixed once it starts. |
 
 ## `/health`
 

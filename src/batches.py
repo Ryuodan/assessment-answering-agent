@@ -264,21 +264,6 @@ def set_detail(batch_id: str, detail: str) -> None:
         )
 
 
-def set_product(batch_id: str, product_id: str) -> None:
-    """Answer this questionnaire for another product, or for General ("").
-
-    The answers already written stay as they are (plan 018, decision 8): they
-    were right for what was asked then, and answering again is a separate,
-    explicit act.
-    """
-    conn = store.connect()
-    with conn:
-        conn.execute(
-            "UPDATE form_batches SET product_id = ?, updated_at = ? WHERE batch_id = ?",
-            (product_id, store.utcnow(), batch_id),
-        )
-
-
 def forget_answer(batch_id: str, question_id: str) -> None:
     """Drop one stored answer, leaving the question as if it had never been answered.
 

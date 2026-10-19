@@ -179,24 +179,20 @@ def open_form(user: User, path: Path, *, strategy: str | None = None, product_id
 
 
 def set_product(user: User, batch_id: str, product_id: str) -> Batch:
-    """Answer a questionnaire for a product, or for General (""), from now on.
+    """Refused unless it is the questionnaire's own product: it is fixed when the file is opened (TD-040).
 
-    The answers already written stay as they are (plan 018, decision 8);
-    answering again is a separate, explicit act. Another team's product is
-    `product_not_found`.
+    Another team's product, or a deleted one, is still `product_not_found`; the
+    questionnaire's own product is accepted, and changes nothing.
     """
     batch = _require(user, batch_id)
-    product_id = products.chosen(user.team_id, product_id)
-    if product_id != batch.product_id:
-        batches.set_product(batch.id, product_id)
-        events.record(
-            user,
-            events.PRODUCT_CHOSEN,
-            subject_type=batches.SUBJECT,
-            subject_id=batch.id,
-            product_id=product_id,
-        )
-    return _require(user, batch_id)
+    products.refuse_change(
+        user.team_id,
+        batch.product_id,
+        product_id,
+        "A questionnaire's product is fixed when it is opened. To answer this file for another product, "
+        "close it and open the file again with that product chosen.",
+    )
+    return batch
 
 
 def _require(user: User, batch_id: str) -> Batch:
@@ -946,7 +942,8 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
 
     question = next(q for q in batch.form.questions if q.id == question_id)
     # Remembered in the questionnaire's memory: its product's, or the shared one
-    # for General (plan 023). Approved before the product changed, it moves.
+    # for General (plan 023). That product is fixed (TD-040), so an entry is in
+    # another memory only after a Move on the memory page; approved again, it comes back.
     previous = answer_memory.get(entry_id, user.team_id)
     if previous is not None and previous.product_id != batch.product_id:
         answer_memory.remove(entry_id, user.team_id)

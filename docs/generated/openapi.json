@@ -1202,7 +1202,7 @@
     "/api/forms/{batch_id}/product": {
       "post": {
         "summary": "Choose Questionnaire Product",
-        "description": "Answer a questionnaire for another product, or General, from now on (plan 023).\n\nThe answers already written stay; answering again is a separate request.",
+        "description": "Refused unless it is the questionnaire's own product: a product is fixed when the file is opened.\n\nAnother product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.",
         "operationId": "choose_questionnaire_product_api_forms__batch_id__product_post",
         "parameters": [
           {
@@ -3470,7 +3470,7 @@
     "/api/chat/{conversation_id}/product": {
       "post": {
         "summary": "Choose Chat Product",
-        "description": "Answer this conversation, and its questionnaire, for another product or General (plan 023).\n\nAnswers already written stay; anything answered afterwards uses the new one.",
+        "description": "Refused unless it is the conversation's own product: a chat's product is fixed once it starts.\n\nAnother product is 409 `product_locked` (TD-040); another team's is 404 `product_not_found` first.\nKept so a page opened before the change, or a script, is told why rather than finding no route.",
         "operationId": "choose_chat_product_api_chat__conversation_id__product_post",
         "parameters": [
           {
