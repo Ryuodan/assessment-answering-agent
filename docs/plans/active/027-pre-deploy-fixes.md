@@ -72,6 +72,11 @@ next plan (028).
   - **The copy:** the dev split ran on a copy of the index. In the copy, the 694 shared answers were re-filed as the app files remembered answers ("Answer memory", chunk 0, same entry id and text, no re-embedding). The live index has no such entries, so a run on it could not show the defect.
   - **Result:** 82 cases graded; agreement 81.7%; verdicts: 59 broader, 13 contradicts, 6 same, 3 narrower, 1 declined.
   - **Live data:** the hashes of `chroma_db/chroma.sqlite3` and `data/app.db` were unchanged before and after.
+- 2026-10-19: run B (with the fix, commit `92d4b7e`), on the same copy.
+  - **Result:** 82 graded, 0 failed; agreement 84.1% (81.7% before). Where the memory had been asked something similar: 91.2% (87.5%). Where it had not: 82.4% (80.3%). Verdicts: 60 broader, 11 contradicts (13 before), 6 same, 5 narrower.
+  - **Item by item** (`scripts.compare_runs` against the plan 014 noise): 3 better, 0 worse, 74 the same, 5 moved within noise.
+  - **Reading:** the +2.4 points is below the 4.9 points that plan 014 measured as the smallest change between two single runs that means anything. The run shows no harm and a consistent direction, not a proven gain. The mechanism is proven by the tests: `tests/test_previous_answers.py` and the merge and fusion tests.
+  - **Live data:** hashes unchanged again.
 
 ## Decision log
 
