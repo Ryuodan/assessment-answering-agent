@@ -306,3 +306,63 @@ or docs and has not been verified by running anything.
 - **Impact:** the drafter can quote the first two as if they were T2's answers, and the third may no longer be true.
 - **Fix:** the user's call, on the Answer memory page: forget `MEM-0035` and `MEM-0519`, and confirm the DPO status before correcting or forgetting `MEM-0400`. Not done by Claude, because the live memory is the team's data.
 - **Resolved** 2026-10-19. The user forgot `MEM-0035` on the memory page. On the user's instruction, Claude forgot `MEM-0519` and `MEM-0400` with `scripts/memory_changes.py`, with the app stopped and a backup of the database and the vector store taken first. The events are recorded under the user's account. Afterwards the rows and their vectors were checked to be gone.
+
+## TD-037: A product chat's direct answers ignore the chat's product
+
+- **What:** found 2026-10-19 by the pre-deploy tests (tracks A-api, B-browser, D1 and D3, each confirmed by a second opinion, two of them offline repros). `answer_directly` in `src/agents/assistant.py` calls `service.answer_questions(..., team_id=user.team_id)` without `product_id`. The same chat's `search_policies` and `open_questionnaire` do pass it (plan 023 wired those two and missed this one).
+- **Impact:** in a chat set to a product, a typed "do we do X" question is drafted from the shared knowledge base and memory only. An Ole5 chat answered that there was no documented single sign-on, against Ole5's own facts. In another case it said no policy covered patching, while the product's knowledge base held the Patch Management Policy.
+- **Fix (needs approval):** pass `product_id=state.get("product_id", "")`, and add a test that a product chat's direct answer reaches the product's store.
+
+## TD-038: An empty SEED_PRODUCTS uses up the product seeding
+
+- **What:** found 2026-10-19 (tracks C, D2, D3 and E, confirmed). `products.seed()` records the `products` seed on the first start even when `SEED_PRODUCTS` is empty. `identity.bootstrap` seeds `ALLOWED_EMAILS` only when the list is non-empty, which is the behaviour plan 018's decision 6 compared it to.
+- **Impact:** an upgraded server whose `.env` has no `SEED_PRODUCTS`, which is every older production `.env`, marks the seed done on its first start. Setting the names afterwards adds nothing, and nothing is logged. The workaround is to add the products on the Products page.
+- **Fix (needs approval):** record the seed only when `SEED_PRODUCTS` names something. For a deploy before the fix, set `SEED_PRODUCTS` before the first start.
+
+## TD-039: Deleting a product leaves its uploaded files on disk and in the document library
+
+- **What:** found 2026-10-19 (tracks A-api, C and D1). A product's knowledge-base files are saved in the team's upload folder with no product marker. After the product is deleted, its vectors are gone, but the files are still listed, opened and downloaded in the document library. The delete dialog says the product's documents are deleted.
+- **Impact:** a person who deleted a product to get rid of its material still has the files on the server, listed for the whole team.
+- **Fix (a product decision):** keep product uploads in a per-product folder and remove it with the product, or say plainly in the dialog that the files stay.
+
+## TD-040: Product-related behaviour that needs a decision
+
+Found 2026-10-19 by the pre-deploy tests. Each item works as specified, but a user may not expect it:
+
+- **Precedence by label only.** A product's hits come first from the store, but the pipeline re-sorts all evidence by score (`graph/state.py`), so product and shared chunks interleave. The drafter still sees FOR THIS PRODUCT, and every tested answer followed the product, but precedence rests on the label alone.
+- **Switching to General before approving.** Approving a product questionnaire's hand-written answer after switching it to General moves product wording into the shared memory. In the test, the sweep then marked a shared answer superseded by it, without asking anyone.
+- **Silent forgetting on delete.** Deleting a product forgets its remembered answers, including shared answers that had been moved into it. The dialog does not count them.
+- **Member rights.** Any member can upload to or clear a product's knowledge base and move memory entries; only managing products themselves needs a lead.
+
+## TD-041: Chat page issues found in the browser tests
+
+Found 2026-10-19 (track B, confirmed):
+
+- **Clipped header.** The chat page's top bar does not wrap. Below about 1,018 px wide, the signed-in address and "Dark mode" are clipped.
+- **Wide history column.** The history column doubles in width when a conversation has a long title. This predates products.
+- **Chip not restored on refusal.** When changing a chat's product is refused (a stale tab offering a deleted product), the chip keeps showing the refused product, and the error is drawn as an assistant turn.
+- **Polish.** Product badges are missing on chat source chips, the memory page's "Move to…" menu is full width, and some header links are inconsistent.
+
+## TD-042: Upgrade and operations visibility
+
+Found 2026-10-19 by the upgrade rehearsals:
+
+- **Migrations are invisible.** Schema migrations are not logged. `doctor` does not warn that a migration is pending. A step is not atomic: a crash part-way through would need the backup.
+- **Renamed setting.** The renamed `STORAGE_LIMIT_PER_TEAM_MB` (now per person, `STORAGE_LIMIT_PER_USER_MB`) is silently ignored when an old `.env` still has it.
+- **Misleading warning.** `doctor`'s warning that `organisation.json` "is created at startup" never clears, because nothing creates it.
+- **Log time zone.** Log timestamps moved from local time to UTC without a zone mark.
+
+## TD-043: Assistant and reader behaviour seen once each in testing
+
+Found 2026-10-19; none was repeated or confirmed by a second run:
+
+- **Search loop.** A search-only request in a product chat looped to the recursion limit, using about 250k tokens. It then said answers were "beside this" when none had been written.
+- **Invented quotation.** Asked what a product document says, the assistant quoted a paraphrase that stated the opposite of the source.
+- **Document opened as a questionnaire.** The assistant once tried to open a knowledge-base document as a questionnaire.
+- **Excel agent.** It returned no questions for a small, clean sheet twice in three opens.
+
+## TD-044: Nobody can reach a former member's questionnaires and chats
+
+- **What:** found 2026-10-19 by the upgrade rehearsal from the production commit (track D3, check D3-07). Since the 20 September release, questionnaires and chats are private to their owner, by design. Before it, every member and the administrator could list and open all of them. After an upgrade from an earlier version, each is visible only to its owner; anyone else gets 404, and the administrator has no team-wide view.
+- **Impact:** nothing is lost, and owners keep their own work. But colleagues who used to share questionnaires lose sight of each other's, and a former member's questionnaires and chats cannot be reached or handed over.
+- **Fix (a product decision):** at least a release note for the upgrade. Possibly a read-only or reassign view for administrators.
