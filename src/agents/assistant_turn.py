@@ -1,29 +1,29 @@
-"""What one assistant turn may do, and what its reply may claim (plan 027, TD-043).
+"""What one assistant turn may do, and what it says when it stops (plan 027, TD-043).
 
 Beside `src/agents/assistant.py`, which re-exports `tidy_reply`, `without_repetition`,
-`CORRECTION` and `UI_KEY` from here. Each rule is a turn that went wrong:
+`CORRECTION`, `UI_KEY` and `CARRY_ON` from here. Whether a reply's quotations hold
+is `src/agents/assistant_quotes.py`. Each rule is a turn that went wrong:
 
-* A turn searches at most three times, and reads each clause whole. Shown 400
-  characters of each, the model never saw the sentence that answered it, and
-  searched nineteen times in quoted phrases until the turn ran out of steps.
+* A turn looks in the documents at most three times, a search or a direct
+  answer counting once each, and reads each clause whole. Shown 400 characters
+  of each, the model never saw the sentence that answered it, and searched
+  nineteen times in quoted phrases until the turn ran out of steps. One refusal
+  is answered; a model that asks again after it ends the turn.
 * Its sources are listed once: those searches listed 114 clauses, 14 distinct.
 * A turn that stopped says what it did, not "What I did finish is in the
   answers beside this" after a turn that changed nothing.
-* A quotation no source contains is asked about once, then shown as a
-  paraphrase with a note. A reply had quoted a real heading over a sentence
-  saying the opposite of its clause.
 * A knowledge-base document is not opened as a questionnaire, and the model is
   told why, rather than to have the person attach it.
+* A call to a tool that does not exist is carried on from, not fatal.
 """
 
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
 
 from src import service
 from src.identity import User
@@ -32,13 +32,10 @@ from src.logs import get_logger
 logger = get_logger(__name__)
 
 SEARCHES_PER_TURN = 3
-"""Searches one turn may make. One usually settles a question; the third is the last."""
+"""Searches one turn may make, a direct answer counting as one. One usually settles a question; the third is the last."""
 
 CLAUSE_CHARS = 1500
 """How much of each clause a search shows the model: all of one, at the chunk size of 1,200."""
-
-QUOTE_MIN_WORDS = 6
-"""Shorter quoted spans are titles and terms, not claims about what a document says."""
 
 FOR_THIS_PRODUCT = "FOR THIS PRODUCT"
 """The mark on a product's own clauses, as the drafter's sources carry it (TD-040)."""
@@ -59,31 +56,95 @@ def is_correction(message: BaseMessage) -> bool:
     return bool((getattr(message, "additional_kwargs", None) or {}).get(CORRECTION))
 
 
-# --- searching ------------------------------------------------------------------------
+# --- looking in the documents ---------------------------------------------------------
 
 
 def _normalised(query: str) -> str:
     return " ".join(re.sub(r"[\"'\u201c\u201d\u2018\u2019\u00ab\u00bb\u201e]", " ", query or "").casefold().split())
 
 
-def search_refused(state: dict[str, Any], query: str) -> str:
-    """Why this search is not run, or "" when it may be, counting it.
+_AGAIN = {
+    "found": "Already searched for that this turn; its clauses are above. Reply from them.",
+    "nothing": "Already searched for that this turn, and it found nothing. Do not search for it again: say that "
+    "the documents found do not state it.",
+    "failed": "Already searched for that this turn, and the search failed. Do not try it again: tell the person "
+    "the search failed.",
+    "answer": "Already answered that this turn; the answer is above. Relay it word for word.",
+}
+_SPENT = (
+    "{refused}: this turn has already searched {n} times, which is the limit. Do not search again. Reply now "
+    "from the clauses those searches returned: quote the sentence that answers the question word for word and "
+    "name its document. If none says it, say plainly that the documents found do not state it, and name the "
+    "closest clause."
+)
+_REFUSED = ("Already searched for that this turn", "Already answered that this turn", "Not searched:", "Not answered:")
+"""How a refused search or direct answer begins, so that `spent` can count them."""
 
-    Before anything is awaited, so searches asked for at once cannot all pass the limit together.
+
+def refused(state: dict[str, Any], asked: str, *, kind: str = "search") -> str:
+    """Why this search or direct answer is not run, or "" when it may be, counting it.
+
+    Before anything is awaited, so calls asked for at once cannot all pass the
+    limit together. `kind` is "search" or "answer": both search the documents,
+    so they share the turn's budget. A failed search stays counted, so a search
+    that keeps failing cannot be asked for until the turn runs out of steps.
     """
-    searched: list[str] = state.setdefault("searches", [])
-    if _normalised(query) in {_normalised(earlier) for earlier in searched}:
-        return "Already searched for that this turn; its clauses are above. Reply from them."
-    if len(searched) >= SEARCHES_PER_TURN:
-        made = "; ".join(repr(earlier) for earlier in searched)
-        return (
-            f"Not searched: this turn has already searched {len(searched)} times ({made}), which is the "
-            "limit. Do not search again. Reply now from the clauses those searches returned: quote the "
-            "sentence that answers the question word for word and name its document. If none says it, "
-            "say plainly that the documents found do not state it, and name the closest clause."
-        )
-    searched.append(query)
+    made: list[dict[str, str]] = state.setdefault("searches", [])
+    key = _normalised(asked)
+    earlier = next((entry for entry in made if entry["kind"] == kind and entry["key"] == key), None)
+    if earlier is not None:
+        return _AGAIN["answer" if kind == "answer" else earlier["outcome"]]
+    if len(made) >= SEARCHES_PER_TURN:
+        return _SPENT.format(refused="Not answered" if kind == "answer" else "Not searched", n=len(made))
+    made.append({"kind": kind, "key": key, "outcome": "found"})
     return ""
+
+
+def searched(state: dict[str, Any], query: str, hits: list[dict[str, Any]] | None = None, failed: Any = None) -> str:
+    """What one search returns to the model. Its outcome is kept, for a repeat and for `stopped_reply`.
+
+    Neither a search that matched nothing nor one that failed says the query
+    back: the model's own words in a tool result would pass for a document's.
+    """
+    key = _normalised(query)
+    made: list[dict[str, str]] = state.get("searches") or []
+    entry = next((e for e in made if e["kind"] == "search" and e["key"] == key), {})
+    entry["outcome"] = "failed" if failed is not None else "found" if hits else "nothing"
+    if failed is not None:
+        return f"The search failed: {failed}"
+    if not hits:
+        return "Nothing in the indexed policies matched that search."
+    add_sources(state, hits)
+    return clauses(hits)
+
+
+def spent(messages: Iterable[BaseMessage]) -> bool:
+    """Whether this turn has been refused a search or a direct answer twice.
+
+    One refusal is answered, so the model can reply from what it found. Asking
+    again after that is ignoring what it was told, and every step re-sends each
+    clause found: the turn ends with what it did instead (`stopped_reply`).
+    """
+    refusals = 0
+    for message in reversed(list(messages)):
+        if isinstance(message, HumanMessage) and not is_correction(message):
+            break
+        refusals += isinstance(message, ToolMessage) and str(message.content).startswith(_REFUSED)
+    return refusals >= 2
+
+
+def ends_when_spent() -> Any:
+    """The agent's middleware that ends a `spent` turn before the model is asked again."""
+    from langchain.agents.middleware import before_model
+
+    @before_model(can_jump_to=["end"])
+    def refused_twice(agent_state: Any, runtime: Any) -> dict[str, Any] | None:
+        if not spent(agent_state["messages"]):
+            return None
+        logger.info("assistant.turn_spent")
+        return {"jump_to": "end"}
+
+    return refused_twice
 
 
 def clauses(hits: list[dict[str, Any]]) -> str:
@@ -159,22 +220,32 @@ def _a_knowledge_base_document(user: User, state: dict[str, Any], name: str) -> 
 _STOPPED = {
     "en": {
         "changed": "I ran out of room part way through that. What I did finish is in the answers beside this.",
-        "searched": "I ran out of room part way through that, and nothing was answered or changed. "
-        "I searched the documents {times} without settling it. The clauses found are listed under this "
-        "reply, from {documents}. Asking about one point at a time usually works better.",
-        "found_nothing": "I ran out of room part way through that, and nothing was answered or changed. "
-        "I searched the documents {times} and found nothing that matched. "
-        "Asking about one point at a time usually works better.",
+        "opened": "I ran out of room part way through that. I opened {file}, but nothing in it was answered "
+        "or changed yet.",
+        "untouched": "I ran out of room part way through that, and nothing was answered or changed.",
+        "searched": "I searched the documents {times} without settling it. The clauses found are listed under "
+        "this reply, from {documents}.",
+        "found_nothing": "I searched the documents {times} and found nothing that matched.",
+        "partly_failed": "I searched the documents {times} and found nothing that matched; {failures} the "
+        "search itself failed.",
+        "failed": "I tried to search the documents {times}, but the search failed.",
+        "advice": "Asking about one point at a time usually works better.",
+        "retry": "Could you try again, one step at a time?",
         "nothing": "I ran out of room part way through that, and nothing was changed. "
         "Could you try again, one step at a time?",
     },
     "ar": {
         "changed": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك. ما أنجزته موجود في الإجابات بجانب هذه الرسالة.",
-        "searched": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك، ولم تتم الإجابة عن شيء ولم يتغير شيء. "
-        "بحثت في المستندات {times} دون أن أصل إلى جواب حاسم. المقاطع التي وجدتها مدرجة تحت هذه الرسالة، "
-        "من {documents}. السؤال عن نقطة واحدة في كل مرة يعطي عادةً نتيجة أفضل.",
-        "found_nothing": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك، ولم تتم الإجابة عن شيء ولم يتغير شيء. "
-        "بحثت في المستندات {times} ولم أجد شيئاً مطابقاً. السؤال عن نقطة واحدة في كل مرة يعطي عادةً نتيجة أفضل.",
+        "opened": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك. فتحت {file}، لكن لم تتم الإجابة عن شيء فيه "
+        "ولم يتغير فيه شيء بعد.",
+        "untouched": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك، ولم تتم الإجابة عن شيء ولم يتغير شيء.",
+        "searched": "بحثت في المستندات {times} دون أن أصل إلى جواب حاسم. المقاطع التي وجدتها مدرجة تحت هذه "
+        "الرسالة، من {documents}.",
+        "found_nothing": "بحثت في المستندات {times} ولم أجد شيئاً مطابقاً.",
+        "partly_failed": "بحثت في المستندات {times} ولم أجد شيئاً مطابقاً، وتعذّر البحث نفسه {failures}.",
+        "failed": "حاولت البحث في المستندات {times}، لكن البحث تعذّر.",
+        "advice": "السؤال عن نقطة واحدة في كل مرة يعطي عادةً نتيجة أفضل.",
+        "retry": "هل يمكنك المحاولة مرة أخرى، خطوة بخطوة؟",
         "nothing": "نفدت المساحة المتاحة لي قبل أن أُكمل ذلك، ولم يتغير شيء. هل يمكنك المحاولة مرة أخرى، خطوة بخطوة؟",
     },
 }
@@ -185,25 +256,75 @@ _AND = {"en": (", ", " and "), "ar": ("، ", " و")}
 def stopped_reply(state: dict[str, Any], language: str) -> str:
     """What a turn that ran out of steps says, from what this turn actually did.
 
-    The documents are named rather than their best clause quoted: the highest
-    score in the turn this was written for belonged to an unrelated clause.
+    Answers are said to be finished only when a tool wrote some (`state["changed"]`):
+    opening a file is said as that. The documents are named rather than their best
+    clause quoted: the highest score in the turn this was written for belonged to
+    an unrelated clause. A search that failed is not said to have found nothing.
     """
     language = "ar" if language == "ar" else "en"
     said = _STOPPED[language]
-    if state.get("refreshed"):
+    if state.get("changed"):
         return said["changed"]
-    searches = len(state.get("searches") or [])
+    opened = state.get("opened") or ""
+    head = said["opened"].format(file=opened) if opened else said["untouched"]
+    searches = state.get("searches") or []
     if not searches:
-        return said["nothing"]
+        return f"{head} {said['retry']}" if opened else said["nothing"]
     once, twice, more = _TIMES[language]
-    times = once if searches == 1 else twice if searches == 2 else more.format(n=searches)
+
+    def times(n: int) -> str:
+        return once if n == 1 else twice if n == 2 else more.format(n=n)
+
+    failed = sum(entry["outcome"] == "failed" for entry in searches)
     sources = sorted(state.get("sources") or [], key=lambda source: not source.get("product_id"))  # its own first
     names = list(dict.fromkeys(str(source["source_name"]) for source in sources if source.get("source_name")))[:4]
-    if not names:
-        return said["found_nothing"].format(times=times)
-    comma, conjunction = _AND[language]
-    documents = comma.join(names[:-1]) + conjunction + names[-1] if len(names) > 1 else names[0]
-    return said["searched"].format(times=times, documents=documents)
+    if names:
+        comma, conjunction = _AND[language]
+        documents = comma.join(names[:-1]) + conjunction + names[-1] if len(names) > 1 else names[0]
+        body = said["searched"].format(times=times(len(searches)), documents=documents)
+    elif failed == len(searches):
+        body = said["failed"].format(times=times(len(searches)))
+    else:
+        body = said["partly_failed" if failed else "found_nothing"].format(
+            times=times(len(searches)), failures=times(failed)
+        )
+    return f"{head} {body} {said['advice']}"
+
+
+# --- a call to a tool that is not there -----------------------------------------------
+
+CARRY_ON = 2
+"""How many times a turn carries on: after the model calls a tool that does not
+exist, or, once, after its reply quoted what no source says."""
+
+
+def invented_a_tool(failed: Exception) -> bool:
+    """Whether the provider refused a call to a tool that was never offered.
+
+    The model on Groq now and then calls `repo_browser.open_file` -- a tool from
+    its own training, not from this request -- and Groq rejects the whole
+    request. In the assistant evaluation that ended two turns, one of them a
+    turn that had already answered four questions, and the next turn then
+    reported the broken one instead of doing what was asked.
+    """
+    text = str(failed)
+    return "tool_use_failed" in text or "not in request.tools" in text
+
+
+def tool_correction(failed: Exception) -> HumanMessage:
+    """A note that the last step called something that is not there.
+
+    Carrying on with the same messages is not enough: the model runs at
+    temperature 0, and in the evaluation it made the identical call again every
+    time. Something in front of it has to be different.
+    """
+    named = re.search(r"call tool '([^']{1,80})'", str(failed))
+    tool = f"`{named.group(1)}`" if named else "a tool"
+    return HumanMessage(
+        f"[Not from the person: your last step called {tool}, which does not exist here. "
+        "Carry on with what they asked, using only the tools you have.]",
+        additional_kwargs={CORRECTION: True},
+    )
 
 
 # --- the reply as a person should read it ---------------------------------------------
@@ -261,139 +382,3 @@ def tidy_reply(text: str, earlier: list[str] | tuple[str, ...] = ()) -> str:
         if len(before) >= 20 and before in text and text != before:
             text = text.replace(before, "", 1).strip()
     return without_repetition(text)
-
-
-# --- quotations -----------------------------------------------------------------------
-
-_QUOTED = re.compile(
-    r'"([^"\n]+)"'  # straight
-    r"|\u201c([^\u201c\u201d\n]+)\u201d"  # curly
-    r"|\u00ab([^\u00ab\u00bb\n]+)\u00bb"  # guillemets, as Arabic is written
-    r"|\u201e([^\u201c\u201d\u201e\n]+)[\u201c\u201d]"  # low-high
-)
-_QUOTE_LINE = re.compile(r"^[ \t]{0,3}>[ \t]?(.*)$")
-_ELLIPSIS = re.compile(r"\[\s*(?:\u2026|\.\.\.)\s*\]|\u2026|\.\.\.")
-_DIACRITICS = re.compile("[\u064b-\u065f\u0670\u0640]")  # harakat, superscript alef, tatweel
-_LETTERS = str.maketrans({**dict.fromkeys("أإآٱ", "ا"), "ى": "ي", **{chr(0x0660 + d): str(d) for d in range(10)}})
-_KEPT = re.compile(r"[^\W_]+")
-_TRAILING = re.compile(
-    r"^(?P<said>.*\S)\s*(?:\((?P<paren>[^()]+)\)|\s[\u2014\u2013-]\s+(?P<dash>[^\u2014\u2013]+?))\W*$"
-)
-_LABEL = re.compile(r"^(?P<label>[^:]{1,120}):[*_]*\s+(?P<said>.+)$")
-_LOCATION = re.compile(r"^(?:(?:section|clause|pages?|p|source|ref|البند|القسم|صفحة)\b|[\u00a7\d.,:\u2013\s-])+$", re.I)
-
-
-def quoted_spans(reply: str) -> list[str]:
-    """What a reply sets out as a quotation: text in quotation marks, and every blockquote line.
-
-    A blockquote line with quotation marks inside it is checked by those alone,
-    so the document it is attributed to is not taken for part of the quotation.
-    """
-    spans: list[str] = []
-    for line in (reply or "").splitlines():
-        inner = [next(group for group in found.groups() if group is not None) for found in _QUOTED.finditer(line)]
-        blockquote = _QUOTE_LINE.match(line)
-        spans += [span.strip() for span in (inner or ([blockquote[1]] if blockquote else []))]
-    return list(dict.fromkeys(span for span in spans if len(span.split()) >= QUOTE_MIN_WORDS))
-
-
-def _plain(text: str) -> str:
-    """Letters and digits only, with case, diacritics, letter forms, spacing and markdown set aside.
-
-    Dropping the spaces absorbs what a faithful copy can still differ by: line
-    breaks, `**`, a dash of another kind, a word a PDF split in two.
-    """
-    text = _DIACRITICS.sub("", unicodedata.normalize("NFKC", text or "").casefold()).translate(_LETTERS)
-    return "".join(_KEPT.findall(text))
-
-
-def _verbatim(text: str, corpus: str) -> bool:
-    """Every stretch of three or more words, between ellipses, is in the corpus."""
-    return all(_plain(piece) in corpus for piece in _ELLIPSIS.split(text) if len(piece.split()) >= 3)
-
-
-def _cites(text: str, documents: list[str]) -> bool:
-    """Whether `text` only says where a quotation is from: a document's name, or a clause or page."""
-    plain = _plain(text)
-    return bool(_LOCATION.match(text.strip("*_ ").strip())) or any(name in plain for name in documents)
-
-
-def _found(span: str, corpus: str, documents: list[str]) -> bool:
-    if _verbatim(span, corpus):
-        return True
-    trailing, label = _TRAILING.match(span), _LABEL.match(span)
-    if trailing and _cites(trailing["paren"] or trailing["dash"] or "", documents):
-        return _verbatim(trailing["said"], corpus)
-    return bool(label and _cites(label["label"], documents) and _verbatim(label["said"], corpus))
-
-
-def unfound(reply: str, texts: Iterable[str], documents: Iterable[str] = ()) -> list[str]:
-    """The quotations in a reply that none of `texts` contains, word for word.
-
-    Each text is compared on its own, so a quotation cannot be stitched across two.
-    `documents` may be named beside a quotation, before or after it, without being part of it.
-    """
-    spans = quoted_spans(reply)
-    corpus = "\n".join(_plain(text) for text in texts) if spans else ""  # most replies quote nothing
-    names = [name for name in (_plain(str(document).rsplit(".", 1)[0]) for document in documents) if len(name) >= 4]
-    return [span for span in spans if not _found(span, corpus, names)]
-
-
-def unquoted(reply: str, final: dict[str, Any], sources: list[dict[str, Any]]) -> list[str]:
-    """`unfound`, against what this turn could quote from: what the person said, every
-    tool result and every clause found, this turn's and those under earlier replies.
-    Never the assistant's own replies, nor a note to the model, which repeats the words.
-    """
-    messages = list((final or {}).get("messages", []))
-    shown = [m.additional_kwargs.get(UI_KEY) or {} for m in messages if isinstance(m, AIMessage)]
-    found = list(sources) + [source for ui in shown for source in ui.get("sources", [])]
-    said = [m for m in messages if isinstance(m, (HumanMessage, ToolMessage)) and not is_correction(m)]
-    texts = [str(m.content) for m in said] + [str(source.get("snippet") or "") for source in found]
-    return unfound(reply, texts, [str(s.get(field) or "") for s in found for field in ("source_name", "doc_id")])
-
-
-def without_reply(final: dict[str, Any]) -> dict[str, Any]:
-    """The turn so far with its closing reply taken off, to be asked again without it."""
-    messages = list((final or {}).get("messages", []))
-    while messages and isinstance(messages[-1], AIMessage) and not messages[-1].tool_calls:
-        messages.pop()
-    return {**(final or {}), "messages": messages}
-
-
-def quote_correction(spans: list[str]) -> HumanMessage:
-    """The note that asks for the reply again, naming the words no source contains."""
-    logger.info("assistant.quote_asked_again", spans=len(spans))
-    named = "; ".join(f"\u00ab{span[:300]}\u00bb" for span in spans)
-    return HumanMessage(
-        "[Not from the person: your reply set out these words as a quotation, but they are in no source "
-        f"or tool result: {named}. Write the reply again. Quote only words copied exactly from a tool "
-        "result, and name the document. If no clause says it, say so plainly.]",
-        additional_kwargs={CORRECTION: True},
-    )
-
-
-_NOT_QUOTED = {
-    "en": (
-        "Note: a passage above was set out as a quotation, but those words are not in any document found, "
-        "so treat it as a paraphrase.",
-        " The clauses themselves are listed under this reply.",
-    ),
-    "ar": (
-        "ملاحظة: عُرض مقطع أعلاه على أنه اقتباس، لكن كلماته غير موجودة في أي مستند عُثر عليه، "
-        "فاعتبره صياغة بتصرف لا اقتباساً حرفياً.",
-        " المقاطع نفسها مدرجة تحت هذه الرسالة.",
-    ),
-}
-_MARKS = (('"', '"'), ("\u201c", "\u201d"), ("\u00ab", "\u00bb"), ("\u201e", "\u201c"), ("\u201e", "\u201d"))
-
-
-def as_paraphrase(reply: str, spans: list[str], language: str, *, listed: bool) -> str:
-    """The reply with those spans no longer set out as quotations, and a note saying why."""
-    text = reply
-    for span in spans:
-        for opening, closing in _MARKS:
-            text = re.sub(rf"{re.escape(opening)}\s*{re.escape(span)}\s*{re.escape(closing)}", lambda _: span, text)
-        text = re.sub(rf"^[ \t]{{0,3}}>[ \t]?\s*{re.escape(span)}[ \t]*$", lambda _: span, text, flags=re.MULTILINE)
-    logger.info("assistant.quote_unverified", spans=len(spans))
-    note, where = _NOT_QUOTED["ar" if language == "ar" else "en"]
-    return f"{text}\n\n{note}{where if listed else ''}"
