@@ -5,6 +5,8 @@
     python -m scripts.product_data workbook <batch.json> <out.xlsx>
     python -m scripts.product_data factsheet <batch.json> <out.docx> [--draft]
     python -m scripts.product_data held <out.xlsx> <batch.json>... [--existing <entries.json>]
+    python -m scripts.product_data contamination <batch.json>...       # needs `poe eval-unlock`
+    python -m scripts.product_data typing <out.xlsx> <batch.json>...  # the kept answers, to type in
 
 The raw files the team sends are messy -- exported email threads, tickets,
 filled and blank questionnaires -- so cleaning them takes judgement, and the
@@ -16,8 +18,11 @@ phone number, which states a dated status as a standing fact, or which draws on
 a file the evaluation holds out.
 
 Nothing here writes the knowledge base or the answer memory. The batch, the
-review workbook and the fact sheet live beside the raw data, outside the
-repository, because they are the team's confidential material.
+review workbook, the fact sheet and the typing sheet live beside the raw data,
+outside the repository, because they are the team's confidential material.
+They reach the app the way a person would bring them (plan 028): the fact sheet
+uploaded into its knowledge base, and each kept answer typed in on the memory
+page.
 """
 
 from __future__ import annotations
@@ -438,22 +443,27 @@ def write_fact_sheet(batch: Batch, out: Path, *, draft: bool = False) -> int:
     """The knowledge-base document: kept, standing facts by topic. Returns how many.
 
     A product's sheet holds its product facts; the shared batch's holds the
-    T2-wide ones. Facts are cited by id only. A file name can carry a customer's
+    T2-wide ones. No source file is named: a file name can carry a customer's
     name, and a drafter quoting its source would put that name in somebody
-    else's answer.
+    else's answer. A draft, for review, carries a banner and each fact's id.
+    The final sheet, the one uploaded, carries neither, so an id never reaches
+    an answer; the batch keeps the ids for tracing a fact back. Neither claims
+    a team review, which has not happened (plan 028). A batch with no kept
+    facts gets no sheet, because an empty document in a knowledge base reads as
+    if it said something.
     """
     import docx
 
     shared = batch.product == SHARED
-    scope = "t2_wide" if shared else "product"
-    kept = [f for f in batch.facts if f.proposed == "keep" and f.status == "standing" and f.scope == scope]
+    kept = kept_facts(batch)
+    if not kept:
+        raise ValueError(f"{batch.product} has no kept standing facts, so it gets no fact sheet")
     document = docx.Document()
     subject = "T2" if shared else batch.product
     document.add_heading(f"{subject}: security and operations facts", level=0)
     if draft:
         document.add_paragraph("DRAFT FOR REVIEW. Not yet confirmed by the team, and not indexed.")
-    reviewed = "" if draft else " and reviewed by the team"
-    compiled = f"compiled from the security team's correspondence and questionnaires{reviewed} ({batch.prepared_on})"
+    compiled = f"compiled from the security team's correspondence and questionnaires ({batch.prepared_on})"
     document.add_paragraph(
         f"What T2 has stated about itself, whatever the product, {compiled}."
         if shared
@@ -465,9 +475,74 @@ def write_fact_sheet(batch: Batch, out: Path, *, draft: bool = False) -> int:
         if facts:
             document.add_heading(topic, level=1)
             for fact in facts:
-                document.add_paragraph(f"{fact.statement} [{fact.id}]", style="List Bullet")
+                document.add_paragraph(
+                    f"{fact.statement} [{fact.id}]" if draft else fact.statement, style="List Bullet"
+                )
     document.save(str(out))
     return len(kept)
+
+
+def kept_facts(batch: Batch) -> list[Fact]:
+    """The facts this batch's sheet states: kept, standing, and of the batch's own scope."""
+    scope = "t2_wide" if batch.product == SHARED else "product"
+    return [f for f in batch.facts if f.proposed == "keep" and f.status == "standing" and f.scope == scope]
+
+
+def kept_pairs(batch: Batch) -> list[Pair]:
+    """The pairs this batch puts into its memory: kept, and counted here rather than in another batch."""
+    return [p for p in batch.pairs if p.proposed == "keep" and owns(batch, p)]
+
+
+def contamination(batches: list[Batch], cases: list[Any]) -> list[Any]:
+    """Every evaluation case whose question or reference answer the import would show the system.
+
+    The house set measures answers to questionnaires the system has never seen
+    (docs/measurements/evaluation.md). Importing a fact or a pair that repeats
+    one of its questions or reference answers would hand the system the answer
+    key, so each kept item is checked as eval/contamination.py checks src/ and
+    the memory: a run of words in common, or the same question normalised.
+    The leaks name case ids and item ids only.
+    """
+    from eval.contamination import in_memory, in_sources
+
+    texts = {f"{b.product}:{f.id}": f.statement for b in batches for f in kept_facts(b)}
+    texts |= {f"{b.product}:{p.id}": f"{p.question}\n{p.answer}" for b in batches for p in kept_pairs(b)}
+    items = [(c.test_id, c.question) for c in cases] + [(c.test_id + ":reference", c.answer) for c in cases]
+    remembered = [p.question for b in batches for p in kept_pairs(b)]
+    return in_sources(items, texts) + in_memory([(c.test_id, c.question) for c in cases], remembered)
+
+
+TYPING_READ_ME = [
+    "How to add these answers, one memory at a time",
+    "",
+    "Each sheet after this one is one answer memory: a product's, or Shared. For every row:",
+    "  1. On the Answer memory page, choose that memory (the product, or Shared) in the selector.",
+    "  2. Press Add an answer, paste the Question and the Answer exactly as they are here, and save.",
+    "  3. Put an x in the Added column, so a second person can see what is done.",
+    "An answer added by hand is dated today. If the memory already holds an answer to the same question, the",
+    "conflict check treats the new one as the later word and the older one as superseded.",
+    "These are only the kept answers. Held ones are in 'Held for the team's review.xlsx' and must not be added.",
+]
+
+
+def write_typing_sheet(batches: list[Batch], out: Path) -> int:
+    """The kept answers to type into the app, one sheet per memory, with nothing else. Returns how many.
+
+    The user chose to add them by hand (plan 028). The sheet carries no
+    sources and no cleaner's notes: those name customers' questionnaires, and
+    this sheet is meant to be handed around.
+    """
+    book = _book("Kept answers to add to the answer memories", TYPING_READ_ME)
+    columns: list[Column] = [("#", 5), ("Question", 60), ("Answer", 80), ("Language", 10), ("Item", 9), ("Added", 8)]
+    total = 0
+    for b in batches:
+        pairs = kept_pairs(b)
+        if pairs:
+            rows = [[str(n), p.question, p.answer, p.language, p.id, ""] for n, p in enumerate(pairs, 1)]
+            _add_sheet(book, b.product, columns, rows)
+            total += len(pairs)
+    book.save(str(out))
+    return total
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +573,11 @@ def main(argv: list[str] | None = None) -> int:
     held.add_argument("out", type=Path)
     held.add_argument("batches", type=Path, nargs="+")
     held.add_argument("--existing", type=Path, help="JSON list of live memory entries held for the team")
+    leaks = commands.add_parser("contamination")
+    leaks.add_argument("batches", type=Path, nargs="+")
+    typing = commands.add_parser("typing")
+    typing.add_argument("out", type=Path)
+    typing.add_argument("batches", type=Path, nargs="+")
     args = parser.parse_args(argv)
 
     if args.command == "extract":
@@ -514,6 +594,20 @@ def main(argv: list[str] | None = None) -> int:
         rows = write_held(batches, args.out, existing)
         print(f"wrote {args.out}: {rows} row(s) from {len(batches)} batch(es)")
         return 0
+    if args.command in ("contamination", "typing"):
+        batches = [Batch.model_validate(json.loads(b.read_text(encoding="utf-8"))) for b in args.batches]
+        if args.command == "typing":
+            print(f"wrote {args.out}: {write_typing_sheet(batches, args.out)} answer(s)")
+            return 0
+        from eval.house import load_house_set
+
+        cases = load_house_set()
+        found = contamination(batches, cases)
+        for leak in found:
+            print(f"LEAK {leak.item} in {leak.where}")
+        kept = sum(len(kept_facts(b)) + len(kept_pairs(b)) for b in batches)
+        print(f"contamination: {len(cases)} house-set cases against {kept} kept item(s): {len(found)} leak(s)")
+        return 1 if found else 0
     batch = Batch.model_validate(json.loads(args.batch.read_text(encoding="utf-8")))
     if args.command == "check":
         problems = check(batch, args.root, args.exclude)
@@ -525,7 +619,11 @@ def main(argv: list[str] | None = None) -> int:
         write_workbook(batch, args.out)
         print(f"wrote {args.out}")
         return 0
-    written = write_fact_sheet(batch, args.out, draft=args.draft)
+    try:
+        written = write_fact_sheet(batch, args.out, draft=args.draft)
+    except ValueError as refused:
+        print(f"not written: {refused}")
+        return 1
     print(f"wrote {args.out}: {written} fact(s)")
     return 0
 

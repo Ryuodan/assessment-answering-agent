@@ -49,6 +49,13 @@ The way in is the user's decision (2026-10-19):
 ## Progress log
 
 - 2026-10-19: plan written. It runs after plan 027's fixes, which it depends on: TD-037 for the chat, TD-039 for deletion and the previous-answer collision for the pairs.
+- 2026-10-19: steps 1 and 2.
+  - **The script** (`scripts/product_data.py`) gained three things. The final fact sheet has no banner, no ids and no review claim, and the draft has no review claim either. A batch with no kept facts gets no sheet. The new `contamination` command checks the kept items and `typing` writes the typing sheet. `tests/test_product_data.py` has 26 tests, 3 of them new.
+  - **Contamination:** 135 house-set cases against 119 kept items (70 facts, 49 pairs) found 0 leaks.
+  - **The files** are in the clean-data folder's `for import/`:
+    - four sheets: Ole5 (12 facts), RICH (27), Availo (1) and T2 (30). Msegat was refused, with no kept facts;
+    - the typing sheet, with 49 answers: Ole5 4, RICH 27, Availo 1, Shared 17.
+  - **Customer names:** a scan of all five files for words from the delivered files' names found none. Only generic and technical words matched.
 
 ## Decision log
 

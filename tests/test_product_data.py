@@ -221,7 +221,21 @@ def test_the_fact_sheet_holds_only_kept_standing_product_facts(root: Path, tmp_p
         assert absent not in text, absent
 
     pd.write_fact_sheet(batch(facts=facts), out)
-    assert "reviewed by the team" in "\n".join(p.text for p in docx.Document(str(out)).paragraphs)
+    final = "\n".join(p.text for p in docx.Document(str(out)).paragraphs)
+    assert STATEMENT in final and "compiled from the security team's correspondence" in final
+    for absent in ("DRAFT", "[F-001]", "reviewed by the team"):
+        assert absent not in final, f"the uploaded sheet carries no {absent!r}: no banner, no ids, no review claim"
+
+
+def test_a_product_with_no_kept_facts_gets_no_sheet(tmp_path: Path) -> None:
+    held = batch(facts=[fact(proposed="hold"), fact(id="F-002", scope="t2_wide")])
+    out = tmp_path / "empty.docx"
+    with pytest.raises(ValueError, match="no kept standing facts"):
+        pd.write_fact_sheet(held, out)
+    assert not out.exists()
+    path = tmp_path / "batch.json"
+    path.write_text(json.dumps(held.model_dump()), encoding="utf-8")
+    assert pd.main(["factsheet", str(path), str(out)]) == 1
 
 
 def test_the_command_line_checks_a_batch_file(root: Path, tmp_path: Path, capsys) -> None:
@@ -293,3 +307,52 @@ def test_a_t2_wide_item_is_held_once_in_the_shared_batch_not_again_in_its_produc
     pd.write_held([product, shared], out)
     rows = [[c.value for c in row] for row in openpyxl.load_workbook(out)["Held facts"].iter_rows(min_row=2)]
     assert [(r[0], r[1]) for r in rows] == [(pd.SHARED, "F-009")]
+
+
+# --- the import (plan 028) ---------------------------------------------------------
+
+
+class Case:
+    """An evaluation case as eval.house gives it: an id, a question and a reference answer."""
+
+    def __init__(self, test_id: str, question: str, answer: str) -> None:
+        self.test_id, self.question, self.answer = test_id, question, answer
+
+
+def test_a_kept_item_that_repeats_an_evaluation_case_is_a_leak() -> None:
+    reference = "Yes, every record we hold for clients stays on servers located within the Kingdom at all times."
+    cases = [
+        Case("H-1", "Where is customer data hosted?", reference),
+        Case("H-2", "Is MFA enforced for administrators?", "Yes."),
+        Case("H-3", "Do you run annual penetration tests?", "Yes, by an external firm every year."),
+    ]
+    clean = batch(facts=[fact()], pairs=[pair(question="Do administrators use MFA?")])
+    assert pd.contamination([clean], cases) == []
+
+    copied = batch(
+        facts=[fact(statement=reference)],
+        pairs=[pair(), pair(id="QA-002", proposed="hold", answer="Yes, by an external firm every year at least.")],
+    )
+    leaks = {(leak.item, leak.where) for leak in pd.contamination([copied], cases)}
+    assert leaks == {("H-1:reference", "Product:F-001"), ("H-2", "answer memory")}, (
+        "a fact repeating a reference answer, and a kept pair asking a house question, are leaks; a held pair is not"
+    )
+
+
+def test_the_typing_sheet_holds_only_the_kept_answers_of_each_memory(tmp_path: Path) -> None:
+    product = batch(pairs=[pair(), pair(id="QA-002", proposed="hold"), pair(id="QA-003", scope="t2_wide")])
+    wide = pair(id="QA-009", question="Is T2 ISO/IEC 27001 certified?", answer="Yes.", scope="t2_wide")
+    shared = batch(pairs=[wide])
+    shared.product = pd.SHARED
+    empty = batch(pairs=[pair(proposed="drop")])
+    empty.product = "Empty"
+    out = tmp_path / "typing.xlsx"
+    assert pd.write_typing_sheet([product, shared, empty], out) == 2
+    book = openpyxl.load_workbook(out)
+    assert book.sheetnames == ["Read me", "Product", pd.SHARED], "one sheet per memory with something to add"
+    rows = {name: [[c.value for c in r] for r in book[name].iter_rows(min_row=2)] for name in ("Product", pd.SHARED)}
+    assert rows["Product"] == [["1", "Is MFA enforced for administrators?", "Yes, through single sign-on.", "en",
+                                "QA-001", None]]  # fmt: skip
+    assert [r[4] for r in rows[pd.SHARED]] == ["QA-009"]
+    every_cell = " ".join(str(c.value) for sheet in book for row in sheet.iter_rows() for c in row)
+    assert "answers.xlsx" not in every_cell and "Answers!B2" not in every_cell, "no sources reach the typing sheet"
