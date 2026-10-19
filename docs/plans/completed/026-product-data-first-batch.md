@@ -1,6 +1,6 @@
 # Plan 026: Product data, cleaned and reviewed (first batch: Ole5)
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -142,9 +142,9 @@ Each is listed with Claude's recommendation.
 - [x] The user's notes on the Ole5 sample are recorded in the decision log, and the tools and rules are changed to match.
 - [x] The other batches (RICH, Availo, Msegat, shared) are cleaned under the same rules and pass `check`. Every held item from every batch is in one workbook for the team's later review.
 - [x] The shared entries from questionnaires filed in a product's folder are sorted. Product-specific ones are proposed for moving, and the uncertain ones are listed for the team.
-- [ ] The live-memory changes are applied with the app stopped: `MEM-0519` and `MEM-0400` forgotten, `MEM-0397` moved to RICH.
+- [x] The live-memory changes are applied with the app stopped: `MEM-0519` and `MEM-0400` forgotten, `MEM-0397` moved to RICH.
 - [x] TD-035 and TD-036 recorded.
-- [ ] `uv run poe check` passes.
+- [x] `uv run poe check` passes.
 
 ## Plan
 
@@ -215,6 +215,12 @@ Each is listed with Claude's recommendation.
 
   The held-items workbook has 276 rows: these 135 held facts and answers, 88 questions for the team, and 53 live entries held rather than moved. A T2-wide item is held once, in the shared batch. A product batch's own copy is not counted again, and a test holds that.
 - 2026-10-19: Three live-memory changes wait for the app to be stopped: forget `MEM-0519` and `MEM-0400`, and move `MEM-0397` to RICH. They are in a changes file beside the clean data, and `scripts/memory_changes.py` previews them. Importing the clean data is the next plan, when the user asks for it.
+- 2026-10-19: The user stopped the app. Nothing answered on its port and no app process was left.
+  - The database (34 MB) and the vector store (241 MB) were copied beside the raw data, as a backup to undo from.
+  - `scripts/memory_changes.py --apply` made the three changes, recorded under the user's account.
+  - Checked afterwards, read-only: the memory has 695 entries; `MEM-0519` and `MEM-0400` have no row and no vector left; `MEM-0397` belongs to RICH and its vector is in RICH's collection only.
+  - The moved entry is compared with RICH's other answers the next time the app sweeps the memory.
+- 2026-10-19: `uv run poe check` passes: 1,892 tests and 13 browser tests. Plan complete. Importing the clean data is the next plan, run when the user asks for it.
 
 ## Decision log
 

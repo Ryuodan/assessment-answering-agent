@@ -305,3 +305,4 @@ or docs and has not been verified by running anything.
   - `MEM-0400`: it says a Data Protection Officer is in place. The team's own 2026 correspondence says, twice, that none is appointed.
 - **Impact:** the drafter can quote the first two as if they were T2's answers, and the third may no longer be true.
 - **Fix:** the user's call, on the Answer memory page: forget `MEM-0035` and `MEM-0519`, and confirm the DPO status before correcting or forgetting `MEM-0400`. Not done by Claude, because the live memory is the team's data.
+- **Resolved** 2026-10-19. The user forgot `MEM-0035` on the memory page. On the user's instruction, Claude forgot `MEM-0519` and `MEM-0400` with `scripts/memory_changes.py`, with the app stopped and a backup of the database and the vector store taken first. The events are recorded under the user's account. Afterwards the rows and their vectors were checked to be gone.
