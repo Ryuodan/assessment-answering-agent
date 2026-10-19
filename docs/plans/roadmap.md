@@ -30,3 +30,4 @@ Work asked for directly, outside the milestones:
 |---|---|---|
 | [016](completed/016-chat-progress.md) | the chat page's answered count restarted during the preferences pass | done 2026-10-06 |
 | [017](completed/017-user-decisions.md) | the user's decisions on TD-020, TD-033 and TD-034 | done 2026-10-06 |
+| [027](active/027-pre-deploy-fixes.md) | the pre-deploy tests' findings fixed as the user decided (TD-037 to TD-044) | active |
