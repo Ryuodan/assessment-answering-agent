@@ -1,6 +1,6 @@
 # Plan 027: The pre-deploy fixes
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -21,20 +21,20 @@ next plan (028).
 
 ## Acceptance criteria
 
-- [ ] **TD-037.** A product chat's direct answers are drafted with the chat's product. A test proves the product reaches the pipeline and its sources carry it.
-- [ ] **TD-043, search loop.** One chat message searches at most three times, and a repeated search is not run again. A turn's sources are listed once. The model sees whole clauses, and the product's own are marked FOR THIS PRODUCT. A turn that stops early says what it did, never claims answers that were not written, and never repeats the previous reply.
-- [ ] **TD-043, quotations.** Words set out as a quotation that are in no source or tool result make the model write the reply again, once. Any still unfound are shown as a paraphrase, with a note.
-- [ ] **TD-043, opening a document.** Asking to open a knowledge-base document as a questionnaire gets a clear answer that says what the tool can and cannot open.
-- [ ] **TD-043, Excel reader.** A short questionnaire (one or two numbered questions under Question and Answer headings) is read by the rules. The reading agent cannot end without recording each sheet. The workbench says why when a file yields no questions.
-- [ ] **TD-039.** A product's knowledge-base files live in the product's own folder and are deleted with the product, including files uploaded before this change. Removing one document from a product's knowledge base, or clearing it, also deletes its file. The library shows which product a file belongs to.
-- [ ] **TD-039, warning.** The delete dialog is a clear warning. It counts what will be deleted: documents and their files, and remembered answers, including those moved in from Shared. It says what happens to the product's questionnaires and chats, and still needs the typed word.
-- [ ] **TD-040, fixed product.** A questionnaire's and a chat's product cannot be changed after it is created: the server refuses with 409 `product_locked`. The pages show the product as fixed. The workbench can close a questionnaire to open another file for another product.
-- [ ] **TD-040, marking.** Product evidence is marked FOR THIS PRODUCT in the drafter's and reviewer's prompt, shared evidence carries no mark, and tests pin both.
-- [ ] **TD-041.** Every page's header wraps without clipping and has the same links. The history column keeps its width. A deleted product chosen before the first message is refused beside the message box, and the chip goes back to General. Chat sources carry the product badge. The memory page's Move menu sits with Edit and Forget.
-- [ ] **Deleted product's work.** A deleted product's questionnaires and chats stay listed, marked as from a deleted product, and are read-only. Reading them and downloading filled files work; answering, editing, approving and chatting are refused. The pages say so.
-- [ ] **Previous-answer collision.** Each remembered answer reaches the drafter as its own evidence, and a shared one no longer hides a product's. A test pins this, and the effect is measured on the dev split before and after.
-- [ ] The decisions on TD-038, TD-040's member rights and TD-044 are recorded.
-- [ ] `uv run poe check` passes. The tech-debt entries, ARCHITECTURE.md, decisions.md and the generated docs are updated.
+- [x] **TD-037.** A product chat's direct answers are drafted with the chat's product. A test proves the product reaches the pipeline and its sources carry it.
+- [x] **TD-043, search loop.** One chat message searches at most three times, and a repeated search is not run again. A turn's sources are listed once. The model sees whole clauses, and the product's own are marked FOR THIS PRODUCT. A turn that stops early says what it did, never claims answers that were not written, and never repeats the previous reply.
+- [x] **TD-043, quotations.** Words set out as a quotation that are in no source or tool result make the model write the reply again, once. Any still unfound are shown as a paraphrase, with a note.
+- [x] **TD-043, opening a document.** Asking to open a knowledge-base document as a questionnaire gets a clear answer that says what the tool can and cannot open.
+- [x] **TD-043, Excel reader.** A short questionnaire (one or two numbered questions under Question and Answer headings) is read by the rules. The reading agent cannot end without recording each sheet. The workbench says why when a file yields no questions.
+- [x] **TD-039.** A product's knowledge-base files live in the product's own folder and are deleted with the product, including files uploaded before this change. Removing one document from a product's knowledge base, or clearing it, also deletes its file. The library shows which product a file belongs to.
+- [x] **TD-039, warning.** The delete dialog is a clear warning. It counts what will be deleted: documents and their files, and remembered answers, including those moved in from Shared. It says what happens to the product's questionnaires and chats, and still needs the typed word.
+- [x] **TD-040, fixed product.** A questionnaire's and a chat's product cannot be changed after it is created: the server refuses with 409 `product_locked`. The pages show the product as fixed. The workbench can close a questionnaire to open another file for another product.
+- [x] **TD-040, marking.** Product evidence is marked FOR THIS PRODUCT in the drafter's and reviewer's prompt, shared evidence carries no mark, and tests pin both.
+- [x] **TD-041.** Every page's header wraps without clipping and has the same links. The history column keeps its width. A deleted product chosen before the first message is refused beside the message box, and the chip goes back to General. Chat sources carry the product badge. The memory page's Move menu sits with Edit and Forget.
+- [x] **Deleted product's work.** A deleted product's questionnaires and chats stay listed, marked as from a deleted product, and are read-only. Reading them and downloading filled files work; answering, editing, approving and chatting are refused. The pages say so.
+- [x] **Previous-answer collision.** Each remembered answer reaches the drafter as its own evidence, and a shared one no longer hides a product's. A test pins this, and the effect is measured on the dev split before and after.
+- [x] The decisions on TD-038, TD-040's member rights and TD-044 are recorded.
+- [x] `uv run poe check` passes. The tech-debt entries, ARCHITECTURE.md, decisions.md and the generated docs are updated.
 
 ## Plan
 
@@ -77,6 +77,13 @@ next plan (028).
   - **Item by item** (`scripts.compare_runs` against the plan 014 noise): 3 better, 0 worse, 74 the same, 5 moved within noise.
   - **Reading:** the +2.4 points is below the 4.9 points that plan 014 measured as the smallest change between two single runs that means anything. The run shows no harm and a consistent direction, not a proven gain. The mechanism is proven by the tests: `tests/test_previous_answers.py` and the merge and fusion tests.
   - **Live data:** hashes unchanged again.
+
+- 2026-10-20: the last findings fixed, and the plan closed.
+  - A third review of the quotation check led to the word-list version and its tests; TD-049 records its limits.
+  - The chat's source read-back lists each remembered answer, and the exports list a name once.
+  - TD-050: customer names found in the code archive were replaced in 27 files, and the archive was scanned clean.
+  - Plan 028's rehearsal exercised this plan's fixes on a copy with the products' data. A false quotation note it saw led to the `quote_unlocated` guard.
+  - `uv run poe check` passes: 2,137 tests and 39 browser tests.
 
 ## Decision log
 

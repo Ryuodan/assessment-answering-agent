@@ -1,6 +1,6 @@
 # Plan 028: The products' clean data, imported into a copy and tested
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -21,21 +21,21 @@ The way in is the user's decision (2026-10-19):
 
 ## Acceptance criteria
 
-- [ ] `scripts/product_data.py` writes a final fact sheet:
+- [x] `scripts/product_data.py` writes a final fact sheet:
   - it has no DRAFT banner and claims no team review;
   - it refuses a product with no kept facts;
   - it names the file as the citation should read.
-- [ ] A contamination check compares the kept facts and pairs with the evaluation's house set. It reports test ids and item ids only and finds no leak; any leak is dropped from the import.
-- [ ] A typing sheet lists every kept pair by memory, ready to copy into "Add an answer". It holds no sources, notes or customer names, and stays outside the repository.
-- [ ] The import is rehearsed on a copy of the local data over HTTP. The four fact sheets are uploaded and the 49 pairs added by the same route the memory page uses. The repository's `data/`, `chroma_db/` and `.env` are untouched (hashes before and after).
-- [ ] With the data in place, the following are checked and recorded with numbers:
+- [x] A contamination check compares the kept facts and pairs with the evaluation's house set. It reports test ids and item ids only and finds no leak; any leak is dropped from the import.
+- [x] A typing sheet lists every kept pair by memory, ready to copy into "Add an answer". It holds no sources, notes or customer names, and stays outside the repository.
+- [x] The import is rehearsed on a copy of the local data over HTTP. The four fact sheets are uploaded and the 49 pairs added by the same route the memory page uses. The repository's `data/`, `chroma_db/` and `.env` are untouched (hashes before and after).
+- [x] With the data in place, the following are checked and recorded with numbers:
   - product answers use their product's facts;
   - no product sees another's material;
   - General answers on unrelated topics keep their sources;
   - a product chat answers from its product;
   - the memory and library pages show the right entries;
   - deleting a product removes its sheet, file and answers and leaves its questionnaires and chats read-only.
-- [ ] `uv run poe check` passes. The roadmap's M8 row and the deploy steps for production are updated.
+- [x] `uv run poe check` passes. The roadmap's M8 row and the deploy steps for production are updated.
 
 ## Plan
 
@@ -88,9 +88,9 @@ are in the clean-data folder's `for import/`, outside this repository.
   - **After the import:**
     - all 14 product probes used their product's sheet, and none had evidence from another product;
     - all 6 shared-topic General probes used the T2 sheet or a new shared answer;
-    - of the 6 unrelated General probes, the top source was unchanged 6/6 and the top three 4/6, with no imported material in their evidence;
+    - of the 6 unrelated General probes, the top source by score was unchanged 6/6 and the top three 4/6, with no imported material in their evidence. In the order the drafter listed its evidence, the first item changed in 2 of 6. Each probe was asked once per phase, so run-to-run variation is not ruled out;
     - mean confidence went from 0.69 to 0.89;
-    - all 20 targeted answers agree with their fact (read by hand). Three baseline answers had contradicted the kept facts: Ole5's single sign-on, Ole5's customer penetration tests and a shared continuity certification.
+    - all 20 targeted answers agree with their fact (read by hand). Four baseline answers had contradicted the kept facts: Ole5's single sign-on, Ole5's customer penetration tests, sharing Ole5's penetration test report, and a shared continuity certification.
   - **Chat:**
     - an Ole5 chat's direct answer used Ole5's sheet (TD-037);
     - a search-only request searched once and quoted three passages word for word;
@@ -106,7 +106,7 @@ are in the clean-data folder's `for import/`, outside this repository.
     - every other scope was unchanged, digest for digest;
     - its questionnaire and chat stayed listed and read-only, with seven writes refused with 409 `product_deleted`;
     - fill and download worked.
-  - **Live data:** the hashes of `data/app.db` and `chroma_db/chroma.sqlite3` were identical before and after; the copy was deleted.
+  - **Live data:** the hashes of `data/app.db` and `chroma_db/chroma.sqlite3` were identical before and after. No file in `data/`, `chroma_db/` or `.env` changed during the rehearsal (the verifier's modification-time check). The copy was deleted.
   - **Findings:**
     - **The RICH hosting provider.** RICH answers name the hosting provider, which plan 026 held as unconfirmed. They did so before the import too. The source is two existing shared answers, MEM-0332 and MEM-0503, which plan 026 left shared "until the team says". This is for the user to decide.
     - **A false quotation note.** In the search-only chat, a reply whose three quotations were word for word got the paraphrase note, and its quotation marks stayed. Offline, the stored reply against the real chunks finds nothing unfound, so the trigger was not reproduced. The note is now added only when the reply actually holds the words flagged (TD-049).
@@ -115,6 +115,11 @@ are in the clean-data folder's `for import/`, outside this repository.
     - **Excel.** The two-question form was read by the agent, not the rules, with readings to check: the agent-versus-rules tie is TD-043's open question.
     - **Search.** A product-scoped search showed the Availo sheet but not Availo's remembered answer, which the drafter did use. Not investigated.
     - **Wording.** The chat's refusal reused the questionnaire's wording about a filled file. Now fixed.
+    - **Replaced answers.** Typing the shared pairs marked 3 existing shared answers replaced. Production will do the same unless its memory differs.
+- 2026-10-20: an independent verifier re-derived every check from the raw evidence.
+  - **Confirmed:** the import, product isolation, the pages, the deletion and the unchanged live data.
+  - **Corrected:** the baseline contradictions (4, not 3) and the definition behind the unrelated-probe figure, both above.
+  - **Found no customer name** in the 42 evidence files.
 
 ## Decision log
 

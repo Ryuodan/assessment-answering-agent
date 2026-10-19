@@ -12,7 +12,7 @@ a plan number without a file has not been written yet.
 | M5 Legible system | request IDs in logs and errors, diagnostic CLI commands, browser tests for the main flows | request IDs: [005](completed/005-structured-logging.md); [010](completed/010-diagnostics-cli.md), [011](completed/011-browser-tests.md) | done 2026-10-06 |
 | M6 Trustworthy evaluation | dev and held-out splits, noise measured first, contamination test, item-by-item comparison (TD-014) | [013](completed/013-evaluation-method.md), [014](completed/014-noise-measured.md) | done 2026-10-06 |
 | M7 Products | per-product knowledge bases and answer memories beside the shared ones; products managed, chosen per questionnaire and chat | [018](completed/018-products.md) (design), [019](completed/019-room-for-products.md), [020](completed/020-products-and-leads.md), [021](completed/021-product-knowledge-bases.md), [022](completed/022-product-answer-memories.md), [023](completed/023-questionnaires-carry-a-product.md), [024](completed/024-choosing-the-product.md) | done 2026-10-06 |
-| M8 Products' data | the team's raw product files cleaned into reviewed, cited facts and answer pairs for each product's knowledge base and memory, then imported | [026](completed/026-product-data-first-batch.md) (survey, tools, every batch cleaned, held items collected, live memory corrected), [028](active/028-product-data-import-rehearsed.md) (the import prepared, rehearsed on a copy and tested) | active |
+| M8 Products' data | the team's raw product files cleaned into reviewed, cited facts and answer pairs for each product's knowledge base and memory, then imported | [026](completed/026-product-data-first-batch.md) (survey, tools, every batch cleaned, held items collected, live memory corrected), [028](completed/028-product-data-import-rehearsed.md) (the import prepared, rehearsed on a copy and tested; production's import follows the deploy, by plan 028's steps) | done 2026-10-20 |
 
 A garbage-collection round, as its own plan, follows each milestone or about
 40 commits, whichever comes first.
@@ -30,4 +30,4 @@ Work asked for directly, outside the milestones:
 |---|---|---|
 | [016](completed/016-chat-progress.md) | the chat page's answered count restarted during the preferences pass | done 2026-10-06 |
 | [017](completed/017-user-decisions.md) | the user's decisions on TD-020, TD-033 and TD-034 | done 2026-10-06 |
-| [027](active/027-pre-deploy-fixes.md) | the pre-deploy tests' findings fixed as the user decided (TD-037 to TD-044) | active |
+| [027](completed/027-pre-deploy-fixes.md) | the pre-deploy tests' findings fixed as the user decided (TD-037 to TD-044) | done 2026-10-20 |
