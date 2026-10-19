@@ -29,12 +29,12 @@ debt = "TD-006"
 
 [[size]]
 path = "src/answer_memory.py"
-max_lines = 836
+max_lines = 820
 debt = "TD-006"
 
 [[size]]
 path = "src/knowledge.py"
-max_lines = 788
+max_lines = 785
 debt = "TD-006"
 
 [[size]]

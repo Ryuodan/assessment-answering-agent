@@ -303,6 +303,27 @@ def test_evidence_recovery_adds_nothing_when_the_citation_is_complete():
     assert [item.chunk for item in chosen] == [1]
 
 
+def test_two_remembered_answers_are_two_pieces_of_evidence():
+    """Plan 027: both are "Answer memory", chunk 0, and keyed by name and chunk the
+    second, which backs the clause the answer names, counted as already shown."""
+
+    def remembered(entry_id: str, snippet: str) -> Evidence:
+        return Evidence(
+            source_type=SourceType.PRIOR_ANSWER,
+            source_name="Answer memory",
+            snippet=snippet,
+            chunk=0,
+            entry_id=entry_id,
+        )
+
+    cited = remembered("mem-a", "Yes, MFA is enforced for administrators.")
+    backing = remembered("mem-b", "Yes, per §5.5.5 MFA is enforced for remote access.")
+
+    chosen = evidence_for("MFA is enforced (§5.5.5).", [cited], [cited, backing])
+
+    assert [item.entry_id for item in chosen] == ["mem-a", "mem-b"]
+
+
 def test_the_q4_case_end_to_end_is_no_longer_flagged():
     confidence, needs_review, reasons = assess(
         ANSWER,

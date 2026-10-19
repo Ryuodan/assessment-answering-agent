@@ -92,6 +92,28 @@ async def test_a_series_is_judged_as_one_unit(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_relevant_remembered_answer_does_not_keep_an_irrelevant_one(monkeypatch):
+    """Plan 027: every remembered answer is "Answer memory", chunk 0, and judged as
+    one unit they all stood or fell with whichever the grader liked."""
+
+    def remembered(entry_id: str) -> Evidence:
+        return Evidence(
+            source_type=SourceType.PRIOR_ANSWER,
+            source_name="Answer memory",
+            snippet=entry_id,
+            chunk=0,
+            entry_id=entry_id,
+        )
+
+    monkeypatch.setattr(relevance, "_grade_batch", grader({2: True, 3: False}))
+    evidence = [chunk(0), chunk(1), remembered("mem-on-topic"), remembered("mem-off-topic")]
+
+    out = await relevance.filter_evidence("q", evidence)
+
+    assert [c.entry_id for c in out] == ["", "", "mem-on-topic"]
+
+
+@pytest.mark.asyncio
 async def test_an_omitted_verdict_is_not_read_as_a_rejection(monkeypatch):
     async def partial(question, batch):
         return {batch[0][0]: True}  # the model answered about one only

@@ -32,7 +32,7 @@ from src import answer_memory, schemas
 from src.config import settings
 from src.embeddings import get_embeddings
 from src.lexical import LexicalIndex, parse_search_query, reciprocal_rank_fusion
-from src.models import Evidence, SourceType
+from src.models import Evidence, SourceType, entry_id_of
 from src.chunking import chunk_document, fold_digits
 from src.vector_names import collection_for as collection_for, cosine_from_relevance as cosine_from_relevance
 
@@ -325,7 +325,7 @@ class KnowledgeStore:
             parts=int(meta.get("parts", 1)),
             questionnaire=meta.get("questionnaire", ""),
             answered_date=meta.get("answered_date", ""),
-            entry_id=(answer_memory.entry_id_of(meta) if source_type is SourceType.PRIOR_ANSWER else ""),
+            entry_id=(entry_id_of(meta) if source_type is SourceType.PRIOR_ANSWER else ""),
         )
 
     def _still_standing(self, evidence: list[Evidence]) -> list[Evidence]:
@@ -564,7 +564,7 @@ class KnowledgeStore:
         if not len(index):
             return dense
 
-        by_key = {(item.source_name, item.chunk): item for item in dense}
+        by_key = {item.key: item for item in dense}
         # A lexical hit the dense pass never returned still has to become
         # Evidence, and the text and metadata for that come from the index.
         for key in index.search(query, k):
@@ -577,7 +577,7 @@ class KnowledgeStore:
                     similarity=0.0,  # never vector-scored; fusion ranks it by position
                 )
 
-        dense_ranking = [(item.source_name, item.chunk) for item in dense]
+        dense_ranking = [item.key for item in dense]
         lexical_ranking = [key for key in index.search(query, k) if key in by_key]
         fused = reciprocal_rank_fusion([dense_ranking, lexical_ranking], weights=[1.0, settings.lexical_weight])
         return [by_key[key] for key in fused if key in by_key]
@@ -600,10 +600,7 @@ class KnowledgeStore:
             records = self._store.get(where={"source_type": source_type.value}, include=["documents", "metadatas"])
             texts = records.get("documents") or []
             metadatas = records.get("metadatas") or []
-            documents = {
-                (meta.get("source_name", ""), int(meta.get("chunk", -1))): (text, meta)
-                for text, meta in zip(texts, metadatas)
-            }
+            documents = {Evidence.key_of(meta, source_type): (text, meta) for text, meta in zip(texts, metadatas)}
             self._chunk_cache[source_type] = documents
             return documents
 

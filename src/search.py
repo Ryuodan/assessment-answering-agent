@@ -90,12 +90,12 @@ async def search_knowledge(
         # Fused on rank, not score: a text-match count and a cosine are not
         # comparable numbers, and averaging them would silently favour
         # whichever happens to use the wider range.
-        by_key: dict[tuple[str, int], Evidence] = {}
+        by_key: dict[tuple[str, int, str], Evidence] = {}
         for item in dense + literal:
-            by_key.setdefault((item.source_name, item.chunk), item)
+            by_key.setdefault(item.key, item)
         rankings = [
-            [(item.source_name, item.chunk) for item in dense],
-            [(item.source_name, item.chunk) for item in literal],
+            [item.key for item in dense],
+            [item.key for item in literal],
         ]
         return [by_key[key] for key in reciprocal_rank_fusion(rankings) if key in by_key]
 

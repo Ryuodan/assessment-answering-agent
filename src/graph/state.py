@@ -21,10 +21,10 @@ def merge_evidence(left: list[Evidence], right: list[Evidence]) -> list[Evidence
     to find material the first query missed, not to discard what it found.
     """
     merged: list[Evidence] = list(left or [])
-    index = {(item.source_name, item.chunk): position for position, item in enumerate(merged)}
+    index = {item.key: position for position, item in enumerate(merged)}
 
     for item in right or []:
-        key = (item.source_name, item.chunk)
+        key = item.key
         position = index.get(key)
         if position is None:
             index[key] = len(merged)
@@ -72,7 +72,7 @@ def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
     """
     best: dict[tuple, float] = {}
     for item in evidence:
-        group = (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+        group = item.unit_key
         # Seeded from the item rather than from 0.0: a genuinely poor match can
         # score below zero on some metrics, and a floor of zero would collapse
         # every such group into a tie broken by file name.
@@ -80,13 +80,14 @@ def order_evidence(evidence: list[Evidence]) -> list[Evidence]:
         best[group] = max(best[group], weighted) if group in best else weighted
 
     def sort_key(item: Evidence):
-        group = (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+        group = item.unit_key
         return (
             item.source_type is not SourceType.PRIOR_ANSWER,
             -best[group],
             item.source_name,
             item.part,
             item.chunk,
+            item.entry_id,
         )
 
     return sorted(evidence, key=sort_key)
@@ -117,7 +118,7 @@ def prune_weak_units(evidence: list[Evidence], floor: float, minimum: int) -> li
         return evidence
 
     def group_of(item: Evidence) -> tuple:
-        return (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+        return item.unit_key
 
     guidelines = [item for item in evidence if item.source_type is not SourceType.PRIOR_ANSWER]
     if not guidelines:

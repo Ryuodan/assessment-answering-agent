@@ -90,7 +90,7 @@ async def filter_evidence(question: str, evidence: list[Evidence]) -> list[Evide
     # list, and demoting the parts the grader happened to dislike would undo
     # that. One relevant part vouches for the unit.
     def unit_of(item: Evidence) -> tuple:
-        return (item.source_name, item.unit_id or f"chunk-{item.chunk}")
+        return item.unit_key
 
     relevant_units = {unit_of(item) for index, item in enumerate(evidence) if verdicts.get(index, True)}
 

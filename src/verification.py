@@ -91,10 +91,10 @@ def evidence_for(answer: str, cited: list[Evidence], retrieved: list[Evidence]) 
     clause the prose names — so the evidence shown is the evidence used.
     """
     chosen = list(cited)
-    keys = {(item.source_name, item.chunk) for item in chosen}
+    keys = {item.key for item in chosen}
 
     def take(item: Evidence) -> None:
-        key = (item.source_name, item.chunk)
+        key = item.key
         if key not in keys:
             keys.add(key)
             chosen.append(item)
