@@ -93,6 +93,7 @@ modules = [
     "src.agents.assistant",
     "src.agents.assistant_prompt",
     "src.agents.assistant_quotes",
+    "src.agents.assistant_stopped",
     "src.agents.assistant_turn",
 ]
 

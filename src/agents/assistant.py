@@ -51,7 +51,7 @@ from src.formatting import without_reasoning
 from src.identity import User
 from src.llm import chat_llm
 from src.models import Question
-from src.agents import assistant_quotes, assistant_turn
+from src.agents import assistant_quotes, assistant_stopped, assistant_turn
 from src.agents.assistant_prompt import FOR_PRODUCT, IN_ARABIC as IN_ARABIC, SYSTEM as SYSTEM
 from src.agents.assistant_turn import CARRY_ON as CARRY_ON, CORRECTION as CORRECTION, UI_KEY as UI_KEY
 from src.agents.assistant_turn import is_correction as _is_correction, tool_correction as _correction
@@ -141,15 +141,7 @@ def uploaded_name(message: BaseMessage) -> str:
     return rest.split(". Call open_questionnaire", 1)[0].strip()
 
 
-CHANGES_ANSWERS = frozenset(
-    {
-        "answer_questions",
-        "reword_answers",
-        "apply_skill",
-        "write_one_answer",
-        "set_aside",
-    }
-)
+CHANGES_ANSWERS = frozenset({"answer_questions", "reword_answers", "apply_skill", "write_one_answer", "set_aside"})
 """The tools whose use means the answer panel has something new to show."""
 
 
@@ -972,7 +964,9 @@ def _tools(user: User, state: dict) -> list:
         review, citations -- over a question somebody typed rather than one
         read out of a spreadsheet. Slow and not free, the same as answering a
         questionnaire row. Nothing is stored against a file and nothing can be
-        filled in; the answer is for the person reading the reply.
+        filled in; the answer is for the person reading the reply. Each call is
+        one of the turn's three searches; past them it is refused, and asking
+        again after a refusal ends the turn.
 
         Args:
             questions: the question, or a few, one per line. At most five.
@@ -1051,6 +1045,7 @@ def _tools(user: User, state: dict) -> list:
             # reason they do under an answer card: a claim about the policies
             # is worth what the clause behind it is worth.
             lines.append(f"    answer, to relay word for word: {result.answer}")
+            assistant_stopped.keep(state, result)  # relayed by a turn that stops before the model can
             if result.drafted:
                 lines.append("    (reworded to your preferences)")
             if result.needs_review:
@@ -1259,7 +1254,7 @@ async def say(
         draft
         or reply_now()
         or (
-            assistant_turn.stopped_reply(state, language)
+            assistant_stopped.stopped_reply(state, language)
             if turn.stopped_early
             else "I could not work out what to do with that. Could you say it another way?"
         )
