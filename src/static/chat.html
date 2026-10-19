@@ -52,7 +52,7 @@
   .status.ok { color: var(--ok); }
   .status.busy { color: var(--accent-ink); }
 
-  /* --- top bar ----------------------------------------------------------- */
+  /* --- top bar: wrapping and the links' look are shared, in cards.css ----- */
   .topbar {
     display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
     padding: 10px 16px; border-bottom: 1px solid var(--line);
@@ -60,7 +60,8 @@
   }
   .topbar h1 { font-size: 15px; margin: 0; font-weight: 620; letter-spacing: -.01em; }
   .topbar .spacer { flex: 1; }
-  .whoami { font-size: 12.5px; color: var(--ink-faint); }
+  .whoami { font-size: 13px; color: var(--ink-faint); }
+  .whoami b { color: var(--ink-soft); font-weight: 600; }
 
   /* --- the three panes --------------------------------------------------- */
   main { flex: 1; display: flex; min-height: 0; position: relative; }
@@ -92,8 +93,14 @@
   .ghost.to-answers:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .ghost.to-answers, .ghost.to-answers:hover { transition: none; transform: none; } }
 
+  /* 250px whatever the titles say. A flex item is never narrower than its
+     content unless told it may be, and a conversation's title is one unbroken
+     line: a 70-character title took the column to 500px, and its ellipsis
+     never showed. `width` holds the same on a narrow window, where the column
+     floats over the conversation instead of sitting beside it. */
   .side {
-    flex: 0 0 250px; background: var(--surface-sunken);
+    flex: 0 0 250px; width: 250px; min-width: 0; overflow: hidden;
+    background: var(--surface-sunken);
     border-inline-end: 1px solid var(--line);
     display: flex; flex-direction: column; min-height: 0;
   }
@@ -334,11 +341,20 @@
     max-width: 130px; padding: 4px 2px; cursor: pointer; outline: none; text-overflow: ellipsis;
   }
   .product-chip:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--product) 35%, transparent); }
+  /* Fixed once the chat has started (TD-040): no arrow and no pointer, so it
+     reads as a badge in the product's colour rather than a greyed-out menu. */
+  .product-chip select:disabled {
+    cursor: default; appearance: none; -webkit-appearance: none; opacity: 1; color: inherit;
+    padding-inline-end: 8px;
+  }
   .convo .tag.product { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .attached {
     max-width: 700px; margin: 0 auto 7px; font-size: 13px; color: var(--ink-faint);
     display: flex; align-items: center; gap: 8px;
   }
+  /* Beside the box, about what was typed in it: a message that could not be
+     sent is not something the assistant said. */
+  .composer-note { max-width: 700px; margin: 0 auto 7px; }
   .attached .name { color: var(--ink); font-weight: 550; }
   .foot { max-width: 700px; margin: 7px auto 0; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
 
@@ -449,15 +465,15 @@
   <button class="ghost" id="newChat">New conversation</button>
   <span class="spacer"></span>
   <button class="ghost" id="openKb">Knowledge base</button>
-  <a class="ghost" href="memory" style="text-decoration:none"
-     title="What we have said before, and which of it still stands">Answer memory</a>
-  <a class="ghost" href="preferences" style="text-decoration:none"
-     title="How you want answers to read, and your skills">Preferences</a>
-  <a class="ghost" href="products" style="text-decoration:none"
-     title="The team's products, each with its own knowledge and answers">Products</a>
-  <a class="ghost" href="workbench" style="text-decoration:none">Workbench →</a>
+  <div class="whoami" id="whoami" hidden>
+    <b id="whoamiEmail"></b>
+    <button class="ghost" id="signOut" title="End this session">Sign out</button>
+  </div>
+  <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
+  <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
+  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
-  <span class="whoami" id="whoami"></span>
 </div>
 
 <main>
@@ -489,12 +505,14 @@
         <span>Attached</span><span class="name" id="attachedName"></span>
         <button class="ghost" id="detach">remove</button>
       </div>
+      <div class="status error composer-note" id="composerNote" role="alert" hidden></div>
       <div class="composer-inner">
         <label class="icon" for="fileInput" title="Attach a questionnaire">
           <input type="file" id="fileInput" accept=".xlsx,.xlsm,.docx" hidden />＋
         </label>
-        <!-- Which product this chat is for (plan 024). A new chat starts for it;
-             on an open chat, changing it changes the chat's and its questionnaire's. -->
+        <!-- Which product this chat is for (plan 024). A new chat starts for it
+             with its first message, and from then on it is fixed (TD-040): to
+             work on another product, start a new chat. -->
         <label class="product-chip" id="productChip">
           <span class="dot" aria-hidden="true"></span>
           <select id="productPick" aria-label="Which product this chat is for">
@@ -621,7 +639,13 @@
       // A session that ran out mid-conversation brings back the sign-in form
       // rather than leaving "Sign in to continue." in a bubble with no way to.
       if (response.status === 401) whoAmI();
-      throw new Error(said || text || response.statusText);
+      // With the server's code, so a caller can tell a refusal it can do
+      // something about -- a product deleted since the page loaded -- from one
+      // it can only report.
+      const failure = new Error(said || text || response.statusText);
+      failure.code = data && data.code;
+      failure.status = response.status;
+      throw failure;
     }
     return data;
   }
@@ -631,9 +655,17 @@
     try { me = await request("/api/auth/session"); } catch (error) { me = null; }
     const needed = me && me.sign_in_required && !me.email;
     $("gate").hidden = !needed;
-    $("whoami").textContent = me && me.email ? me.email : "";
+    // As on the other pages: only where more than one person can appear. On an
+    // open deployment it would always read the same stand-in address.
+    $("whoami").hidden = !(me && me.email && me.sign_in_required);
+    $("whoamiEmail").textContent = (me && me.email) || "";
     return !needed;
   }
+
+  $("signOut").addEventListener("click", async () => {
+    await fetch("/api/auth/session", { method: "DELETE", credentials: "same-origin" }).catch(() => {});
+    window.location.reload();
+  });
 
   $("signInForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -658,6 +690,7 @@
   let batchId = "";
   let busy = false;
   let attached = null;
+  let startingChat = false;  // the first message is on its way: the chip is fixed already
 
   const STARTERS = [
     "Read this questionnaire and tell me what is in it",
@@ -850,7 +883,12 @@
   function sourceBubbles(sources) {
     const seen = new Set();
     const unique = sources.filter((hit) => {
-      const key = (hit.locator || "") + "|" + (hit.source_name || "");
+      // One chunk, not one locator. A document with no clause numbers gives
+      // every chunk the same locator, and three different passages of one fact
+      // sheet came out as a single bubble. A remembered answer is told apart by
+      // its entry, and a product's document from a shared one of the same name.
+      const chunk = typeof hit.chunk === "number" && hit.chunk >= 0 ? hit.chunk : (hit.locator || "");
+      const key = [hit.product_id || "", hit.source_name || "", chunk, hit.entry_id || ""].join("|");
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -878,6 +916,10 @@
       // one that matters.
       const mark = Cards.authorityBadge(hit.authority);
       if (mark) button.append(mark);
+      // And the product's own, as on the workbench's cards: a shared source is
+      // the unmarked case.
+      const own = Cards.ownSourceBadge(hit);
+      if (own) button.append(own);
       const caret = document.createElement("span");
       caret.className = "caret";
       caret.textContent = "▾";
@@ -891,7 +933,10 @@
       const who = document.createElement("span");
       who.className = "who";
       who.textContent = hit.source_name || "";
-      head.append(who, Cards.viewToggle());
+      head.append(who);
+      const ownHead = Cards.ownSourceBadge(hit);
+      if (ownHead) head.append(ownHead);
+      head.append(Cards.viewToggle());
       const openIt = Cards.openDocumentButton(hit.source_name, hit.source_type);
       if (openIt) head.append(openIt);
       panel.append(head, Cards.chunk(hit.snippet || ""));
@@ -986,9 +1031,15 @@
     const message = field.value.trim();
     if ((!message && !attached) || busy) return;
 
+    // The product this message starts a chat for, if it starts one. The chip
+    // is fixed from here on, so it cannot change under the first turn.
+    const startingFor = conversationId ? "" : chosenProduct();
+    startingChat = !conversationId;
+    noteByTheBox("");
     busy = true;
     refresh();
-    addTurn("you", message || ("Read " + attached.name), {
+    paintProductChip();
+    const you = addTurn("you", message || ("Read " + attached.name), {
       at: new Date().toISOString(), file: attached ? attached.name : "",
     });
     field.value = "";
@@ -1036,14 +1087,39 @@
       loadHistory();
     } catch (error) {
       stop();
+      if (error.code === "product_not_found" && startingFor) {
+        // The product was deleted after this page listed it. The server
+        // refused before saving anything -- no chat, no file -- so the two
+        // turns come off the page, the words go back in the box, and the chip
+        // goes back to General, said beside the box rather than as a reply.
+        const name = (teamProducts.find((p) => p.id === startingFor) || {}).name || "That product";
+        you.remove();
+        placeholder.remove();
+        $("empty").hidden = Boolean($("thread").querySelector(".turn"));
+        $("prompt").value = message;
+        grow();
+        await loadProducts();
+        chipChoice = chosenProduct();
+        noteByTheBox(name + " has been deleted, so the chat could not start for it. Nothing was sent. " +
+          "The chip is back on General: choose a product, or send it as General.");
+        return;
+      }
       placeholder.classList.remove("working");
       placeholder.querySelector(".bubble").textContent = "That did not work: " + error.message;
     } finally {
       stop();
       busy = false;
+      startingChat = false;
       refresh();
+      paintProductChip();
       $("prompt").focus();
     }
+  }
+
+  function noteByTheBox(text) {
+    const note = $("composerNote");
+    note.textContent = text || "";
+    note.hidden = !text;
   }
 
   /* --- the answers beside it ------------------------------------------------ */
@@ -1594,6 +1670,7 @@
       const data = await request("/api/chat/" + id);
       conversationId = data.id;
       batchId = data.batch_id || "";
+      noteByTheBox("");
       showProduct(data.product_id || "");
       $("thread").replaceChildren($("empty"));
       $("empty").hidden = (data.messages || []).length > 0;
@@ -1612,6 +1689,11 @@
   function newConversation() {
     conversationId = "";
     batchId = "";
+    noteByTheBox("");
+    // The chip can be changed again, and starts on the product last chosen for
+    // a chat rather than on whichever chat was open: opening an old chat to
+    // read it is not choosing its product for the next one.
+    showProduct(chipChoice);
     $("thread").replaceChildren($("empty"));
     $("empty").hidden = false;
     noAnswersToShow();
@@ -1743,7 +1825,10 @@
         remove.className = "ghost";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          if (!confirm("Remove " + source.name + " from the knowledge base?")) return;
+          // A product's document goes with its file (TD-039); a shared one is
+          // only taken out of the index.
+          const files = kbScope() ? "\n\nIts file is deleted too, and cannot be recovered from here." : "";
+          if (!confirm("Remove " + source.name + " from the knowledge base?" + files)) return;
           try {
             await request("/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
               { method: "DELETE" });
@@ -1799,47 +1884,57 @@
   /* --- which product: General, or one of the team's (plan 024) -------------- */
 
   let teamProducts = [];
+  let chipChoice = "";  // what the person last chose on the chip, for the next new chat
   function chosenProduct() { return $("productPick").value; }
+  /* A chat's product is fixed once it starts (TD-040): the chip can be changed
+     only before the first message, and after that it is the chat's badge. To
+     work on another product, start a new chat. */
   function paintProductChip() {
     const product = teamProducts.find((p) => p.id === chosenProduct());
     const chip = $("productChip");
+    const fixed = Boolean(conversationId) || startingChat;
+    $("productPick").disabled = fixed;
     if (product && product.color) chip.style.setProperty("--product", product.color);
     else chip.style.removeProperty("--product");
-    chip.title = product
+    chip.title = (product
       ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
-      : "General: answered from the shared knowledge base and answer memory.";
+      : "General: answered from the shared knowledge base and answer memory.") +
+      (fixed ? " Fixed for this chat; start a new chat to work on another product." : "");
   }
   function showProduct(productId) {
     const select = $("productPick");
     select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
     paintProductChip();
   }
+  /* The team's products, again. Returns the name of the product the chip was
+     on if it has since been deleted -- the chip is then back on General, which
+     the caller says -- and "" otherwise. A failed fetch changes nothing. */
   async function loadProducts() {
+    const chosen = chosenProduct();
+    const was = teamProducts.find((p) => p.id === chosen);
     try {
       teamProducts = (await request("/api/products")).products || [];
-    } catch (error) { teamProducts = []; }
+    } catch (error) { return ""; }
     Cards.setProducts(teamProducts);
     const select = $("productPick");
-    const chosen = select.value;
     select.replaceChildren(new Option("General", ""));
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
     showProduct(chosen);
+    return was && chosenProduct() !== chosen ? was.name : "";
   }
-  // A new chat starts for the chip's product with its first message. An open
-  // one changes now, and its questionnaire with it; what is already answered stays.
-  $("productPick").addEventListener("change", async () => {
+  // Only before the first message, and nothing is sent: the server reads the
+  // product when the message starts the chat, and never changes it afterwards.
+  $("productPick").addEventListener("change", () => {
+    chipChoice = chosenProduct();
+    noteByTheBox("");
     paintProductChip();
-    if (!conversationId) return;
-    try {
-      const changed = await request("/api/chat/" + conversationId + "/product", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: chosenProduct() }),
-      });
-      showProduct(changed.product_id || "");
-      loadHistory();
-    } catch (error) {
-      addTurn("assistant", "The product could not be changed: " + error.message);
-    }
+  });
+  // A tab left open while somebody deleted a product corrects itself when the
+  // person comes back to it, rather than on the message that fails.
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible" || !$("gate").hidden) return;
+    const gone = await loadProducts();
+    if (gone) noteByTheBox(gone + " has been deleted; the chip is back on General.");
   });
 
   /* --- start ---------------------------------------------------------------- */

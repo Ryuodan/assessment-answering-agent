@@ -11,6 +11,7 @@ days. These tests hold the arrangement that makes that impossible.
 from __future__ import annotations
 
 import re
+from html.parser import HTMLParser
 
 import pytest
 from fastapi.testclient import TestClient
@@ -94,6 +95,87 @@ def test_the_old_chat_address_redirects_within_the_prefix(client):
     response = client.get("/chat", follow_redirects=False)
     assert response.status_code == 308
     assert not response.headers["location"].startswith("/"), "a rooted redirect leaves the prefix"
+
+
+# --- the bar across the top (TD-041) -----------------------------------------
+#
+# Five pages each wrote their own header, and they drifted: one had no Sign
+# out, the links came in different orders, two carried arrows, and three drew
+# them as plain blue text. The links are the same five everywhere, in one
+# order, each page leaving out its own.
+
+NAV = [
+    ("./", "Assistant"),
+    ("workbench", "Workbench"),
+    ("memory", "Answer memory"),
+    ("preferences", "Preferences"),
+    ("products", "Products"),
+]
+OWN = {"/": "./", "/workbench": "workbench", "/admin": "workbench", "/memory": "memory"}
+VOID = {"area", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
+class _Header(HTMLParser):
+    """The links (href, text, title) and the ids inside the element with class "topbar"."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.depth = 0  # inside the bar while > 0
+        self.links: list[dict[str, str]] = []
+        self.ids: set[str] = set()
+        self._link: dict[str, str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        named = {key: value or "" for key, value in attrs}
+        if not self.depth and "topbar" not in named.get("class", "").split():
+            return
+        if "id" in named:
+            self.ids.add(named["id"])
+        if tag == "a" and "ghost" in named.get("class", "").split():
+            self._link = {"href": named.get("href", ""), "title": named.get("title", ""), "text": ""}
+        if tag not in VOID:
+            self.depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self.depth:
+            return
+        if tag == "a" and self._link is not None:
+            self._link["text"] = " ".join(self._link["text"].split())
+            self.links.append(self._link)
+            self._link = None
+        self.depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._link is not None:
+            self._link["text"] += data
+
+
+def _header(client: TestClient, path: str) -> _Header:
+    header = _Header()
+    header.feed(client.get(path).text)
+    return header
+
+
+@pytest.mark.parametrize("path", PAGES)
+def test_every_header_links_the_other_pages_the_same_way(client, path):
+    header = _header(client, path)
+
+    own = OWN.get(path, path.lstrip("/"))
+    assert [(link["href"], link["text"]) for link in header.links] == [
+        (href, text) for href, text in NAV if href != own
+    ], f"{path}: the header's links are not the other pages', in the usual order and words"
+    assert {"whoami", "whoamiEmail", "signOut", "themeToggle"} <= header.ids, f"{path}: the header lost a control"
+
+
+def test_a_header_link_says_the_same_on_every_page(client):
+    titles: dict[str, set[str]] = {}
+    for path in PAGES:
+        for link in _header(client, path).links:
+            titles.setdefault(link["href"], set()).add(link["title"])
+
+    assert set(titles) == {href for href, _ in NAV}
+    for href, said in titles.items():
+        assert len(said) == 1 and all(said), f"{href!r} is described differently across the pages: {said}"
 
 
 def test_changing_a_shared_asset_changes_its_url(tmp_path, monkeypatch):

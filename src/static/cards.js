@@ -1077,6 +1077,7 @@ const Cards = (window.Cards = {
     authorityBadge: authorityBadge,
     setProducts: setProducts,
     productBadge: productBadge,
+    ownSourceBadge: ownSourceBadge,
     openDocumentButton: openDocumentButton,
     canOpenDocument: canOpenDocument,
     markdown: renderMarkdown,

@@ -1,9 +1,11 @@
-/* The design tokens, the answer card, and the chunk renderer.
+/* The design tokens, the answer card, the chunk renderer, and the bar across
+ the top of every page.
 
- Loaded by both pages. `cards.js` was shared between them from the start and
- its styles were not, which is why the chat page drew the right markup with
- none of the rules that make it a card. Sharing the tokens as well means one
- visual language across the two, and dark mode working the same in both.
+ Loaded by every page. `cards.js` was shared between the first two from the
+ start and its styles were not, which is why the chat page drew the right
+ markup with none of the rules that make it a card. Sharing the tokens as well
+ means one visual language across the pages, and dark mode working the same in
+ all of them.
 
  Nothing here was rewritten. It was lifted out of the workbench, so a card
  looks in the conversation exactly as it looks on the workbench.
@@ -364,6 +366,8 @@
   background: color-mix(in srgb, var(--cite-hue) 20%, var(--cite-ground));
 }
 .cite .caret { opacity: .6; margin-inline-start: 6px; font-size: 10px; }
+/* Whose source it is -- a law's, or a product's own -- after the name, not run into it. */
+.cite .tag { margin-inline-start: 6px; }
 .cite-key { display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--ink-faint); }
 .cite-key span { display: inline-flex; align-items: center; gap: 5px; }
 .cite-key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
@@ -422,3 +426,31 @@
 }
 .chunk thead th { background: var(--surface-sunken); font-weight: 650; color: var(--ink); }
 .chunk tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-sunken) 45%, transparent); }
+
+/* --- the bar across the top of every page (TD-041) ---------------------
+   Each page keeps its own bar's padding, height and title; these are the
+   parts that have to agree. It wraps rather than clipping: the chat page's
+   bar did not, and below about 1,000px its last controls -- the address and
+   Dark mode -- were cut off with no way to scroll to them. A wrapped row sits
+   to the right, under the controls it continues, rather than leaving one
+   button alone on the left. The title gives way first: its line of
+   explanation may wrap, a link's label may not.
+
+   The links and buttons share one look. Three pages drew the links as plain
+   blue text beside outlined buttons, so the same five places looked different
+   on every page. `.topbar .ghost` outranks each page's `button.ghost`; a page
+   that wants a special control in the bar has to say so as specifically. */
+.topbar { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+.topbar .brand { flex: 1 1 280px; }
+.topbar .ghost {
+  display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap;
+  font: inherit; font-size: 13px; font-weight: 500; line-height: 1.4;
+  padding: 6px 11px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--surface); color: var(--ink-soft); border: 1px solid var(--line-strong);
+}
+.topbar .ghost:hover { color: var(--ink); border-color: var(--ink-faint); background: var(--surface-sunken); filter: none; }
+.topbar .whoami { display: flex; align-items: center; gap: 8px; }
+.topbar .whoami b { white-space: nowrap; }
+/* A rule that sets `display` outranks the browser's own `[hidden]`, and the
+   administrators' Access button showed for everybody. Restated here. */
+.topbar .ghost[hidden], .topbar .whoami[hidden] { display: none; }

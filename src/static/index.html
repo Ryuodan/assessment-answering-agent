@@ -549,14 +549,10 @@
   <!-- The assistant is a separate page rather than a mode of this one: the two
        are different shapes, and a control that had to know which mode it was in
        would be a control with a bug waiting in it. -->
-  <a class="ghost" href="./" title="Ask for this in a conversation instead"
-     style="text-decoration:none;display:inline-flex;align-items:center">Assistant →</a>
-  <a class="ghost" href="memory" title="What we have said before, and which of it still stands"
-     style="text-decoration:none;display:inline-flex;align-items:center">Answer memory</a>
-  <a class="ghost" href="preferences" title="How you want answers to read, and your skills"
-     style="text-decoration:none;display:inline-flex;align-items:center">Preferences</a>
-  <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers"
-     style="text-decoration:none;display:inline-flex;align-items:center">Products</a>
+  <a class="ghost" href="./" title="Ask for what you need in a conversation">Assistant</a>
+  <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
+  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
@@ -658,12 +654,16 @@
     <div class="panel">
       <!-- Which product this questionnaire is answered for (plan 024): General,
            or a product's knowledge base and answer memory beside the shared ones.
-           Chosen before uploading, or changed once a questionnaire is open. -->
+           Chosen before uploading, and fixed once a questionnaire is open
+           (TD-040): to answer the file for another product, close it and open
+           it again with that product chosen. -->
       <div class="row kb-scope" id="formProductRow" style="margin:0 0 12px">
         <label for="formProduct"><strong>Product</strong></label>
         <span class="product-swatch" id="formProductSwatch" aria-hidden="true"></span>
         <select id="formProduct"><option value="">General</option></select>
         <span class="hint" id="formProductHint">Answered from the shared knowledge base and answer memory.</span>
+        <button class="quiet" id="closeForm" hidden
+                title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
       </div>
       <label class="file" data-drop="assessment">
         <input type="file" id="assessmentInput" accept=".xlsx,.xlsm,.docx,.pdf" />
@@ -1710,6 +1710,10 @@
         remove.className = "quiet danger";
         remove.textContent = "remove";
         remove.onclick = async () => {
+          // A product's document goes with its file (TD-039), so that one asks
+          // first; a shared one is taken out of the index as it always was.
+          if (kbScope() && !confirm("Remove " + source.name + " from " + kbScopeName() +
+              "'s knowledge base?\n\nIts file is deleted too, and cannot be recovered from here.")) return;
           await request("/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
             { method: "DELETE" });
           loadKnowledge();
@@ -2212,7 +2216,7 @@
     // logic wanted it off.
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
      "composerAdd", "composerInput", "extractBtn", "assessmentInput",
-     "guidelinesBtn", "kbClear", "retryFailed",
+     "guidelinesBtn", "kbClear", "retryFailed", "closeForm",
      "fillFormBtn", "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
@@ -2227,6 +2231,7 @@
       }
     });
     document.body.classList.toggle("answering", locked);
+    describeFormProduct();  // fixed while answering, and once anything is answered
   }
 
   /* An edit on a card is the person overruling the system, and it has to reach
@@ -2456,11 +2461,14 @@
     $("extractBtn").disabled = true;
     setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
 
+    let why = "";  // the questionnaire reader's own reason, when it found nothing
     try {
-      if (FILLABLE.includes(suffix) && await loadAsForm(file)) return;
+      const form = FILLABLE.includes(suffix) ? await loadAsForm(file) : null;
+      if (form && form.opened) return;
+      why = form ? form.why : "";
       await loadAsText(file);
     } catch (error) {
-      setStatus($("extractStatus"), error.message, "error");
+      setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
     } finally {
       $("extractBtn").disabled = false;
       loadDocuments();
@@ -2508,6 +2516,10 @@
     }
   }
 
+  /* `opened` when the file is open as a questionnaire. Otherwise the text path
+     is tried next, and `why` is what the reader said about a file it read but
+     found no questions in -- the reason a person needs if the text path finds
+     none either. */
   async function loadAsForm(file) {
     const body = new FormData();
     body.append("file", file);
@@ -2518,11 +2530,11 @@
     } catch (error) {
       // A Word file with no answerable structure is not a failure -- it is a
       // document to read questions out of, which is the other path.
-      return false;
+      return { opened: false, why: "" };
     }
-    if (!batch.counts.questions) return false;
+    if (!batch.counts.questions) return { opened: false, why: (batch.warnings || []).join("\n") };
     await adoptBatch(batch);
-    return true;
+    return { opened: true, why: "" };
   }
 
   /* `quiet` is for a correction rather than a load: the batch is rebuilt and
@@ -2598,6 +2610,16 @@
     listRecentForms();
 
     if (quiet) return;
+    if (!batch.counts.questions) {
+      // "Found 0 question(s)" in green said nothing about why. The reader
+      // says which sheets it read and as what, and that is the part a person
+      // can act on.
+      setStatus($("extractStatus"),
+        "No questions were read from " + batch.source_name + "." +
+        ((batch.warnings || []).length ? "\n" + batch.warnings.join("\n") : "") +
+        "\nCheck what was found below, or open the file again.", "error");
+      return;
+    }
     const unsure = batch.parts.reduce(
       (total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
     const already = batch.counts.already_in_file || 0;
@@ -2858,6 +2880,7 @@
     // same on a list of typed questions as it does on a questionnaire.
     $("fillFormBtn").hidden = !formBatch;
     $("reviseRow").hidden = !(result && result.answers.length);
+    describeFormProduct();
   }
 
   let sourceName = "questions";
@@ -3415,7 +3438,9 @@
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
     const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
-    if (!confirm("Remove every policy document from " + which + "?\n\nThe answer memory is not affected.")) return;
+    const files = kbScope() ? "\n\nTheir files are deleted too, and cannot be recovered from here." : "";
+    if (!confirm("Remove every policy document from " + which + "?" + files +
+        "\n\nThe answer memory is not affected.")) return;
     await request("/api/knowledge" + kbScopeQuery("?"), { method: "DELETE" });
     loadKnowledge();
   };
@@ -3444,12 +3469,23 @@
 
   let teamProducts = [];
   function formProduct() { return $("formProduct").value; }
+  /* The selector chooses the product the next file is opened for. Once a
+     questionnaire is open its product is fixed (TD-040), and so is a typed
+     list's once any of it is answered or answering: what is on the page was
+     answered for one product, and the selector says which. Called whenever
+     any of the three changes. */
   function describeFormProduct() {
     const product = teamProducts.find((p) => p.id === formProduct());
+    const fixed = Boolean(formBatch) || answering || questions.some((q) => q.status === "answered");
+    $("formProduct").disabled = fixed;
+    $("closeForm").hidden = !formBatch;
     $("formProductSwatch").style.background = product ? (product.color || "var(--accent)") : "var(--line-strong)";
-    $("formProductHint").textContent = product
+    $("formProductHint").textContent = (product
       ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
-      : "Answered from the shared knowledge base and answer memory.";
+      : "Answered from the shared knowledge base and answer memory.") +
+      (formBatch
+        ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
+        : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
   }
   function showFormProduct(productId) {
     const select = $("formProduct");
@@ -3468,25 +3504,33 @@
     showFormProduct(formBatch ? formBatch.product_id || "" : "");
     listRecentForms();
   }
-  // Before a questionnaire is open, the choice is what the next one is opened
-  // and answered for. Once one is, it changes that questionnaire's product.
-  $("formProduct").onchange = async () => {
-    describeFormProduct();
+  // What the next questionnaire is opened and answered for. Nothing is sent:
+  // an open one's product was fixed when it was opened.
+  $("formProduct").onchange = describeFormProduct;
+
+  /* Put the open questionnaire away, so another file -- or the same one, for
+     another product -- can be opened. Its answers stay on the server and it
+     stays in "Or pick up"; only questions typed beside it, which the
+     questionnaire does not hold, would be lost, so only those are asked about. */
+  $("closeForm").onclick = () => {
     if (!formBatch) return;
-    try {
-      const updated = await request("/api/forms/" + formBatch.id + "/product", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: formProduct() }),
-      });
-      await adoptBatch(updated, { quiet: true });
-      setStatus($("extractStatus"), "Anything answered from now on uses "
-        + ($("formProduct").selectedOptions[0] || {}).textContent
-        + ". The answers already written stay as they are.", "ok");
-      listRecentForms();
-    } catch (error) {
-      setStatus($("extractStatus"), error.message, "error");
-      showFormProduct(formBatch.product_id || "");
-    }
+    const typed = questions.filter((q) => !q.formId && q.text.trim()).length;
+    if (typed && !confirm("Close " + formBatch.source_name + "?\n\n" + typed +
+        " question(s) typed beside it are not part of the file and will go.")) return;
+    const closed = formBatch.source_name;
+    formBatch = null;
+    questions = [];
+    result = null;
+    Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+    $("results").innerHTML = "";
+    $("resultsCard").hidden = true;
+    $("formReport").hidden = true;
+    setStatus($("answerStatus"), "");
+    renderDetailPicker();
+    renderQuestions();
+    refreshFormControls();
+    listRecentForms();
+    setStatus($("extractStatus"), "Closed " + closed + ". It stays in “Or pick up” below.", "ok");
   };
   loadFormProducts();
 

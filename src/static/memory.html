@@ -39,7 +39,6 @@
   .brand-text h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
   .brand-text p { margin: 0; font-size: 12.5px; color: var(--ink-faint); }
   .topbar .spacer { flex: 1; }
-  .topbar a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
 
   main { max-width: 1000px; margin: 0 auto; padding: 26px 24px 90px; }
 
@@ -112,7 +111,14 @@
     display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
     margin-top: 11px; font-size: 12px; color: var(--ink-faint);
   }
-  .entry .meta .spacer { flex: 1; }
+  /* What can be done to the entry, together at the end of the row and wrapping
+     as one: the Move menu took the whole width of the card, as every select on
+     this page does, and pushed Forget onto a line of its own. */
+  .entry .meta .actions {
+    display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px;
+    margin-inline-start: auto;
+  }
+  .entry .meta select.move { width: auto; max-width: 220px; padding: 3px 8px; font-size: 12.5px; }
   .tag {
     display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill);
     font-size: 11.5px; font-weight: 600;
@@ -217,10 +223,10 @@
     <b id="whoamiEmail"></b>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
   </div>
-  <a class="ghost" href="./">Assistant</a>
-  <a class="ghost" href="workbench">Workbench</a>
-  <a class="ghost" href="preferences">Preferences</a>
-  <a class="ghost" href="products">Products</a>
+  <a class="ghost" href="./" title="Ask for what you need in a conversation">Assistant</a>
+  <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
+  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
   <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
@@ -485,23 +491,23 @@
     ].filter(Boolean).join(" · ");
     meta.append(where);
 
-    const spacer = document.createElement("span");
-    spacer.className = "spacer";
-    meta.append(spacer);
+    const actions = document.createElement("span");
+    actions.className = "actions";
+    meta.append(actions);
 
     if (!entry.stands) {
       const restore = document.createElement("button");
       restore.className = "quiet";
       restore.textContent = "Put back in use";
       restore.onclick = () => act(restore, () => api("/api/memory/" + encodeURIComponent(entry.entry_id) + "/restore", { method: "POST" }));
-      meta.append(restore);
+      actions.append(restore);
     }
 
     const edit = document.createElement("button");
     edit.className = "quiet";
     edit.textContent = "Edit";
     edit.onclick = () => openEditor(card, entry);
-    meta.append(edit);
+    actions.append(edit);
 
     // Into another memory: the shared one or a product's (plan 022).
     if (scopes.length) {
@@ -518,7 +524,7 @@
           method: "POST", body: JSON.stringify({ product: target }),
         }));
       };
-      meta.append(move);
+      actions.append(move);
     }
 
     const remove = document.createElement("button");
@@ -529,7 +535,7 @@
       if (!confirm("Forget this answer?\n\nIt stops being retrieved and cannot be recovered from here.")) return;
       act(remove, () => api("/api/memory/" + encodeURIComponent(entry.entry_id), { method: "DELETE" }));
     };
-    meta.append(remove);
+    actions.append(remove);
 
     card.append(question, answer, meta);
     return card;
