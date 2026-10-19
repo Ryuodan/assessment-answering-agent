@@ -231,3 +231,39 @@ def test_the_command_line_checks_a_batch_file(root: Path, tmp_path: Path, capsys
     )
     assert pd.main(["check", str(path), "--root", str(root)]) == 1
     assert "PROBLEM F-001: the quote is not at" in capsys.readouterr().out
+
+
+def test_a_rewritten_answer_says_so_in_the_workbook(root: Path, tmp_path: Path) -> None:
+    out = tmp_path / "review.xlsx"
+    pd.write_workbook(batch(pairs=[pair(rewritten=True)]), out)
+    sheet = openpyxl.load_workbook(out)["Q&A"]
+    row = {h.value: c.value for h, c in zip(sheet[1], sheet[2])}
+    assert row["Answer rewritten"] == "yes" and row["Question rebuilt"] == "no"
+
+
+def test_held_items_from_every_batch_go_into_one_workbook(root: Path, tmp_path: Path) -> None:
+    """Only what is held, labelled with its product, plus live entries held rather than moved."""
+    first = batch(facts=[fact(), fact(id="F-002", status="dated", as_of="2026-07", proposed="hold")])
+    second = batch(pairs=[pair(), pair(id="QA-002", proposed="hold")])
+    second.product = "Other"
+    second.asks = [pd.Ask(id="Q-1", question="Which data centres?", why="conflict")]
+    existing = [
+        pd.Existing(
+            entry_id="MEM-1", product="Other", from_file="form.xlsx", question="Q?", answer="Yes.", why="unclear"
+        )
+    ]
+    out = tmp_path / "held.xlsx"
+    assert pd.write_held([first, second], out, existing) == 4
+    book = openpyxl.load_workbook(out)
+    assert book.sheetnames == [
+        "Read me",
+        "Held facts",
+        "Held answers",
+        "Questions for the team",
+        "Existing memory entries",
+    ]
+    facts = [[c.value for c in row] for row in book["Held facts"].iter_rows(min_row=2)]
+    assert [(r[0], r[1]) for r in facts] == [("Product", "F-002")], "kept items are not held"
+    answers = [[c.value for c in row] for row in book["Held answers"].iter_rows(min_row=2)]
+    assert [(r[0], r[1]) for r in answers] == [("Other", "QA-002")]
+    assert book["Existing memory entries"]["B2"].value == "MEM-1"

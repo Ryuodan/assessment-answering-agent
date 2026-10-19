@@ -179,3 +179,19 @@ Each is listed with Claude's recommendation.
 
 - 2026-10-18: The clean data is built from the source files, not from the organising workbook. A sample of its rows against the files showed 8% faithful and new, and whole files with shifted columns, so cleaning its rows would cost more than reading the files. Its locations all resolve, so it stays as a cross-check. (Claude)
 - 2026-10-18: Ole5 first. It has the most product-specific content, and every kind of source file appears in its folder: tickets, an evidence reply, a status sheet and an agreement. Its sample therefore exercises every rule the later batches need. Availo is too small to show much, Msegat's material is T2-wide, and RICH needs a hosting decision first. (Claude)
+- 2026-10-19, by the user, on the Ole5 sample:
+  - **Restated policies.** Drop a fact or answer that only restates a T2 policy already in the shared knowledge base.
+  - **Answers that point to an attachment.** Rewrite the answer so it stands on its own, and keep it; drop it if it cannot stand without the attachment.
+  - **The team cannot review anything now.** Use only items with no conflict and no gap. Collect every held item from every product in one place, for a later review.
+  - **Shared entries from questionnaires filed in a product's folder.** General information about T2 stays shared; information specific to the product moves to the product's memory. Some move and some stay, and the outcome is reported to the user.
+  - **The unnamed link and QR-code product.** Ignore it.
+  - **Order.** RICH, then Availo, Msegat and the shared batch, as recommended.
+  - Everything else as recommended.
+  - **Live memory.** The user deleted `MEM-0035` themselves and asked Claude to delete `MEM-0519` and `MEM-0400`.
+- 2026-10-19: How "no conflict" is read. A disagreement counts only when another T2 source says otherwise about the same product. These do not count:
+  - an answer from another product's questionnaire (MEM-0121 "no SSO", MEM-0480 "SIEM integration on request");
+  - an answer that disagrees only in wording (MEM-0681: "Yes", but it says T2 tests internally);
+  - a client's own risk register, which records the client's finding, not T2's.
+
+  Items that rest on such sources stay usable, and their notes say why. (Claude)
+- 2026-10-19: The live memory is changed only with the app stopped. Forgetting and moving both rewrite vectors, and the app (`uvicorn --reload`) holds the vector store open. `scripts/memory_changes.py` applies a reviewed changes file. It previews by default, refuses to apply while anything answers on the app's port, and records the same events as the memory page under the account of the person who decided. (Claude)

@@ -4,6 +4,7 @@
     python -m scripts.product_data check <batch.json> --root <dir> [--exclude <dir>]
     python -m scripts.product_data workbook <batch.json> <out.xlsx>
     python -m scripts.product_data factsheet <batch.json> <out.docx> [--draft]
+    python -m scripts.product_data held <out.xlsx> <batch.json>... [--existing <entries.json>]
 
 The raw files the team sends are messy -- exported email threads, tickets,
 filled and blank questionnaires -- so cleaning them takes judgement, and the
@@ -30,7 +31,7 @@ import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -76,10 +77,26 @@ class Pair(BaseModel):
     answer: str = Field(min_length=2)
     language: Literal["en", "ar", "mixed"]
     question_rebuilt: bool = Field(description="True when the question was reconstructed rather than read")
+    rewritten: bool = Field(
+        default=False,
+        description="True when the answer was reworded to stand on its own (an attachment reference removed); "
+        "the sources hold T2's original words",
+    )
     scope: Literal["product", "t2_wide"]
     sources: list[Source] = Field(min_length=1)
     note: str = ""
     proposed: Proposal
+
+
+class Existing(BaseModel):
+    """An entry already in the live answer memory, held for the team rather than moved (plan 026)."""
+
+    entry_id: str
+    product: str
+    from_file: str
+    question: str
+    answer: str
+    why: str
 
 
 class Ask(BaseModel):
@@ -276,132 +293,128 @@ def _sources(sources: list[Source]) -> str:
     return "\n\n".join(f"{s.file} @ {s.where}:\n“{s.quote}”" for s in sources)
 
 
-def write_workbook(batch: Batch, out: Path) -> None:
+Column = tuple[str, int]
+"""A sheet column: its header and its width."""
+
+FACT_COLUMNS: list[Column] = [
+    ("ID", 8), ("Topic", 22), ("Statement", 60), ("Status", 10), ("As of", 10), ("Scope", 10),
+    ("Confidence", 11), ("Proposed", 10), ("Decision", 10), ("Reviewer note", 30), ("Cleaner's note", 40),
+    ("Sources", 70),
+]  # fmt: skip
+PAIR_COLUMNS: list[Column] = [
+    ("ID", 8), ("Question", 45), ("Answer", 70), ("Language", 9), ("Question rebuilt", 9),
+    ("Answer rewritten", 9), ("Scope", 10), ("Proposed", 10), ("Decision", 10), ("Reviewer note", 30),
+    ("Cleaner's note", 40), ("Sources", 70),
+]  # fmt: skip
+ASK_COLUMNS: list[Column] = [
+    ("ID", 8), ("Question", 60), ("Why", 12), ("Detail", 70), ("Related items", 20), ("Team's answer", 50),
+]  # fmt: skip
+
+
+def _fact_row(f: Fact) -> list[str]:
+    return [f.id, f.topic, f.statement, f.status, f.as_of, f.scope, f.confidence, f.proposed, "", "", f.note,
+            _sources(f.sources)]  # fmt: skip
+
+
+def _pair_row(p: Pair) -> list[str]:
+    yes = {True: "yes", False: "no"}
+    return [p.id, p.question, p.answer, p.language, yes[p.question_rebuilt], yes[p.rewritten], p.scope,
+            p.proposed, "", "", p.note, _sources(p.sources)]  # fmt: skip
+
+
+def _ask_row(a: Ask) -> list[str]:
+    return [a.id, a.question, a.why, a.detail, ", ".join(a.related), ""]
+
+
+def _by_topic(facts: list[Fact]) -> list[Fact]:
+    order = {topic: i for i, topic in enumerate(TOPICS)}
+    return sorted(facts, key=lambda f: (order.get(f.topic, 99), f.id))
+
+
+def _book(title: str, read_me: list[str]) -> Any:
     import openpyxl
-    from openpyxl.styles import Alignment, Font, PatternFill
-    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.styles import Font
 
     book = openpyxl.Workbook()
-    readme = book.active
-    readme.title = "Read me"
-    readme.append([f"{batch.product}: clean data for review, prepared {batch.prepared_on}"])
-    readme["A1"].font = Font(bold=True, size=14)
-    for line in READ_ME:
-        readme.append([line])
-    counts = Counter(f.proposed for f in batch.facts) + Counter(p.proposed for p in batch.pairs)
-    readme.append([""])
-    readme.append(
-        [
-            f"{len(batch.facts)} facts, {len(batch.pairs)} pairs, {len(batch.asks)} questions, "
-            f"{len(batch.files)} files. Proposed: {dict(counts)}"
-        ]
-    )
-    readme.column_dimensions["A"].width = 120
+    sheet = book.active
+    sheet.title = "Read me"
+    sheet.append([title])
+    sheet["A1"].font = Font(bold=True, size=14)
+    for line in read_me:
+        sheet.append([line])
+    sheet.column_dimensions["A"].width = 120
+    return book
 
-    order = {topic: i for i, topic in enumerate(TOPICS)}
-    sheets: list[tuple[str, list[str], list[list[str]], list[int]]] = [
-        (
-            "Facts",
-            [
-                "ID",
-                "Topic",
-                "Statement",
-                "Status",
-                "As of",
-                "Scope",
-                "Confidence",
-                "Proposed",
-                "Decision",
-                "Reviewer note",
-                "Cleaner's note",
-                "Sources",
-            ],
-            [
-                [
-                    f.id,
-                    f.topic,
-                    f.statement,
-                    f.status,
-                    f.as_of,
-                    f.scope,
-                    f.confidence,
-                    f.proposed,
-                    "",
-                    "",
-                    f.note,
-                    _sources(f.sources),
-                ]
-                for f in sorted(batch.facts, key=lambda f: (order.get(f.topic, 99), f.id))
-            ],
-            [8, 22, 60, 10, 10, 10, 11, 10, 10, 30, 40, 70],
-        ),
-        (
-            "Q&A",
-            [
-                "ID",
-                "Question",
-                "Answer",
-                "Language",
-                "Question rebuilt",
-                "Scope",
-                "Proposed",
-                "Decision",
-                "Reviewer note",
-                "Cleaner's note",
-                "Sources",
-            ],
-            [
-                [
-                    p.id,
-                    p.question,
-                    p.answer,
-                    p.language,
-                    "yes" if p.question_rebuilt else "no",
-                    p.scope,
-                    p.proposed,
-                    "",
-                    "",
-                    p.note,
-                    _sources(p.sources),
-                ]
-                for p in batch.pairs
-            ],
-            [8, 45, 70, 9, 9, 10, 10, 10, 30, 40, 70],
-        ),
-        (
-            "Questions for the team",
-            ["ID", "Question", "Why", "Detail", "Related items", "Team's answer"],
-            [[a.id, a.question, a.why, a.detail, ", ".join(a.related), ""] for a in batch.asks],
-            [8, 60, 12, 70, 20, 50],
-        ),
-        (
-            "Files",
-            ["File", "What was done", "Why", "Items from it"],
-            [[f.file, f.decision, f.reason, ", ".join(f.items)] for f in batch.files],
-            [60, 14, 80, 30],
-        ),
-    ]
-    header = PatternFill("solid", fgColor="1F3864")
-    for title, columns, rows, widths in sheets:
-        sheet = book.create_sheet(title)
-        sheet.append(columns)
-        for row in rows:
-            sheet.append(row)
-        for cell in sheet[1]:
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = header
-        for i, width in enumerate(widths, 1):
-            sheet.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
-        for row in sheet.iter_rows(min_row=2):
-            for cell in row:
-                cell.alignment = Alignment(wrap_text=True, vertical="top")
-        sheet.freeze_panes = "B2"
-        if "Decision" in columns:
-            letter = openpyxl.utils.get_column_letter(columns.index("Decision") + 1)
-            choice = DataValidation(type="list", formula1='"keep,edit,drop"', allow_blank=True)
-            sheet.add_data_validation(choice)
-            choice.add(f"{letter}2:{letter}{max(2, len(rows) + 1)}")
+
+def _add_sheet(book: Any, title: str, columns: list[Column], rows: list[list[str]]) -> None:
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    sheet = book.create_sheet(title)
+    headers = [name for name, _ in columns]
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F3864")
+    for i, (_, width) in enumerate(columns, 1):
+        sheet.column_dimensions[get_column_letter(i)].width = width
+    for line in sheet.iter_rows(min_row=2):
+        for cell in line:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+    sheet.freeze_panes = "B2"
+    if "Decision" in headers:
+        letter = get_column_letter(headers.index("Decision") + 1)
+        choice = DataValidation(type="list", formula1='"keep,edit,drop"', allow_blank=True)
+        sheet.add_data_validation(choice)
+        choice.add(f"{letter}2:{letter}{max(2, len(rows) + 1)}")
+
+
+def write_workbook(batch: Batch, out: Path) -> None:
+    """One batch for review: facts, pairs, questions for the team, and what was done with each file."""
+    counts = Counter(f.proposed for f in batch.facts) + Counter(p.proposed for p in batch.pairs)
+    totals = (
+        f"{len(batch.facts)} facts, {len(batch.pairs)} pairs, {len(batch.asks)} questions, "
+        f"{len(batch.files)} files. Proposed: {dict(counts)}"
+    )
+    book = _book(f"{batch.product}: clean data for review, prepared {batch.prepared_on}", [*READ_ME, "", totals])
+    _add_sheet(book, "Facts", FACT_COLUMNS, [_fact_row(f) for f in _by_topic(batch.facts)])
+    _add_sheet(book, "Q&A", PAIR_COLUMNS, [_pair_row(p) for p in batch.pairs])
+    _add_sheet(book, "Questions for the team", ASK_COLUMNS, [_ask_row(a) for a in batch.asks])
+    files = [[f.file, f.decision, f.reason, ", ".join(f.items)] for f in batch.files]
+    _add_sheet(book, "Files", [("File", 60), ("What was done", 14), ("Why", 80), ("Items from it", 30)], files)
     book.save(str(out))
+
+
+HELD_READ_ME = [
+    "What is held, across every product, until the team can review it",
+    "",
+    "The team could not review anything when the data was cleaned, so only items with no conflict, no open",
+    "gap and no draft status were proposed for use. Everything else is collected here: held facts and answers,",
+    "the questions that would settle them, and entries already in the live shared memory that were neither kept",
+    "as they are nor moved, with the reason. Write the team's answer in the last column; an answered row can",
+    "then be kept, corrected or dropped in its product's batch.",
+]
+
+
+def write_held(batches: list[Batch], out: Path, existing: list[Existing] | None = None) -> int:
+    """Every held item from every batch, in one workbook for the team. Returns how many rows."""
+    product = [("Product", 12)]
+    facts = [[b.product, *_fact_row(f)] for b in batches for f in _by_topic(b.facts) if f.proposed == "hold"]
+    pairs = [[b.product, *_pair_row(p)] for b in batches for p in b.pairs if p.proposed == "hold"]
+    asks = [[b.product, *_ask_row(a)] for b in batches for a in b.asks]
+    rows = [[e.product, e.entry_id, e.from_file, e.question, e.answer, e.why, ""] for e in existing or []]
+    book = _book("Held for the team's review", HELD_READ_ME)
+    _add_sheet(book, "Held facts", product + FACT_COLUMNS, facts)
+    _add_sheet(book, "Held answers", product + PAIR_COLUMNS, pairs)
+    _add_sheet(book, "Questions for the team", product + ASK_COLUMNS, asks)
+    memory_columns = [("Entry", 10), ("From questionnaire", 40), ("Question", 50), ("Answer", 60), ("Why held", 50),
+                      ("Team's answer", 40)]  # fmt: skip
+    _add_sheet(book, "Existing memory entries", product + memory_columns, rows)
+    book.save(str(out))
+    return len(facts) + len(pairs) + len(asks) + len(rows)
 
 
 def write_fact_sheet(batch: Batch, out: Path, *, draft: bool = False) -> int:
@@ -457,11 +470,25 @@ def main(argv: list[str] | None = None) -> int:
     sheet.add_argument("batch", type=Path)
     sheet.add_argument("out", type=Path)
     sheet.add_argument("--draft", action="store_true")
+    held = commands.add_parser("held")
+    held.add_argument("out", type=Path)
+    held.add_argument("batches", type=Path, nargs="+")
+    held.add_argument("--existing", type=Path, help="JSON list of live memory entries held for the team")
     args = parser.parse_args(argv)
 
     if args.command == "extract":
         for where, text in extract(args.file):
             print(f"[{where}] {text}")
+        return 0
+    if args.command == "held":
+        batches = [Batch.model_validate(json.loads(b.read_text(encoding="utf-8"))) for b in args.batches]
+        existing = (
+            [Existing.model_validate(e) for e in json.loads(args.existing.read_text(encoding="utf-8"))]
+            if args.existing
+            else []
+        )
+        rows = write_held(batches, args.out, existing)
+        print(f"wrote {args.out}: {rows} row(s) from {len(batches)} batch(es)")
         return 0
     batch = Batch.model_validate(json.loads(args.batch.read_text(encoding="utf-8")))
     if args.command == "check":
