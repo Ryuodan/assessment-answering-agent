@@ -21,10 +21,16 @@ and [Facing a network](docs/design/access.md#facing-a-network).
 - **Eval data in git history (TD-013).** `eval/house_set.json` and
   `eval/answer_memory.json` were committed in plaintext until plan 002 sealed
   them (2026-10-05); by the user's decision history is not rewritten, so every
-  commit before the sealing still holds the plaintext. **Before this repository
-  is pushed to any remote, purge those two paths from history** (for example
+  commit before the sealing still holds the plaintext. On 2026-10-20 the user
+  decided to push the repository, history included, to a **private** GitHub
+  repository, so that the server manager can pull the code. The plaintext
+  eval data and the customer names in old commits (TD-030, TD-050) are
+  therefore readable by anyone with access to that repository. Keep it
+  private, and give access only to people who may see the team's answers. To
+  remove them later, purge those paths from history (for example
   `git filter-repo --path eval/house_set.json --path eval/answer_memory.json
-  --invert-paths`); the sealed copies in `eval/sealed/` are unaffected.
+  --invert-paths`) and force-push; the sealed copies in `eval/sealed/` are
+  unaffected.
 - **Data residency.** LangSmith has no Saudi region; `LANGSMITH_TRACING` is off
   by default and switching it on sends policy text and questionnaires abroad.
   That is a decision for whoever owns the documents.
@@ -92,6 +98,7 @@ memory (D-019).
    storage path). A test must never need the real database, index or `.env`.
 4. Do not run a script that writes to the real Chroma index (TD-012) unless the
    user asked for that run.
-5. Do not add a git remote before TD-013 is resolved.
+5. The only remote is the private GitHub repository (2026-10-20, TD-013). Do not
+   add another, make it public or widen its access without the user.
 6. `uv run poe arch` scans tracked files for key-shaped strings (ARCH-SECRET);
    a hit is a stop-and-ask, not something to allow-list quietly.

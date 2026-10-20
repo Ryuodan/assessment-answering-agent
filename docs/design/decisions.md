@@ -66,6 +66,8 @@ a plan relies on it.
   held in `.env`; encrypt forward only, without rewriting history.
 - **Consequences:** the plaintext stays in old commits (TD-013) and must be
   purged before any remote is added. Implemented by plan 002. Format in D-011.
+  *Amended 2026-10-20 by the user: the repository is pushed unpurged to a
+  private GitHub repository (TD-013).*
 - **Date:** 2026-10-05. **Status:** accepted. **Decided by:** the user.
 
 ## D-006: the README is kept and reorganised, not replaced

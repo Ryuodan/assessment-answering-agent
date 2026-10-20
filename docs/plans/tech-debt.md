@@ -109,6 +109,12 @@ or docs and has not been verified by running anything.
 - **Impact:** anyone with a copy of the history has the plaintext. There is no remote today.
 - **Fix:** purge them from history (for example with `git filter-repo`) before this repository is ever pushed to a remote. Recorded in `SECURITY.md`.
 - **Partly resolved** 2026-10-05 (plan 002): sealed from commit onward (`eval/sealed/`, ARCH-SEALED); the plaintext remains in the history before it.
+- **Decision** 2026-10-20, by the user: push the repository, history included, to a private GitHub repository so that the server manager can pull it ("don't mind the evaluation, it would be a private repo"). Before the push, Claude scanned the whole history:
+  - no API key, private key or password value;
+  - no `.env`, database, index or data folder was ever committed;
+  - the only key-shaped strings are short test values, far shorter than real keys.
+
+  The plaintext eval data and the old customer names are now readable by whoever has access to the repository. The purge stays possible later, with a force-push.
 
 ## TD-014: The evaluation has no clean held-out split
 

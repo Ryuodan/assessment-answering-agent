@@ -94,3 +94,6 @@ docs/harness/*.pdf
 # `uv run poe eval-unlock` writes these plaintexts; ARCH-SEALED keeps them out.
 eval/house_set.json
 eval/answer_memory.json
+
+# Worktrees made by Claude Code's workflows: scratch checkouts, never committed.
+.claude/worktrees/
