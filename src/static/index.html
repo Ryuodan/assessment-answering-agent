@@ -1701,8 +1701,12 @@
 
   let guidelineCount = null;  // what "Remove every policy document" counts in its question
   async function loadKnowledge() {
+    const scope = kbScope();
     try {
       const stats = await request("/api/knowledge" + kbScopeQuery("?"));
+      // An answer for the knowledge base the selector has since left is dropped: arriving
+      // late, it replaced the list, and the count "Remove every policy document" names.
+      if (scope !== kbScope()) return;
       guidelineCount = stats.sources.filter((s) => s.source_type === "guideline").length;
       $("kbSummary").innerHTML = stats.total_chunks
         ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
@@ -1760,6 +1764,7 @@
         $("kbSources").append(item);
       });
     } catch (error) {
+      if (scope !== kbScope()) return;
       guidelineCount = null;  // not known: the question says "every policy document"
       $("kbSummary").textContent = "Could not load the knowledge base: " + error.message;
     }

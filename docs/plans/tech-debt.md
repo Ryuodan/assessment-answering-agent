@@ -529,3 +529,10 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-05 while building plan 029's 0.2, and reproduced. `restore_draft` clears `APPROVED` from `confidence_reason` but leaves `needs_review` false, as withdrawing did before TD-053's fix. A flagged answer that was reworded, then approved, then put back to its draft is written as if confident (seen at 0.85 with a reviewer's reason).
 - **Impact:** the model's draft reaches the customer's file without a person having confirmed it. Only answers that scored at or above the threshold: a low score is still held.
 - **Fix (needs approval):** `restore_draft` withdraws the approval with `selection.withdraw_approval(restored, reworded=True)`, as `revise` does since plan 029. One line, with a test.
+
+## TD-060: A late knowledge-base answer replaced the list for another scope
+
+- **What:** found 2026-11-05 by `poe check` during plan 029, when the existing browser test of removing a product's documents timed out under load. The Workbench loads the shared knowledge base when the page opens and the chosen one when the selector changes, and drew whichever answer came back last. A slow shared answer replaced a product's list while the selector still named the product.
+- **Impact:** the list, and since plan 029 the count in "Remove every policy document", could belong to another knowledge base than the one chosen. A "remove" clicked there was sent for the chosen one, and refused. The test failed intermittently.
+- **Resolved** 2026-11-05 (Claude, plan 029, with 0.3, whose count depends on it): `loadKnowledge` drops an answer for a scope the selector has left. `tests/browser/test_knowledge_scope.py::test_a_late_answer_for_the_shared_list_does_not_replace_a_products` delays the shared answer and fails on the old page.
+- **Still open:** the chat drawer's `loadSources` has the same race. Fix (needs approval): the same check.

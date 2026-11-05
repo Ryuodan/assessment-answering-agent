@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -173,6 +175,31 @@ def test_the_assistants_drawer_names_the_same_impact(page: Page, stores) -> None
 
     assert in_the_chat and in_the_chat == on_the_workbench
     assert shared_names(stores) == ["Shared policy.pdf"]
+
+
+def test_a_late_answer_for_the_shared_list_does_not_replace_a_products(page: Page, stores, monkeypatch) -> None:
+    """Found by `poe check` (plan 029): the page's first, shared, request came back
+    after the product's, and the list and its count went back to the shared
+    knowledge base under a selector that still said Availo."""
+    availo = products.add(None, TEAM, "Availo")
+    real = service.knowledge_stats
+
+    def slow_when_shared(team_id=None, *, product_id=""):
+        if not product_id:
+            time.sleep(1.5)
+        return real(team_id, product_id=product_id)
+
+    monkeypatch.setattr(service, "knowledge_stats", slow_when_shared)
+    sources = page.locator("#kbSources")
+
+    with page.expect_response(lambda response: response.url.endswith("/api/knowledge")):
+        page.goto("/workbench")
+        page.select_option("#kbScope", availo.id)
+        expect(sources).to_contain_text("Availo policy.pdf")
+    page.wait_for_timeout(500)  # time for the late answer to be drawn, were it drawn
+
+    expect(sources).to_contain_text("Availo policy.pdf")
+    expect(sources).not_to_contain_text("Shared policy.pdf")
 
 
 def test_the_assistants_drawer_has_the_same_selector(page: Page, stores) -> None:
