@@ -130,6 +130,9 @@ All stages:
   - Major, 1.3: a question asked through "Ask another question" on an open questionnaire disappeared. Every run put the review back on Needs review, overriding the person's All, and a typed question's confident answer is in no tab but All. Only a run of the file's own rows goes back to Needs review now; a run of typed questions alone keeps the person's tab, or shows All when the tab would hide one of its answers. After a run of both, the status says the typed ones are under All. 2 browser tests, both failing on the old page.
   - Minor, 1.4: Fill could be clicked during the rewording pass that follows a run when the style box has text: drawing the answers set it to "not running", over the lock. Fill's state is now worked out from the page's state each time (answering, the server's run, a fill on its way) rather than remembered and put back. 1 browser test, failing on the old page.
   - Minor, 1.3 and 1.2, the keyboard and screen readers: choosing a tab dropped the focus to the page, because the tabs are drawn again; it now stays on the tab chosen. The "You already have" box appeared silently; the keyboard now goes to its first "Open it", and the box is described by its sentence. 2 browser tests, both failing on the old page.
+  - Minor, 1.4: a followed run that had questions typed beside the file ended with "Finished: every question has an answer." They go out after the file's rows, so a request that failed never sent them, and the server does not keep them. The closing message now counts them and says to answer them again. 1 browser test (a 504 with a typed question), failing on the old page.
+  - Minor, 1.4: TD-064 said `running.started_at` shows how long a run has been going, and no page showed it. The "Being answered on the server" note now says when the run started ("started at 14:02", with the day when it is not today). 1 browser test, failing on the old page.
+  - Minor, the test note: 1.4's step 4 asked the chat to answer the questionnaire the Workbench was answering, which the chat cannot reach: it opens only a file attached to it, always as a new questionnaire (TD-062). The step now starts in the chat: attach the file there, then answer that questionnaire on the Workbench from "Or pick up", and ask the chat to change it during the run.
 
 ## Decision log
 
@@ -268,12 +271,14 @@ Use a local copy, not the team's data.
 ### 1.4 Each answer is saved as it finishes, and a run is not started twice
 
 1. Upload a questionnaire with at least 20 questions and click Answer.
-2. When a few are answered, press F5. The page reopens and says "Being answered on the server: 6 of 25 done". "Answer questions" and "Fill the original file" are greyed out, and the answers have no Edit or Approve.
+2. When a few are answered, press F5. The page reopens and says "Being answered on the server: 6 of 25 done, started at 14:02" (the time the run began). "Answer questions" and "Fill the original file" are greyed out, and the answers have no Edit or Approve.
 3. Wait. The count rises, and at the end every answer appears with "Finished: every question has an answer." The questions were answered once, not twice.
-4. While a run is going, open the same address in a second tab: it shows the same note and follows the same run. In the chat, ask it to answer that questionnaire: it says the questionnaire is being answered right now.
-5. Optional, in Chrome: during a run press F12, then Network, and set Offline, then back to Online. The page says the connection timed out but the answering carries on there, then shows the answers.
-6. On the server, answer a questionnaire of more than 100 questions. After 15 minutes, instead of "Request failed (504)", the page says it carries on, and the answers arrive.
-7. "Close questionnaire" works during a run: the run carries on, and opening the questionnaire again shows its progress.
+4. While a run is going, open the same address in a second tab: it shows the same note and follows the same run.
+5. The chat and the Workbench on one questionnaire. The chat can only open a file attached to it, always as a new questionnaire, so start there: in the chat, attach a questionnaire of at least 20 questions and send "Open this file, but do not answer anything yet." Then on the Workbench, open that questionnaire from "Or pick up" and click Answer. While it runs, go back to the chat and send "Change the answer to the first question to: Yes." The chat says the questionnaire is being answered right now, with how many are done, and changes nothing.
+6. Optional, in Chrome: during a run press F12, then Network, and set Offline, then back to Online. The page says the connection timed out but the answering carries on there, then shows the answers.
+7. Optional, the same with a question of your own: open a questionnaire with questions still waiting, add one with "+ Add a question", click Answer, and go Offline and back as in step 6. At the end the page says your typed question was not answered and offers "Answer 1 question", rather than "every question has an answer".
+8. On the server, answer a questionnaire of more than 100 questions. After 15 minutes, instead of "Request failed (504)", the page says it carries on, and the answers arrive.
+9. "Close questionnaire" works during a run: the run carries on, and opening the questionnaire again shows its progress.
 
 ### 1.3 Reviewing starts with the answers that need you
 

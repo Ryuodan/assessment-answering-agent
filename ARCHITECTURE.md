@@ -221,8 +221,9 @@ question/answer pairs, `knowledge.add_prior_answers`, and
 **Answering a questionnaire.** `POST /api/forms` saves the file and calls
 `tools.open_form`, for a `product` or General. With `if_already_open="ask"`
 (the Workbench) it first compares the bytes with this person's questionnaire
-files still on disk (`batches.same_upload`), and on a match saves and reads
-nothing and returns `already_open`, for them to open one or start fresh. That reads it (`forms.reading`, by default the guarded
+files still on disk (`batches.same_upload`, leaving out one nothing was read
+from), and on a match saves and reads nothing and returns `already_open`, for
+them to open one or start fresh. That reads it (`forms.reading`, by default the guarded
 agent strategy) into a `Batch` of questions with write targets; nothing is
 answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 `service.answer_questions`, which runs the LangGraph pipeline once per question
@@ -234,8 +235,9 @@ answers are saved again at its end (`batches.save_answers`), with an event.
 While a run goes on, `busy` holds its questionnaire: a second run, and any
 change to it (an edit, an approval, a rewording), is refused with 409
 `questionnaire_busy`; reading and filling are not. `GET /api/forms/{id}` says
-how far the run has got (`running`), and the Workbench follows it after a
-reload or a timed-out request instead of offering Answer again. `busy`, like
+how far the run has got and when it started (`running`), and the Workbench
+follows it after a reload or a timed-out request instead of offering Answer
+again. `busy`, like
 `progress`, is in the memory of the one process that serves the app (plan 029). `POST /api/forms/{id}/fill` writes the ready answers into a copy
 of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
 when `selection.ready_to_write` says so: a person confirmed it, or it is neither

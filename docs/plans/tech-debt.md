@@ -573,7 +573,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 ## TD-064: A run that never ends holds its questionnaire until a restart
 
 - **What:** found 2026-11-05 while building plan 029's 1.4. A hold is let go when its run ends, however it ends, and never expires: one that lapsed while the run went on would let the overwrite back in. `src/llm.py` sets no timeout of its own; the provider SDK's default applies (not verified).
-- **Impact:** a model call that hangs keeps the questionnaire locked, in the Workbench and the chat, until the run ends or the server restarts. `running.started_at` shows how long it has been going.
+- **Impact:** a model call that hangs keeps the questionnaire locked, in the Workbench and the chat, until the run ends or the server restarts. The Workbench's "Being answered on the server" note says when the run started (`running.started_at`), so a run that has stopped moving can be told from a long one; the chat's refusal gives the count only. (The note was added after the review of Stage 1 found that this line claimed it before any page showed it.)
 - **Fix (needs approval):** a timeout on each model call, or a "Stop answering" control that cancels the run and lets the questionnaire go.
 
 ## TD-065: Every read of a Word file written as prose keeps an empty questionnaire

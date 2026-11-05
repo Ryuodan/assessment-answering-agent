@@ -526,6 +526,73 @@ def test_a_timed_out_answer_request_is_followed_not_repeated(page: Page, tmp_pat
     assert len(gated.calls) == 4, "every question answered once"
 
 
+def test_a_followed_run_says_the_questions_typed_beside_the_file_were_not_answered(
+    page: Page, tmp_path: Path, gated
+) -> None:
+    """Plan 029's review: typed questions go out after the file's rows, so a timed-out request never
+    sent them, and the page still said "every question has an answer" when the run ended."""
+    import threading
+
+    import httpx
+
+    def proxy_gives_up(route) -> None:
+        sent = route.request
+        threading.Thread(
+            target=lambda: httpx.post(
+                sent.url, content=sent.post_data_buffer, headers={"content-type": "application/json"}, timeout=60
+            ),
+            daemon=True,
+        ).start()
+        for _ in range(200):
+            if gated.calls:
+                break
+            threading.Event().wait(0.05)
+        route.fulfill(status=504, content_type="text/html", body="<html>504 Gateway Time-out</html>")
+
+    page.route("**/answer", proxy_gives_up)
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    page.click("#addQuestionBtn")
+    page.get_by_role("textbox", name="Type a question").last.press_sequentially("Do you test your backups?")
+    page.click("#answerBtn")
+
+    status = page.locator("#answerStatus")
+    expect(status).to_contain_text("the answering carries on there")
+    gated.open()
+    expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
+    expect(status).to_contain_text(
+        "The 1 question(s) you typed beside the file were not answered: answer them again.", timeout=15_000
+    )
+    expect(status).not_to_contain_text("every question has an answer")
+    expect(page.locator("#answerBtn")).to_have_text("Answer 1 question")
+
+
+def test_a_run_being_followed_says_when_it_started(page: Page, tmp_path: Path, monkeypatch) -> None:
+    """Plan 029's review: TD-064 said a run's start could be seen, and no page showed it."""
+    from datetime import datetime, timezone
+
+    from src import busy
+
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    [opened] = batches.recent(TEAM)
+    started = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    monkeypatch.setitem(busy._HELD, opened["id"], busy._Hold(run_id="elsewhere", started_at=started))
+
+    page.reload()
+
+    note = page.locator("#formReadOnly")
+    expect(note).to_contain_text("Being answered on the server")
+    at = page.evaluate(
+        "(iso) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' })", started
+    )
+    expect(note).to_contain_text("started at " + at)
+
+
 # --- leaving with unsaved work asks first (plan 029, 1.5) ------------------------
 
 

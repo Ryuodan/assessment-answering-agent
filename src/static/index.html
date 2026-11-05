@@ -4225,8 +4225,14 @@
     if (running() && !formBatch.read_only) {
       const run = formBatch.running;
       const counted = run.total ? ": " + run.completed + " of " + run.total + " done" : "";
-      note.textContent = "Being answered on the server" + counted + ". Answers appear here when it finishes; " +
-        "editing opens then.";
+      // When it started, so a run that has stopped moving can be told from a long one (TD-064).
+      const started = run.started_at ? new Date(run.started_at) : null;
+      const since = started && !isNaN(started) ? ", started at " + started.toLocaleString(undefined,
+        started.toDateString() === new Date().toDateString()
+          ? { hour: "2-digit", minute: "2-digit" }
+          : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+      note.textContent = "Being answered on the server" + counted + since + ". Answers appear here when it " +
+        "finishes; editing opens then.";
       return;
     }
     const name = (Cards.product(formBatch.product_id) || {}).name || "Its product";
@@ -4298,10 +4304,19 @@
         stopped = true;
         reviewTab = null;  // after a run, what needs a person first
         await adoptBatch(batchNow, { quiet: true });
+        /* The file's rows from the server, and the questions typed beside
+           them from this page: those go out after the file's rows, so a
+           request that failed never sent them, and the server does not keep
+           them. "Every question has an answer" was said with them still
+           waiting (plan 029's review). */
         const left = (batchNow.counts || {}).still_blank || 0;
+        const typed = pendingQuestions().filter((entry) => !entry.formId).length;
+        const typedLeft = typed ? " The " + typed + " question(s) you typed beside the file were not answered: " +
+          "answer them again." : "";
         setStatus(status, left
-          ? "The run has ended, and " + left + " question(s) still have no answer. Answer them to carry on."
-          : "Finished: every question has an answer.", left ? "warn" : "ok");
+          ? "The run has ended, and " + left + " question(s) still have no answer. Answer them to carry on." + typedLeft
+          : typed ? "The file's questions are answered." + typedLeft
+          : "Finished: every question has an answer.", left || typed ? "warn" : "ok");
         return;
       }
     })();
