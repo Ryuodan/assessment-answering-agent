@@ -371,6 +371,25 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     assert len(batches.recent(TEAM)) == 2
 
 
+def test_the_offer_of_a_file_already_open_takes_the_keyboard_and_says_why(
+    page: Page, tmp_path: Path, answers_yes: None
+) -> None:
+    """Plan 029's review: the box appeared without focus or announcement, so a screen reader that
+    had just pressed "Read questions from file" heard nothing."""
+    read_and_answer(page, tmp_path)
+    page.click("#closeForm")
+    page.focus("#extractBtn")
+    page.keyboard.press("Enter")
+
+    offer = page.locator("#alreadyOpen")
+    expect(offer.get_by_role("button", name="Open it")).to_be_focused()
+    described = offer.get_attribute("aria-describedby")
+    assert described
+    expect(page.locator("#" + described)).to_contain_text("You already have vendor.xlsx, with 4 of 4 answered")
+    page.keyboard.press("Enter")
+    expect(page.locator("#results .answer")).to_have_count(4)
+
+
 def test_a_word_file_written_as_prose_is_read_again_as_text(page: Page, tmp_path: Path, monkeypatch) -> None:
     """Plan 029's review: its first read leaves an empty questionnaire, and the second read offered
     that, "0 of 0 answered", where it used to read the questions again."""

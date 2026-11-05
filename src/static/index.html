@@ -2057,12 +2057,17 @@
 
   function renderReviewBar(counted, tab) {
     const tabs = $("reviewTabs");
+    /* Drawn again with each count, so the keyboard's place goes with it: on
+       the tab chosen. Left alone, it dropped to the page and the next Tab
+       began again at the first tab (plan 029's review). */
+    const hadFocus = tabs.contains(document.activeElement);
     tabs.replaceChildren();
     REVIEW_TABS.forEach(([key, name, about]) => {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = name + " (" + counted[key] + ")";
       button.title = about;
+      button.dataset.tab = key;
       button.setAttribute("aria-pressed", String(key === tab));
       button.onclick = () => {
         reviewTab = key;
@@ -2070,6 +2075,10 @@
       };
       tabs.append(button);
     });
+    if (hadFocus) {
+      const chosen = tabs.querySelector('[data-tab="' + tab + '"]');
+      if (chosen) chosen.focus({ preventScroll: true });
+    }
     $("reviewCounts").textContent = (counted.written + counted.person) + " will be written · " +
       counted.review + " need review";
   }
@@ -2983,6 +2992,7 @@
   function hideAlreadyOpen() {
     $("alreadyOpen").hidden = true;
     $("alreadyOpen").replaceChildren();
+    $("alreadyOpen").removeAttribute("aria-describedby");
   }
 
   function offerAlreadyOpen(file, matches) {
@@ -2994,6 +3004,7 @@
       day(match.updated_at || match.created_at);
     const named = (text) => Object.assign(document.createElement("strong"), { textContent: text });
     const lead = document.createElement("p");
+    lead.id = "alreadyOpenLead";
     if (matches.length === 1) {
       lead.append("You already have ", named(matches[0].source_name), ", with " + progress(matches[0]) +
         ". Open it, or start fresh?");
@@ -3032,6 +3043,12 @@
     choices.append(fresh, cancel);
     panel.append(choices);
     panel.hidden = false;
+    /* The choice is where the keyboard goes, and the sentence is what the
+       group says when it gets there: it appeared silently, and a screen
+       reader heard nothing after "Read questions from file" (plan 029's review). */
+    panel.setAttribute("aria-describedby", lead.id);
+    const first = panel.querySelector("button");
+    if (first) first.focus();
   }
 
   /* `quiet` is for a correction rather than a load: the batch is rebuilt and

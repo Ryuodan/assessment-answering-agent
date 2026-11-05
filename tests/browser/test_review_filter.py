@@ -102,6 +102,20 @@ def test_the_review_opens_on_the_answers_that_need_a_person(page: Page, tmp_path
     expect(tab(page, "All")).to_have_attribute("aria-pressed", "true")
 
 
+def test_choosing_a_tab_from_the_keyboard_keeps_the_keyboards_place(page: Page, tmp_path: Path, mixed: None) -> None:
+    """Plan 029's review: the tabs are drawn again on each choice, and the focus fell to the page,
+    so a screen reader said nothing and the next Tab began again at the first tab."""
+    answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
+    tab(page, "All").focus()
+
+    page.keyboard.press("Enter")
+
+    expect(tab(page, "All")).to_have_attribute("aria-pressed", "true")
+    expect(tab(page, "All")).to_be_focused()
+    page.keyboard.press("Tab")
+    expect(page.locator("#fillFormBtn")).to_be_focused()
+
+
 def test_a_low_score_with_no_flag_counts_as_needing_review(page: Page, tmp_path: Path, mixed: None) -> None:
     """The summary counted the "needs review" chip: an unflagged answer under the threshold was missed."""
     answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)

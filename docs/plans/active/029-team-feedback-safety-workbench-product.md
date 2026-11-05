@@ -129,6 +129,7 @@ All stages:
   - Major, 1.3: editing a held answer left it in Needs review, still "Not going into the file yet", and the bar's counts disagreed with what Fill writes (an edit is a person's, and goes in). A saved edit now draws the answers again from what the server holds, so the card moves and the counts follow. An edit is saved when its editor is left, by the press of the next click, so the redraw waits for that click to land; when that click opened another card's editor, the counts follow at once and the card at the next draw, so the editor being typed in stays open. After a redraw by an edit, an approval or a blank, the keyboard goes back to the same control, or to the answer now in that place. 3 browser tests, all failing on the old page; the second also fails on a fix that always redraws.
   - Major, 1.3: a question asked through "Ask another question" on an open questionnaire disappeared. Every run put the review back on Needs review, overriding the person's All, and a typed question's confident answer is in no tab but All. Only a run of the file's own rows goes back to Needs review now; a run of typed questions alone keeps the person's tab, or shows All when the tab would hide one of its answers. After a run of both, the status says the typed ones are under All. 2 browser tests, both failing on the old page.
   - Minor, 1.4: Fill could be clicked during the rewording pass that follows a run when the style box has text: drawing the answers set it to "not running", over the lock. Fill's state is now worked out from the page's state each time (answering, the server's run, a fill on its way) rather than remembered and put back. 1 browser test, failing on the old page.
+  - Minor, 1.3 and 1.2, the keyboard and screen readers: choosing a tab dropped the focus to the page, because the tabs are drawn again; it now stays on the tab chosen. The "You already have" box appeared silently; the keyboard now goes to its first "Open it", and the box is described by its sentence. 2 browser tests, both failing on the old page.
 
 ## Decision log
 
@@ -256,7 +257,7 @@ Use a local copy, not the team's data.
 ### 1.2 The same file again offers the questionnaire you already have
 
 1. Upload a questionnaire, answer some rows, then click "Close questionnaire".
-2. Upload the same file again and click "Read questions from file". A box says you already have it, with how many are answered and when it last changed.
+2. Upload the same file again and click "Read questions from file". A box says you already have it, with how many are answered and when it last changed. "Open it" is highlighted, so Enter opens it; with a screen reader on, the box's sentence is read out.
 3. Click "Open it". Your answers are there, and no second copy appears under "Or pick up".
 4. Upload it again and click "Start fresh (for …)". A new, empty copy opens for the product chosen, and "Or pick up" now lists two.
 5. Rename the file on your computer and upload it: it is still recognised. With two copies, the box lists both, each with its own "Open it".
@@ -280,7 +281,7 @@ Use a local copy, not the team's data.
 2. The review section opens on "Needs review", with a count on each tab. Only the answers that need you are shown: flagged ones, ones with a low confidence even when not flagged, and ones that failed.
 3. Approve one. It leaves the list, the counts change, and the bar says what happened ("Approved…").
 4. Edit one: click Edit, change a word, click "Done editing". It leaves the list too ("Done by a person" goes up by one, and so does "will be written" in the bar), and the bar says "Your edit is saved". Edit another, and before clicking "Done editing" click Edit on a third: the third opens and stays open while you type, the counts change at once, and the second leaves the list when you finish the third.
-5. With the keyboard: press Tab until an answer's Approve is highlighted, then press Enter. The answer leaves the list, and the next Tab goes on from the answer that took its place.
+5. With the keyboard: press Tab until an answer's Approve is highlighted, then press Enter. The answer leaves the list, and the next Tab goes on from the answer that took its place. Press Tab until the "All" tab is highlighted and press Enter: "All" stays highlighted (a screen reader says it is pressed), and the next Tab goes to "Fill the original file".
 6. Scroll anywhere among the answers. The bar with the tabs, the counts and "Fill the original file" stays at the top, under the page header.
 7. Click Fill, from far down the list. The page goes up to the result, which sits right under the bar, nothing of it covered. Only there, if answers were held back, do you see the count, "Show them" and "Write them in anyway".
 8. The long question list above the answers is folded into one line ("Show the 59 questions…"). Click it to see the questions; "+ Add a question" opens it too.
