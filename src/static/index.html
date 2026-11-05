@@ -2957,7 +2957,10 @@
     // Being answered on the server, by a run this page is not itself waiting
     // for: one started before a reload, in another tab, or by the chat.
     if (batch.running && !answering) followRun(batch, "", false);  // drawn below, locked
-    else if (!batch.running) stopFollowing();
+    else if (!batch.running) {
+      if (following && following.id === batch.id) setStatus($("answerStatus"), "The run has ended.", "ok");
+      stopFollowing();
+    }
     sourceName = batch.source_name || sourceName;
     paintReadOnly();
     showFormProduct(batch.product_id || "");
@@ -4155,7 +4158,7 @@
         await adoptBatch(batchNow, { quiet: true });
         const left = (batchNow.counts || {}).still_blank || 0;
         setStatus(status, left
-          ? "Answering stopped with " + left + " question(s) unanswered. Answer them to carry on."
+          ? "The run has ended, and " + left + " question(s) still have no answer. Answer them to carry on."
           : "Finished: every question has an answer.", left ? "warn" : "ok");
         return;
       }
