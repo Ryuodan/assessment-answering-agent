@@ -134,6 +134,36 @@ def test_questionnaires_are_listed(client, tmp_path):
     assert [form["source_name"] for form in listed] == ["two.xlsx", "one.xlsx"]
 
 
+@pytest.fixture
+def clock(monkeypatch):
+    """`store.utcnow` one second later on every call, so the order of writes is the order of times."""
+    from datetime import datetime, timedelta, timezone
+    from itertools import count
+
+    start = datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc)
+    ticks = count()
+    monkeypatch.setattr(
+        "src.batches.store.utcnow",
+        lambda: (start + timedelta(seconds=next(ticks))).isoformat(timespec="seconds"),
+    )
+
+
+def test_questionnaires_are_listed_by_last_change(client, tmp_path, clock):
+    """Plan 029, 1.1: the one somebody worked on last is the one they look for,
+    whenever it was uploaded. Listed by upload, it fell off "Or pick up"."""
+    one = _upload(client, shapes.simple(tmp_path / "one.xlsx")).json()
+    _upload(client, shapes.simple(tmp_path / "two.xlsx"))
+    client.post(
+        f"/api/forms/{one['id']}/answers",
+        json={"question_id": one["questions"][0]["id"], "text": "We use AES-256 throughout."},
+    )
+
+    listed = client.get("/api/forms").json()["forms"]
+
+    assert [form["source_name"] for form in listed] == ["one.xlsx", "two.xlsx"]
+    assert listed[0]["updated_at"] > listed[1]["updated_at"]
+
+
 def test_an_unknown_questionnaire_is_a_404(client):
     assert client.get("/api/forms/nope").status_code == 404
 

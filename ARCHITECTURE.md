@@ -106,6 +106,12 @@ service. Each failure prints a FIX line (`src/diagnostics.py`, plan 010).
 preferences pages, and the shared answer card (`cards.js`, `cards.css`). They
 talk to `src/api.py` over HTTP only.
 
+The Workbench keeps the open questionnaire in its own address, `?q=<id>`
+(plan 029), with `history.replaceState` on an address derived from the page's,
+so it stays under the deployment's prefix. A reload or a copied link opens it
+again, for its owner only. "Or pick up" lists every questionnaire of the
+person, last changed first (`form_batches.updated_at`).
+
 `tests/browser/` drives them in headless Chromium (Playwright, plan 011): the
 app runs in a thread of the test process, so the suite's fixtures (temporary
 storage, faked model calls) apply to it, and a page that raises a JavaScript

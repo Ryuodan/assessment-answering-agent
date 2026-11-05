@@ -59,7 +59,7 @@ Stage 0, safety fixes:
 
 Stage 1, Workbench relief:
 
-- [ ] **1.1** Reloading the page reopens the open questionnaire. "Or pick up" lists every questionnaire of the person, most recently used first.
+- [x] **1.1** Reloading the page reopens the open questionnaire. "Or pick up" lists every questionnaire of the person, most recently used first.
 - [ ] **1.2** Uploading a file the person already has as a questionnaire offers to open it, or to start fresh.
 - [ ] **1.3** A "Needs review" filter with counts shows first the answers the gate holds back, plus failed ones. A fixed bar keeps Fill and the counts in reach.
 - [ ] **1.4** Each answer is saved as it finishes. A second run on a questionnaire that is still being answered is refused. Reopening it shows the progress.
@@ -112,6 +112,8 @@ All stages:
   - 15 tests added, each failing on the old code: 10 unit and API (4 in `test_tools.py`, 1 in `test_api_forms.py`, 5 in `test_fill_audit.py`), 5 browser (1 in `test_workbench.py`, 1 in `test_knowledge_scope.py`, 3 in `test_chat_history.py`). Changed on purpose: the "Write them in anyway" browser test now expects the ids in the request; the empty-brief test also checks the live region.
   - `uv run poe check`, first run: every task passed except `test`, which had 1 failure, in an answer-memory test this round does not touch. That test passes only when two answers are recorded in the same second (TD-061, recorded and not fixed: it needs approval). Second run: every task passed (fmt, lint, types with 243 in the baseline, arch, docs, rules 94, test 2,169 passed and 2 skipped, browser 58).
   - Stage 0 waits for the user's test.
+- 2026-11-05, Stage 1 build (in the order the design gives: 1.1, 1.5, 1.2, 1.4, 1.3):
+  - 1.1: the Workbench writes the open questionnaire into its address (`?q=<id>`) and opens it again at start-up; Close and reading a PDF take it out. Someone else's, or one that is gone, opens nothing and says so. `GET /api/forms` lists last changed first (`updated_at`, which every write moves; no migration), and "Or pick up" lists every questionnaire, up to 500, in a scrolling box when there are more than three, each with when it last changed. 6 tests: 1 API and 4 browser, each failing on the old code, and 1 static guard that the address stays inside the prefix. The existing pick-up, close and deleted-product tests pass unchanged.
 
 ## Decision log
 
@@ -218,3 +220,13 @@ Use a local copy, not the team's data.
 5. Back to Brief, fill the file and download it: the cell has your short answer.
 6. Edit a Brief card, delete all its text and click "Done editing". It is refused with a note pointing to "Leave blank", and the short answer comes back. With a screen reader on (Narrator: Ctrl+Win+Enter), the note is read out when it appears.
 7. In the chat's answers panel, set Brief and repeat steps 2 and 3.
+
+### 1.1 A reload opens the questionnaire again
+
+1. Open the Workbench, choose a product, upload a questionnaire and answer a few rows.
+2. Press F5. The same questionnaire opens again, with its answers and its product. The address ends in `?q=` and a code.
+3. Copy the address into a new tab. It opens there too.
+4. Click "Close questionnaire". The `?q=` part disappears. Press F5: nothing is open.
+5. Under "Or pick up", every questionnaire you have is listed, each with when it last changed. With more than three they are in a box that scrolls. Open an old one, change one answer and close it: it is now at the top.
+6. On the server, repeat steps 2 to 4 under /assessment/.
+7. Send the address to a colleague. It opens nothing for them, and says the questionnaire is not one of theirs.

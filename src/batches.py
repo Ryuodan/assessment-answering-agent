@@ -164,7 +164,12 @@ def claimed_sources(team_id: str) -> dict[str, str]:
 
 
 def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> list[dict]:
-    """One person's questionnaires, newest first, with how far each has got.
+    """One person's questionnaires, last changed first, with how far each has got.
+
+    Last changed is `updated_at`, which every write to a questionnaire or its
+    answers moves (plan 029, 1.1): the one somebody was working on is the one
+    they look for, whenever it was uploaded. Opening, filling and downloading
+    change nothing, so they do not move it.
 
     `actor_email=None` lists the team's, which nothing a person clicks asks for.
     """
@@ -180,9 +185,9 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
     if actor_email is not None:
         sql += " AND b.actor_email = ?"
         params.append(actor_email)
-    # rowid breaks the tie: `created_at` is accurate to the second, and two
+    # rowid breaks the tie: `updated_at` is accurate to the second, and two
     # files uploaded together came back in an arbitrary order without it.
-    sql += " GROUP BY b.batch_id ORDER BY b.created_at DESC, b.rowid DESC LIMIT ?"
+    sql += " GROUP BY b.batch_id ORDER BY b.updated_at DESC, b.rowid DESC LIMIT ?"
     params.append(max(1, limit))
     rows = conn.execute(sql, params).fetchall()
     return [

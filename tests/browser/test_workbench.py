@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, expect
 
-from src import access_codes, identity
+from src import access_codes, batches, identity, products, tools
 from src.config import settings
 from src.models import AnsweredQuestion
 from tests import forms_fixtures as shapes
+from tests.conftest import FakeVectorStore, bare_store
 
 pytestmark = pytest.mark.browser
 
@@ -18,6 +20,7 @@ ALICE = "alice@example.test"
 ADMIN = "admin@example.test"
 CODE = "BROWSER-TEST-CODE"
 ANSWER = "Yes, an approved policy is in place and reviewed annually."
+TEAM = settings.default_team
 
 
 @pytest.fixture
@@ -225,3 +228,102 @@ def test_a_file_name_is_shown_as_text_never_as_markup(page: Page) -> None:
     expect(status).to_contain_text("<img")
     assert status.locator("img").count() == 0
     assert page.evaluate("window.__pwned") is None
+
+
+# --- a reload opens what was open; "Or pick up" lists every one (plan 029, 1.1) -----
+
+
+@pytest.fixture
+def availo(monkeypatch: pytest.MonkeyPatch) -> products.Product:
+    made: dict[tuple[str, str], object] = {}
+
+    def get_store(team_id=None, *, product_id=""):
+        return made.setdefault((team_id or TEAM, product_id), bare_store(FakeVectorStore([])))
+
+    monkeypatch.setattr("src.knowledge.get_store", get_store)
+    identity.ensure_team(TEAM)
+    return products.add(None, TEAM, "Availo", color="#16a34a")
+
+
+def test_a_reload_opens_the_questionnaire_that_was_open(
+    page: Page, tmp_path: Path, answers_yes: None, availo: products.Product
+) -> None:
+    """After a reload the Workbench was empty, and on General."""
+    page.goto("/workbench")
+    page.select_option("#formProduct", availo.id)
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
+    [opened] = batches.recent(TEAM)
+    expect(page).to_have_url(re.compile(r"/workbench\?q=" + opened["id"] + "$"))
+
+    page.reload()
+
+    expect(page.locator("#results .answer")).to_have_count(4)
+    expect(page.locator("#closeForm")).to_be_visible()
+    expect(page.locator("#formProduct")).to_have_value(availo.id)
+    expect(page.locator("#formProduct")).to_be_disabled()
+    expect(page.locator("#extractStatus")).to_contain_text("Reopened vendor.xlsx")
+
+
+def test_close_takes_the_questionnaire_out_of_the_address(page: Page, tmp_path: Path) -> None:
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    questions = page.get_by_role("textbox", name="Type a question")
+    expect(questions).to_have_count(4)
+    expect(page).to_have_url(re.compile(r"\?q=\w+$"))
+
+    page.click("#closeForm")
+    expect(page).to_have_url(re.compile(r"/workbench$"))
+    page.reload()
+
+    expect(page.locator("#formRecent button", has_text="vendor.xlsx")).to_be_visible()
+    expect(questions).to_have_count(0)
+    expect(page.locator("#closeForm")).to_be_hidden()
+
+
+def test_an_address_naming_someone_elses_questionnaire_opens_nothing(page: Page, tmp_path: Path) -> None:
+    """A questionnaire is its uploader's: a link to Bob's opens nothing for anybody else, and says so."""
+    from src.forms.reading import read
+
+    path = shapes.simple(tmp_path / "bobs.xlsx")
+    theirs = batches.create(identity.User(email="bob@example.test", team_id=TEAM), path, read(path, "rules").form)
+
+    page.goto(f"/workbench?q={theirs.id}")
+
+    expect(page.locator("#extractStatus")).to_contain_text(
+        "The questionnaire in this address could not be opened: it is not one of yours"
+    )
+    expect(page).to_have_url(re.compile(r"/workbench$"))
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(0)
+    expect(page.locator("#closeForm")).to_be_hidden()
+
+
+def test_pick_up_lists_every_questionnaire_last_changed_first(
+    page: Page, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three were offered, by upload: the one worked on yesterday was not among them."""
+    from datetime import datetime, timedelta, timezone
+    from itertools import count
+
+    user = identity.local_user()
+    start, ticks = datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc), count()
+    with monkeypatch.context() as clocked:
+        clocked.setattr(
+            "src.batches.store.utcnow", lambda: (start + timedelta(minutes=next(ticks))).isoformat(timespec="seconds")
+        )
+        opened = {name: tools.open_form(user, shapes.simple(tmp_path / f"{name}.xlsx")) for name in "abcde"}
+        for name in ("b", "d"):  # worked on later, in this order
+            batch = opened[name]
+            tools.set_answer(user, batch.id, batch.form.questions[0].id, "We do.")
+
+    page.goto("/workbench")
+
+    offered = page.locator("#formRecent button")
+    expect(offered).to_have_count(5)
+    expect(offered).to_contain_text(["d.xlsx", "b.xlsx", "e.xlsx", "c.xlsx", "a.xlsx"])
+    expect(page.locator("#formRecent .recent-list")).to_be_visible()
+    expect(offered.first).to_contain_text("(1 answered)")
+    expect(offered.first).to_have_attribute("title", re.compile("^Last changed "))

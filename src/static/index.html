@@ -367,6 +367,16 @@
   .qn-recent { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
                font-size: 12.5px; color: var(--ink-faint); margin-top: 10px; }
   .qn-recent[hidden] { display: none; }
+  /* "Or pick up": every questionnaire of this person, last changed first (plan 029, 1.1).
+     Three or fewer sit on one line, as they always did; more scroll in a box. */
+  .form-recent { margin-top: 10px; }
+  .form-recent .recent-when { margin-inline-start: 6px; font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+  .form-recent .recent-list {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    max-height: 12em; overflow-y: auto; margin-top: 4px; padding: 4px 6px;
+    border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-sunken);
+  }
+  .form-recent .recent-list button { text-align: start; }
   .qn-summary {
     display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
     padding: 12px 0 4px; font-size: 13.5px;
@@ -690,8 +700,8 @@
       </label>
       <div class="row">
         <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
-        <span class="adm-note" id="formRecent"></span>
       </div>
+      <div class="adm-note form-recent" id="formRecent"></div>
       <div class="status" id="extractStatus"></div>
 
       <details id="formReport" hidden>
@@ -2545,11 +2555,15 @@
      through 183 questions should not have to start again. Uploading the same
      file a second time would make a second batch and orphan the first. */
   let lastClosed = null;  // the questionnaire Close put away, as the list shows one
+  const RECENT_LIMIT = 500;
+  /* Every questionnaire of this person, last changed first (plan 029, 1.1):
+     three were shown, by when they were uploaded, so the one somebody worked
+     on yesterday was not there to pick up. Each appears exactly once. */
   async function listRecentForms() {
     const line = $("formRecent");
     let forms = [];
     try {
-      forms = (await request("/api/forms")).forms || [];
+      forms = (await request("/api/forms?limit=" + RECENT_LIMIT)).forms || [];
     } catch (error) {
       line.replaceChildren();
       return;
@@ -2559,22 +2573,81 @@
     const others = forms.filter((form) => !formBatch || form.id !== formBatch.id);
     const closed = lastClosed && !(formBatch && formBatch.id === lastClosed.id)
       ? [others.find((form) => form.id === lastClosed.id) || lastClosed] : [];
-    const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id)).slice(0, 3);
+    const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id));
     line.replaceChildren();
     if (!open.length) return;
-    line.append(document.createTextNode("Or pick up: "));
-    open.forEach((form, index) => {
-      if (index) line.append(document.createTextNode(" · "));
+    const buttons = open.map((form) => {
       const link = document.createElement("button");
       link.className = "quiet";
       link.textContent = form.source_name +
         (form.answered ? " (" + form.answered + " answered)" : "");
       const product = Cards.productBadge(form.product_id);
       if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
-      link.title = "Loaded " + new Date(form.created_at).toLocaleString();
+      const changed = form.updated_at || form.created_at;
+      if (changed) {
+        const when = document.createElement("span");
+        when.className = "recent-when";
+        when.textContent = "changed " + new Date(changed).toLocaleString(undefined,
+          { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        link.append(when);
+        link.title = "Last changed " + new Date(changed).toLocaleString();
+      }
       link.onclick = () => reopenForm(form.id);
-      line.append(link);
+      return link;
     });
+    if (buttons.length <= 3) {
+      line.append(document.createTextNode("Or pick up: "));
+      buttons.forEach((link, index) => {
+        if (index) line.append(document.createTextNode(" · "));
+        line.append(link);
+      });
+      return;
+    }
+    line.append(document.createTextNode("Or pick up one of your " + buttons.length +
+      " questionnaires, last changed first:"));
+    const box = document.createElement("div");
+    box.className = "recent-list";
+    box.append(...buttons);
+    line.append(box);
+    if (forms.length >= RECENT_LIMIT) {
+      line.append(document.createTextNode("Showing the " + RECENT_LIMIT + " most recently changed."));
+    }
+  }
+
+  /* The open questionnaire is in the address, `?q=<id>`, so a reload or a
+     copied link opens it again (plan 029, 1.1). Derived from the page's own
+     address, so it stays under whatever prefix the deployment serves it at. */
+  function rememberInAddress(id) {
+    try {
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set("q", id); else url.searchParams.delete("q");
+      if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url.href);
+    } catch (error) { /* an address that cannot be changed: the page works as it did */ }
+  }
+
+  /* At start-up: the questionnaire the address names, if it is this person's.
+     Not theirs, or gone: said, and the address forgets it. Any other failure
+     -- not signed in yet, a dropped line -- keeps it, because signing in
+     reloads the page and that reload must still open it. */
+  async function openFromAddress() {
+    let id = "";
+    try { id = new URL(window.location.href).searchParams.get("q") || ""; } catch (error) { return; }
+    if (!id) return;
+    if (!/^[A-Za-z0-9]{1,64}$/.test(id)) { rememberInAddress(""); return; }
+    try {
+      const batch = await request("/api/forms/" + encodeURIComponent(id));
+      if (formBatch) return;  // something else was opened while this was on its way
+      await adoptBatch(batch, { quiet: true });
+      setStatus($("extractStatus"), "Reopened " + batch.source_name + ", as it was left.", "ok");
+    } catch (error) {
+      if (error.code === "questionnaire_not_found") {
+        rememberInAddress("");
+        setStatus($("extractStatus"), "The questionnaire in this address could not be opened: " +
+          "it is not one of yours, or it is no longer there.", "error");
+      } else if (error.status !== 401) {
+        setStatus($("extractStatus"), error.message, "error");
+      }
+    }
   }
 
   async function reopenForm(id) {
@@ -2629,6 +2702,7 @@
     }
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
+    rememberInAddress(batch.id);
     sourceName = batch.source_name || sourceName;
     paintReadOnly();
     showFormProduct(batch.product_id || "");
@@ -2746,6 +2820,7 @@
       forgetFilling();
     }
     formBatch = null;
+    rememberInAddress("");
     paintReadOnly();
     $("formReport").hidden = true;
     refreshFormControls();
@@ -3761,9 +3836,10 @@
     const closed = formBatch;
     lastClosed = {
       id: closed.id, source_name: closed.source_name, product_id: closed.product_id,
-      created_at: closed.created_at, answered: (closed.counts || {}).answered || 0,
+      created_at: closed.created_at, updated_at: closed.updated_at, answered: (closed.counts || {}).answered || 0,
     };
     formBatch = null;
+    rememberInAddress("");
     questions = [];
     result = null;
     Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
@@ -3837,6 +3913,7 @@
   loadDocuments();
   listRecentForms();
   renderQuestions();
+  openFromAddress();
 })();
 </script>
 
