@@ -470,6 +470,8 @@ const Cards = (window.Cards = {
     return { key: "low", word: "Low confidence" };
   }
 
+  let refusedNotes = 0;  // each editor's refusal note has an id of its own, for aria-describedby
+
   function answerField(item, index) {
     const field = labelledField("Answer", "");
     const rendered = document.createElement("div");
@@ -663,10 +665,17 @@ const Cards = (window.Cards = {
     /* The editor holds the text the card shows: the brief on a brief card, and
        says which back to the page, so an edit lands where it was made. */
     let shown = Cards.shownAnswer(item, index);
+    /* Said to a screen reader too (plan 029's review): the text going back is
+       otherwise silent. A live region in place before it speaks, empty and
+       drawn at no height until then, and the editor's description. */
     const refused = document.createElement("p");
     refused.className = "held edit-refused";
-    refused.hidden = true;
-    refused.textContent = "A brief answer cannot be empty. To write nothing here, use Leave blank.";
+    refused.id = "edit-refused-" + (++refusedNotes);
+    refused.setAttribute("role", "status");
+    editor.setAttribute("aria-describedby", refused.id);
+    const sayRefused = (yes) => {
+      refused.textContent = yes ? "A brief answer cannot be empty. To write nothing here, use Leave blank." : "";
+    };
 
     let editing = false;
     const setMode = (next) => {
@@ -675,7 +684,7 @@ const Cards = (window.Cards = {
         shown = Cards.shownAnswer(item, index);
         editor.value = shown.text;
         editor.dir = isArabic(shown.text) ? "rtl" : "ltr";
-        refused.hidden = true;
+        sayRefused(false);
       }
       rendered.hidden = editing;
       editor.hidden = !editing;
@@ -699,10 +708,10 @@ const Cards = (window.Cards = {
       if (shown.which === "brief" && !editor.value.trim()) {
         editor.value = shown.text;
         Cards.onEdit(item, index, shown.text, shown.which);
-        refused.hidden = false;
+        sayRefused(true);
         return;
       }
-      refused.hidden = true;
+      sayRefused(false);
       Cards.onEditDone(item, index, editor.value, shown.which);
     });
     toggle.onclick = () => setMode(!editing);

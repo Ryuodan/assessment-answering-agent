@@ -208,5 +208,5 @@ Use a local copy, not the team's data.
 3. Change a word and click "Done editing". The card shows your short answer, and the status says your edit is saved.
 4. Set "Answers" to Full: the long answer is as it was.
 5. Back to Brief, fill the file and download it: the cell has your short answer.
-6. Edit a Brief card, delete all its text and click "Done editing". It is refused with a note pointing to "Leave blank", and the short answer comes back.
+6. Edit a Brief card, delete all its text and click "Done editing". It is refused with a note pointing to "Leave blank", and the short answer comes back. With a screen reader on (Narrator: Ctrl+Win+Enter), the note is read out when it appears.
 7. In the chat's answers panel, set Brief and repeat steps 2 and 3.

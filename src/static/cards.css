@@ -216,6 +216,8 @@
 .held.aside { background: var(--surface-sunken); border-color: var(--line-strong); }
 .held.aside button { margin-inline-start: 6px; }
 .held.edit-refused { margin-bottom: 0; }
+/* Empty until a refusal, and still there: a live region has to exist before it speaks. */
+.held.edit-refused:empty { margin: 0; padding: 0; border: 0; }
 .quiet.approve { color: var(--ok); font-weight: 600; }
 .quiet.approve:hover { background: var(--ok-soft); }
 

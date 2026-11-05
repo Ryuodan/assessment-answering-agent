@@ -226,11 +226,21 @@ def test_emptying_a_brief_is_refused_on_the_card(page: Page, tmp_path: Path, mon
     page.on("request", lambda request: sent.append(request.url) if request.url.endswith("/answers") else None)
 
     card.get_by_role("button", name="Edit", exact=True).click()
+    # Plan 029's review: said to a screen reader too. A live region, there
+    # before it speaks, and the editor's description.
+    note = card.locator(".edit-refused")
+    expect(note).to_have_attribute("role", "status")
+    expect(note).to_have_text("")
+    note_id = note.get_attribute("id")
+    assert note_id and card.locator("textarea").get_attribute("aria-describedby") == note_id
     card.locator("textarea").fill("")
     card.get_by_role("button", name="Done editing").click()
 
     expect(card.locator(".rendered")).to_have_text(BRIEF)
     expect(card).to_contain_text("A brief answer cannot be empty. To write nothing here, use Leave blank.")
+    expect(card.get_by_role("status")).to_have_text(
+        "A brief answer cannot be empty. To write nothing here, use Leave blank."
+    )
     assert sent == []
     batch_id, question_id = the_first_question()
     assert batches.answers(batch_id)[question_id].brief == BRIEF
