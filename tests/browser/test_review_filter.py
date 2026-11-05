@@ -126,6 +126,67 @@ def test_approving_moves_an_answer_out_of_needs_review(page: Page, tmp_path: Pat
     expect(page.locator("#results .answer")).to_have_text([re.compile("Partly.")])
 
 
+def test_editing_moves_an_answer_out_of_needs_review(page: Page, tmp_path: Path, mixed: None) -> None:
+    """Plan 029's review: an edit is a person's and goes in, but the card stayed in Needs review,
+    still "Not going into the file yet", and the bar's counts disagreed with what Fill writes."""
+    answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
+    expect(page.locator("#reviewCounts")).to_have_text("1 will be written · 3 need review")
+    flagged = page.locator("#results .answer", has_text="Partly.")
+
+    flagged.get_by_role("button", name="Edit", exact=True).click()
+    flagged.locator("textarea").fill("Partly: at the two main sites.")
+    flagged.get_by_role("button", name="Done editing").click()
+
+    expect(page.locator("#reviewStatus")).to_contain_text("Your edit is saved")
+    expect(tab(page, "Needs review")).to_have_text("Needs review (2)")
+    expect(tab(page, "Needs review")).to_have_attribute("aria-pressed", "true")
+    expect(tab(page, "Done by a person")).to_have_text("Done by a person (1)")
+    expect(page.locator("#reviewCounts")).to_have_text("2 will be written · 2 need review")
+    expect(page.locator("#results .answer", has_text="Partly")).to_have_count(0)
+    tab(page, "Done by a person").click()
+    edited = page.locator("#results .answer")
+    expect(edited).to_have_text([re.compile("Partly: at the two main sites.")])
+    expect(edited).not_to_contain_text("Not going into the file yet")
+
+
+def test_an_edit_saved_while_another_card_is_edited_leaves_that_editor_open(
+    page: Page, tmp_path: Path, mixed: None
+) -> None:
+    """An edit is saved when its editor is left, by the click that opens the next one: redrawn
+    then, the cards would close the editor the person had just opened."""
+    answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
+    first = page.locator("#results .answer", has_text="Partly.")
+    second = page.locator("#results .answer", has_text="Probably.")
+    first.get_by_role("button", name="Edit", exact=True).click()
+    first.locator("textarea").fill("Partly: at the two main sites.")
+
+    second.get_by_role("button", name="Edit", exact=True).click()  # leaving the first saves it
+    second.locator("textarea").press_sequentially(" Not yet.")
+
+    expect(page.locator("#reviewStatus")).to_contain_text("Your edit is saved")
+    expect(second.locator("textarea")).to_be_visible()
+    expect(second.locator("textarea")).to_be_focused()
+    expect(second.locator("textarea")).to_have_value("Probably. Not yet.")
+    expect(tab(page, "Needs review")).to_have_text("Needs review (2)")
+    expect(tab(page, "Done by a person")).to_have_text("Done by a person (1)")
+
+    second.get_by_role("button", name="Done editing").click()  # nobody typing now: both cards move
+    expect(tab(page, "Done by a person")).to_have_text("Done by a person (2)")
+    expect(page.locator("#results .answer")).to_have_count(1)  # the failed one is left
+
+
+def test_approving_from_the_keyboard_goes_on_to_the_next_answer(page: Page, tmp_path: Path, mixed: None) -> None:
+    """Drawn again, the cards dropped the keyboard's place: the next Tab started from the top of the page."""
+    answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
+    approve = page.locator("#results .answer", has_text="Partly.").get_by_role("button", name="Approve", exact=True)
+    approve.focus()
+    page.keyboard.press("Enter")
+
+    expect(tab(page, "Needs review")).to_have_text("Needs review (2)")
+    expect(page.locator("#results .answer").first).to_be_focused()
+    expect(page.locator("#results .answer").first).to_contain_text("Probably.")
+
+
 def test_set_aside_and_blank_answers_have_their_own_tab(page: Page, tmp_path: Path, mixed: None) -> None:
     answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
     page.locator("#results .answer", has_text="Probably.").get_by_role("button", name="Leave blank").click()

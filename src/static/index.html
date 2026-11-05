@@ -2074,21 +2074,20 @@
       counted.review + " need review";
   }
 
-  function renderResult(data, options = {}) {
-    result = data;
-
-    /* The tabs are a questionnaire's: a list of typed questions has no file
-       to hold anything back from, and shows every answer as it always did.
-       The first draw of a questionnaire, and the first after a run, opens on
-       what needs a person; every other keeps the tab the person chose. */
+  /* Each answer's tab, and how many each tab holds. The tabs are a
+     questionnaire's: a list of typed questions has no file to hold anything
+     back from, and shows every answer as it always did. */
+  function reviewCounts(data) {
     const queue = Boolean(formBatch);
     const buckets = data.answers.map(reviewBucket);
     const setAside = queue ? questions.filter((entry) => entry.formId && entry.skip) : [];
     const counted = { review: 0, written: 0, person: 0, blank: setAside.length, all: data.answers.length };
     buckets.forEach((bucket) => { if (bucket) counted[bucket] += 1; });
-    if (queue && !reviewTab) reviewTab = counted.review ? "review" : "all";
-    const tab = queue ? reviewTab : "all";
+    return { queue, buckets, setAside, counted };
+  }
 
+  /* The summary above the answers, and the bar's tabs and counts. */
+  function paintCounts(data, counted, queue, tab) {
     const reviewCount = queue ? counted.review : data.answers.filter((a) => a.needs_review).length;
     const summary = $("resultsSummary");
     summary.innerHTML = "";
@@ -2098,12 +2097,28 @@
       Cards.stat(reviewCount, "need review", reviewCount ? "review" : ""),
       Cards.stat(data.language === "ar" ? "العربية" : "English", "output language")
     );
+    $("reviewBar").hidden = !queue;
+    if (queue) renderReviewBar(counted, tab);
+  }
 
-    // Each card keeps its index in `result.answers`: the card's hooks find it there.
+  function renderResult(data, options = {}) {
+    result = data;
+
+    // The first draw of a questionnaire, and the first after a run of its
+    // rows, opens on what needs a person; every other keeps the person's tab.
+    const { queue, buckets, setAside, counted } = reviewCounts(data);
+    if (queue && !reviewTab) reviewTab = counted.review ? "review" : "all";
+    const tab = queue ? reviewTab : "all";
+
+    // Each card keeps its index in `result.answers`: the card's hooks find it
+    // there. Its key says which answer it is when the list is drawn again.
     const container = $("results");
     container.innerHTML = "";
     data.answers.forEach((item, index) => {
-      if (tab === "all" || buckets[index] === tab) container.append(Cards.render(item, index));
+      if (tab !== "all" && buckets[index] !== tab) return;
+      const card = Cards.render(item, index);
+      card.dataset.key = item.__key || "";
+      container.append(card);
     });
     // A row set aside has no card; its own row, with "Include", is how it comes back.
     if (tab === "blank") setAside.forEach((entry) => container.append(questionRow(entry, questions.indexOf(entry))));
@@ -2116,8 +2131,7 @@
         : "No answers here. " + counted.review + " need review, " + going + " will be written.";
       container.append(empty);
     }
-    $("reviewBar").hidden = !queue;
-    if (queue) renderReviewBar(counted, tab);
+    paintCounts(data, counted, queue, tab);
     refreshRetryAll();
     $("resultsCard").hidden = false;
     // The caller scrolls when it is appending to a list the reader is already
@@ -2446,6 +2460,63 @@
     if (held) held[which] = text;
   }
 
+  /* A press of the mouse, or a touch, still in progress. Drawing the cards
+     again between the press and the release moves the button pressed out
+     from under it, and the click is lost; the release resets this after its
+     click has run. */
+  let pressing = false;
+  document.addEventListener("pointerdown", () => { pressing = true; }, true);
+  ["pointerup", "pointercancel"].forEach((kind) => document.addEventListener(kind, () => {
+    setTimeout(() => { pressing = false; }, 0);
+  }, true));
+  async function afterThePress() {
+    for (let waited = 0; pressing && waited < 3000; waited += 25) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+
+  const typingInACard = () => {
+    const at = document.activeElement;
+    return Boolean(at && at.tagName === "TEXTAREA" && at.closest("#results .answer"));
+  };
+
+  /* Drawing the cards again drops the keyboard's place with the control it
+     was on. It goes back to the same control of the same answer when that is
+     still shown, to the answer itself otherwise, and, when the answer has
+     left the tab, to the one now in its place: the next in the queue. */
+  async function keepingPlace(redraw) {
+    const list = $("results");
+    const at = document.activeElement;
+    const card = at && list.contains(at) ? at.closest("#results > *") : null;
+    if (!card) return redraw();
+    const position = [...list.children].indexOf(card);
+    const key = card.dataset.key;
+    await redraw();
+    if (list.contains(document.activeElement)) return;
+    const shown = [...list.children];
+    const same = key ? shown.find((node) => node.dataset.key === key) : null;
+    const label = at.tagName === "BUTTON" ? at.textContent : "";
+    const control = same && label
+      ? [...same.querySelectorAll("button")].find((button) => button.textContent === label && !button.hidden) : null;
+    const target = control || same || shown[Math.min(position, shown.length - 1)];
+    if (!target) return;
+    if (!control) target.tabIndex = -1;
+    target.focus({ preventScroll: true });
+  }
+
+  /* One answer as the server now has it, and the counts with it; the cards
+     are left as drawn until the next draw. */
+  function recountWith(batch, index) {
+    formBatch = batch;
+    const item = result && result.answers[index];
+    const entry = item && questions.find((q) => q.key === item.__key);
+    const question = entry && (batch.questions || []).find((q) => q.id === entry.formId);
+    const fresh = question && Cards.fromQuestion(question);
+    if (fresh) Object.assign(item, fresh);
+    const { queue, counted } = reviewCounts(result);
+    paintCounts(result, counted, queue, queue ? reviewTab : "all");
+  }
+
   /* `which` is the text the card showed and the person edited: the brief only
      when the brief was on the card. Recomputed here, it said "brief" whenever
      the length was brief, and a card showing the full answer, because no
@@ -2469,8 +2540,21 @@
       });
       storedEdits[entry.formId + "\n" + which] = text;
       unsavedEdits.delete(item.__key + "\n" + which);
-      // A cleared answer is gone from the batch, so its card goes too.
-      if (!text.trim()) await adoptBatch(updated, { quiet: true });
+      /* Drawn again from what the server now holds: an edit is a person's, so
+         the answer goes in, leaves "Needs review", and the counts follow. Kept
+         as it was, the card still said "Not going into the file yet" and the
+         bar's counts disagreed with Fill (plan 029's review). A cleared answer
+         is gone from the batch, so its card goes too.
+
+         An edit is saved when its editor is left, which is the press of the
+         next click: the redraw waits for that click to land. When the click
+         opened another card's editor, the person is typing there and a redraw
+         would close it under them: the counts follow now, the card at the
+         next draw. */
+      await afterThePress();
+      if (!formBatch || formBatch.id !== updated.id) return;  // that click put the questionnaire away
+      if (!text.trim() || !typingInACard()) await keepingPlace(() => adoptBatch(updated, { quiet: true }));
+      else recountWith(updated, index);
       setStatus(status, text.trim()
         ? "Your edit is saved, and is what will be written into the file."
         : "Cleared. Nothing is written for it: the file keeps whatever that cell already held.", "ok");
@@ -2495,7 +2579,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: entry.formId, blank: blank }),
       });
-      await adoptBatch(updated, { quiet: true });
+      await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       setStatus($("answerStatus"), blank
         ? "That row will be written empty when you fill the file."
         : "Back to unanswered. Answer it whenever you like.", "ok");
@@ -2542,7 +2626,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: entry.formId, approved: approved }),
       });
-      await adoptBatch(updated, { quiet: true });
+      // An approved answer leaves "Needs review": the keyboard goes on to the next.
+      await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       // Both halves of what the click did, and the second half only when it
       // actually happened: the memory takes an answer somebody wrote, not one
       // the model wrote and a reviewer agreed with.

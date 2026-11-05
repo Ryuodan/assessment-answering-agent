@@ -126,6 +126,7 @@ All stages:
 - 2026-11-05, review of Stage 1: the server side held up (the guard, saving each answer, the 409, the byte match, the sort, the three moves). It found 4 major and 5 minor problems on the Workbench page, reproduced in headless Chromium. All 9 are fixed; none was rejected.
   - Major, 1.2: reading a Word file written as prose a second time offered the empty questionnaire its first read had left, "0 of 0 answered", and "Open it" read nothing. `batches.same_upload` now leaves out a questionnaire nothing was read from, so the file is read as text again. 2 tests (1 API, 1 browser), both failing on the old code. New debt: TD-065 (each such read still keeps an empty questionnaire, listed under "Or pick up").
   - Major, 1.3: Fill clicked from far down the list scrolled its report behind the page header and the sticky bar, so the held count, "Write them in anyway" and the download could not be seen. The report now scrolls to just under the bar, by their measured heights; "Show them" keeps it there. 1 browser test (40 rows, at 1366x768, clicked from the last card: a click at each control's middle reaches it), failing on the old page.
+  - Major, 1.3: editing a held answer left it in Needs review, still "Not going into the file yet", and the bar's counts disagreed with what Fill writes (an edit is a person's, and goes in). A saved edit now draws the answers again from what the server holds, so the card moves and the counts follow. An edit is saved when its editor is left, by the press of the next click, so the redraw waits for that click to land; when that click opened another card's editor, the counts follow at once and the card at the next draw, so the editor being typed in stays open. After a redraw by an edit, an approval or a blank, the keyboard goes back to the same control, or to the answer now in that place. 3 browser tests, all failing on the old page; the second also fails on a fix that always redraws.
 
 ## Decision log
 
@@ -275,8 +276,10 @@ Use a local copy, not the team's data.
 
 1. Open a questionnaire whose answers include some marked for review, and answer it.
 2. The review section opens on "Needs review", with a count on each tab. Only the answers that need you are shown: flagged ones, ones with a low confidence even when not flagged, and ones that failed.
-3. Approve or edit one. It leaves the list, the counts change, and the bar says what happened ("Approved…").
-4. Scroll anywhere among the answers. The bar with the tabs, the counts and "Fill the original file" stays at the top, under the page header.
-5. Click Fill, from far down the list. The page goes up to the result, which sits right under the bar, nothing of it covered. Only there, if answers were held back, do you see the count, "Show them" and "Write them in anyway".
-6. The long question list above the answers is folded into one line ("Show the 59 questions…"). Click it to see the questions; "+ Add a question" opens it too.
-7. Click "All" to see every answer, as before. Leave a card blank, or set a row aside: they are under "Blank or set aside", where a set-aside row has "Include".
+3. Approve one. It leaves the list, the counts change, and the bar says what happened ("Approved…").
+4. Edit one: click Edit, change a word, click "Done editing". It leaves the list too ("Done by a person" goes up by one, and so does "will be written" in the bar), and the bar says "Your edit is saved". Edit another, and before clicking "Done editing" click Edit on a third: the third opens and stays open while you type, the counts change at once, and the second leaves the list when you finish the third.
+5. With the keyboard: press Tab until an answer's Approve is highlighted, then press Enter. The answer leaves the list, and the next Tab goes on from the answer that took its place.
+6. Scroll anywhere among the answers. The bar with the tabs, the counts and "Fill the original file" stays at the top, under the page header.
+7. Click Fill, from far down the list. The page goes up to the result, which sits right under the bar, nothing of it covered. Only there, if answers were held back, do you see the count, "Show them" and "Write them in anyway".
+8. The long question list above the answers is folded into one line ("Show the 59 questions…"). Click it to see the questions; "+ Add a question" opens it too.
+9. Click "All" to see every answer, as before. Leave a card blank, or set a row aside: they are under "Blank or set aside", where a set-aside row has "Include".
