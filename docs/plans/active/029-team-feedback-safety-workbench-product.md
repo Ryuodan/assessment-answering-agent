@@ -115,6 +115,7 @@ All stages:
 - 2026-11-05, Stage 1 build (in the order the design gives: 1.1, 1.5, 1.2, 1.4, 1.3):
   - 1.1: the Workbench writes the open questionnaire into its address (`?q=<id>`) and opens it again at start-up; Close and reading a PDF take it out. Someone else's, or one that is gone, opens nothing and says so. `GET /api/forms` lists last changed first (`updated_at`, which every write moves; no migration), and "Or pick up" lists every questionnaire, up to 500, in a scrolling box when there are more than three, each with when it last changed. 6 tests: 1 API and 4 browser, each failing on the old code, and 1 static guard that the address stays inside the prefix. The existing pick-up, close and deleted-product tests pass unchanged.
   - 1.5: leaving the Workbench asks first (the browser's own "Leave site?") while it holds work only the page has: an edit typed into a card and not yet saved, questions typed beside a file or into a list, or a question in "Ask another question". Nothing is saved on the way out. 4 browser tests: 2 fail on the old page, 2 guard against asking when everything is saved.
+  - Room for 1.2 (R1, behaviour-neutral, its own commit): opening, listing and reading a questionnaire (`POST /api/forms`, `GET /api/forms`, `GET /api/forms/{id}`) moved into `src/routes/forms.py`, as a second router included where the routes were. `poe gen` left `openapi.json` and `api.md` byte-identical; 195 existing tests over the routes, the error responses and the pages pass unchanged. `api.py` ceiling 1,264 to 1,225.
 
 ## Decision log
 

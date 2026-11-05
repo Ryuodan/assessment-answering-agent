@@ -17,14 +17,11 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 from src import web
 from src.logs import get_logger
 from src import (
-    batches,
     events,
-    forms,
     identity,
     llm,
     preferences,
@@ -262,43 +259,7 @@ class SetAnswerRequest(BaseModel):
     """Which of the two lengths is being edited. See `tools.set_answer`."""
 
 
-@app.post("/api/forms")
-async def open_questionnaire(
-    file: UploadFile = File(...), product: str = Form(""), user: User = Depends(current_user)
-) -> dict:
-    """Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.
-
-    Nothing is answered here. The point of the separation is that a person sees
-    which sheets were used, which were skipped and why, and what each column was
-    taken to be, *before* a run that costs minutes.
-    """
-    # Checked against what `forms` can read, not against the knowledge base's
-    # list: the two accept different things. Policies come in as PDF or Word;
-    # questionnaires are mostly spreadsheets, which the knowledge-base check
-    # would have refused before the parser ever saw them.
-    name = file.filename or "questionnaire"
-    if Path(name).suffix.lower() not in forms.SUPPORTED:
-        raise forms.UnsupportedForm(
-            f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
-            f"Supported: {', '.join(forms.SUPPORTED)}."
-        )
-    product_id = products.chosen(user.team_id, product)  # before the file is kept
-    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
-    # In a thread: reading a workbook is a CPU-bound XML parse, and under the
-    # assisted and agent strategies it is also a network call. Either way it is
-    # not something to do on the event loop of a server answering other people.
-    batch = await run_in_threadpool(lambda: tools.open_form(user, path, product_id=product_id))
-    return tools.inspect(user, batch.id)
-
-
-@app.get("/api/forms")
-def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> dict:
-    return {"forms": batches.recent(user.team_id, actor_email=user.email, limit=limit)}
-
-
-@app.get("/api/forms/{batch_id}")
-def get_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict:
-    return tools.inspect(user, batch_id)
+app.include_router(form_routes.opening)  # opening and listing, src/routes/forms.py
 
 
 @app.post("/api/forms/{batch_id}/answer")
