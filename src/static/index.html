@@ -1702,6 +1702,9 @@
   let guidelineCount = null;  // what "Remove every policy document" counts in its question
   async function loadKnowledge() {
     const scope = kbScope();
+    // Not known until this scope's list arrives: the last count belonged to the
+    // knowledge base the selector has left (plan 029's review).
+    guidelineCount = null;
     try {
       const stats = await request("/api/knowledge" + kbScopeQuery("?"));
       // An answer for the knowledge base the selector has since left is dropped: arriving

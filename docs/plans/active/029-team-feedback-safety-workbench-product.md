@@ -123,6 +123,7 @@ All stages:
     - Rewording follows the same rule.
     - Answers released by a withdrawal before the fix are listed, not repaired.
   - **0.3 and 0.4:** they ask first. Who may remove shared documents, and an Undo for forgetting a chat, are for a later round.
+  - **TD-060, fixed during the build without asking first:** the Workbench drops a knowledge-base list that arrives for a scope the selector has left, and forgets the count of "Remove every policy document" until the chosen list arrives. Why now: the late list made an existing gate test fail at random, and made 0.3's count name another knowledge base. The chat drawer's same race (`loadSources`) is recorded and waits for approval.
   - **0.5:** an empty brief is refused.
   - **1.1:**
     - "Last use" means last change (`form_batches.updated_at`).
@@ -187,7 +188,7 @@ For whoever runs the server, in the app's folder:
 Use a local copy, not the team's data.
 
 1. On the Workbench, step 1, with the knowledge base set to "Shared, for every product", click "remove" beside a document. A question names the document, says that every questionnaire and chat (General and every product) stops using it, and that its file stays on the server. Click Cancel: it is still listed.
-2. Click "Remove every policy document". The question says how many ("the 1 policy document", "all 12 policy documents"). Click Cancel.
+2. Click "Remove every policy document". The question says how many ("the 1 policy document", "all 12 policy documents"). Click Cancel. Change the selector to a product and click it again at once, before the product's list appears: the question says "every policy document", never the shared count. Once the list is shown, it says the product's count.
 3. On the chat page, open the knowledge-base drawer and click "remove" on a shared document. You see the same question. Click Cancel.
 4. Choose a product in the selector and remove one of its documents. The question names the product and says its file is deleted too, as before.
 

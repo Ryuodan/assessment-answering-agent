@@ -202,6 +202,35 @@ def test_a_late_answer_for_the_shared_list_does_not_replace_a_products(page: Pag
     expect(sources).not_to_contain_text("Shared policy.pdf")
 
 
+def test_clearing_while_a_products_list_loads_does_not_count_another(page: Page, stores, monkeypatch) -> None:
+    """Plan 029's review: until the product's list arrived, "Remove every policy
+    document" asked about the product with the shared knowledge base's count."""
+    availo = products.add(None, TEAM, "Availo")
+    record = {"text": "t", "metadata": {"source_name": "Availo standard.pdf", "source_type": "guideline"}, "id": "s"}
+    knowledge.get_store(TEAM, product_id=availo.id)._store.records.append(record)
+    real = service.knowledge_stats
+
+    def slow_for_a_product(team_id=None, *, product_id=""):
+        if product_id:
+            time.sleep(1.5)
+        return real(team_id, product_id=product_id)
+
+    monkeypatch.setattr(service, "knowledge_stats", slow_for_a_product)
+    asked: list[str] = []
+    page.goto("/workbench")
+    expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+
+    page.select_option("#kbScope", availo.id)
+    page.once("dialog", answering(asked, accept=False))
+    page.click("#kbClear")  # while Availo's list is on its way
+    assert asked and asked[0].startswith("Remove every policy document from Availo's knowledge base?")
+
+    expect(page.locator("#kbSources")).to_contain_text("Availo standard.pdf")
+    page.once("dialog", answering(asked, accept=False))
+    page.click("#kbClear")
+    assert asked[1].startswith("Remove all 2 policy documents from Availo's knowledge base?")
+
+
 def test_the_assistants_drawer_has_the_same_selector(page: Page, stores) -> None:
     availo = products.add(None, TEAM, "Availo")
     page.goto("/")
