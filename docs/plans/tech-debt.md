@@ -540,3 +540,13 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Fixed without asking first, unlike TD-056 to TD-059: it made a gate test flaky, and 0.3's count wrong. Recorded in plan 029's decision log as a default the user can reverse after testing.
   - The review of Stage 0 found the count still wrong while a product's list was loading: "Remove every policy document" asked about the product with the shared knowledge base's count. `loadKnowledge` now forgets the count when it starts, so the question says "every policy document" until the chosen list arrives. `test_clearing_while_a_products_list_loads_does_not_count_another` fails on the old page.
 - **Still open:** the chat drawer's `loadSources` has the same race. Fix (needs approval): the same check.
+
+## TD-061: A product-memory test fails when its answers are recorded in different seconds
+
+- **What:** found 2026-11-05 by `poe check` during the review fixes of plan 029. `tests/test_product_memory.py::test_a_product_answer_that_differs_from_a_shared_one_is_not_a_disagreement` failed once in the full suite (`assert 0 == 1`). It passed 5 times out of 5 on its own, and in the next full run.
+  - `answer_memory.record` stamps `approved_on` to the second.
+  - `memory.compare` calls two disagreeing answers a conflict only when neither is later. When one is later, it supersedes the other, as designed.
+  - The test expects a conflict between two shared answers recorded with a scan between them, so it passes only when both land in the same second.
+  - Reproduced with a clock that ticks one second per call: the test's own assertion fails.
+- **Impact:** a flaky gate test, more likely under load. The product behaves as designed.
+- **Fix (needs approval):** pin `store.utcnow` in the test, or give the two shared answers the same `approved_on`, so that the test sets up the case where nothing says which answer is current.
