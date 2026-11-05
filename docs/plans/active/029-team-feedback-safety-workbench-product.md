@@ -159,6 +159,11 @@ All stages:
   - `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,199 passed and 2 skipped, browser 110).
   - Stage 2 waits for the user's test.
 
+- 2026-11-06: the three stages merged into main (`967d756`).
+  - Each stage was built, reviewed adversarially and fixed before the next started.
+  - `uv run poe check` passes: 2,201 tests and 110 browser tests.
+  - Handed to the user to test, following "How to test it yourself" below. Their findings go here.
+
 ## Decision log
 
 - 2026-11-05, by the user: the chat stays the home page. Its upload is to be made more obvious, in a later round. The Workbench becomes the questionnaire front door, redesigned in a later round.
