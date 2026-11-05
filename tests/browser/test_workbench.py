@@ -352,6 +352,9 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     offer = page.locator("#alreadyOpen")
     expect(offer).to_contain_text("You already have vendor.xlsx")
     expect(offer).to_contain_text("4 of 4 answered")
+    # Extended by plan 029's review of Stage 2: a General copy had no label, since General is
+    # now a choice as deliberate as a product, and the box names each copy's product.
+    expect(offer.locator(".match .tag.product")).to_have_text("General")
     expect(page.locator("#extractStatus")).not_to_contain_text("Reading")
     offer.get_by_role("button", name="Open it").click()
 

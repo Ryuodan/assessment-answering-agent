@@ -429,6 +429,11 @@ a plan relies on it.
     new chat's first message wait for a choice. Enter waits as Send does. In
     the chat a file can be attached first: nothing reaches the server until
     Send. A team with no products still chooses General.
+  - The rule is kept where a file is read, not on one button: the "You
+    already have this file" box's "Start fresh" is for the product chosen
+    now, and waits while nothing is (plan 029's review of Stage 2: it opened
+    the file as General after Clear all or a deletion). Its copies each name
+    their product, General's included.
   - "Last used" fills the choice in one click and is never preselected. It is
     derived from the person's own saved questionnaires and chats, and from
     what they did on the page; nothing new is stored.

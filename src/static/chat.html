@@ -518,7 +518,8 @@
              work on another product, start a new chat. -->
         <label class="product-chip unchosen" id="productChip">
           <span class="dot" aria-hidden="true"></span>
-          <select id="productPick" aria-label="Which product this chat is for" aria-describedby="productNeeded">
+          <!-- Described by #productNeeded only while that line shows: paintProductNeeded. -->
+          <select id="productPick" aria-label="Which product this chat is for">
             <option value="" disabled selected>Product: choose…</option>
             <option value="general">General (shared policies only)</option>
           </select>
@@ -2070,6 +2071,11 @@
     const row = $("productNeeded");
     const show = !conversationId && !readOnly && !startingChat && !productChosen();
     row.hidden = !show;
+    /* The chip is described by the line only while it shows: a hidden element
+       named by aria-describedby is still read, and the chip said "Choose a
+       product to send this." for the rest of the chat (plan 029, 2's review). */
+    if (show) $("productPick").setAttribute("aria-describedby", "productNeeded");
+    else $("productPick").removeAttribute("aria-describedby");
     if (!show) return;
     const wanting = Boolean(attempted || $("prompt").value.trim() || attached);
     row.classList.toggle("warn", wanting);

@@ -2856,8 +2856,6 @@
   async function extractQuestions() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
-    // Any file, a PDF included, waits for a product: one rule (plan 029, 2).
-    if (!productChosen()) { paintRead(); $("formProduct").focus(); return; }
     await readQuestionnaire(input.files[0], false);
   }
 
@@ -2873,11 +2871,16 @@
     button.disabled = !file || !chosen || reading || answering;
     button.textContent = chosen ? "Read questions for " + choiceName(formProduct()) : "Read questions from file";
     $("readNeedsProduct").hidden = !(file && !chosen);
+    paintAlreadyOpen();
   }
 
   /* `fresh` opens a new questionnaire even when this person already has one
      read from the same file: their "Start fresh" (plan 029, 1.2). */
   async function readQuestionnaire(file, fresh) {
+    // Any file, a PDF included, waits for a product: one rule, here so that
+    // every way in keeps it. "Start fresh" skipped it, and opened the file as
+    // General under "Product: choose…" (plan 029, 2, and its review).
+    if (!productChosen()) { paintRead(); $("formProduct").focus(); return; }
     const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
     hideAlreadyOpen();
 
@@ -3077,6 +3080,27 @@
     $("alreadyOpen").removeAttribute("aria-describedby");
   }
 
+  /* The box follows the Product box, as Read does: "Start fresh" is for the
+     product chosen now and waits while nothing is, and each copy's label says
+     when its product has gone. It named the product chosen when it appeared,
+     and after Clear all or a deletion opened the file as General under
+     "Product: choose…" (plan 029, 2's review). "Open it" needs no choice:
+     a copy keeps its own product. */
+  function paintAlreadyOpen() {
+    const fresh = $("alreadyOpenFresh");
+    if (!fresh) return;
+    const chosen = productChosen();
+    fresh.disabled = !chosen || reading || answering;
+    fresh.textContent = chosen
+      ? "Start fresh (for " + choiceName(formProduct()) + ")"
+      : "Start fresh (choose a product first)";
+    $("alreadyOpen").querySelectorAll(".match").forEach((row) => {
+      const shown = row.querySelector(".tag.product");
+      const now = Cards.choiceTag(row.dataset.choice);
+      if (shown && now && shown.textContent !== now.textContent) shown.replaceWith(now);
+    });
+  }
+
   function offerAlreadyOpen(file, matches) {
     const panel = $("alreadyOpen");
     panel.replaceChildren();
@@ -3098,8 +3122,10 @@
     matches.forEach((match) => {
       const row = document.createElement("div");
       row.className = "match";
+      row.dataset.choice = Cards.choiceOf(match.product_id);
       if (matches.length > 1) row.append(match.source_name + ": " + progress(match));
-      const badge = Cards.productBadge(match.product_id);
+      // Each copy names its product, General's included (plan 029, 2's review).
+      const badge = Cards.choiceTag(row.dataset.choice);
       if (badge) row.append(badge);
       const open = document.createElement("button");
       open.textContent = "Open it";
@@ -3110,8 +3136,8 @@
     const choices = document.createElement("div");
     choices.className = "row";
     const fresh = document.createElement("button");
+    fresh.id = "alreadyOpenFresh";
     fresh.className = "ghost";
-    fresh.textContent = "Start fresh (for " + choiceName(formProduct()) + ")";
     fresh.title = "Read the file again as a new questionnaire, with no answers";
     fresh.onclick = () => readQuestionnaire(file, true);
     const cancel = document.createElement("button");
@@ -3123,6 +3149,7 @@
     };
     choices.append(fresh, cancel);
     panel.append(choices);
+    paintAlreadyOpen();
     panel.hidden = false;
     /* The choice is where the keyboard goes, and the sentence is what the
        group says when it gets there: it appeared silently, and a screen

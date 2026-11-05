@@ -146,6 +146,16 @@ All stages:
   - 18 browser tests in the new `tests/browser/test_choosing_a_product_first.py`, each failing on the pages before this stage. Changed on purpose, each saying so in a comment: the existing tests that read a file or send a first message choose first (General where they meant General: the new `tests/browser/choosing.py` helper in `test_workbench.py`, `test_review_filter.py`, `test_answer_card.py` and `test_workbench_status.py`; `test_chat.py` twice); `test_product_choice.py`'s chat test now expects New conversation to choose nothing and offer "Last used: Availo" (plan 024's "keeps the choice" is superseded, D-022); its Close, Clear all and deleted-product tests expect "choose…" and Read or Send disabled, and choose General before going on; `test_deleted_product_work.py` expects a new chat after a deleted product's to wait, with no "Last used" offered.
   - New debt: TD-066 (the server still answers as General when no product is sent). D-022 records the decision and its defaults.
   - Stage 2 done, waiting for review and the user's test. `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,199 passed and 2 skipped, browser 107). Stage 2 added 18 browser tests and no unit test (no server code changed); `poe gen` left the generated docs unchanged. Every stage of this plan is now built.
+- 2026-11-06, review of Stage 2: most of it matched the design and the decision log on both pages. The selector and the chip start on "choose…"; Read, Answer, Send and Enter wait; "Last used" is derived and fills the choice in one click; a `?q=` reopen shows its label at once; the review heading names the product; nothing overflows at 375 or 1280 px in either theme. It found 1 major and 4 minor problems, reproduced in Chromium. All 5 are fixed; none was rejected.
+  - Major: the 1.2 box's "Start fresh" skipped the product check, which only Read's handler made. After Clear all, or after the chosen product was deleted, it still said "Start fresh (for Availo)" under "Product: choose…", and opened the file as General: the silent General the user ruled out. The check is now in `readQuestionnaire`, which every read goes through. The box follows the Product box: "Start fresh" names the product chosen now, and while nothing is chosen it is greyed and reads "Start fresh (choose a product first)". The box stays open, because "Open it" needs no choice. 2 browser tests, both failing on the old page, and both asserting that no General questionnaire is made: Clear all, then Start fresh for another product; a deletion, then Start fresh.
+  - Minor: once a product was chosen in the chat, the chip was still described by the hidden line, so a screen reader kept reading "Choose a product to send this." The chip is now described by the line only while the line shows. 1 browser test (`to_have_accessible_description`), failing on the old page.
+  - Minor: the box gave a General copy no label, because `productBadge` has none for General. Each copy now shows `Cards.choiceTag`, which gives General a grey label. A deleted product's label says so once the page learns of the deletion. `test_opening_a_file_already_open_offers_to_open_it_or_start_fresh` was extended on purpose, and fails on the old page; the deletion test checks "Msegat · deleted".
+  - Minor, the test notes:
+    - 2.1 step 6 said the note also shows under "Ask another question", which stays hidden until something is answered. That part is removed.
+    - 2.4 step 5 asked to see the "could not be loaded" note while the server restarts, when the page itself does not load. It now blocks the products request in Chrome's DevTools.
+    - New steps: 2.1 steps 10 and 11 (the box follows the Product box) and 2.2 step 7 (the screen reader).
+  - TD-066 (the server still answers as General when no product is sent) stays open, as decided. Its entry now records this gap in the page's own guard. ARCHITECTURE.md and D-022 say where the check is.
+  - 3 browser tests added and 1 extended, each failing on the old pages; no other test changed. Pages only: no Python, API, setting, layer or size ceiling changed, and the mypy baseline stays at 237.
 
 ## Decision log
 
@@ -199,6 +209,9 @@ All stages:
       - Clicking "Last used" in the chat puts the cursor back in the box; on the Workbench it stays on the Product box.
       - A typed list whose product was deleted under it chooses nothing, and is not fixed to that nothing: the person can choose again without clearing the list.
       - On a phone-width chat (under 560 px) the chip is narrower, so the box keeps room to type.
+    - After the review of Stage 2:
+      - The "You already have" box stays open when the Product box changes, because "Open it" needs no choice: each copy keeps its own product. Its "Start fresh" is for the product chosen now, and waits while nothing is chosen ("Start fresh (choose a product first)"), rather than the box closing.
+      - Each copy in that box shows its product's label, General's included, and a deleted product's label says so.
 
 ## How to test it yourself
 
@@ -321,10 +334,12 @@ Use a local copy, not the team's data.
 3. Open the Product list. You see **General (shared policies only)**, then your products. Choose one, say Msegat. The button now reads **Read questions for Msegat**. Click it.
 4. The Product box is now a Msegat label in Msegat's colour, and cannot be changed. Drop another spreadsheet: the button reads **Read questions for Msegat**, because a file read while one is open takes its product.
 5. Click **Close questionnaire**. The box reads **Product: choose…** again.
-6. Click **+ Add a question** and type a question. **Answer 1 question** stays grey, with **Choose a product first.** beside it, and the same under "Ask another question". Click **Choose…** in that note: the page goes to the Product box. Choose **General (shared policies only)**: Answer works.
+6. Click **+ Add a question** and type a question. **Answer 1 question** stays grey, with **Choose a product first.** beside it. Click **Choose…** in that note: the page goes to the Product box. Choose **General (shared policies only)**: Answer works.
 7. Answer it, then click **Clear all** and OK. The box reads **Product: choose…** again.
 8. Reload the page. The box reads **Product: choose…**: nothing was chosen for you.
 9. Optional, with a PDF questionnaire: Read waits for a product too, and so does Answer.
+10. The "You already have" box (1.2) follows the Product box. Choose a product, say Availo, type a question and answer it. Drop a file you already have as a questionnaire and click **Read questions for Availo**: the box offers **Start fresh (for Availo)**, and each copy it lists shows its product's label (a General copy shows a grey **General**). Click **Clear all** and OK: the Product box reads **Product: choose…**, and the button now reads **Start fresh (choose a product first)** and is grey; **Open it** still works. Choose Msegat: it reads **Start fresh (for Msegat)**. Click it: the copy opens for Msegat, and "Or pick up" shows no new General one.
+11. Optional, the same with a product deleted: with the box showing **Start fresh (for Msegat)**, have a lead delete Msegat in another tab, then come back to this one. The page says **Msegat has been deleted; choose a product again.**, the button reads **Start fresh (choose a product first)**, and a Msegat copy in the box is labelled **Msegat · deleted**.
 
 ### 2.2 The chat waits for a product
 
@@ -334,6 +349,7 @@ Use a local copy, not the team's data.
 4. Choose a product on the chip, say Ole5. The arrow lights up and the line goes. Send. The chip becomes an Ole5 label in Ole5's colour, and cannot be changed.
 5. Click **New conversation**. The chip reads **Product: choose…** again.
 6. Choose **General (shared policies only)** and send a question. The chip stays a grey **General (shared policies only)** label.
+7. With a screen reader on (Narrator: Ctrl+Win+Enter): in a new chat, type a question and press Tab back to the chip: it is read with **Choose a product to send this.** Choose a product, then move away and back to the chip: that sentence is no longer read.
 
 ### 2.3 "Last used", in one click, never chosen for you
 
@@ -350,4 +366,4 @@ Use a local copy, not the team's data.
 2. Answer it and scroll to **3 Review and export**. The Availo label is beside the heading, so whoever approves can see which product's memory the approvals go to.
 3. Open a General questionnaire: the label beside the heading reads **General**, in grey.
 4. In the chat, a chat started as General shows a grey **General (shared policies only)** label beside the box.
-5. If the products cannot be loaded (for example the server is restarting), the Product box and the chat's line say so and ask you to reload before choosing, rather than offering only General.
+5. If the products cannot be loaded when the page opens, the Product box and the chat's line say so and ask you to reload before choosing, rather than offering only General. To see it, in Chrome: open the Workbench, press F12 and choose **Network**, then reload the page. Right-click the request named **products** and choose **Block request URL**, then reload again. The note beside the Product box reads **Your products could not be loaded…**, and no "Last used" is offered. Go to the chat page in the same tab: the line above the box says the same. To undo, untick the line in the **Network request blocking** panel that opened at the bottom, or close the panel, and reload.

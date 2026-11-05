@@ -209,7 +209,9 @@ The product is fixed when the questionnaire is opened or the chat starts
   General is an explicit option ("General (shared policies only)"). Reading a
   file and answering a typed or PDF list on the workbench, and a new chat's
   first message (Send and Enter), wait for a choice; a file can be attached in
-  the chat before. The page's choice is `""` (nothing), `Cards.GENERAL`, or a
+  the chat before. On the workbench the check is in `readQuestionnaire`, which
+  every read goes through ("Start fresh" in the same-file box too, whose label
+  follows the selector). The page's choice is `""` (nothing), `Cards.GENERAL`, or a
   product id, and the page sends `Cards.serverProduct(choice)`, which is still
   `""` for General: the server does not yet refuse a missing product (TD-066).
   "Last used" (`Cards.lastUsedButton`) fills the choice in one click and is

@@ -200,6 +200,74 @@ def test_a_reload_chooses_nothing(page: Page, availo: products.Product) -> None:
     expect(selector.locator("option:checked")).to_have_text("Product: choose…")
 
 
+def test_start_fresh_follows_the_product_box_after_clear_all(
+    page: Page, tmp_path: Path, availo: products.Product, answers_yes: None
+) -> None:
+    """Plan 029's review of Stage 2: "Start fresh" skipped the product check. After Clear all it
+    still said "for Availo" under "Product: choose…", and opened the file as General."""
+    msegat = products.add(None, TEAM, "Msegat", color="#dc2626")
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    tools.open_form(identity.local_user(), workbook, product_id=availo.id)  # the copy this person has
+
+    page.goto("/workbench")
+    page.select_option("#formProduct", availo.id)
+    page.click("#addQuestionBtn")
+    page.get_by_role("textbox", name="Type a question").last.fill("Do you encrypt backups?")
+    page.click("#answerBtn")
+    expect(page.locator("#results").get_by_text(ANSWER).first).to_be_visible(timeout=15_000)
+    expect(page.locator("#formProduct")).to_be_disabled()  # the list's answers fix its product
+
+    page.set_input_files("#assessmentInput", str(workbook))
+    page.click("#extractBtn")
+    offer = page.locator("#alreadyOpen")
+    fresh = offer.get_by_role("button", name=re.compile(r"^Start fresh"))
+    expect(fresh).to_have_text("Start fresh (for Availo)")
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#clearQuestions")
+    expect(page.locator("#formProduct")).to_have_value("")
+    expect(fresh).to_have_text("Start fresh (choose a product first)")
+    expect(fresh).to_be_disabled()
+    expect(offer.get_by_role("button", name="Open it")).to_be_enabled()  # a copy keeps its own product
+
+    page.select_option("#formProduct", msegat.id)
+    expect(fresh).to_have_text("Start fresh (for Msegat)")
+    fresh.click()
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    assert [form["product_id"] for form in batches.recent(TEAM)] == [msegat.id, availo.id], "none for General"
+
+
+def test_start_fresh_waits_for_a_product_after_the_one_chosen_is_deleted(
+    page: Page, tmp_path: Path, availo: products.Product
+) -> None:
+    """Plan 029's review of Stage 2: the page said "choose a product again", and the box still
+    offered "Start fresh (for Msegat)", which opened the file as General."""
+    msegat = products.add(None, TEAM, "Msegat", color="#dc2626")
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    tools.open_form(identity.local_user(), workbook, product_id=msegat.id)
+
+    page.goto("/workbench")
+    page.select_option("#formProduct", msegat.id)
+    page.set_input_files("#assessmentInput", str(workbook))
+    page.click("#extractBtn")
+    offer = page.locator("#alreadyOpen")
+    fresh = offer.get_by_role("button", name=re.compile(r"^Start fresh"))
+    expect(fresh).to_have_text("Start fresh (for Msegat)")
+    expect(offer.locator(".match .tag.product")).to_have_text("Msegat")
+
+    delete(msegat)
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # the person comes back to the tab
+    expect(page.locator("#extractStatus")).to_contain_text("Msegat has been deleted; choose a product again.")
+    expect(fresh).to_have_text("Start fresh (choose a product first)")
+    expect(fresh).to_be_disabled()
+    expect(offer.locator(".match .tag.product")).to_have_text("Msegat · deleted")  # its copy is kept, to read
+
+    page.select_option("#formProduct", availo.id)
+    fresh.click()
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    assert [form["product_id"] for form in batches.recent(TEAM)] == [availo.id, msegat.id], "none for General"
+
+
 @pytest.mark.parametrize(("address", "selector"), [("/workbench", "#formProduct"), ("/", "#productPick")])
 def test_general_chosen_before_the_products_arrive_stays_chosen(
     page: Page, availo: products.Product, address: str, selector: str
@@ -322,6 +390,19 @@ def test_new_conversation_from_an_open_chat_chooses_nothing(page: Page, availo: 
     expect(page.locator("#productChip")).to_have_class(UNCHOSEN)
     page.fill("#prompt", "Hello")
     expect(page.locator("#send")).to_be_disabled()
+
+
+def test_the_chip_is_described_by_the_line_only_while_it_shows(page: Page, availo: products.Product) -> None:
+    """Plan 029's review of Stage 2: the chip stayed described by the hidden line, so a screen
+    reader heard "Choose a product to send this." on it for the rest of the chat."""
+    page.goto("/")
+    pick = page.locator("#productPick")
+    page.fill("#prompt", "Hello")
+    expect(pick).to_have_accessible_description(re.compile(r"Choose a product to send this\."))
+
+    page.select_option("#productPick", availo.id)
+    expect(page.locator("#productNeeded")).to_be_hidden()
+    expect(pick).to_have_accessible_description("")
 
 
 # --- 2.3 "Last used", in one click, never chosen ------------------------------
