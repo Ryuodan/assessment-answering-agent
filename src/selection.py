@@ -1,8 +1,9 @@
-"""Which questions an operation applies to, and when an answer counts as settled.
+"""Which questions an operation applies to, when an answer counts as settled, and what is written.
 
 Moved from `src/tools.py` (plan 023), which re-exports what its callers use:
 `tools.Scope`, `tools.HAND`, `tools.APPROVED` and `tools.ready_to_write` are
 the names the interface, the assistant and the tests have always used.
+`length_of` and `written_text` followed in plan 029, to make room in `tools.py`.
 """
 
 from __future__ import annotations
@@ -160,6 +161,24 @@ def ready_to_write(
             f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed to write without a person looking"
         )
     return True, ""
+
+
+def length_of(answered: AnsweredQuestion, detail: str = "full") -> str:
+    """Which length this answer is written at: its own choice, else the file's."""
+    return answered.prefer or detail or "full"
+
+
+def written_text(answered: AnsweredQuestion, detail: str = "full") -> str:
+    """The words that go into the cell, at the length that was chosen for them.
+
+    Falls back to the full answer when a brief one has not been derived yet, so
+    switching a questionnaire to brief and filling it immediately writes the
+    long answers rather than blanks. The interface derives them first; this is
+    what happens when something else does not.
+    """
+    if length_of(answered, detail) == "brief" and answered.brief.strip():
+        return answered.brief.strip()
+    return answered.answer
 
 
 def _settled(answered: AnsweredQuestion | None, question: FormQuestion) -> bool:

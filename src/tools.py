@@ -47,8 +47,10 @@ from src.selection import (
     _has_answer,
     _settled,
     confirmed_by_a_person as confirmed_by_a_person,
+    length_of,
     ready_to_write as ready_to_write,
     written_by_a_person as written_by_a_person,
+    written_text as written_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -770,24 +772,6 @@ def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = T
         question_id=question_id,
         blanked=True,
     )
-
-
-def length_of(answered: AnsweredQuestion, detail: str = "full") -> str:
-    """Which length this answer is written at: its own choice, else the file's."""
-    return answered.prefer or detail or "full"
-
-
-def written_text(answered: AnsweredQuestion, detail: str = "full") -> str:
-    """The words that go into the cell, at the length that was chosen for them.
-
-    Falls back to the full answer when a brief one has not been derived yet, so
-    switching a questionnaire to brief and filling it immediately writes the
-    long answers rather than blanks. The interface derives them first; this is
-    what happens when something else does not.
-    """
-    if length_of(answered, detail) == "brief" and answered.brief.strip():
-        return answered.brief.strip()
-    return answered.answer
 
 
 def prefer_length(user: User, batch_id: str, question_id: str, prefer: str) -> None:
