@@ -116,7 +116,9 @@ error fails its test. `uv run poe browser` runs them; the gate includes them.
 `src/api.py` builds the app and still defines most routes. Routes grouped by
 area are moving into `src/routes/` as they change (plan 019, TD-006):
 `routes/auth.py` holds the dependencies every route uses (`current_user`,
-`current_admin`), and `routes/admin.py` the Access panel's routes. A router is
+`current_admin`), and `routes/admin.py` the Access panel's routes.
+`routes/forms.py` holds filling a questionnaire, the first of its routes to
+move (plan 029); the rest follow with plan 029's Stage 1. A router is
 included where its routes used to be defined, so the routes are registered,
 and the OpenAPI contract is ordered, as before. The SQLite schema's
 migrations are in `src/migrations.py`, applied by `src/store.py`.

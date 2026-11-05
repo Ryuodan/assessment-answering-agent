@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 1296
+max_lines = 1264
 debt = "TD-006"
 
 [[size]]

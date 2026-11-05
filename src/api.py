@@ -41,6 +41,7 @@ from src.routes import admin as admin_routes
 from src.routes import knowledge as knowledge_routes
 from src.routes import memory as memory_routes
 from src.routes import chat as chat_routes
+from src.routes import forms as form_routes
 from src.routes.memory import scan_memory as _scan_memory
 from src.routes.knowledge import check_suffix
 from src.routes import products as product_routes
@@ -489,40 +490,7 @@ def approve_an_answer(
     return {**tools.inspect(user, batch_id), "remembered": entry_id}
 
 
-class FillRequest(BaseModel):
-    """How much of the questionnaire to write."""
-
-    include_unreviewed: bool = False
-    """Write answers nobody has confirmed as well.
-
-    Off by default, and deliberately awkward to turn on. Measured against the
-    security team's own answers, every answer that contradicted them came back
-    flagged and under 0.50 confidence -- so the default holds back exactly the
-    ones that would embarrass the organisation, and turning it off is a thing
-    somebody should have to mean.
-    """
-
-
-@app.post("/api/forms/{batch_id}/fill")
-def fill_questionnaire(
-    batch_id: str,
-    request: FillRequest | None = None,
-    user: User = Depends(current_user),
-) -> dict:
-    """Write the confirmed answers into a copy of the original, and report the rest."""
-    include = bool(request and request.include_unreviewed)
-    filled = tools.fill(user, batch_id, include_unreviewed=include)
-    return {
-        "file": filled.path.name,
-        "written": filled.written,
-        "created": filled.created,
-        "replaced": filled.replaced,
-        "intact": filled.intact,
-        "skipped": filled.skipped,
-        "blank": filled.blank,
-        "held_back": filled.held_back,
-        "because": filled.because,
-    }
+app.include_router(form_routes.router)  # filling, src/routes/forms.py
 
 
 OOXML_TYPES = {
