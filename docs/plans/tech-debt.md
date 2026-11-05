@@ -503,7 +503,8 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 
 - **What:** found 2026-11-05 by plan 029's design, and reproduced. `set_answer(which="brief", text="")` left the model's full answer in place and marked the answer `by_hand`, confidence 1.0. The empty check covered the full answer only.
 - **Impact:** emptying the brief editor on a held answer released it unreviewed, as a person's words, at 100%.
-- **Resolved** 2026-11-05 (Claude, plan 029, item 0.5): an empty brief is refused (400 `operation_refused`, "A brief answer cannot be empty. To write nothing for this question, use Leave blank."); the stored answer is unchanged. `tests/test_tools.py::test_an_empty_brief_is_refused`.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.5): an empty brief is refused (400 `operation_refused`, "A brief answer cannot be empty. To write nothing for this question, use Leave blank."); the stored answer is unchanged. `tests/test_tools.py::test_an_empty_brief_is_refused`, `tests/test_api_forms.py::test_an_empty_brief_is_a_400`.
+  - The card does not send an emptied brief: it puts the brief back and says to use Leave blank (`tests/browser/test_answer_card.py::test_emptying_a_brief_is_refused_on_the_card`). The editor of a Brief card now holds the brief, not the full answer.
 
 ## TD-056: Rewording an answer a person wrote releases the model's new words unreviewed
 

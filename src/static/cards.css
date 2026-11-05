@@ -215,6 +215,7 @@
 .held .how { display: block; margin-top: 3px; color: var(--ink-soft); }
 .held.aside { background: var(--surface-sunken); border-color: var(--line-strong); }
 .held.aside button { margin-inline-start: 6px; }
+.held.edit-refused { margin-bottom: 0; }
 .quiet.approve { color: var(--ok); font-weight: 600; }
 .quiet.approve:hover { background: var(--ok-soft); }
 

@@ -12,8 +12,9 @@
      Cards.onDiscard(key)              throw a question away
      Cards.onRetry(keys, button)       answer a failed one again
      Cards.onOpenDocument(descriptor)  open the file a source came from
-     Cards.onEdit(item, index, text)      an answer is being edited, per keystroke
-     Cards.onEditDone(item, index, text)  the editor was left: worth storing
+     Cards.onEdit(item, index, text, which)      an answer is being edited, per keystroke
+     Cards.onEditDone(item, index, text, which)  the editor was left: worth storing
+                                          (`which`: "answer" or "brief", what the card shows)
      Cards.onBlank(item, index, blank)    leave this answer deliberately empty
      Cards.onApprove(item, index, ok)     accept it as it stands: fill writes it, memory keeps it
      Cards.onLength(item, index, prefer)  write this one answer full or brief
@@ -40,10 +41,12 @@ const Cards = (window.Cards = {
   onSetAside() {},
   canSetAside: false,
   readOnly: false,
-  /* Where the page keeps the answer being edited. The card shows and writes
-     through this rather than owning it, because the workbench holds a whole
-     run in memory and the chat page holds a batch. */
-  answerText(item) { return item.answer || ""; },
+  /* Which text the card shows, and so edits: `{ text, which }`, `which` being
+     "brief" only when the brief is what is shown, else "answer". The card shows
+     and writes through this rather than owning it, because the workbench holds
+     a whole run in memory and the chat page holds a batch. The editor opened
+     on the full answer under a brief card, and saved it as the brief (plan 029). */
+  shownAnswer(item) { return { text: item.answer || "", which: "answer" }; },
 });
 
 (function () {
@@ -480,7 +483,7 @@ const Cards = (window.Cards = {
     field.querySelector(".field-label").append(grow, toggle);
 
     const paint = () => {
-      const text = Cards.answerText(item, index);
+      const text = Cards.shownAnswer(item, index).text;
       rendered.innerHTML = "";
       if (item.blanked) {
         /* Deliberately empty is not the same as never answered, and the card
@@ -657,28 +660,54 @@ const Cards = (window.Cards = {
       field.querySelector(".field-label").append(blank);
     }
 
+    /* The editor holds the text the card shows: the brief on a brief card, and
+       says which back to the page, so an edit lands where it was made. */
+    let shown = Cards.shownAnswer(item, index);
+    const refused = document.createElement("p");
+    refused.className = "held edit-refused";
+    refused.hidden = true;
+    refused.textContent = "A brief answer cannot be empty. To write nothing here, use Leave blank.";
+
     let editing = false;
     const setMode = (next) => {
       editing = next;
+      if (editing) {
+        shown = Cards.shownAnswer(item, index);
+        editor.value = shown.text;
+        editor.dir = isArabic(shown.text) ? "rtl" : "ltr";
+        refused.hidden = true;
+      }
       rendered.hidden = editing;
       editor.hidden = !editing;
       toggle.textContent = editing ? "Done editing" : "Edit";
       if (editing) { editor.focus(); } else { paint(); }
     };
 
-    editor.value = item.answer;
+    editor.value = shown.text;
     editor.hidden = true;
-    if (isArabic(item.answer)) editor.dir = "rtl";
-    editor.addEventListener("input", () => Cards.onEdit(item, index, editor.value));
+    if (isArabic(shown.text)) editor.dir = "rtl";
+    editor.addEventListener("input", () => Cards.onEdit(item, index, editor.value, shown.which));
     /* `input` fires on every keystroke, which is right for keeping the page in
        step and wrong for anything that leaves the browser. `change` fires once,
        when the editor is left and the text actually differs, which is the point
        at which an edit is worth storing. Leaving by the button fires it too,
-       because blur precedes the click. */
-    editor.addEventListener("change", () => Cards.onEditDone(item, index, editor.value));
+       because blur precedes the click.
+
+       An emptied brief is not sent: saved, it released the model's full answer
+       as a person's (TD-055). The brief comes back, and the card says why. */
+    editor.addEventListener("change", () => {
+      if (shown.which === "brief" && !editor.value.trim()) {
+        editor.value = shown.text;
+        Cards.onEdit(item, index, shown.text, shown.which);
+        refused.hidden = false;
+        return;
+      }
+      refused.hidden = true;
+      Cards.onEditDone(item, index, editor.value, shown.which);
+    });
     toggle.onclick = () => setMode(!editing);
 
-    field.append(rendered, editor);
+    field.append(rendered, editor, refused);
     setMode(false);
     return field;
   }

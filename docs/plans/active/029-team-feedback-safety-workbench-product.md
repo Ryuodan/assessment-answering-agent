@@ -55,7 +55,7 @@ Stage 0, safety fixes:
 - [x] **0.2** Withdrawing an approval puts back the answer's review flag and reasons as they were before the approval.
 - [x] **0.3** Removing a shared knowledge-base document, or clearing a knowledge base, on the Workbench asks first and says what is affected.
 - [x] **0.4** Forgetting a chat asks first and names it. The control is a real button that can be reached with the keyboard and is not nested in another button.
-- [ ] **0.5** Edit on a Brief card edits the brief text that is shown.
+- [x] **0.5** Edit on a Brief card edits the brief text that is shown.
 
 Stage 1, Workbench relief:
 
@@ -101,6 +101,7 @@ All stages:
   - 0.1, the Workbench page: Fill sends `include_unreviewed: false` (the request opens the gate only for an exact `true`); the held answers are counted, listed under "Which, and why" with their reasons, and written only through "Write them in anyway", whose confirm counts them; afterwards the first line says how many unconfirmed answers went in. TD-052 resolved. 2 browser tests, both failing on the old page.
   - 0.3: removing a shared document on the Workbench asks first and says that every questionnaire and chat, General and every product, stops using it, and that its file stays. "Remove every policy document" counts them. The chat drawer asks the same question, from one wording in `cards.js` (`Cards.removalQuestion`, `Cards.clearQuestion`). A product's document keeps today's wording. 3 browser tests, all failing on the old pages.
   - 0.4: each conversation in the chat's history is two sibling buttons, the conversation and Forget (✕, named "Forget “title”" for screen readers). Forget asks first, names the conversation and its time, says it cannot be recovered and that its questionnaire and answers are kept; a failed delete says so under the list. The ✕ shows on hover, on keyboard focus, and always on touch screens. 3 browser tests in `tests/browser/test_chat_history.py`, all failing on the old page; the history width test and the five tests that read the rows pass unchanged.
+  - 0.5, the pages: the card's hook is now `Cards.shownAnswer(item, index) -> { text, which }`. The editor opens on the text the card shows (the brief on a brief card) and says which back to the page, which saves that one. An emptied brief is not sent: it comes back, with a note pointing to Leave blank. Both pages. 4 browser tests (3 on the Workbench, 1 in the chat), all failing on the old pages.
 
 ## Decision log
 
@@ -190,3 +191,13 @@ Use a local copy, not the team's data.
 2. Click ✕. A question names the conversation (and its file, if it has one) and says it cannot be recovered. Click Cancel: it is still there. Click ✕ again and OK: it is gone.
 3. With the keyboard: click a conversation, then press Tab. The ✕ of that row shows, highlighted. Press Enter: the same question. Click Cancel.
 4. On a phone or tablet the ✕ is always shown, and tapping it asks first.
+
+### 0.5 Edit on a Brief card edits the brief
+
+1. On the Workbench, open an answered questionnaire and set "Answers" to Brief. The cards show short answers.
+2. Click Edit on a card. The box holds the short answer you see, not the long one.
+3. Change a word and click "Done editing". The card shows your short answer, and the status says your edit is saved.
+4. Set "Answers" to Full: the long answer is as it was.
+5. Back to Brief, fill the file and download it: the cell has your short answer.
+6. Edit a Brief card, delete all its text and click "Done editing". It is refused with a note pointing to "Leave blank", and the short answer comes back.
+7. In the chat's answers panel, set Brief and repeat steps 2 and 3.

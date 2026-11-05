@@ -2279,24 +2279,25 @@
      answer belongs in, and recorded with their name on it. */
   const storedEdits = {};
 
-  async function storeEditedAnswer(item, index, text) {
-    if (result && result.answers[index]) result.answers[index].answer = text;
+  /* `which` is the text the card showed and the person edited: the brief only
+     when the brief was on the card. Recomputed here, it said "brief" whenever
+     the length was brief, and a card showing the full answer, because no
+     brief existed, saved its full text as the brief (plan 029). */
+  async function storeEditedAnswer(item, index, text, which = "answer") {
+    if (result && result.answers[index]) result.answers[index][which] = text;
     const entry = questions.find((q) => q.key === item.__key);
     if (!formBatch || !entry || !entry.formId) return;
-    if (storedEdits[entry.formId] === text) return;
+    if (storedEdits[entry.formId + "\n" + which] === text) return;
 
     const status = $("answerStatus");
     try {
       const updated = await request("/api/forms/" + formBatch.id + "/answers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question_id: entry.formId, text: text,
-          // Editing the full answer discards the brief derived from it.
-          which: (entry.length || detailLevel) === "brief" ? "brief" : "answer",
-        }),
+        // Editing the full answer discards the brief derived from it.
+        body: JSON.stringify({ question_id: entry.formId, text: text, which: which }),
       });
-      storedEdits[entry.formId] = text;
+      storedEdits[entry.formId + "\n" + which] = text;
       // A cleared answer is gone from the batch, so its card goes too.
       if (!text.trim()) await adoptBatch(updated, { quiet: true });
       setStatus(status, text.trim()
@@ -3792,7 +3793,7 @@
   Cards.onDiscard = discardQuestion;
   Cards.onRetry = retryQuestions;
   Cards.onOpenDocument = openDocument;
-  Cards.onEdit = (item, index, text) => { result.answers[index].answer = text; };
+  Cards.onEdit = (item, index, text, which) => { result.answers[index][which || "answer"] = text; };
   Cards.onEditDone = storeEditedAnswer;
   Cards.onBlank = leaveAnswerBlank;
   Cards.onApprove = approveAnswer;
@@ -3800,13 +3801,15 @@
   Cards.onRestoreDraft = restoreDraft;
   /* Whichever length the questionnaire is set to. The workbench keeps the run
      in memory, so the brief travels on the same object as the answer. */
-  Cards.answerText = (item, index) => {
+  Cards.shownAnswer = (item, index) => {
     const held = (result && result.answers[index]) || item;
     // `length` is what the server resolved for this answer: its own choice if
     // it made one, otherwise the questionnaire's. The page does not repeat the
     // fallback rule, so the two cannot disagree about which is showing.
     const level = held.length || item.length || detailLevel;
-    return (level === "brief" && held.brief ? held.brief : held.answer) || "";
+    return level === "brief" && held.brief
+      ? { text: held.brief, which: "brief" }
+      : { text: held.answer || "", which: "answer" };
   };
 
   loadSkills();

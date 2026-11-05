@@ -1434,11 +1434,13 @@
      to, falling back to the full answer when the brief one has not been
      derived yet. */
   let detailLevel = "full";
-  Cards.answerText = (item) => {
+  Cards.shownAnswer = (item) => {
     // The server resolved this answer's own length; the page does not repeat
     // the rule that turns a preference plus a default into a choice.
     const level = item.length || detailLevel;
-    return (level === "brief" && item.brief ? item.brief : item.answer) || "";
+    return level === "brief" && item.brief
+      ? { text: item.brief, which: "brief" }
+      : { text: item.answer || "", which: "answer" };
   };
   Cards.onOpenDocument = (doc) => showDocument(doc.name);
 
@@ -1447,19 +1449,17 @@
      the payload the server had sent and never from what was being typed.
      `onEditDone` fires once, when the editor is left, and is the point at which
      an edit is worth a request. */
-  Cards.onEdit = (item, index, text) => { item.answer = text; };
-  Cards.onEditDone = async (item, index, text) => {
+  /* `which` is what the card showed: the brief on a brief card (plan 029). */
+  Cards.onEdit = (item, index, text, which) => { item[which || "answer"] = text; };
+  Cards.onEditDone = async (item, index, text, which = "answer") => {
     if (!batchId || !item.question) return;
-    item.answer = text;
+    item[which] = text;
     try {
       showUpdated(await request("/api/forms/" + batchId + "/answers", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question_id: item.question.id, text: text,
-          // Editing the full answer discards the brief derived from it, so the
-          // two cannot disagree about what this organisation says.
-          which: (item.length || detailLevel) === "brief" && item.brief ? "brief" : "answer",
-        }),
+        // Editing the full answer discards the brief derived from it, so the
+        // two cannot disagree about what this organisation says.
+        body: JSON.stringify({ question_id: item.question.id, text: text, which: which }),
       }));
     } catch (error) {
       sayInPane("That edit could not be saved: " + error.message, "err");
