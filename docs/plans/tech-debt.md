@@ -474,6 +474,12 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Every file filled from the Workbench also holds the answers the review gate holds back. Those are flagged or low-confidence answers: on the held-out set, 76.2% agreement and 11 of 12 contradictions, against 95.8% and 1 for the answers the gate lets through.
   - The FILE_FILLED event then records `held_back=0`, so the logs do not show it.
 - **Fix:** plan 029, approved by the user.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.1):
+  - The button calls `fillTheForm(false)`, and the request opens the gate only for an exact `true`, so a handler that passes an event fails closed.
+  - A fill that holds answers back says how many, lists each under "Which, and why" with its reason, and offers "Write them in anyway" behind a confirm that counts them. After that, the first line says how many unconfirmed answers were written.
+  - `FILE_FILLED` records the gate's count (`held_back`) in both modes, and `include_unreviewed`. Events from before have no `include_unreviewed` key.
+  - `python -m src.cli inspect fills` lists the fills that wrote held answers before the fix (`src/fill_audit.py`). It is certain only for answers unchanged since the fill. What to tell the team, and which sent files to re-check, is the user's decision.
+  - Tests: 2 browser tests in `tests/browser/test_workbench.py` (failing on the old page), 3 unit tests in `tests/test_tools.py`, 11 in `tests/test_fill_audit.py`.
 
 ## TD-053: Withdrawing an approval leaves the answer released
 

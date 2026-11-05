@@ -93,6 +93,92 @@ def test_a_questionnaire_is_read_answered_and_shown_as_cards(page: Page, tmp_pat
     expect(page.locator("#results").get_by_text(ANSWER)).to_have_count(4)
 
 
+# --- filling holds back what nobody has confirmed (TD-052) ---------------------
+
+
+@pytest.fixture
+def answers_doubtfully(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=q,
+                answer=ANSWER,
+                confidence=0.3,
+                needs_review=True,
+                review_reasons=["the sources do not cover this directly"],
+            )
+            for q in questions
+        ]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", fake)
+
+
+def read_and_answer(page: Page, tmp_path: Path) -> Path:
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(workbook))
+    page.click("#extractBtn")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
+    return workbook
+
+
+def test_filling_from_the_workbench_holds_back_unconfirmed_answers(
+    page: Page, tmp_path: Path, answers_doubtfully: None
+) -> None:
+    """The button's click event arrived as `includeUnreviewed`, so every fill
+    from this page wrote the answers the gate holds back."""
+    read_and_answer(page, tmp_path)
+
+    with page.expect_request("**/fill") as sent:
+        page.click("#fillFormBtn")
+    assert sent.value.post_data_json == {"include_unreviewed": False}
+
+    filled = page.locator("#formFilled")
+    expect(filled).to_contain_text("4 answer(s) were held back")
+    expect(filled).to_contain_text("Nothing was written: 4 answer(s) are held back")
+    expect(filled.get_by_role("button", name="Write them in anyway")).to_be_visible()
+    filled.get_by_text("Which, and why").click()
+    reasons = filled.locator(".held-which li")
+    expect(reasons).to_have_count(4)
+    for row in reasons.all():
+        expect(row).to_contain_text("flagged for review -- the sources do not cover this directly")
+    expect(reasons.first).to_contain_text("Does the vendor have documented information security policies?")
+
+
+def test_write_them_in_anyway_asks_first_then_writes_them(page: Page, tmp_path: Path, answers_doubtfully) -> None:
+    from src import batches, tools
+    from src.forms.reading import read
+
+    read_and_answer(page, tmp_path)
+    page.click("#fillFormBtn")
+    filled = page.locator("#formFilled")
+    anyway = filled.get_by_role("button", name="Write them in anyway")
+    expect(anyway).to_be_visible()
+
+    sent: list[dict] = []
+    page.on("request", lambda request: sent.append(request.post_data_json) if request.url.endswith("/fill") else None)
+    asked: list[str] = []
+    page.once("dialog", lambda dialog: (asked.append(dialog.message), dialog.dismiss()))
+    anyway.click()
+    expect(anyway).to_be_visible()
+    assert asked and "Write 4 unconfirmed answer(s) into the file?" in asked[0]
+    assert "Which, and why" in asked[0]
+    assert sent == [], "dismissed: nothing is sent"
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    anyway.click()
+    expect(filled).to_contain_text(
+        "Wrote 4 value(s) into vendor - answered.xlsx, including 4 answer(s) nobody has confirmed"
+    )
+    assert sent == [{"include_unreviewed": True}]
+    expect(filled.get_by_role("button", name="Write them in anyway")).to_have_count(0)
+
+    [batch] = batches.recent(settings.default_team)
+    written = read(tools._filled_path(batches.load(batch["id"])), "rules").form.questions
+    assert [q.existing_answer for q in written] == [ANSWER] * 4
+
+
 def test_a_file_name_is_shown_as_text_never_as_markup(page: Page) -> None:
     """TD-021: what the server says about a file reaches the status line as text."""
     name = '<img src=x onerror="window.__pwned=1">.txt'

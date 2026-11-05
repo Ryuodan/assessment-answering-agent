@@ -429,6 +429,9 @@
   }
   .qn-filled[hidden] { display: none; }
   .qn-filled .blanks { color: var(--ink-faint); font-size: 12px; margin-top: 6px; }
+  .qn-filled .held-which { margin-top: 4px; color: var(--ink-soft); }
+  .qn-filled .held-which summary { cursor: pointer; }
+  .qn-filled .held-which ul { margin: 4px 0 0; padding-inline-start: 18px; max-height: 240px; overflow-y: auto; }
 
   .search-note {
     font-size: 11.5px; color: var(--warn, #b26a00); padding: 6px 0 2px;
@@ -3100,16 +3103,21 @@
     setStatus($("composerStatus"), "");
   }
 
-  async function fillTheForm(includeUnreviewed = false) {
+  /* `includeUnreviewed` must be exactly `true` to open the gate: the button's
+     handler once passed its click event here, which is truthy, and every fill
+     from this page wrote the held answers (TD-052). `unconfirmed` is how many
+     the person agreed to write anyway, said back in the first line. */
+  async function fillTheForm(includeUnreviewed, unconfirmed) {
     if (!formBatch) return;
     // The questionnaire this filled, whatever is open by the time its file is downloaded.
     const id = formBatch.id;
+    const batch = formBatch;
     const button = $("fillFormBtn");
     button.disabled = true;
     try {
       const filled = await request("/api/forms/" + id + "/fill", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ include_unreviewed: Boolean(includeUnreviewed) }),
+        body: JSON.stringify({ include_unreviewed: includeUnreviewed === true }),
       });
       const panel = $("formFilled");
       panel.hidden = false;
@@ -3123,6 +3131,7 @@
       line.textContent = filled.because
         ? filled.because
         : "Wrote " + filled.written + " value(s) into " + filled.file +
+          (unconfirmed ? ", including " + unconfirmed + " answer(s) nobody has confirmed" : "") +
           (filled.intact ? " — every other part of the file is untouched." : ".");
       panel.append(line);
       if (blanks || refused) {
@@ -3149,10 +3158,28 @@
         anyway.textContent = "Write them in anyway";
         anyway.onclick = () => {
           if (confirm("Write " + heldCount + " unconfirmed answer(s) into the file?\n\n" +
-                      "These are the ones the system is least sure about.")) fillTheForm(true);
+                      "These are the ones the system is least sure about. " +
+                      "Their reasons are listed under 'Which, and why'.")) fillTheForm(true, heldCount);
         };
         note.append(anyway);
         panel.append(note);
+        /* Which, and why: folded, because a large file can hold back sixty.
+           As text: a question's words are the customer's. */
+        const which = document.createElement("details");
+        which.className = "held-which";
+        const summary = document.createElement("summary");
+        summary.textContent = "Which, and why";
+        const list = document.createElement("ul");
+        Object.entries(filled.held_back).forEach(([questionId, why]) => {
+          const question = ((batch && batch.questions) || []).find((q) => q.id === questionId) || {};
+          const text = question.text || "";
+          const row = document.createElement("li");
+          row.textContent = (question.number || question.location || questionId) + " — " +
+            (text.length > 80 ? text.slice(0, 80) + "…" : text) + ": " + why;
+          list.append(row);
+        });
+        which.append(summary, list);
+        panel.append(which);
       }
 
       /* The one moment a person finds out their extra questions are not in the
@@ -3495,7 +3522,7 @@
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
   $("retryFailed").onclick = () => retryQuestions(failedKeys(), $("retryFailed"));
-  $("fillFormBtn").onclick = fillTheForm;
+  $("fillFormBtn").onclick = () => fillTheForm(false);  // never the click event: it is truthy (TD-052)
   $("reviseBtn").onclick = rewordAnswers;
 
   function addFromComposer() {

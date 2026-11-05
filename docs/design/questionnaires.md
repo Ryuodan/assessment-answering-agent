@@ -603,6 +603,13 @@ whole point of holding an answer is that somebody should look at it. The fill
 report says how many stayed behind and offers to write them anyway, which is a
 button somebody has to mean.
 
+The Workbench's Fill did not keep the gate until plan 029 (TD-052): its click
+event arrived where the "write them anyway" flag belonged, so every fill sent
+`include_unreviewed: true`. The flag now has to be exactly `true`, the held
+answers are listed under **Which, and why** with their reasons, and the fill
+event records what the gate held and whether it was opened. `python -m src.cli
+inspect fills` lists the fills from before the fix that wrote held answers.
+
 **Withdrawing an approval puts the review back** (plan 029, TD-053). Approving
 clears the flag, and withdrawing used to leave it cleared, so an answer the gate
 had held went into the file as if confident. An approval now keeps the flag and

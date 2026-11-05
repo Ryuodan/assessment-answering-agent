@@ -51,7 +51,7 @@ session's scratchpad; this is what it found.
 
 Stage 0, safety fixes:
 
-- [ ] **0.1** Filling from the Workbench writes only what the gate allows. Held answers are reported with their count and reasons, and written only through "Write them in anyway". The FILE_FILLED event records whether the gate was bypassed and how many answers were held. A read-only command lists the questionnaires filled with held answers before the fix.
+- [x] **0.1** Filling from the Workbench writes only what the gate allows. Held answers are reported with their count and reasons, and written only through "Write them in anyway". The FILE_FILLED event records whether the gate was bypassed and how many answers were held. A read-only command lists the questionnaires filled with held answers before the fix.
 - [x] **0.2** Withdrawing an approval puts back the answer's review flag and reasons as they were before the approval.
 - [ ] **0.3** Removing a shared knowledge-base document, or clearing a knowledge base, on the Workbench asks first and says what is affected.
 - [ ] **0.4** Forgetting a chat asks first and names it. The control is a real button that can be reached with the keyboard and is not nested in another button.
@@ -98,6 +98,7 @@ All stages:
   - 0.1 and 0.5, server side. `fill` records what the gate held (`held_back`) and whether "Write them in anyway" was used (`include_unreviewed`); the "nothing written" message names held answers (TD-054); an empty brief is refused (TD-055). 4 unit tests, each failing on the old code. `tools.py` ceiling 1,373 to 1,366. New debt found: TD-056 to TD-058.
   - 0.1b, the read-only audit: `python -m src.cli inspect fills [--team T] [--json]` (`src/fill_audit.py`, operations layer). It lists the fills that wrote held answers (certain when the answer is unchanged since the fill, unknown when it was saved after) and the approvals withdrawn before the fix that still pass the gate. 11 tests in `tests/test_fill_audit.py`, one of them proving that the audit changes no row.
   - 0.2: an approval keeps the review flag and reason it replaced (`before_approval` in the answer's JSON, no migration); withdrawing restores them, and rewording an approved answer withdraws it the same way (TD-053 resolved). 9 tests: 7 unit (5 failing on the old code), 1 API, 1 browser (failing on the old code). `poe gen` added the field to openapi.json; `poe snapshots` added `"before_approval": null` to the two pipeline snapshots and nothing else. `tools.py` ceiling 1,366 to 1,365. New debt found: TD-059 (putting back the draft of an approved answer releases it).
+  - 0.1, the Workbench page: Fill sends `include_unreviewed: false` (the request opens the gate only for an exact `true`); the held answers are counted, listed under "Which, and why" with their reasons, and written only through "Write them in anyway", whose confirm counts them; afterwards the first line says how many unconfirmed answers went in. TD-052 resolved. 2 browser tests, both failing on the old page.
 
 ## Decision log
 
@@ -139,3 +140,35 @@ All stages:
     - Reading any file waits for a product, and the Read button names it.
     - A team with no products still chooses General explicitly.
     - The server is unchanged: scripts and the API can still answer as General without saying so (a tech-debt item).
+
+## How to test it yourself
+
+Use a local copy of the app, not the server the team uses. Each item says what to do and what you should see.
+
+### 0.1 Fill keeps back the answers nobody has confirmed
+
+1. Open the Workbench. Upload a questionnaire, click Read, then Answer.
+2. Look at the cards. Some should say "needs review" or show a low confidence, with "Not going into the file yet." (A real run usually has several.)
+3. Click "Fill the original file". You should see "N answer(s) were held back…", a "Which, and why" line and a "Write them in anyway" button.
+4. Click "Which, and why". Each held question is listed with its number, the start of its text and the reason it was held.
+5. If anything was written, click "Download the filled file" and open it. The held questions are empty, or keep what the file already had.
+6. Click "Write them in anyway". A question asks first and counts them. Click Cancel: nothing changes. Click the button again and OK: the first line says "Wrote … including N answer(s) nobody has confirmed". Download again: those cells are now filled.
+
+### 0.1b Which files were already filled with held answers
+
+For whoever runs the server, in the app's folder:
+
+1. Run `uv run python -m src.cli inspect fills` (add `--team <team>` for another team). It changes nothing.
+2. It lists each fill that wrote answers the review gate holds back. Older Workbench fills say "before the fix"; the fill from step 6 above says "written anyway".
+3. Under each fill: how many held answers are unchanged since the fill (these certainly went into that file), and how many were saved after it (unknown).
+4. At the end: answers whose approval was withdrawn before the fix and that still go into the file as if confident. Open each on the Workbench, and edit or approve it.
+
+### 0.2 Withdrawing an approval holds the answer back again
+
+1. On the Workbench, open a questionnaire with a card marked "needs review", ideally one with a high confidence beside it.
+2. Click Approve. The card says "Approved ✓", and its "Not going into the file yet." note goes.
+3. Click "Approved ✓" to withdraw. The message says "It will be held back until somebody edits or approves it". The card shows "needs review" and the same reason as before.
+4. Fill the file. That question is under "Which, and why".
+5. Reload the page and reopen the questionnaire from "Or pick up": still held.
+6. Approve it again, then reword it (for example "make it shorter"). It comes back held.
+7. Edit a card's text yourself, Approve it, then withdraw: it still goes into the file, because a person wrote it.
