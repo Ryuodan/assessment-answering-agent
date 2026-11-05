@@ -93,3 +93,44 @@ def test_each_cited_remembered_answer_has_a_chip_that_opens_it(
     expect(panel).to_contain_text("Yes, with a hardware key for every account.")
     expect(panel).not_to_contain_text("for administrators")
     expect(panel.locator(".cite-head .tag.product")).to_have_text("Availo")
+
+
+UNGROUNDED = "the reviewer did not find the answer grounded"
+
+
+@pytest.fixture
+def flagged_but_sure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scored well, flagged anyway: held by the gate on the flag alone."""
+
+    async def answered(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(question=q, answer=ANSWER, confidence=0.85, needs_review=True, review_reasons=[UNGROUNDED])
+            for q in questions
+        ]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", answered)
+
+
+def answered_on_the_workbench(page: Page, tmp_path: Path) -> None:
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    page.click("#answerBtn")
+    expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
+
+
+def test_withdrawing_an_approval_shows_the_answer_held_again(page: Page, tmp_path: Path, flagged_but_sure) -> None:
+    """TD-053: the card said "held back again" while the server had released it."""
+    answered_on_the_workbench(page, tmp_path)
+    card = page.locator("#results .answer").first
+    expect(card).to_contain_text("Not going into the file yet.")
+
+    card.get_by_role("button", name="Approve", exact=True).click()
+    expect(card.get_by_role("button", name="Approved ✓")).to_be_visible()
+    expect(card).not_to_contain_text("Not going into the file yet.")
+
+    card.get_by_role("button", name="Approved ✓").click()
+    expect(page.locator("#answerStatus")).to_contain_text("It will be held back until somebody edits or approves it.")
+    expect(card).to_contain_text("Not going into the file yet.")
+    expect(card).to_contain_text(UNGROUNDED)
+    expect(card.locator(".tag.warn", has_text="needs review")).to_have_count(1)

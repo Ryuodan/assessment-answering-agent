@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from src.config import settings
 from src.forms.model import DetectedForm, FormQuestion
-from src.models import AnsweredQuestion
+from src.models import AnsweredQuestion, BeforeApproval
 
 # ---------------------------------------------------------------------------
 # Choosing which questions to act on
@@ -134,6 +134,43 @@ def written_by_a_person(answered: AnsweredQuestion | None) -> bool:
     if answered is None:
         return False
     return answered.by_hand or answered.confidence_reason == HAND
+
+
+def approve(answered: AnsweredQuestion) -> AnsweredQuestion:
+    """Released by a person, keeping what the review said for a withdrawal (TD-053)."""
+    approved = answered.model_copy(deep=True)
+    if approved.confidence_reason != APPROVED:  # approving twice keeps the first record
+        approved.before_approval = BeforeApproval(
+            needs_review=approved.needs_review, confidence_reason=approved.confidence_reason
+        )
+    approved.confidence_reason, approved.needs_review = APPROVED, False
+    return approved
+
+
+def withdraw_approval(
+    answered: AnsweredQuestion, *, reworded: bool = False, threshold: float | None = None
+) -> AnsweredQuestion:
+    """The answer as it stood before a person approved it.
+
+    The kept state first. An approval from before it was kept is judged again by
+    the review's own rule (`verification.assess`: any reason, or a score at or under
+    the threshold) unless a person wrote the words. `reworded`: the words are the
+    model's now, so "written by hand" goes too. Not approved: unchanged, but for that.
+    """
+    withdrawn = answered.model_copy(deep=True)
+    if withdrawn.confidence_reason == APPROVED:
+        kept = withdrawn.before_approval
+        if kept is not None:
+            withdrawn.needs_review, withdrawn.confidence_reason = kept.needs_review, kept.confidence_reason
+        else:
+            floor = settings.review_confidence_threshold if threshold is None else threshold
+            by_hand = written_by_a_person(withdrawn)
+            withdrawn.needs_review = not by_hand and (bool(withdrawn.review_reasons) or withdrawn.confidence <= floor)
+            withdrawn.confidence_reason = HAND if by_hand else ""
+    withdrawn.before_approval = None
+    if reworded and withdrawn.confidence_reason == HAND:
+        withdrawn.confidence_reason = ""
+    return withdrawn
 
 
 def ready_to_write(

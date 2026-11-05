@@ -603,6 +603,17 @@ whole point of holding an answer is that somebody should look at it. The fill
 report says how many stayed behind and offers to write them anyway, which is a
 button somebody has to mean.
 
+**Withdrawing an approval puts the review back** (plan 029, TD-053). Approving
+clears the flag, and withdrawing used to leave it cleared, so an answer the gate
+had held went into the file as if confident. An approval now keeps the flag and
+the "why the score is low" sentence it replaced (`before_approval` on the answer,
+in its stored JSON; no migration), and withdrawing restores them
+(`selection.approve`, `selection.withdraw_approval`). An approval made before
+that kept nothing, so withdrawing it applies the review's own rule again: any
+reason, or a score at or under the threshold, is held, unless a person wrote the
+words. Rewording an approved answer withdraws the approval the same way, because
+the approval was for other words.
+
 **Silence is not a No.** Five of the eight contradictions that survived the
 identity fix were the same move: the corpus does not say whether we hold ISO
 27001, whether a DPA was signed with this customer, or whether a regulator

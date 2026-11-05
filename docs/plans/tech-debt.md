@@ -478,7 +478,14 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 ## TD-053: Withdrawing an approval leaves the answer released
 
 - **What:** found 2026-11-05 by the feedback review. Approving clears `needs_review`, and withdrawing the approval does not put it back. A held answer that was approved and then withdrawn is written to the file as if confident.
+  - The "why the score is low" sentence (`confidence_reason`) was lost too.
+  - Found by plan 029's design, and reproduced: rewording an approved answer (`revise`) cleared the approval the same way, so the reworded model text was released unreviewed.
 - **Fix:** plan 029.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.2):
+  - An approval keeps the flag and reason it replaced, in the answer's stored JSON (`AnsweredQuestion.before_approval`; no column, no migration). Withdrawing restores them; rewording an approved answer withdraws the approval by the same rule (`selection.approve`, `selection.withdraw_approval`).
+  - An approval made before the fix kept nothing: withdrawing it applies the review's rule again (any reason, or a score at or under the threshold, unless a person wrote the words).
+  - Answers already released by a withdrawal before the fix stay released until somebody edits or approves them. `python -m src.cli inspect fills` lists them (0.1b); they are not repaired.
+  - Tests: 7 in `tests/test_tools.py` (5 failing on the old code, 2 pinning what stays), 1 in `tests/test_api_forms.py`, 1 browser test in `tests/browser/test_answer_card.py`.
 
 ## TD-054: A fill that held every answer said none of them had a cell to go into
 
@@ -506,6 +513,12 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 
 ## TD-058: A set-aside question's held answer is counted as held back by fill
 
-- **What:** found 2026-11-05 while building plan 029's 0.1. `fill` checks the gate before it checks whether a question is set aside, so a set-aside question whose answer is held appears in `Filled.held_back` and in the `FILE_FILLED` event's `held_back` count. `inspect`'s `held_back` count leaves set-aside questions out. Nothing is written for them either way.
+- **What:** found 2026-11-05 while building plan 029's 0.1, and reproduced. `fill` checks the gate before it checks whether a question is set aside, so a set-aside question whose answer is held appears in `Filled.held_back` and in the `FILE_FILLED` event's `held_back` count. `inspect`'s `held_back` count leaves set-aside questions out, and `docs/design/questionnaires.md` says the fill report does too. Nothing is written for them either way.
 - **Impact:** the fill's "N held back" and its reasons can include questions that will never be written, and "Write them in anyway" counts them.
 - **Fix (needs approval):** skip set-aside questions before the gate in `fill`, with a test.
+
+## TD-059: Putting back the draft of an approved answer releases it unreviewed
+
+- **What:** found 2026-11-05 while building plan 029's 0.2, and reproduced. `restore_draft` clears `APPROVED` from `confidence_reason` but leaves `needs_review` false, as withdrawing did before TD-053's fix. A flagged answer that was reworded, then approved, then put back to its draft is written as if confident (seen at 0.85 with a reviewer's reason).
+- **Impact:** the model's draft reaches the customer's file without a person having confirmed it. Only answers that scored at or above the threshold: a low score is still held.
+- **Fix (needs approval):** `restore_draft` withdraws the approval with `selection.withdraw_approval(restored, reworded=True)`, as `revise` does since plan 029. One line, with a test.

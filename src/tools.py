@@ -46,10 +46,12 @@ from src.selection import (
     Scope as Scope,
     _has_answer,
     _settled,
+    approve,
     confirmed_by_a_person as confirmed_by_a_person,
     length_of,
     ready_to_write as ready_to_write,
     written_by_a_person as written_by_a_person,
+    withdraw_approval,
     written_text as written_text,
 )
 
@@ -585,8 +587,7 @@ async def revise(
                 # Kept, it went on being what a brief questionnaire showed and
                 # wrote, so the rewording appeared to do nothing at all.
                 revised.brief = ""
-                if revised.confidence_reason in (APPROVED, HAND):
-                    revised.confidence_reason = ""
+                revised = withdraw_approval(revised, reworded=True)  # held again if it was before approval
             return revised
 
         results = list(await asyncio.gather(*(one(q) for q in chosen)))
@@ -909,9 +910,7 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
 
     by_hand = written_by_a_person(existing)
 
-    answered = existing.model_copy(deep=True)
-    answered.confidence_reason = APPROVED if approved else (HAND if by_hand else "")
-    answered.needs_review = False if approved else existing.needs_review
+    answered = approve(existing) if approved else withdraw_approval(existing)  # puts back the review's flag (TD-053)
     batches.save_answers(batch.id, [answered], edited_by=user.email if approved else "")
     events.record(
         user,

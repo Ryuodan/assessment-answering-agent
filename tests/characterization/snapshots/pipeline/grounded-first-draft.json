@@ -2,6 +2,7 @@
   "answered": {
     "answer": "All access is revoked within 24 hours of the end of employment, and privileged accounts are disabled on the last working day. Line managers notify the IT service desk before then.",
     "attempts": 1,
+    "before_approval": null,
     "brief": "",
     "by_hand": false,
     "citations": [

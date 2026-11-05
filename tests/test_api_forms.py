@@ -265,6 +265,51 @@ def test_writing_an_unknown_question_is_a_400(client, tmp_path):
     assert response.status_code == 400
 
 
+def test_withdrawing_an_approval_over_http_restores_the_review(client, tmp_path, monkeypatch):
+    """TD-053, through the route both pages call."""
+
+    async def flagged(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=q,
+                answer="Yes.",
+                confidence=0.85,
+                needs_review=True,
+                review_reasons=["the reviewer did not find the answer grounded"],
+            )
+            for q in questions
+        ]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", flagged)
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    approved = client.post(f"/api/forms/{opened['id']}/approve", json={"question_id": question}).json()
+    shown = next(q for q in approved["questions"] if q["id"] == question)
+    assert shown["will_be_written"] is True
+    assert shown["answered"]["before_approval"] == {"needs_review": True, "confidence_reason": ""}
+
+    withdrawn = client.post(
+        f"/api/forms/{opened['id']}/approve", json={"question_id": question, "approved": False}
+    ).json()
+    shown = next(q for q in withdrawn["questions"] if q["id"] == question)
+    assert shown["needs_review"] is True and shown["will_be_written"] is False
+    assert shown["answered"]["before_approval"] is None
+
+
+def test_an_empty_brief_is_a_400(client, tmp_path, answers_yes):
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    response = client.post(
+        f"/api/forms/{opened['id']}/answers", json={"question_id": question, "text": "", "which": "brief"}
+    )
+
+    assert response.status_code == 400 and response.json()["code"] == "operation_refused"
+
+
 # --- filling and downloading -----------------------------------------------
 
 

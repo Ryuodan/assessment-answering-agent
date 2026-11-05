@@ -836,6 +836,145 @@ async def test_inspect_says_which_answers_would_be_written(batch, user, answers_
     assert "flagged for review" in question["held_back_because"]
 
 
+# --- withdrawing an approval (TD-053) -------------------------------------------
+#
+# Approving clears the review's flag. Withdrawing used to leave it cleared, so an
+# answer the gate had held was written into the file as if confident.
+
+UNGROUNDED = "the reviewer did not find the answer grounded"
+WHY_LOW = "two of its citations were not found in the sources"
+
+
+@pytest.fixture
+def answers_flagged_but_sure(monkeypatch):
+    """Scored well, flagged anyway: the gate holds it on the flag alone."""
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=q,
+                answer="Yes, backups are encrypted.",
+                confidence=0.85,
+                needs_review=True,
+                review_reasons=[UNGROUNDED],
+                confidence_reason=WHY_LOW,
+            )
+            for q in questions
+        ]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+
+
+def _question(user, batch_id, question_id):
+    return next(q for q in tools.inspect(user, batch_id)["questions"] if q["id"] == question_id)
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_an_approval_holds_the_answer_back_again(batch, user, answers_flagged_but_sure):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    assert _question(user, batch.id, first)["will_be_written"] is True
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["needs_review"] is True and view["will_be_written"] is False
+    assert view["held_back_because"] == f"flagged for review -- {UNGROUNDED}"
+    assert view["answered"]["before_approval"] is None
+    assert first in tools.fill(user, batch.id).held_back
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_puts_back_the_reason_the_score_was_low(batch, user, answers_flagged_but_sure):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    assert batches.answers(batch.id)[first].confidence_reason == tools.APPROVED
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    assert batches.answers(batch.id)[first].confidence_reason == WHY_LOW
+
+
+@pytest.mark.asyncio
+async def test_approving_twice_keeps_what_the_review_said(batch, user, answers_flagged_but_sure):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, first)
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    assert _question(user, batch.id, first)["will_be_written"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_confident_answer_withdrawn_still_goes_in(batch, user, answers_yes):
+    """Nothing held it before the approval, so nothing holds it after."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["will_be_written"] is True and view["needs_review"] is False
+
+
+@pytest.mark.asyncio
+async def test_an_approval_from_before_the_fix_is_judged_again_on_withdrawal(batch, user, answers_flagged_but_sure):
+    """Approved by the old code, which kept nothing: the review's own rule decides."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    old = batches.answers(batch.id)[first].model_copy(deep=True)
+    old.confidence_reason, old.needs_review = tools.APPROVED, False
+    batches.save_answers(batch.id, [old], edited_by=user.email)
+    assert old.before_approval is None
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["needs_review"] is True and view["will_be_written"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_hand_written_answer_withdrawn_still_goes_in(batch, user, answers_flagged_but_sure):
+    """A person wrote it, so it was never held for the review; withdrawing the
+    approval takes it out of the answer memory and leaves it in the file."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.set_answer(user, batch.id, first, "Yes, with AES-256.")
+    tools.approve_answer(user, batch.id, first)
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["by_hand"] and view["will_be_written"] is True
+    assert batches.answers(batch.id)[first].confidence_reason == tools.HAND
+
+
+@pytest.mark.asyncio
+async def test_rewording_an_approved_answer_holds_it_back_again(batch, user, answers_flagged_but_sure, monkeypatch):
+    """The approval was for other words. Clearing only the mark released the
+    model's new wording unreviewed."""
+
+    async def reworded(answered, instruction, language=None, **_):
+        revised = answered.model_copy(deep=True)
+        revised.answer = "Backups are encrypted."
+        return revised
+
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    monkeypatch.setattr(tools.rewrite, "rewrite", reworded)
+
+    await tools.revise(user, batch.id, "Shorter.", tools.Scope(ids=(first,)))
+
+    view = _question(user, batch.id, first)
+    assert view["answer"] == "Backups are encrypted."
+    assert view["approved"] is False and view["needs_review"] is True and view["will_be_written"] is False
+
+
 def test_approving_a_question_with_no_answer_is_refused(batch, user):
     with pytest.raises(tools.ToolError):
         tools.approve_answer(user, batch.id, batch.form.questions[0].id)

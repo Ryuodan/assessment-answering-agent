@@ -3792,6 +3792,17 @@
             "title": "Error",
             "description": "Why answering this question failed; '' when it produced an answer",
             "default": ""
+          },
+          "before_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BeforeApproval"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The review flag and reason as they were when a person approved this answer; null otherwise"
           }
         },
         "type": "object",
@@ -3891,6 +3902,17 @@
             "title": "Error",
             "description": "Why answering this question failed; '' when it produced an answer",
             "default": ""
+          },
+          "before_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BeforeApproval"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The review flag and reason as they were when a person approved this answer; null otherwise"
           }
         },
         "type": "object",
@@ -4015,6 +4037,25 @@
         ],
         "title": "AssessmentResult",
         "description": "Everything produced by one run over a submitted assessment."
+      },
+      "BeforeApproval": {
+        "properties": {
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review"
+          },
+          "confidence_reason": {
+            "type": "string",
+            "title": "Confidence Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "needs_review"
+        ],
+        "title": "BeforeApproval",
+        "description": "What the review said of an answer when a person approved it, so withdrawing can put it back (TD-053)."
       },
       "BlankAnswerRequest": {
         "properties": {
