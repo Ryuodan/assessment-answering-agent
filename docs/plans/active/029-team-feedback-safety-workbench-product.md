@@ -133,6 +133,9 @@ All stages:
   - Minor, 1.4: a followed run that had questions typed beside the file ended with "Finished: every question has an answer." They go out after the file's rows, so a request that failed never sent them, and the server does not keep them. The closing message now counts them and says to answer them again. 1 browser test (a 504 with a typed question), failing on the old page.
   - Minor, 1.4: TD-064 said `running.started_at` shows how long a run has been going, and no page showed it. The "Being answered on the server" note now says when the run started ("started at 14:02", with the day when it is not today). 1 browser test, failing on the old page.
   - Minor, the test note: 1.4's step 4 asked the chat to answer the questionnaire the Workbench was answering, which the chat cannot reach: it opens only a file attached to it, always as a new questionnaire (TD-062). The step now starts in the chat: attach the file there, then answer that questionnaire on the Workbench from "Or pick up", and ask the chat to change it during the run.
+  - 14 tests added, each failing on the old code: 1 API (`test_api_forms.py`) and 13 browser (8 in `test_review_filter.py`, 5 in `test_workbench.py`). No existing test was changed. No server size ceiling moved (`batches.py` is under the default limit); the mypy baseline stays at 237. `docs/design/questionnaires.md` and D-021 say what changed in the review queue and the same-file check; ARCHITECTURE.md says what `same_upload` leaves out and that `running` carries the start.
+  - `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,199 passed and 2 skipped, browser 89).
+  - Stage 1 waits for the user's test.
 
 ## Decision log
 
@@ -166,6 +169,7 @@ All stages:
     - The tabs are Needs review (the default when it has anything), Will be written, Done by a person, Blank or set aside, and All.
     - "Write them in anyway" appears only after Fill.
     - The question list folds once answers exist.
+    - After the review of Stage 1: only a run of the file's own rows goes back to Needs review; a run of typed questions alone keeps the person's tab, or shows All when the tab would hide its answers. A saved edit moves its card like an approval does, except while another card's editor is being typed in, when only the counts follow.
   - **1.4:**
     - One run at a time per questionnaire, held in the server's memory (one process serves).
     - A run carries on after a reload or a timeout, as today.

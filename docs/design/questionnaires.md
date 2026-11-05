@@ -623,12 +623,18 @@ are in tabs by what the server says `fill` would do with each
 (`will_be_written`): Needs review (held back, or failed), Will be written
 (confident, nobody has checked), Done by a person, Blank or set aside, and All.
 The page does not repeat the threshold. A questionnaire opens on Needs review
-when it has anything, and so does the first view after a run; otherwise the
-person's tab is kept. Fill and the counts stay in a bar under the page header,
-and "Write them in anyway" is offered only in Fill's report, never in the bar.
-The "need review" count above the cards is the tab's count: it used to count
-the reviewer's flag, so an answer under the threshold that nobody flagged was
-held back by Fill and counted nowhere.
+when it has anything, and so does the first view after a run of its rows;
+otherwise the person's tab is kept. A question typed beside the file is in no
+tab unless it needs a person, so a run of typed questions alone keeps the tab,
+or shows All when the tab would hide one of its answers. An approval, a blank
+and an edit each draw the answers again from the server, so the card moves to
+its tab and the counts follow; an edit waits for the click that left its
+editor, and only recounts while another card's editor is being typed in. Fill
+and the counts stay in a bar under the page header, and "Write them in anyway"
+is offered only in Fill's report, never in the bar; the report scrolls to just
+under the bar. The "need review" count above the cards is the tab's count: it
+used to count the reviewer's flag, so an answer under the threshold that nobody
+flagged was held back by Fill and counted nowhere.
 
 **Withdrawing an approval puts the review back** (plan 029, TD-053). Approving
 clears the flag, and withdrawing used to leave it cleared, so an answer the gate
