@@ -479,3 +479,33 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 
 - **What:** found 2026-11-05 by the feedback review. Approving clears `needs_review`, and withdrawing the approval does not put it back. A held answer that was approved and then withdrawn is written to the file as if confident.
 - **Fix:** plan 029.
+
+## TD-054: A fill that held every answer said none of them had a cell to go into
+
+- **What:** found 2026-11-05 by plan 029's design, and reproduced. When every answer that could be written was held back by the review gate, `fill` returned "The answers exist but none of them has a cell to go into -- check the answer column for each sheet in the reading report." `_nothing_written` had no case for held answers. The chat showed it above its own "N held back" line.
+- **Impact:** it sent the person to the column mapping when what they had to do was review the answers. After TD-052's fix the Workbench reaches this case often.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.1): the message is "Nothing was written: N answer(s) are held back until somebody edits or approves them." when answers were kept out. `tests/test_tools.py::test_a_fill_that_held_everything_says_so`.
+
+## TD-055: Saving an empty brief released the model's answer as a person's
+
+- **What:** found 2026-11-05 by plan 029's design, and reproduced. `set_answer(which="brief", text="")` left the model's full answer in place and marked the answer `by_hand`, confidence 1.0. The empty check covered the full answer only.
+- **Impact:** emptying the brief editor on a held answer released it unreviewed, as a person's words, at 100%.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.5): an empty brief is refused (400 `operation_refused`, "A brief answer cannot be empty. To write nothing for this question, use Leave blank."); the stored answer is unchanged. `tests/test_tools.py::test_an_empty_brief_is_refused`.
+
+## TD-056: Rewording an answer a person wrote releases the model's new words unreviewed
+
+- **What:** found 2026-11-05 by plan 029's design, and reproduced. `revise(include_written=True)`, which the chat assistant can ask for, rewords a hand-written answer. The result has `by_hand` false and `confidence_reason` cleared, but keeps the `needs_review=False` and confidence 1.0 that writing by hand set, so the gate lets the model's new words through.
+- **Impact:** model text reaches the customer's file as if a person had confirmed it.
+- **Fix (needs a decision):** a reworded hand-written answer comes back held, as a reworded approved answer does since plan 029 (0.2).
+
+## TD-057: A brief-only edit marks the whole answer as a person's
+
+- **What:** read 2026-11-05 (plan 029's design). `set_answer(which="brief")` sets `by_hand`, confidence 1.0 and `HAND` on the answer, though the full answer is still the model's.
+- **Impact:** switched to Full, the model's full text is written as the person's. Approved in a Full questionnaire, it enters the answer memory under their name.
+- **Fix (needs a decision):** record which length a person wrote, or drop the brief's mark when the full answer is written.
+
+## TD-058: A set-aside question's held answer is counted as held back by fill
+
+- **What:** found 2026-11-05 while building plan 029's 0.1. `fill` checks the gate before it checks whether a question is set aside, so a set-aside question whose answer is held appears in `Filled.held_back` and in the `FILE_FILLED` event's `held_back` count. `inspect`'s `held_back` count leaves set-aside questions out. Nothing is written for them either way.
+- **Impact:** the fill's "N held back" and its reasons can include questions that will never be written, and "Write them in anyway" counts them.
+- **Fix (needs approval):** skip set-aside questions before the gate in `fill`, with a test.

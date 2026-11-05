@@ -684,7 +684,10 @@ def set_answer(user: User, batch_id: str, question_id: str, text: str, *, which:
     # produced. Cleared, the question is simply unanswered, and the file keeps
     # whatever its cell already held -- empty stays empty, and an answer the
     # file arrived with stays. Leaving a cell empty over the file's own answer
-    # is "Leave blank", which is a decision rather than a deletion.
+    # is "Leave blank", which is a decision rather than a deletion. An empty brief
+    # released the model's full answer as a person's (plan 029), so it is refused.
+    if which == "brief" and not text.strip():
+        raise ToolError("A brief answer cannot be empty. To write nothing for this question, use Leave blank.")
     if which == "answer" and not text.strip():
         if existing is not None:
             batches.forget_answer(batch.id, question_id)
@@ -1020,9 +1023,10 @@ def fill(
         # contradicted the security team scored at or below 0.50 and was
         # flagged; none of them should reach a customer unread.
         allowed, because = ready_to_write(result, edits.get(question.id, ""))
-        if not allowed and not include_unreviewed:
+        if not allowed:
             held[question.id] = because
-            continue
+            if not include_unreviewed:
+                continue
         for target in question.writable:
             if target.role is Role.EVIDENCE:
                 blank[target.id] = "evidence columns are left blank by default"
@@ -1045,6 +1049,7 @@ def fill(
     destination = destination or _filled_path(batch)
     destination.parent.mkdir(parents=True, exist_ok=True)
     report = forms.write(batch.source_path, destination, values)
+    kept_out = {} if include_unreviewed else held
     events.record(
         user,
         events.FILE_FILLED,
@@ -1054,7 +1059,9 @@ def fill(
         created=len(report.created),
         replaced=len(report.replaced),
         left_blank=len(blank),
+        # What the gate held, and whether they went in anyway ("Write them in anyway", TD-052).
         held_back=len(held),
+        include_unreviewed=include_unreviewed,
     )
     return Filled(
         path=destination,
@@ -1063,19 +1070,19 @@ def fill(
         replaced=len(report.replaced),
         skipped=report.skipped,
         blank=blank,
-        held_back=held,
+        held_back=kept_out,
         intact=report.intact,
-        because=_nothing_written(batch, answered) if not report.written else "",
+        because=_nothing_written(batch, answered, kept_out) if not report.written else "",
     )
 
 
-def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion]) -> str:
+def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion], held: dict[str, str]) -> str:
     """Why a fill wrote nothing. Only asked when it wrote nothing.
 
-    Three states arrive here looking identical and are not: work not started,
-    work already done by the file itself, and every row struck out. The message
-    has to name which, because what the person should do next differs and only
-    one of the three is a problem.
+    Four states arrive here looking identical and are not: work not started, work
+    already done by the file itself, every row struck out, and every answer held
+    back by the gate (`held`: what was kept out). The message has to name which,
+    because what the person should do next differs in each.
     """
     if not any(_has_answer(answered.get(q.id)) for q in batch.form.questions):
         already = batch.form.answered_count
@@ -1093,6 +1100,8 @@ def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion]) -> str
         return "Nothing has been answered yet, so there was nothing to write. Answer some questions first."
     if all(q.skip for q in batch.form.questions if _has_answer(answered.get(q.id))):
         return "Every answered question is set aside, so nothing was written for any of them."
+    if held:
+        return f"Nothing was written: {len(held)} answer(s) are held back until somebody edits or approves them."
     return (
         "The answers exist but none of them has a cell to go into -- check the "
         "answer column for each sheet in the reading report."

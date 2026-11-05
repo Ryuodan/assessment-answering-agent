@@ -780,6 +780,43 @@ async def test_the_gate_can_be_opened_deliberately(batch, user, answers_doubtful
     assert filled.written == 4 and not filled.held_back
 
 
+def _filled_event(batch_id):
+    return [e for e in events.for_subject(batches.SUBJECT, batch_id) if e.kind == events.FILE_FILLED][-1]
+
+
+@pytest.mark.asyncio
+async def test_a_bypassed_fill_records_how_many_the_gate_held(batch, user, answers_doubtfully):
+    """TD-052: a fill that wrote held answers recorded `held_back=0`, so the log
+    could not show that unconfirmed answers had reached a customer's file."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, include_unreviewed=True)
+
+    recorded = _filled_event(batch.id).payload
+    assert recorded["held_back"] == 4 and recorded["include_unreviewed"] is True
+    assert filled.held_back == {}, "nothing was kept out, so nothing is offered to write anyway"
+
+
+@pytest.mark.asyncio
+async def test_a_gated_fill_records_that_the_gate_was_kept(batch, user, answers_doubtfully):
+    await tools.answer(user, batch.id)
+    tools.fill(user, batch.id)
+
+    recorded = _filled_event(batch.id).payload
+    assert recorded["held_back"] == 4 and recorded["include_unreviewed"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_fill_that_held_everything_says_so(batch, user, answers_doubtfully):
+    """It said "none of them has a cell to go into", which sent the person to the
+    column mapping when what they had to do was review the answers."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id)
+
+    assert filled.written == 0
+    assert "4 answer(s) are held back" in filled.because
+    assert "cell to go into" not in filled.because
+
+
 @pytest.mark.asyncio
 async def test_a_confident_answer_still_goes_straight_in(batch, user, answers_yes):
     """The gate must not turn every run into a review queue."""
@@ -1046,3 +1083,19 @@ def test_an_answer_emptied_in_the_editor_is_simply_not_answered(batch, user):
     assert question.id not in batches.answers(batch.id)
     view = next(q for q in tools.inspect(user, batch.id)["questions"] if q["id"] == question.id)
     assert view["answered"] is None and not view["blanked"]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_brief_is_refused(batch, user, answers_doubtfully):
+    """Saved, it left the model's full answer in place marked as a person's, at
+    100%, so emptying the brief editor released an answer nobody had reviewed."""
+    await tools.answer(user, batch.id)
+    question = batch.form.questions[0]
+    before = batches.answers(batch.id)[question.id]
+
+    with pytest.raises(tools.ToolError, match="Leave blank"):
+        tools.set_answer(user, batch.id, question.id, "  ", which="brief")
+
+    assert batches.answers(batch.id)[question.id] == before
+    view = next(q for q in tools.inspect(user, batch.id)["questions"] if q["id"] == question.id)
+    assert view["will_be_written"] is False and not view["by_hand"]

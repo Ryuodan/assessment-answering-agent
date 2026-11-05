@@ -93,6 +93,9 @@ All stages:
     - `in_house_style` moves to `src/styling.py`;
     - the Word preview moves to `src/docx_preview.py`, which resolves TD-019.
   - The build goes stage by stage, each stage reviewed and fixed before the next starts.
+- 2026-11-05, Stage 0 build:
+  - `length_of` and `written_text` moved into `selection.py`, behaviour unchanged (164 existing tests pass).
+  - 0.1 and 0.5, server side. `fill` records what the gate held (`held_back`) and whether "Write them in anyway" was used (`include_unreviewed`); the "nothing written" message names held answers (TD-054); an empty brief is refused (TD-055). 4 unit tests, each failing on the old code. `tools.py` ceiling 1,373 to 1,366. New debt found: TD-056 to TD-058.
 
 ## Decision log
 
