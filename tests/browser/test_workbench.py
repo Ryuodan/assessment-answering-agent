@@ -368,6 +368,108 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     assert len(batches.recent(TEAM)) == 2
 
 
+# --- a run carries on after a reload or a timeout, and is followed (plan 029, 1.4) ---
+
+
+@pytest.fixture
+def gated(monkeypatch: pytest.MonkeyPatch):
+    """The real answering path over a stand-in for the per-question pipeline,
+    one question at a time: the first is answered at once, the rest when `open()` is called."""
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+
+    gate = threading.Event()
+    calls: list[str] = []
+
+    async def answer_one(question, language, *, run_id="", **_):
+        calls.append(question.id)
+        if len(calls) > 1:
+            while not gate.is_set():
+                await asyncio.sleep(0.05)
+        return AnsweredQuestion(question=question, answer=ANSWER, confidence=0.9, needs_review=False)
+
+    monkeypatch.setattr("src.service.answer_one_question", answer_one)
+    monkeypatch.setattr(settings, "max_concurrent_questions", 1)
+    yield SimpleNamespace(calls=calls, open=gate.set)
+    gate.set()  # a run never outlives its test waiting
+
+
+def wait_until(page: Page, condition, seconds: float = 10) -> None:
+    for _ in range(int(seconds * 20)):
+        if condition():
+            return
+        page.wait_for_timeout(50)
+    raise AssertionError("waited too long")
+
+
+def test_a_reload_while_answering_follows_the_run_and_answers_once(page: Page, tmp_path: Path, gated) -> None:
+    """A reload mid-run showed 0 answered and Answer enabled: a second, paid run was one click away."""
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    page.click("#answerBtn")
+    [opened] = batches.recent(TEAM)
+    wait_until(page, lambda: len(batches.answers(opened["id"])) >= 1)  # saved as it finished
+
+    page.reload()
+
+    note = page.locator("#formReadOnly")
+    expect(note).to_contain_text("Being answered on the server: 1 of 4 done")
+    expect(page.locator("#answerBtn")).to_be_disabled()
+    expect(page.locator("#fillFormBtn")).to_be_disabled()
+    cards = page.locator("#results .answer")
+    expect(cards).to_have_count(1)
+    expect(cards.first.get_by_role("button", name="Approve")).to_have_count(0)
+    expect(page.locator("#closeForm")).to_be_enabled()
+
+    gated.open()
+    expect(cards).to_have_count(4, timeout=15_000)
+    expect(page.locator("#answerStatus")).to_contain_text("Finished: every question has an answer.")
+    expect(note).to_be_hidden()
+    expect(cards.first.get_by_role("button", name="Approve")).to_be_visible()
+    expect(page.locator("#fillFormBtn")).to_be_enabled()
+    assert len(gated.calls) == 4, "every question answered once"
+
+
+def test_a_timed_out_answer_request_is_followed_not_repeated(page: Page, tmp_path: Path, gated) -> None:
+    """Past nginx's 15 minutes the page said "Request failed (504)" and offered Answer again, while the server carried on."""
+    import threading
+
+    import httpx
+
+    def proxy_gives_up(route) -> None:
+        sent = route.request
+        threading.Thread(
+            target=lambda: httpx.post(
+                sent.url, content=sent.post_data_buffer, headers={"content-type": "application/json"}, timeout=60
+            ),
+            daemon=True,
+        ).start()
+        for _ in range(200):  # the run has started on the server
+            if gated.calls:
+                break
+            threading.Event().wait(0.05)
+        route.fulfill(status=504, content_type="text/html", body="<html>504 Gateway Time-out</html>")
+
+    page.route("**/answer", proxy_gives_up)
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    page.click("#answerBtn")
+
+    status = page.locator("#answerStatus")
+    expect(status).to_contain_text("the answering carries on there")
+    expect(page.locator("#answerBtn")).to_be_disabled()
+    expect(page.locator("#formReadOnly")).to_contain_text("Being answered on the server")
+
+    gated.open()
+    expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
+    expect(status).to_contain_text("Finished: every question has an answer.")
+    assert len(gated.calls) == 4, "every question answered once"
+
+
 # --- leaving with unsaved work asks first (plan 029, 1.5) ------------------------
 
 

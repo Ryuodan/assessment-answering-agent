@@ -1304,3 +1304,131 @@ async def test_an_empty_brief_is_refused(batch, user, answers_doubtfully):
     assert batches.answers(batch.id)[question.id] == before
     view = next(q for q in tools.inspect(user, batch.id)["questions"] if q["id"] == question.id)
     assert view["will_be_written"] is False and not view["by_hand"]
+
+
+# --- each answer saved as it finishes; one run at a time (plan 029, 1.4) -------
+
+
+class Paused:
+    """The real `service.answer_questions`, over a stand-in for the per-question
+    pipeline that holds one question until `release` is set."""
+
+    def __init__(self, monkeypatch, wait_on: int = 1):
+        import asyncio
+
+        from src import service
+
+        self.calls: list[str] = []
+        self.waiting = asyncio.Event()
+        self.release = asyncio.Event()
+        self.wait_on = wait_on
+        monkeypatch.setattr(settings, "max_concurrent_questions", 1)
+        monkeypatch.setattr(service, "answer_one_question", self.answer_one)
+
+    async def answer_one(self, question, language, *, run_id="", **_):
+        self.calls.append(question.id)
+        if len(self.calls) == self.wait_on + 1:
+            self.waiting.set()
+            await self.release.wait()
+        return AnsweredQuestion(question=question, answer=f"Yes. [{question.id}]", confidence=0.9, needs_review=False)
+
+    async def during(self, user, batch, check, **answer_options):
+        """Run `tools.answer` and call `check` while it waits on the second question."""
+        import asyncio
+
+        run = asyncio.ensure_future(tools.answer(user, batch.id, **answer_options))
+        await asyncio.wait_for(self.waiting.wait(), timeout=5)
+        try:
+            await check()
+        finally:
+            self.release.set()
+        return await run
+
+
+@pytest.fixture
+def paused(monkeypatch):
+    return Paused(monkeypatch)
+
+
+async def test_answers_are_saved_as_each_one_finishes(batch, user, paused):
+    """A run's answers were saved only when it ended: one cut short lost them all."""
+    first, second = (q.id for q in batch.form.questions[:2])
+
+    async def check():
+        saved = batches.answers(batch.id)
+        assert first in saved and second not in saved
+
+    await paused.during(user, batch, check)
+
+    assert len(batches.answers(batch.id)) == 4
+
+
+async def test_a_second_run_on_a_questionnaire_being_answered_is_refused(batch, user, paused):
+    from src.errors import QuestionnaireBusy
+
+    async def check():
+        with pytest.raises(QuestionnaireBusy, match="being answered right now"):
+            await tools.answer(user, batch.id)
+
+    await paused.during(user, batch, check)
+
+    assert len(paused.calls) == 4, "every question answered once"
+
+
+async def test_nothing_changes_a_questionnaire_while_it_is_answered(batch, user, paused):
+    """An edit made during a run was overwritten by the run's last save."""
+    from src.errors import QuestionnaireBusy
+
+    first = batch.form.questions[0].id
+
+    async def check():
+        for change in (
+            lambda: tools.set_answer(user, batch.id, first, "Mine."),
+            lambda: tools.approve_answer(user, batch.id, first),
+            lambda: tools.blank_answer(user, batch.id, first),
+            lambda: tools.set_questions(user, batch.id, [{"id": first, "skip": True}]),
+        ):
+            with pytest.raises(QuestionnaireBusy):
+                change()
+        with pytest.raises(QuestionnaireBusy):
+            await tools.revise(user, batch.id, "Shorter.")
+        assert tools.inspect(user, batch.id)["counts"]["answered"] == 1
+        assert tools.fill(user, batch.id).written == 1, "filling only reads, and writes a copy"
+
+    await paused.during(user, batch, check)
+
+    assert batches.answers(batch.id)[first].answer == f"Yes. [{first}]"
+
+
+async def test_inspect_says_how_far_a_run_has_got(batch, user, paused):
+    async def check():
+        running = tools.inspect(user, batch.id)["running"]
+        assert running["run_id"] == batch.id and running["started_at"]
+        assert (running["stage"], running["completed"], running["total"]) == ("answering", 1, 4)
+
+    await paused.during(user, batch, check)
+
+    assert tools.inspect(user, batch.id)["running"] is None
+
+
+async def test_a_brief_questionnaire_still_gets_its_briefs(batch, user, answers_yes, shortens):
+    """A run shortens its own answers: the hold does not refuse the run that holds it."""
+    tools.set_detail(user, batch.id, "brief")
+
+    outcome = await tools.answer(user, batch.id)
+
+    assert outcome.answered == 4
+    assert all(a.brief == "Yes, briefly." for a in batches.answers(batch.id).values())
+    assert tools.inspect(user, batch.id)["running"] is None
+
+
+async def test_a_run_that_fails_lets_the_questionnaire_go(batch, user, monkeypatch):
+    async def broken(questions, **_):
+        raise RuntimeError("the pipeline fell over")
+
+    monkeypatch.setattr(tools.service, "answer_questions", broken)
+    with pytest.raises(RuntimeError):
+        await tools.answer(user, batch.id)
+
+    tools.set_answer(user, batch.id, batch.form.questions[0].id, "Mine.")
+    assert tools.inspect(user, batch.id)["running"] is None

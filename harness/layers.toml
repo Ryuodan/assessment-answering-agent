@@ -24,6 +24,7 @@ modules = [
     "src.roles",
     "src.verification",
     "src.progress",
+    "src.busy",
     "src.chunking",
 ]
 

@@ -215,6 +215,23 @@ def test_describing_a_form_counts_the_blanks_rather_than_implying_them(kit):
     assert "0 answered here, 4 still blank" in tool["describe_form"]()
 
 
+def test_the_assistant_is_told_the_questionnaire_is_busy(kit, answers_yes, monkeypatch):
+    """Plan 029, 1.4: a run going on elsewhere -- the Workbench, another chat --
+    is a refusal the model can relay, not an error and not a second paid run."""
+    import asyncio
+
+    from src import busy
+
+    tool, state = kit
+    tool["open_questionnaire"]("")
+    monkeypatch.setitem(busy._HELD, state["batch_id"], busy._Hold(run_id="elsewhere", started_at="now"))
+
+    said = asyncio.run(tool["answer_questions"]())
+
+    assert said.startswith("This questionnaire is being answered right now")
+    assert "questions" not in answers_yes, "nothing was answered"
+
+
 def test_every_tool_says_so_when_no_questionnaire_is_open(kit):
     import asyncio
 

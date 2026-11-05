@@ -205,3 +205,14 @@ class ProductDeleted(Conflict, ToolError):
     """
 
     code = "product_deleted"
+
+
+# Raised by src.busy, through src.tools (plan 029).
+class QuestionnaireBusy(Conflict, ToolError):
+    """A questionnaire being answered right now: one run at a time, and nothing changes it meanwhile.
+
+    A Conflict, so the API answers 409; also a ToolError, so the chat assistant
+    hands the sentence to the model as the tool's result.
+    """
+
+    code = "questionnaire_busy"

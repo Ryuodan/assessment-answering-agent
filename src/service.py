@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import logging
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from src.errors import NotADocument as NotADocument
@@ -270,6 +271,7 @@ async def answer_questions(
     run_id: str | None = None,
     team_id: str | None = None,
     product_id: str = "",
+    on_answer: Callable[[AnsweredQuestion], None] | None = None,
 ) -> list[AnsweredQuestion]:
     """Answer a list of questions that did not come from a document.
 
@@ -283,7 +285,8 @@ async def answer_questions(
     is simply not observable.
 
     `product_id` answers them for a product, from its knowledge base and the
-    shared one (plan 023). It is passed on only when there is one.
+    shared one (plan 023). It is passed on only when there is one. `on_answer`
+    is handed each answer as it finishes, failed ones too, before it is counted.
     """
     semaphore = asyncio.Semaphore(settings.max_concurrent_questions)
     scope = {"product_id": product_id} if product_id else {}
@@ -293,16 +296,20 @@ async def answer_questions(
     async def run(question: Question) -> AnsweredQuestion:
         async with semaphore:
             try:
-                return await answer_one_question(
-                    question, language or question.language, run_id=run_id or "", team_id=team_id, **scope
-                )
-            except Exception as exc:  # noqa: BLE001 - contained per question, as in the fan-out
-                # The document flow already contains a per-question failure; this
-                # path did not, so a single transient upstream error — a model
-                # briefly withdrawn from the region, say — discarded a whole
-                # forty-two question run that had nearly finished.
-                logger.exception("Failed to answer question %s", question.id)
-                return failed_answer(question, exc)
+                try:
+                    answered = await answer_one_question(
+                        question, language or question.language, run_id=run_id or "", team_id=team_id, **scope
+                    )
+                except Exception as exc:  # noqa: BLE001 - contained per question, as in the fan-out
+                    # The document flow already contains a per-question failure; this
+                    # path did not, so a single transient upstream error — a model
+                    # briefly withdrawn from the region, say — discarded a whole
+                    # forty-two question run that had nearly finished.
+                    logger.exception("Failed to answer question %s", question.id)
+                    answered = failed_answer(question, exc)
+                if on_answer is not None:
+                    on_answer(answered)  # before it is counted: "12 done" finds 12 saved (plan 029)
+                return answered
             finally:
                 progress.advance(run_id)
 

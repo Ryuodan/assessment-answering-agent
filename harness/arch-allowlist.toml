@@ -14,7 +14,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/tools.py"
-max_lines = 1294
+max_lines = 1303
 debt = "TD-006"
 
 [[size]]
@@ -44,7 +44,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/service.py"
-max_lines = 462
+max_lines = 469
 debt = "TD-006"
 
 [[size]]

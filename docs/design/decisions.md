@@ -377,3 +377,35 @@ a plan relies on it.
 - **Date:** 2026-11-05. **Status:** accepted; a default the user can reverse
   after testing plan 029. **Decided by:** the user (kept, not derived); Claude
   (where it is kept, the event's fields, listing rather than repairing).
+
+## D-021: the Workbench keeps a person's place, and one run holds a questionnaire
+
+- **Context:** the team lost work on the Workbench (plan 029's feedback). A
+  reload opened nothing; "Or pick up" offered three questionnaires, by upload;
+  the same file again made a second, empty questionnaire; a run saved its
+  answers only at its end, outlived nginx's 15 minutes, and could be started
+  again, paid for twice, while it was still going.
+- **Decision:**
+  - A questionnaire's last use is its last change (`form_batches.updated_at`,
+    which every write moves). "Or pick up" lists every one, last changed first,
+    up to 500. The open one is in the page's address (`?q=<id>`), which opens
+    only for its owner. No migration.
+  - The same file again is matched by its bytes against this person's
+    questionnaire files still on disk, before anything is saved or read, and
+    offered to open or start fresh (`if_already_open="ask"`, sent only by the
+    Workbench). Not a stored fingerprint: that needs a migration (TD-046).
+  - Each answer is saved as it finishes. One run at a time per questionnaire,
+    held in memory (`src/busy.py`), and nothing else changes it until the run
+    ends: one writer at a time, rather than letting edits through and merging
+    at the end. A run carries on after a reload or a timeout, as before, and
+    the page follows it.
+  - Leaving the Workbench with work only the page holds asks first; nothing
+    is saved on the way out.
+- **Consequences:** opening or filling a questionnaire does not move it up the
+  list. During a run nobody can edit that questionnaire, in the Workbench or
+  the chat. The hold assumes one process (TD-063), and a run that never ends
+  holds its questionnaire until a restart (TD-064). The chat does not yet ask
+  about the same file (TD-062).
+- **Date:** 2026-11-05. **Status:** accepted; defaults the user can reverse
+  after testing plan 029. **Decided by:** Claude, on the design's
+  recommendations recorded in plan 029's decision log.

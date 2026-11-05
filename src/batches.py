@@ -14,6 +14,7 @@ is the difference between this and `runs`, which records one finished pass.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,10 @@ from typing import Any
 from src import store, uploads
 from src.forms.model import DetectedForm
 from src.identity import User
+from src.logs import get_logger
 from src.models import AnsweredQuestion
+
+logger = get_logger(__name__)
 
 SUBJECT = "batch"
 """What `events.record(subject_type=...)` should say about a batch."""
@@ -272,6 +276,24 @@ def save_answers(batch_id: str, answers: list[AnsweredQuestion], *, edited_by: s
             [(batch_id, answer.question.id, now, edited_by, answer.model_dump_json()) for answer in answers],
         )
         conn.execute("UPDATE form_batches SET updated_at = ? WHERE batch_id = ?", (now, batch_id))
+
+
+def saver(batch_id: str) -> Callable[[AnsweredQuestion], None]:
+    """Save one answer of a run the moment it is drafted (plan 029).
+
+    A run's answers were saved only when the whole run ended, so a large
+    questionnaire cut short -- a restart, a crash -- lost every answer it had
+    paid for. A failure here is logged and nothing more: the run's own last
+    save stores the answer again.
+    """
+
+    def save(answer: AnsweredQuestion) -> None:
+        try:
+            save_answers(batch_id, [answer])
+        except Exception:  # noqa: BLE001 - the run's last save stores it again
+            logger.exception("batches.save_failed", batch_id=batch_id, question_id=answer.question.id)
+
+    return save
 
 
 def answers(batch_id: str) -> dict[str, AnsweredQuestion]:

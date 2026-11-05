@@ -25,6 +25,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `ProductDeleted` | 409 | `product_deleted` | A deleted product's questionnaire or chat: kept to be read, and its filled file downloaded. |
 | `ProductLocked` | 409 | `product_locked` | A questionnaire's or a chat's product is fixed once chosen. |
 | `ProductNameTaken` | 409 | `product_name_taken` | The team already has a product of that name, whatever its case. |
+| `QuestionnaireBusy` | 409 | `questionnaire_busy` | A questionnaire being answered right now: one run at a time, and nothing changes it meanwhile. |
 | `UnsupportedFile` | 415 | `unsupported_file` | A file of a type this cannot take. |
 | `Unprocessable` | 422 | `unprocessable` | Understood, but cannot be used: an unreadable file, nothing to export. |
 | `FormatError` | 422 | `questionnaire_unreadable` | The file is not a workbook this can read. The message is safe to show. |

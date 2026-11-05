@@ -1029,7 +1029,7 @@ async def answer_question_list(request: AnswerQuestionsRequest, user: User = Dep
         for index, item in enumerate(request.questions)
     ]
 
-    scope = {"product_id": products.chosen(user.team_id, request.product)} if request.product else {}
+    scope: dict[str, Any] = {"product_id": products.chosen(user.team_id, request.product)} if request.product else {}
     answers = await service.answer_questions(
         questions,
         language=request.language,

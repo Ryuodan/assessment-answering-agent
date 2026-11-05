@@ -326,6 +326,27 @@ def test_revising_rewrites_what_is_already_answered(client, tmp_path, answers_ye
     assert body["attempted"] == 4
 
 
+def test_a_busy_questionnaire_answers_409(client, tmp_path, answers_yes, monkeypatch):
+    """Plan 029, 1.4: one run at a time, and nothing changes it meanwhile."""
+    from src import busy
+
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+
+    with monkeypatch.context() as running:  # a run going on in another request
+        running.setitem(busy._HELD, opened["id"], busy._Hold(run_id="run-x", started_at="2026-11-05T09:00:00+00:00"))
+        answered = client.post(f"/api/forms/{opened['id']}/answer", json={})
+        edited = client.post(f"/api/forms/{opened['id']}/answers", json={"question_id": question, "text": "Mine."})
+        shown = client.get(f"/api/forms/{opened['id']}")
+
+    for refused in (answered, edited):
+        assert refused.status_code == 409
+        assert refused.json()["code"] == "questionnaire_busy"
+        assert "being answered right now" in refused.json()["detail"]
+    assert shown.status_code == 200 and shown.json()["running"]["run_id"] == "run-x"
+    assert client.get(f"/api/forms/{opened['id']}").json()["running"] is None
+
+
 # --- correcting ------------------------------------------------------------
 
 

@@ -32,7 +32,7 @@ from typing import Any
 import asyncio
 
 from src.config import settings
-from src import answer_memory, batches, events, preferences, products, progress, rewrite, service, store
+from src import answer_memory, batches, busy, events, preferences, products, progress, rewrite, service, store
 from src.formatting import to_cell_text
 from src.batches import Batch
 from src.forms import status as status_map
@@ -209,13 +209,15 @@ def _require(user: User, batch_id: str, *, reading: bool = False) -> Batch:
 
     Somebody else's questionnaire is "no questionnaire": the person who
     uploaded it owns it and its answers. A deleted product's is kept to be
-    read and filled, `reading`, and nothing else (plan 027).
+    read and filled, `reading`, and nothing else (plan 027); so is one another
+    run is answering, until it ends (`busy`, plan 029).
     """
     batch = batches.load(batch_id, team_id=user.team_id, actor_email=user.email)
     if batch is None:
         raise QuestionnaireNotFound(f"No questionnaire {batch_id!r}.")
     if not reading:
         products.refuse_deleted(user.team_id, batch.product_id)
+        busy.refuse(batch.id)
     return batch
 
 
@@ -299,6 +301,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
         "file_present": batch.exists,
         "created_at": batch.created_at,
         "updated_at": batch.updated_at,
+        "running": busy.state(batch.id),  # being answered now, and how far it has got (plan 029)
         "counts": {
             "questions": len(batch.form.questions),
             "answered": sum(1 for q in batch.form.questions if _has_answer(answered.get(q.id))),
@@ -388,44 +391,48 @@ async def answer(
     if not chosen:
         return outcome
 
-    # The questionnaire's product, from its knowledge base beside the shared one.
-    scope_of_answers: dict[str, Any] = {"product_id": batch.product_id} if batch.product_id else {}
-    results = await service.answer_questions(
-        [_as_question(question) for question in chosen],
-        run_id=run_id or batch.id,
-        team_id=user.team_id,
-        **scope_of_answers,
-    )
-    # Preferences are applied here, after drafting and review, and never
-    # handed to `service`: see `src.preferences` for why the drafter must not
-    # see them. Here rather than in each interface so the workbench and the
-    # assistant cannot disagree about whether it happened.
-    results = await in_house_style(user, results, run_id=run_id or batch.id)
-    outcome.styled = sum(1 for result in results if result.drafted)
-    batches.save_answers(batch.id, results)
-    # A questionnaire being filled in briefly needs the brief form of what was
-    # just answered. It used to get it only at the moment somebody switched the
-    # file to brief, so anything answered afterwards showed -- and was written
-    # -- at full length under a "Brief" label.
-    if batch.detail == "brief":
-        fresh = tuple(result.question.id for result in results if _has_answer(result))
-        if fresh:
-            await make_brief(user, batch.id, Scope(ids=fresh), run_id=run_id)
+    # One run at a time, and nothing else changes it meanwhile (plan 029). No
+    # await since `_require` looked, so no other run can have started since.
+    with busy.hold(batch.id, run_id or batch.id):
+        # The questionnaire's product, from its knowledge base beside the shared one.
+        scope_of_answers: dict[str, Any] = {"product_id": batch.product_id} if batch.product_id else {}
+        results = await service.answer_questions(
+            [_as_question(question) for question in chosen],
+            run_id=run_id or batch.id,
+            team_id=user.team_id,
+            on_answer=batches.saver(batch.id),  # each saved as it finishes: a run cut short keeps them
+            **scope_of_answers,
+        )
+        # Preferences are applied here, after drafting and review, and never
+        # handed to `service`: see `src.preferences` for why the drafter must not
+        # see them. Here rather than in each interface so the workbench and the
+        # assistant cannot disagree about whether it happened.
+        results = await in_house_style(user, results, run_id=run_id or batch.id)
+        outcome.styled = sum(1 for result in results if result.drafted)
+        batches.save_answers(batch.id, results)
+        # A questionnaire being filled in briefly needs the brief form of what was
+        # just answered. It used to get it only at the moment somebody switched the
+        # file to brief, so anything answered afterwards showed -- and was written
+        # -- at full length under a "Brief" label.
+        if batch.detail == "brief":
+            fresh = tuple(result.question.id for result in results if _has_answer(result))
+            if fresh:
+                await make_brief(user, batch.id, Scope(ids=fresh), run_id=run_id)
 
-    outcome.answered = sum(1 for r in results if not r.error)
-    outcome.failed = sum(1 for r in results if r.error)
-    outcome.needs_review = sum(1 for r in results if r.needs_review and not r.error)
-    events.record(
-        user,
-        events.BATCH_ANSWERED,
-        subject_type=batches.SUBJECT,
-        subject_id=batch.id,
-        scope=outcome.scope,
-        attempted=outcome.attempted,
-        answered=outcome.answered,
-        failed=outcome.failed,
-    )
-    return outcome
+        outcome.answered = sum(1 for r in results if not r.error)
+        outcome.failed = sum(1 for r in results if r.error)
+        outcome.needs_review = sum(1 for r in results if r.needs_review and not r.error)
+        events.record(
+            user,
+            events.BATCH_ANSWERED,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            scope=outcome.scope,
+            attempted=outcome.attempted,
+            answered=outcome.answered,
+            failed=outcome.failed,
+        )
+        return outcome
 
 
 def restore_draft(user: User, batch_id: str, question_id: str) -> None:
@@ -508,65 +515,66 @@ async def revise(
     if not chosen:
         return outcome
 
-    # Reworded, not re-answered. Running the pipeline again with the instruction
-    # as a style would re-retrieve and re-review, so "make it shorter" could come
-    # back saying something different -- which is not what revise means. One call
-    # over the answer and the sources it already used keeps the facts, the
-    # citations and the clause a reader would go and check.
-    progress.start(run_id or batch.id, stage="rewriting")
-    progress.set_total(run_id or batch.id, len(chosen))
-    try:
+    with busy.hold(batch.id, run_id or batch.id):  # nothing else changes it meanwhile (plan 029)
+        # Reworded, not re-answered. Running the pipeline again with the instruction
+        # as a style would re-retrieve and re-review, so "make it shorter" could come
+        # back saying something different -- which is not what revise means. One call
+        # over the answer and the sources it already used keeps the facts, the
+        # citations and the clause a reader would go and check.
+        progress.start(run_id or batch.id, stage="rewriting")
+        progress.set_total(run_id or batch.id, len(chosen))
+        try:
 
-        async def one(question: FormQuestion) -> AnsweredQuestion:
-            original = existing[question.id]
-            try:
-                revised = await rewrite.rewrite(
-                    original,
-                    instruction,
-                    **({"language": language} if language else {}),
-                    **({"note": note} if note else {}),
-                )
-            finally:
-                progress.advance(run_id or batch.id)
-            if revised is not original:
-                # The first rewording keeps the draft, so any of them can be
-                # undone. Not a person's words, though: "put the draft back"
-                # would then restore them marked as the model's.
-                if not revised.drafted and not written_by_a_person(original):
-                    revised.drafted = original.answer
-                revised.by_hand = False
-                # The brief form was condensed from the words just replaced.
-                # Kept, it went on being what a brief questionnaire showed and
-                # wrote, so the rewording appeared to do nothing at all.
-                revised.brief = ""
-                revised = withdraw_approval(revised, reworded=True)  # held again if it was before approval
-            return revised
+            async def one(question: FormQuestion) -> AnsweredQuestion:
+                original = existing[question.id]
+                try:
+                    revised = await rewrite.rewrite(
+                        original,
+                        instruction,
+                        **({"language": language} if language else {}),
+                        **({"note": note} if note else {}),
+                    )
+                finally:
+                    progress.advance(run_id or batch.id)
+                if revised is not original:
+                    # The first rewording keeps the draft, so any of them can be
+                    # undone. Not a person's words, though: "put the draft back"
+                    # would then restore them marked as the model's.
+                    if not revised.drafted and not written_by_a_person(original):
+                        revised.drafted = original.answer
+                    revised.by_hand = False
+                    # The brief form was condensed from the words just replaced.
+                    # Kept, it went on being what a brief questionnaire showed and
+                    # wrote, so the rewording appeared to do nothing at all.
+                    revised.brief = ""
+                    revised = withdraw_approval(revised, reworded=True)  # held again if it was before approval
+                return revised
 
-        results = list(await asyncio.gather(*(one(q) for q in chosen)))
-    finally:
-        progress.finish(run_id or batch.id)
+            results = list(await asyncio.gather(*(one(q) for q in chosen)))
+        finally:
+            progress.finish(run_id or batch.id)
 
-    changed = [r for r in results if r is not existing[r.question.id]]
-    batches.save_answers(batch.id, changed)
-    # Derived again only where somebody is going to read the brief form.
-    shown_brief = tuple(r.question.id for r in changed if length_of(r, batch.detail) == "brief")
-    if shown_brief:
-        await make_brief(user, batch.id, Scope(ids=shown_brief), run_id=run_id)
+        changed = [r for r in results if r is not existing[r.question.id]]
+        batches.save_answers(batch.id, changed)
+        # Derived again only where somebody is going to read the brief form.
+        shown_brief = tuple(r.question.id for r in changed if length_of(r, batch.detail) == "brief")
+        if shown_brief:
+            await make_brief(user, batch.id, Scope(ids=shown_brief), run_id=run_id)
 
-    outcome.answered = len(changed)
-    outcome.failed = len(results) - len(changed)
-    outcome.needs_review = sum(1 for r in changed if r.needs_review and not r.error)
-    events.record(
-        user,
-        events.BATCH_REVISED,
-        subject_type=batches.SUBJECT,
-        subject_id=batch.id,
-        scope=outcome.scope,
-        instruction=instruction[:400],
-        attempted=outcome.attempted,
-        protected=outcome.protected,
-    )
-    return outcome
+        outcome.answered = len(changed)
+        outcome.failed = len(results) - len(changed)
+        outcome.needs_review = sum(1 for r in changed if r.needs_review and not r.error)
+        events.record(
+            user,
+            events.BATCH_REVISED,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            scope=outcome.scope,
+            instruction=instruction[:400],
+            attempted=outcome.attempted,
+            protected=outcome.protected,
+        )
+        return outcome
 
 
 async def apply_skill(
@@ -771,37 +779,38 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None, run_
     if not chosen:
         return outcome
 
-    progress.start(run_id or batch.id, stage="shortening")
-    progress.set_total(run_id or batch.id, len(chosen))
-    try:
+    with busy.hold(batch.id, run_id or batch.id):  # nothing else changes it meanwhile (plan 029)
+        progress.start(run_id or batch.id, stage="shortening")
+        progress.set_total(run_id or batch.id, len(chosen))
+        try:
 
-        async def one(question: FormQuestion) -> AnsweredQuestion:
-            answered = existing[question.id].model_copy(deep=True)
-            try:
-                answered.brief = await rewrite.shorten(answered)
-            except Exception:  # noqa: BLE001 - one failure is one long answer, not a failed run
-                logger.exception("Could not shorten %s", question.id)
-            finally:
-                progress.advance(run_id or batch.id)
-            return answered
+            async def one(question: FormQuestion) -> AnsweredQuestion:
+                answered = existing[question.id].model_copy(deep=True)
+                try:
+                    answered.brief = await rewrite.shorten(answered)
+                except Exception:  # noqa: BLE001 - one failure is one long answer, not a failed run
+                    logger.exception("Could not shorten %s", question.id)
+                finally:
+                    progress.advance(run_id or batch.id)
+                return answered
 
-        results = list(await asyncio.gather(*(one(q) for q in chosen)))
-    finally:
-        progress.finish(run_id or batch.id)
+            results = list(await asyncio.gather(*(one(q) for q in chosen)))
+        finally:
+            progress.finish(run_id or batch.id)
 
-    # Saved under whoever had put their name to each answer. One save for all of
-    # them recorded every answer as edited by nobody, which erased the name of
-    # the person who had approved or corrected it.
-    edits = batches.edited_by(batch.id)
-    for who in {edits.get(r.question.id, "") for r in results}:
-        batches.save_answers(
-            batch.id,
-            [r for r in results if edits.get(r.question.id, "") == who],
-            edited_by=who,
-        )
-    outcome.answered = sum(1 for r in results if r.brief.strip())
-    outcome.failed = outcome.attempted - outcome.answered
-    return outcome
+        # Saved under whoever had put their name to each answer. One save for all of
+        # them recorded every answer as edited by nobody, which erased the name of
+        # the person who had approved or corrected it.
+        edits = batches.edited_by(batch.id)
+        for who in {edits.get(r.question.id, "") for r in results}:
+            batches.save_answers(
+                batch.id,
+                [r for r in results if edits.get(r.question.id, "") == who],
+                edited_by=who,
+            )
+        outcome.answered = sum(1 for r in results if r.brief.strip())
+        outcome.failed = outcome.attempted - outcome.answered
+        return outcome
 
 
 def set_detail(user: User, batch_id: str, detail: str) -> None:

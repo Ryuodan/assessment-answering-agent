@@ -226,8 +226,15 @@ answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 `service.answer_questions`, which runs the LangGraph pipeline once per question
 (`graph/workflow.py`): plan the searches, retrieve, rerank, draft, review, and
 either retry retrieval with a refined query or finalize with confidence and
-citations. Answers are saved on the batch (`batches.save_answers`) and an event
-is recorded. `POST /api/forms/{id}/fill` writes the ready answers into a copy
+citations. Each answer is saved on the batch as it finishes (`on_answer`,
+`batches.saver`), before it is counted in `progress`, and the run's styled
+answers are saved again at its end (`batches.save_answers`), with an event.
+While a run goes on, `busy` holds its questionnaire: a second run, and any
+change to it (an edit, an approval, a rewording), is refused with 409
+`questionnaire_busy`; reading and filling are not. `GET /api/forms/{id}` says
+how far the run has got (`running`), and the Workbench follows it after a
+reload or a timed-out request instead of offering Answer again. `busy`, like
+`progress`, is in the memory of the one process that serves the app (plan 029). `POST /api/forms/{id}/fill` writes the ready answers into a copy
 of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
 when `selection.ready_to_write` says so: a person confirmed it, or it is neither
 flagged nor under `REVIEW_CONFIDENCE_THRESHOLD`. The rest are held back and

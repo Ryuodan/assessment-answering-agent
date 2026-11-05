@@ -60,6 +60,12 @@ or docs and has not been verified by running anything.
   - `graph/nodes.py` 406 -> 402.
 
   The ceilings in `harness/arch-allowlist.toml` were lowered to match, each at the end of its plan.
+- **Update** 2026-11-05 (plan 029, Stage 1): room for the Workbench relief came from three behaviour-neutral moves, each in its own commit with `openapi.json` unchanged:
+  - `api.py` 1264 -> 1225: opening, listing and reading a questionnaire, to `src/routes/forms.py`.
+  - `tools.py` 1347 -> 1294: `in_house_style`, to `src/styling.py`; then 1303 with the run guard (1.4).
+  - `service.py` 591 -> 462: the Word preview, to `src/docx_preview.py` (TD-019); then 469 with saving each answer as it finishes (1.4).
+
+  The two raises after a move follow Stage 0's (`tools.py` 1,334 -> 1,347): the move commit has to lower the ceiling to the module's length, so the item after it raises it again, and each ceiling ends below where the stage started.
 
 ## TD-007: Import cycles and upward imports
 
@@ -557,3 +563,15 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-05 while building plan 029's 1.2. The Workbench now asks before opening a file this person already has as a questionnaire (`if_already_open="ask"`). The chat's "+" attach still calls `tools.open_form` with no such check, so attaching the same file again makes a second, empty questionnaire, as the Workbench did before.
 - **Impact:** a chat that is sent the file again works on an empty copy, and "Or pick up" lists both.
 - **Fix (needs approval):** the same check in the chat, with the same choice offered; the design puts it with the chat parity work (Stage 5).
+
+## TD-063: The run guard and the progress counter are in one process's memory
+
+- **What:** found 2026-11-05 while building plan 029's 1.4, and by design. `src/busy.py` holds a questionnaire while a run answers it, and `src/progress.py` counts the run, in the memory of the process that serves the app. `serve.sh` and `run.sh` start one worker.
+- **Impact:** with a second worker, a request that reaches the other one sees no run: a second run, or an edit the first run overwrites, would be accepted again, and the page would not follow the run. A restart forgets every hold (the runs end with it).
+- **Fix (needs approval, only if more workers are wanted):** keep the hold in SQLite (a `running` column or table, so a migration: TD-046 first), with a lease the run renews.
+
+## TD-064: A run that never ends holds its questionnaire until a restart
+
+- **What:** found 2026-11-05 while building plan 029's 1.4. A hold is let go when its run ends, however it ends, and never expires: one that lapsed while the run went on would let the overwrite back in. `src/llm.py` sets no timeout of its own; the provider SDK's default applies (not verified).
+- **Impact:** a model call that hangs keeps the questionnaire locked, in the Workbench and the chat, until the run ends or the server restarts. `running.started_at` shows how long it has been going.
+- **Fix (needs approval):** a timeout on each model call, or a "Stop answering" control that cancels the run and lets the questionnaire go.

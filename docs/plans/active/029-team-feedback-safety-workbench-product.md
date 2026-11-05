@@ -62,7 +62,7 @@ Stage 1, Workbench relief:
 - [x] **1.1** Reloading the page reopens the open questionnaire. "Or pick up" lists every questionnaire of the person, most recently used first.
 - [x] **1.2** Uploading a file the person already has as a questionnaire offers to open it, or to start fresh.
 - [ ] **1.3** A "Needs review" filter with counts shows first the answers the gate holds back, plus failed ones. A fixed bar keeps Fill and the counts in reach.
-- [ ] **1.4** Each answer is saved as it finishes. A second run on a questionnaire that is still being answered is refused. Reopening it shows the progress.
+- [x] **1.4** Each answer is saved as it finishes. A second run on a questionnaire that is still being answered is refused. Reopening it shows the progress.
 - [x] **1.5** Leaving the page with an unsaved answer or unsaved typed answers asks first.
 
 Stage 2, product choice:
@@ -119,6 +119,8 @@ All stages:
   - 1.2: `POST /api/forms` takes `if_already_open` ("new", the default and today's behaviour, or "ask", which only the Workbench sends; anything else is a 422). With "ask", when this person already has questionnaires read from a file with exactly these bytes, whatever its name, nothing is saved, read or recorded, and the answer lists them (`batches.same_upload`, `uploads.holds`: the size first, then the bytes, against the files still on disk; no migration). The Workbench shows "You already have vendor.xlsx, with 4 of 4 answered…" with Open it, Start fresh (for the product chosen) and Cancel. 9 tests: 8 API (4 failing on the old code, 4 guards: different bytes, someone else's copy, a file the storage limit removed, and "new" still opening a second copy) and 1 browser, failing on the old page. The full browser suite (67) passes. The chat's "+" still opens a second copy (TD-062).
   - Room for 1.4 (R2, behaviour-neutral, its own commit): `tools.in_house_style` moved into `src/styling.py` (operations layer); `tools` re-exports it, so every caller and test is unchanged. Its failure log is now the event `styling.failed` (D-014) instead of a sentence; no test reads it. 418 existing tests over preferences, tools, the assistant and the pipeline pass unchanged. `tools.py` ceiling 1,347 to 1,294.
   - Room for 1.4 (R3, behaviour-neutral, its own commit): the Word preview moved out of `service` into `src/docx_preview.py` (integrations layer, which owns python-docx); `service.docx_preview_html` still names it. TD-019 resolved: its allow-list entry is gone. Its three helpers gained type annotations, which drops 3 errors from the mypy baseline (240 to 237). `service.py` ceiling 591 to 462.
+  - 1.4: `service.answer_questions` hands each answer, failed ones too, to `on_answer` before it is counted, and `tools.answer` saves it there (`batches.saver`); the end-of-run save stays, for the styled wording. `src/busy.py` (foundation layer, in memory) holds a questionnaire for the length of a run, a rewording or a shortening; `tools._require` refuses any change to it meanwhile with 409 `questionnaire_busy` (a `ToolError` too, so the chat's model is told), while reading and filling go on. `GET /api/forms/{id}` says how far the run has got (`running`). The Workbench locks a questionnaire being answered, shows the progress and draws it again when the run ends; after a reload, and when the answer request fails with no code of its own (nginx's 502 or 504, a dropped line) or with 409, it follows the run instead of offering Answer again. 21 tests: 19 unit and API (8 in the new `tests/test_busy.py`, 3 in `test_concurrency.py`, 6 in `test_tools.py`, 2 of them guarding that a brief questionnaire still gets its briefs and that a failed run lets go, 1 API, 1 assistant) and 2 browser (a reload mid-run, and a 504 from the proxy), each failing on the old code. Changed on purpose: `test_preferences_are_never_handed_to_the_answering_pipeline` now allows `on_answer` among the pipeline's arguments, which is where answers are saved, not a wording instruction. The full browser suite (69) passes.
+  - Ceilings: the moves lowered `tools.py` to 1,294 and `service.py` to 462 in their own commits; 1.4 brings them to 1,303 and 469, still below where the stage started (1,347 and 591). The same as Stage 0's 1,334 to 1,347 (TD-006). New debt: TD-063 (the hold is per process), TD-064 (a run that never ends holds its questionnaire). D-021 records the defaults of 1.1, 1.2, 1.4 and 1.5.
 
 ## Decision log
 
@@ -252,3 +254,13 @@ Use a local copy, not the team's data.
 5. Rename the file on your computer and upload it: it is still recognised. With two copies, the box lists both, each with its own "Open it".
 6. Upload a different file with the same name: it opens normally, with no box.
 7. Click Cancel in the box: nothing is opened.
+
+### 1.4 Each answer is saved as it finishes, and a run is not started twice
+
+1. Upload a questionnaire with at least 20 questions and click Answer.
+2. When a few are answered, press F5. The page reopens and says "Being answered on the server: 6 of 25 done". "Answer questions" and "Fill the original file" are greyed out, and the answers have no Edit or Approve.
+3. Wait. The count rises, and at the end every answer appears with "Finished: every question has an answer." The questions were answered once, not twice.
+4. While a run is going, open the same address in a second tab: it shows the same note and follows the same run. In the chat, ask it to answer that questionnaire: it says the questionnaire is being answered right now.
+5. Optional, in Chrome: during a run press F12, then Network, and set Offline, then back to Online. The page says the connection timed out but the answering carries on there, then shows the answers.
+6. On the server, answer a questionnaire of more than 100 questions. After 15 minutes, instead of "Request failed (504)", the page says it carries on, and the answers arrive.
+7. "Close questionnaire" works during a run: the run carries on, and opening the questionnaire again shows its progress.

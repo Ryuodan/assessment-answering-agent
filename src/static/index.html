@@ -2300,6 +2300,7 @@
       }
     });
     document.body.classList.toggle("answering", locked);
+    if (running()) $("fillFormBtn").disabled = true;  // answered on the server: still arriving
     describeFormProduct();  // fixed while answering, and once anything is answered
   }
 
@@ -2490,6 +2491,8 @@
       ? "Questions (" + questions.length + ")" : "Questions";
     $("questionListHint").textContent = !questions.length
       ? "Read them from a file above, or write your own — you do not need a file to ask a question."
+      : running()
+        ? answered + " answered so far. Being answered on the server: editing opens when it finishes."
       : readOnly()
         ? answered + " answered. Kept to read: nothing here can be answered or changed."
       : answered
@@ -2523,7 +2526,7 @@
   function refreshAnswerButton() {
     const pending = pendingQuestions().length;
     const button = $("answerBtn");
-    button.disabled = pending === 0 || answering;
+    button.disabled = pending === 0 || answering || running();
     button.textContent = pending === 0
       ? "Nothing to answer"
       : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
@@ -2804,6 +2807,10 @@
     formBatch = batch;
     rememberInAddress(batch.id);
     hideAlreadyOpen();
+    // Being answered on the server, by a run this page is not itself waiting
+    // for: one started before a reload, in another tab, or by the chat.
+    if (batch.running && !answering) followRun(batch, "", false);  // drawn below, locked
+    else if (!batch.running) stopFollowing();
     sourceName = batch.source_name || sourceName;
     paintReadOnly();
     showFormProduct(batch.product_id || "");
@@ -2922,6 +2929,7 @@
     }
     formBatch = null;
     rememberInAddress("");
+    stopFollowing();
     paintReadOnly();
     $("formReport").hidden = true;
     refreshFormControls();
@@ -3141,6 +3149,7 @@
     // Filling needs a file to fill. Rewording only needs answers, and works the
     // same on a list of typed questions as it does on a questionnaire.
     $("fillFormBtn").hidden = !formBatch;
+    $("fillFormBtn").disabled = running();  // its answers are still arriving (plan 029, 1.4)
     $("reviseRow").hidden = !(result && result.answers.length);
     describeFormProduct();
   }
@@ -3520,7 +3529,16 @@
     } catch (error) {
       stop();
       answering = false;
-      if (error.code === "product_not_found") await productGone(status, "they were not answered for it");
+      /* The run goes on on the server when the line drops or the proxy gives
+         up (nginx answers 502 or 504 with no code of its own), and a 409 means
+         one was already going. Followed, not offered again: pressing Answer
+         again started a second run, paid for twice (plan 029, 1.4). */
+      const carriesOn = error.code === "questionnaire_busy" || !error.status || (error.status >= 500 && !error.code);
+      if (formBatch && batch.some((entry) => entry.formId) && carriesOn) {
+        followRun(formBatch, error.code === "questionnaire_busy" ? error.message
+          : "The connection to the server timed out, but the answering carries on there. " +
+            "This page will show the answers when it finishes.");
+      } else if (error.code === "product_not_found") await productGone(status, "they were not answered for it");
       else setStatus(status, error.message, "error");
     } finally {
       stop();
@@ -3881,7 +3899,10 @@
 
   /* A deleted product's questionnaire: kept so its answers can be read and its
      filled file downloaded, and changed by nothing on this page (plan 027). */
-  function readOnly() { return Boolean(formBatch && formBatch.read_only); }
+  function readOnly() { return Boolean(formBatch && (formBatch.read_only || formBatch.running)); }
+  /* Being answered on the server (plan 029, 1.4): read like a deleted
+     product's until the run ends, because the server refuses any change. */
+  function running() { return Boolean(formBatch && formBatch.running); }
   function paintReadOnly() {
     const on = readOnly();
     Cards.readOnly = on;
@@ -3889,11 +3910,90 @@
     const note = $("formReadOnly");
     note.hidden = !on;
     if (!on) return;
+    if (running() && !formBatch.read_only) {
+      const run = formBatch.running;
+      const counted = run.total ? ": " + run.completed + " of " + run.total + " done" : "";
+      note.textContent = "Being answered on the server" + counted + ". Answers appear here when it finishes; " +
+        "editing opens then.";
+      return;
+    }
     const name = (Cards.product(formBatch.product_id) || {}).name || "Its product";
     note.textContent = name + " was deleted. This questionnaire is kept so its answers can be read and its " +
       "filled file downloaded; it can no longer be answered, edited or approved. To answer the file again, " +
       "close it and open the file for another product or General.";
   }
+  /* A run on the server this page is not waiting on: started before a reload,
+     cut off by the proxy, or started elsewhere (plan 029, 1.4). The
+     questionnaire is locked and the progress shown; when the run ends it is
+     drawn again from the server. Plain `fetch`, so Close stays usable: Close
+     stops following, and the run carries on. */
+  let following = null;  // { id, stop }
+  function stopFollowing() {
+    if (following) following.stop();
+    following = null;
+  }
+  function followRun(batch, note, redraw = true) {
+    const id = batch.id;
+    if (following && following.id === id) return;
+    stopFollowing();
+    let stopped = false;
+    following = { id: id, stop: () => { stopped = true; } };
+    const runId = (batch.running && batch.running.run_id) || id;
+    if (!batch.running) batch.running = { run_id: runId, stage: "answering", total: 0, completed: 0 };
+    if (redraw) {  // locked from here: the cards lose their editing controls
+      paintReadOnly();
+      renderQuestions();
+      refreshFormControls();
+      if (result) renderResult(result, { keepQuestions: true });
+    }
+    const status = $("answerStatus");
+    setStatus(status, note || "Being answered on the server…", "busy");
+    const here = () => !stopped && formBatch && formBatch.id === id;
+    (async () => {
+      let looked = Date.now();
+      while (here()) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!here()) return;
+        let look = Date.now() - looked >= 20000;
+        try {
+          const response = await fetch("/api/assessments/progress/" + runId);
+          if (response.status === 404) look = true;
+          else if (response.ok) {
+            const state = await response.json();
+            if (state.stage === "done") look = true;
+            else if (here()) {
+              Object.assign(formBatch.running, state);
+              paintReadOnly();
+              status.innerHTML = progressMessage(state);
+              status.className = "status busy";
+            }
+          }
+        } catch (error) { /* a dropped poll: the next one will do */ }
+        if (!look || !here()) continue;
+        looked = Date.now();
+        let batchNow = null;
+        try {
+          const response = await fetch("/api/forms/" + id);
+          if (response.ok) batchNow = await response.json();
+        } catch (error) { /* the next look will say */ }
+        if (!batchNow || !here()) continue;
+        if (batchNow.running) {
+          formBatch.running = batchNow.running;
+          paintReadOnly();
+          continue;
+        }
+        following = null;
+        stopped = true;
+        await adoptBatch(batchNow, { quiet: true });
+        const left = (batchNow.counts || {}).still_blank || 0;
+        setStatus(status, left
+          ? "Answering stopped with " + left + " question(s) unanswered. Answer them to carry on."
+          : "Finished: every question has an answer.", left ? "warn" : "ok");
+        return;
+      }
+    })();
+  }
+
   /* Drawn again from the server, quietly: what a refusal or another tab says has changed. */
   async function redrawBatch() {
     if (!formBatch) return;
@@ -3946,6 +4046,7 @@
     formBatch = null;
     rememberInAddress("");
     hideAlreadyOpen();
+    stopFollowing();  // the run carries on on the server, and the questionnaire reopens with it
     questions = [];
     result = null;
     Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
