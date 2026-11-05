@@ -3761,11 +3761,26 @@
             questions_found: result.answers.length + data.answers.length }
         : data;
 
-      setStatus(status, "Answered " + data.answers.length + " question(s).", "ok");
-      reviewTab = null;  // after a run, what needs a person first
+      /* After a run of the file's own rows, the review opens on what needs a
+         person. A question typed beside the file is in no tab unless it needs
+         a person, so after a run of typed questions alone, resetting the tab
+         hid the answer just asked for, and overrode the tab the person chose:
+         that run keeps the tab, or shows All when the tab would hide one of
+         its answers (plan 029's review). After a run of both, the status says
+         where the typed ones are. */
+      const typedOutOf = (tab) => !formBatch || !tab || tab === "all" ? 0 : data.answers.filter((answer, index) =>
+        batch[index] && !batch[index].formId && reviewBucket(answer) !== tab).length;
+      if (batch.some((entry) => entry.formId)) reviewTab = null;
+      else if (formBatch) {
+        if (!reviewTab) reviewTab = reviewCounts(result).counted.review ? "review" : "all";
+        if (typedOutOf(reviewTab)) reviewTab = "all";
+      }
       renderQuestions();
       renderResult(result, { keepQuestions: true });
       refreshFormControls();
+      const typedOut = typedOutOf(reviewTab);
+      setStatus(status, "Answered " + data.answers.length + " question(s)." + (typedOut
+        ? " The answers to " + typedOut + " you typed beside the file are under All: they are not rows in it." : ""), "ok");
 
       /* A wording instruction given before the run is applied after it, as a
          rewording pass over the answers just written. It is not injected into

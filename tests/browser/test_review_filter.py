@@ -187,6 +187,52 @@ def test_approving_from_the_keyboard_goes_on_to_the_next_answer(page: Page, tmp_
     expect(page.locator("#results .answer").first).to_contain_text("Probably.")
 
 
+def test_a_question_asked_beside_an_answered_questionnaire_stays_in_view(
+    page: Page, tmp_path: Path, mixed: None
+) -> None:
+    """Plan 029's review: after every run the review went back to Needs review, where a typed
+    question's confident answer has no place. The person's All was overridden and the answer hidden."""
+    answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
+    tab(page, "All").click()
+    expect(page.locator("#results .answer")).to_have_count(4)
+
+    page.fill("#composerInput", "Do you run penetration tests every year?")
+    page.click("#composerAdd")
+    page.click("#composerAnswer")
+
+    expect(tab(page, "All")).to_have_text("All (5)")
+    expect(tab(page, "All")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#results .answer", has_text="penetration")).to_have_count(1)
+
+    tab(page, "Needs review").click()  # asked from Needs review, it is shown too
+    page.fill("#composerInput", "Do you train every new joiner?")
+    page.click("#composerAdd")
+    page.click("#composerAnswer")
+    expect(tab(page, "All")).to_have_text("All (6)")
+    expect(tab(page, "All")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#results .answer", has_text="new joiner")).to_have_count(1)
+
+
+def test_a_run_of_the_file_and_a_typed_question_says_where_the_typed_answer_is(
+    page: Page, tmp_path: Path, mixed: None
+) -> None:
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    expect(page.locator("#questionList .qrow")).to_have_count(4)
+    page.click("#addQuestionBtn")
+    page.locator("#questionList textarea").last.press_sequentially("Do you run penetration tests every year?")
+
+    page.click("#answerBtn")
+
+    expect(tab(page, "Needs review")).to_have_attribute("aria-pressed", "true", timeout=15_000)
+    expect(page.locator("#answerStatus")).to_contain_text(
+        "The answers to 1 you typed beside the file are under All: they are not rows in it."
+    )
+    tab(page, "All").click()
+    expect(page.locator("#results .answer", has_text="penetration")).to_have_count(1)
+
+
 def test_set_aside_and_blank_answers_have_their_own_tab(page: Page, tmp_path: Path, mixed: None) -> None:
     answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
     page.locator("#results .answer", has_text="Probably.").get_by_role("button", name="Leave blank").click()
