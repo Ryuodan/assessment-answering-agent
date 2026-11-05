@@ -125,6 +125,7 @@ All stages:
   - Stage 1 done, waiting for review and the user's test. `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,198 passed and 2 skipped, browser 77). Stage 1 added 48 tests, 29 unit and API and 19 browser; 4 existing tests were changed on purpose, each named above. The mypy baseline went from 243 to 237, by the annotations the moved code gained.
 - 2026-11-05, review of Stage 1: the server side held up (the guard, saving each answer, the 409, the byte match, the sort, the three moves). It found 4 major and 5 minor problems on the Workbench page, reproduced in headless Chromium. All 9 are fixed; none was rejected.
   - Major, 1.2: reading a Word file written as prose a second time offered the empty questionnaire its first read had left, "0 of 0 answered", and "Open it" read nothing. `batches.same_upload` now leaves out a questionnaire nothing was read from, so the file is read as text again. 2 tests (1 API, 1 browser), both failing on the old code. New debt: TD-065 (each such read still keeps an empty questionnaire, listed under "Or pick up").
+  - Major, 1.3: Fill clicked from far down the list scrolled its report behind the page header and the sticky bar, so the held count, "Write them in anyway" and the download could not be seen. The report now scrolls to just under the bar, by their measured heights; "Show them" keeps it there. 1 browser test (40 rows, at 1366x768, clicked from the last card: a click at each control's middle reaches it), failing on the old page.
 
 ## Decision log
 
@@ -276,6 +277,6 @@ Use a local copy, not the team's data.
 2. The review section opens on "Needs review", with a count on each tab. Only the answers that need you are shown: flagged ones, ones with a low confidence even when not flagged, and ones that failed.
 3. Approve or edit one. It leaves the list, the counts change, and the bar says what happened ("Approved…").
 4. Scroll anywhere among the answers. The bar with the tabs, the counts and "Fill the original file" stays at the top, under the page header.
-5. Click Fill. The result appears under the bar. Only there, if answers were held back, do you see the count, "Show them" and "Write them in anyway".
+5. Click Fill, from far down the list. The page goes up to the result, which sits right under the bar, nothing of it covered. Only there, if answers were held back, do you see the count, "Show them" and "Write them in anyway".
 6. The long question list above the answers is folded into one line ("Show the 59 questions…"). Click it to see the questions; "+ Add a question" opens it too.
 7. Click "All" to see every answer, as before. Leave a card blank, or set a row aside: they are under "Blank or set aside", where a set-aside row has "Include".

@@ -3449,6 +3449,19 @@
     setStatus($("composerStatus"), "");
   }
 
+  /* Into view just under the page header and the review bar. Both stick to
+     the top, so scrolled into view as such, Fill's report from far down the
+     list landed behind them: the held count, "Write them in anyway" and the
+     download were all covered (plan 029's review). The bar sits right above
+     the report, so this is also where the bar stands of its own accord. */
+  function scrollUnderTheBar(element) {
+    const topbar = document.querySelector(".topbar");
+    const bar = $("reviewBar");
+    const covered = (topbar ? topbar.offsetHeight : 0) + (bar.hidden ? 0 : bar.offsetHeight);
+    element.style.scrollMarginTop = (covered + 14) + "px";  // 14: the bar's own margin below it
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   /* `includeUnreviewed` must be exactly `true` to open the gate: the button's
      handler once passed its click event here, which is truthy, and every fill
      from this page wrote the held answers (TD-052). `agreed` names the held
@@ -3514,7 +3527,7 @@
           show.onclick = () => {
             reviewTab = "review";
             renderResult(result, { keepQuestions: true });
-            $("reviewBar").scrollIntoView({ behavior: "smooth", block: "nearest" });
+            scrollUnderTheBar(panel);  // the report, and the answers it is about right below it
           };
           note.append(show);
         }
@@ -3573,7 +3586,7 @@
         });
         panel.append(download);
       }
-      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });  // under the bar, wherever the person was
+      scrollUnderTheBar(panel);  // wherever the person was when they clicked
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     } finally {

@@ -158,6 +158,37 @@ def test_fill_and_the_counts_stay_in_view_while_scrolling(page: Page, tmp_path: 
     assert box and header and box["y"] >= header["y"] + header["height"] - 1, "below the page header, not under it"
 
 
+UNCOVERED = """(element) => {
+  const box = element.getBoundingClientRect();
+  const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  return Boolean(hit) && (hit === element || element.contains(hit));
+}"""
+"""True when a click at the element's middle reaches it: on screen, and behind nothing that sticks."""
+
+
+def test_fills_report_from_far_down_the_list_is_not_behind_the_bar(page: Page, tmp_path: Path, one_held: None) -> None:
+    """Plan 029's review: scrolled into view as such, the report landed under the page header and
+    the sticky bar, and neither "Write them in anyway" nor the download could be seen or clicked."""
+    page.set_viewport_size({"width": 1366, "height": 768})
+    answered(page, shapes.numbered(tmp_path / "long.xlsx", 40), 40)
+    tab(page, "All").click()
+    cards = page.locator("#results .answer")
+    expect(cards).to_have_count(40)
+    cards.last.scroll_into_view_if_needed()
+
+    page.click("#fillFormBtn")
+
+    filled = page.locator("#formFilled")
+    expect(filled).to_contain_text("1 answer(s) were held back")
+    for shown in (
+        filled.locator(".held-note"),
+        filled.get_by_role("button", name="Write them in anyway"),
+        filled.get_by_role("button", name="Download the filled file"),
+    ):
+        expect(shown).to_be_visible()
+        page.wait_for_function(UNCOVERED, arg=shown.element_handle(), timeout=5_000)
+
+
 def test_writing_held_answers_in_anyway_is_offered_only_after_fill(page: Page, tmp_path: Path, mixed: None) -> None:
     answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
     expect(page.locator("#reviewBar").get_by_role("button", name=re.compile("anyway"))).to_have_count(0)
