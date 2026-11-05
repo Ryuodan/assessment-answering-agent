@@ -191,3 +191,15 @@ def test_the_question_list_folds_once_answers_exist(page: Page, tmp_path: Path, 
     page.click("#addQuestionBtn")
     expect(rows.first).to_be_visible()
     expect(page.locator("#questionList textarea").last).to_be_focused()
+
+
+def test_answers_the_file_arrived_with_leave_the_list_open(page: Page, tmp_path: Path) -> None:
+    """They have no card to review, so the list stays where the work is: "Answer it again" lives there."""
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.already_answered(tmp_path / "last year.xlsx")))
+    page.click("#extractBtn")
+
+    rows = page.locator("#questionList .qrow")
+    expect(rows.first).to_be_visible()
+    expect(rows.first.get_by_role("button", name="Answer it again")).to_be_visible()
+    expect(page.locator("#reviewBar")).to_be_hidden()
