@@ -108,7 +108,7 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 
 The use cases the web interface, the command line and the chat assistant share.
 
-- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.search`, `src.selection`, `src.service`, `src.tools`
+- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.fill_audit`, `src.search`, `src.selection`, `src.service`, `src.tools`
 - **Owns:** `langchain`
 
 | Module | What it is |
@@ -118,8 +118,9 @@ The use cases the web interface, the command line and the chat assistant share.
 | `src/agents/assistant_quotes.py` | Whether what an assistant reply sets out as a quotation is in what it could quote from (plan 027, TD-043). |
 | `src/agents/assistant_stopped.py` | What an assistant turn that stopped part way says (plan 027, TD-043). |
 | `src/agents/assistant_turn.py` | What one assistant turn may do (plan 027, TD-043). |
+| `src/fill_audit.py` | Which filled files may hold answers the review gate holds back (plan 029, TD-052, TD-053). |
 | `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
-| `src/selection.py` | Which questions an operation applies to, and when an answer counts as settled. |
+| `src/selection.py` | Which questions an operation applies to, when an answer counts as settled, and what is written. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |
 | `src/tools.py` | The operations the interface performs, and the chat assistant calls. |
 

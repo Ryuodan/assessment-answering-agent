@@ -151,6 +151,20 @@ def recent(team_id: str, *, limit: int = 50, kind: str | None = None) -> list[Ev
     return [_row_to_event(row) for row in conn.execute(sql, params).fetchall()]
 
 
+def of_kind(team_id: str, kind: str) -> list[Event]:
+    """Every event of one kind in a team, oldest first, with no limit.
+
+    For an audit that has to see all of them (`src/fill_audit.py`), which
+    `recent`, newest first and capped, cannot promise.
+    """
+    rows = (
+        store.connect()
+        .execute("SELECT * FROM events WHERE team_id = ? AND kind = ? ORDER BY id", (team_id, kind))
+        .fetchall()
+    )
+    return [_row_to_event(row) for row in rows]
+
+
 def for_subject(subject_type: str, subject_id: str) -> list[Event]:
     """Everything recorded about one thing, oldest first.
 

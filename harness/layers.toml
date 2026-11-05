@@ -89,6 +89,7 @@ modules = [
     "src.service",
     "src.search",
     "src.selection",
+    "src.fill_audit",
     "src.tools",
     "src.agents.assistant",
     "src.agents.assistant_prompt",

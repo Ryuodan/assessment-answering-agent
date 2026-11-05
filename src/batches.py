@@ -233,6 +233,13 @@ def answers(batch_id: str) -> dict[str, AnsweredQuestion]:
     return {row["question_id"]: AnsweredQuestion.model_validate_json(row["payload"]) for row in rows}
 
 
+def saved_at(batch_id: str) -> dict[str, str]:
+    """When each answer was last saved, by question id (`store.utcnow`, comparable as text)."""
+    conn = store.connect()
+    rows = conn.execute("SELECT question_id, answered_at FROM batch_answers WHERE batch_id = ?", (batch_id,)).fetchall()
+    return {row["question_id"]: row["answered_at"] for row in rows}
+
+
 def edited_by(batch_id: str) -> dict[str, str]:
     """Which answers a person changed by hand, and who."""
     conn = store.connect()

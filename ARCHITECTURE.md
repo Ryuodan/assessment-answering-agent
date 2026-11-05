@@ -18,7 +18,7 @@ any layer below it, never above, including from inside a function.
 | 2. integrations | everything that talks to something outside the process: the model provider, the embedding host, Docling, SQLite, Chroma, and the customer's PDF, Word and Excel files | `llm`, `embeddings`, `documents`, `store`, `knowledge`, `export_pdf`, `forms/` |
 | 3. records | what the system remembers about people and their work | `identity`, `events`, `runs`, `batches`, `conversations`, `answer_memory`, `storage` |
 | 4. answering | turning a question into a grounded answer | `graph/`, `extraction`, `relevance`, `rewrite`, `forms/reading.py`, `agents/excel_agent.py` |
-| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `search`, `selection`, `tools`, `agents/assistant.py` |
+| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `search`, `selection`, `tools`, `fill_audit`, `agents/assistant.py` |
 | 6. interfaces | how people and programs reach the system | `api`, `cli` |
 
 Why these lines (Claude's reasoning, recorded as D-012):
@@ -86,6 +86,14 @@ with its route template. To follow a failure: take `request_id` from the error
 the person saw and run `python -m src.cli inspect request <id>`, which prints
 that request's lines from `SERVER_LOG_PATH`. Modules not yet converted
 (TD-028) still log prose, but their lines carry the ID too.
+
+`python -m src.cli inspect fills [--team T]` reads the event log and the answers
+as they are today, and changes nothing (`src/fill_audit.py`, plan 029). It lists
+the fills that wrote answers the review gate holds back: before plan 029 every
+Workbench fill did (TD-052), and since then a fill records it. An answer held
+today and unchanged since the fill was certainly written; one saved after the
+fill is reported as unknown. It also lists answers whose approval was withdrawn
+before plan 029 and that the gate still lets through (TD-053).
 
 `python -m src.cli doctor` checks an installation without changing it: the
 interpreter, the env file, whether the secrets are set (never their values),
@@ -209,7 +217,13 @@ answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 either retry retrieval with a refined query or finalize with confidence and
 citations. Answers are saved on the batch (`batches.save_answers`) and an event
 is recorded. `POST /api/forms/{id}/fill` writes the ready answers into a copy
-of the customer's own file (`forms.xlsx` / `forms.docx`).
+of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
+when `selection.ready_to_write` says so: a person confirmed it, or it is neither
+flagged nor under `REVIEW_CONFIDENCE_THRESHOLD`. The rest are held back and
+listed with their reasons, and written only when the request says
+`include_unreviewed` (the Workbench's "Write them in anyway"). The `file_filled`
+event records how many the gate held (`held_back`) and whether they were written
+anyway (`include_unreviewed`; absent on events from before plan 029).
 
 **Talking to the assistant.** `POST /api/chat` (`src/routes/chat.py`) loads a
 `Conversation`, or starts one for the `product` sent, and calls
