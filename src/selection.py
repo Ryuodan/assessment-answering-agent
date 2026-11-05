@@ -3,7 +3,8 @@
 Moved from `src/tools.py` (plan 023), which re-exports what its callers use:
 `tools.Scope`, `tools.HAND`, `tools.APPROVED` and `tools.ready_to_write` are
 the names the interface, the assistant and the tests have always used.
-`length_of` and `written_text` followed in plan 029, to make room in `tools.py`.
+`length_of` and `written_text` followed in plan 029, to make room in `tools.py`,
+and then `nothing_written` (`tools._nothing_written` until then).
 """
 
 from __future__ import annotations
@@ -216,6 +217,38 @@ def written_text(answered: AnsweredQuestion, detail: str = "full") -> str:
     if length_of(answered, detail) == "brief" and answered.brief.strip():
         return answered.brief.strip()
     return answered.answer
+
+
+def nothing_written(form: DetectedForm, answered: dict[str, AnsweredQuestion], held: dict[str, str]) -> str:
+    """Why a fill wrote nothing. Only asked when it wrote nothing.
+
+    Four states arrive here looking identical and are not: work not started, work
+    already done by the file itself, every row struck out, and every answer held
+    back by the gate (`held`: what was kept out). The message has to name which,
+    because what the person should do next differs in each.
+    """
+    if not any(_has_answer(answered.get(q.id)) for q in form.questions):
+        already = form.answered_count
+        if already:
+            blank = sum(1 for q in form.questions if not _settled(answered.get(q.id), q))
+            return (
+                f"Nothing needed writing: the {already} answer(s) this questionnaire has "
+                "came with the file and are already in it."
+                + (
+                    f" {blank} question(s) are still blank — answer those and fill again."
+                    if blank
+                    else " Every question is answered."
+                )
+            )
+        return "Nothing has been answered yet, so there was nothing to write. Answer some questions first."
+    if all(q.skip for q in form.questions if _has_answer(answered.get(q.id))):
+        return "Every answered question is set aside, so nothing was written for any of them."
+    if held:
+        return f"Nothing was written: {len(held)} answer(s) are held back until somebody edits or approves them."
+    return (
+        "The answers exist but none of them has a cell to go into -- check the "
+        "answer column for each sheet in the reading report."
+    )
 
 
 def _settled(answered: AnsweredQuestion | None, question: FormQuestion) -> bool:

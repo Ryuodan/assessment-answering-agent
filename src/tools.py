@@ -49,6 +49,7 @@ from src.selection import (
     approve,
     confirmed_by_a_person as confirmed_by_a_person,
     length_of,
+    nothing_written,
     ready_to_write as ready_to_write,
     written_by_a_person as written_by_a_person,
     withdraw_approval,
@@ -1071,39 +1072,7 @@ def fill(
         blank=blank,
         held_back=kept_out,
         intact=report.intact,
-        because=_nothing_written(batch, answered, kept_out) if not report.written else "",
-    )
-
-
-def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion], held: dict[str, str]) -> str:
-    """Why a fill wrote nothing. Only asked when it wrote nothing.
-
-    Four states arrive here looking identical and are not: work not started, work
-    already done by the file itself, every row struck out, and every answer held
-    back by the gate (`held`: what was kept out). The message has to name which,
-    because what the person should do next differs in each.
-    """
-    if not any(_has_answer(answered.get(q.id)) for q in batch.form.questions):
-        already = batch.form.answered_count
-        if already:
-            blank = sum(1 for q in batch.form.questions if not _settled(answered.get(q.id), q))
-            return (
-                f"Nothing needed writing: the {already} answer(s) this questionnaire has "
-                "came with the file and are already in it."
-                + (
-                    f" {blank} question(s) are still blank — answer those and fill again."
-                    if blank
-                    else " Every question is answered."
-                )
-            )
-        return "Nothing has been answered yet, so there was nothing to write. Answer some questions first."
-    if all(q.skip for q in batch.form.questions if _has_answer(answered.get(q.id))):
-        return "Every answered question is set aside, so nothing was written for any of them."
-    if held:
-        return f"Nothing was written: {len(held)} answer(s) are held back until somebody edits or approves them."
-    return (
-        "The answers exist but none of them has a cell to go into -- check the "
-        "answer column for each sheet in the reading report."
+        because=nothing_written(batch.form, answered, kept_out) if not report.written else "",
     )
 
 
