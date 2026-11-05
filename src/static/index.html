@@ -432,6 +432,7 @@
   .qn-filled .held-which { margin-top: 4px; color: var(--ink-soft); }
   .qn-filled .held-which summary { cursor: pointer; }
   .qn-filled .held-which ul { margin: 4px 0 0; padding-inline-start: 18px; max-height: 240px; overflow-y: auto; }
+  .qn-filled .held-which .why { color: var(--ink-faint); }
 
   .search-note {
     font-size: 11.5px; color: var(--warn, #b26a00); padding: 6px 0 2px;
@@ -3175,8 +3176,11 @@
           const question = ((batch && batch.questions) || []).find((q) => q.id === questionId) || {};
           const text = question.text || "";
           const row = document.createElement("li");
-          row.textContent = (question.number || question.location || questionId) + " — " +
-            (text.length > 80 ? text.slice(0, 80) + "…" : text) + ": " + why;
+          const reason = document.createElement("span");
+          reason.className = "why";
+          reason.textContent = " — " + why;
+          row.append((question.number || question.location || questionId) + "  " +
+            (text.length > 80 ? text.slice(0, 80) + "…" : text), reason);
           list.append(row);
         });
         which.append(summary, list);
