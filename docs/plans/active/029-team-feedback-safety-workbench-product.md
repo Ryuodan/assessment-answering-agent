@@ -123,6 +123,8 @@ All stages:
   - Ceilings: the moves lowered `tools.py` to 1,294 and `service.py` to 462 in their own commits; 1.4 brings them to 1,303 and 469, still below where the stage started (1,347 and 591). The same as Stage 0's 1,334 to 1,347 (TD-006). New debt: TD-063 (the hold is per process), TD-064 (a run that never ends holds its questionnaire). D-021 records the defaults of 1.1, 1.2, 1.4 and 1.5.
   - 1.3, the page only (and `edited_by` on the shared card): the review is in tabs, Needs review, Will be written, Done by a person, Blank or set aside, and All, each with its count, by the gate's verdict as the server gave it (`will_be_written`); failed answers count as needing review. It opens on Needs review when there is anything in it, and again after each run; approving or editing keeps the person's tab. Each card keeps its index in the answers, so the card's hooks are unchanged. A bar under the page header holds the tabs, "N will be written · M need review", Fill (moved there, its id kept) and what the last click did; Fill's report is under the bar, scrolled into view, and gains "Show them". "Write them in anyway" stays in the report only. The "need review" count above the cards is the tab's count. The question list folds into one line once a questionnaire has answer cards, unless the person opens or closes it themselves; "+ Add a question" opens it, and answers the file arrived with (no card) leave it open, where "Answer it again" is. 8 browser tests in the new `tests/browser/test_review_filter.py` (a 40-row fixture, `shapes.numbered`): 7 failing on the old page, 1 guarding the open list of a file that arrived answered. Changed on purpose: the two browser tests that follow one held card through approving and withdrawing (`test_write_them_in_anyway_writes_no_more_than_it_counted`, `test_withdrawing_an_approval_shows_the_answer_held_again`) first click All, because an approved answer now leaves Needs review. The full browser suite (76) passes.
   - Stage 1 done, waiting for review and the user's test. `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,198 passed and 2 skipped, browser 77). Stage 1 added 48 tests, 29 unit and API and 19 browser; 4 existing tests were changed on purpose, each named above. The mypy baseline went from 243 to 237, by the annotations the moved code gained.
+- 2026-11-05, review of Stage 1: the server side held up (the guard, saving each answer, the 409, the byte match, the sort, the three moves). It found 4 major and 5 minor problems on the Workbench page, reproduced in headless Chromium. All 9 are fixed; none was rejected.
+  - Major, 1.2: reading a Word file written as prose a second time offered the empty questionnaire its first read had left, "0 of 0 answered", and "Open it" read nothing. `batches.same_upload` now leaves out a questionnaire nothing was read from, so the file is read as text again. 2 tests (1 API, 1 browser), both failing on the old code. New debt: TD-065 (each such read still keeps an empty questionnaire, listed under "Or pick up").
 
 ## Decision log
 
@@ -150,7 +152,7 @@ All stages:
     - Every questionnaire is listed, up to 500, in a scrolling list.
     - A `?q=` link opens only for its owner.
   - **1.2:**
-    - The same file means the same bytes as one of this person's questionnaire files still on disk.
+    - The same file means the same bytes as one of this person's questionnaire files still on disk. After the review of Stage 1: one nothing was read from is not offered, so a Word file written as prose is read as text again.
     - It is checked before the file is read. A match on another product is offered with its badge, and "Start fresh" stays one click away.
   - **1.3:**
     - The tabs are Needs review (the default when it has anything), Will be written, Done by a person, Blank or set aside, and All.
@@ -256,6 +258,7 @@ Use a local copy, not the team's data.
 5. Rename the file on your computer and upload it: it is still recognised. With two copies, the box lists both, each with its own "Open it".
 6. Upload a different file with the same name: it opens normally, with no box.
 7. Click Cancel in the box: nothing is opened.
+8. Upload a Word file whose questions are plain paragraphs (no table, no "Q1:" lines) and click "Read questions from file": its questions are listed. Reload the page, upload it again and read it: the questions are listed again, with no box.
 
 ### 1.4 Each answer is saved as it finishes, and a run is not started twice
 

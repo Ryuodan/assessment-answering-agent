@@ -270,6 +270,24 @@ def test_start_fresh_still_makes_a_new_questionnaire(client, tmp_path):
     assert len(client.get("/api/forms").json()["forms"]) == 3
 
 
+def test_a_questionnaire_nothing_was_read_from_is_not_offered(client, tmp_path):
+    """Plan 029's review: a Word file written as prose is read as text after an empty questionnaire is made.
+    Offered the second time, it was "0 of 0 answered", and opening it read nothing."""
+    from docx import Document
+
+    prose = tmp_path / "questions.docx"
+    document = Document()
+    document.add_paragraph("1. Do you encrypt data at rest?")
+    document.add_paragraph("2. How long are logs kept?")
+    document.save(str(prose))
+    first = _upload(client, prose, if_already_open="ask").json()
+    assert first["counts"]["questions"] == 0
+
+    again = _upload(client, prose, if_already_open="ask").json()
+
+    assert "already_open" not in again and again["counts"]["questions"] == 0
+
+
 def test_an_unknown_choice_for_a_file_already_open_is_a_422(client, tmp_path):
     response = _upload(client, shapes.simple(tmp_path / "vendor.xlsx"), if_already_open="maybe")
     assert response.status_code == 422

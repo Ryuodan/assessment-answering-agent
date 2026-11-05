@@ -221,6 +221,11 @@ def same_upload(team_id: str, actor_email: str, content: bytes) -> list[dict[str
 
     `answered` is counted as `recent` counts it, so the two agree; the server's
     path to the file is not in what is returned.
+
+    One nothing was read from is not offered. A Word file written as prose
+    makes such a questionnaire on every read, and is then read as text;
+    offered, it was "0 of 0 answered", and opening it read nothing (plan 029's
+    review). Reading the file again is the only way on with it.
     """
     rows = (
         store.connect()
@@ -237,19 +242,25 @@ def same_upload(team_id: str, actor_email: str, content: bytes) -> list[dict[str
         )
         .fetchall()
     )
-    return [
-        {
-            "id": row["batch_id"],
-            "source_name": row["source_name"],
-            "product_id": row["product_id"],
-            "answered": row["answered"],
-            "questions": len(DetectedForm.model_validate_json(row["detected"]).questions),
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
-        for row in rows
-        if uploads.holds(Path(row["source_path"]), content)
-    ]
+    found = []
+    for row in rows:
+        if not uploads.holds(Path(row["source_path"]), content):
+            continue
+        questions = len(DetectedForm.model_validate_json(row["detected"]).questions)
+        if not questions:
+            continue
+        found.append(
+            {
+                "id": row["batch_id"],
+                "source_name": row["source_name"],
+                "product_id": row["product_id"],
+                "answered": row["answered"],
+                "questions": questions,
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+        )
+    return found
 
 
 def save_answers(batch_id: str, answers: list[AnsweredQuestion], *, edited_by: str = "") -> None:

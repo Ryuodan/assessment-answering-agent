@@ -575,3 +575,9 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-05 while building plan 029's 1.4. A hold is let go when its run ends, however it ends, and never expires: one that lapsed while the run went on would let the overwrite back in. `src/llm.py` sets no timeout of its own; the provider SDK's default applies (not verified).
 - **Impact:** a model call that hangs keeps the questionnaire locked, in the Workbench and the chat, until the run ends or the server restarts. `running.started_at` shows how long it has been going.
 - **Fix (needs approval):** a timeout on each model call, or a "Stop answering" control that cancels the run and lets the questionnaire go.
+
+## TD-065: Every read of a Word file written as prose keeps an empty questionnaire
+
+- **What:** found 2026-11-05 by the review of plan 029's Stage 1. `POST /api/forms` keeps a questionnaire for every file it reads, whatever it found. A Word file written as prose has no places for answers, so it is kept with 0 questions, and the Workbench then reads its questions as text. Older than plan 029.
+- **Impact:** "Or pick up" lists one "questions.docx" with nothing in it for each such read; opening one says "No questions were read". Since plan 029's 1.1 lists every questionnaire, not the last three, they all show. The review's other half, the second read offering that empty questionnaire instead of reading the file again, is fixed: `batches.same_upload` leaves out a questionnaire nothing was read from.
+- **Fix (needs approval):** do not keep a questionnaire when nothing was read from a Word file (the page reads it as text anyway), or leave those out of "Or pick up". Either changes what the chat's attach keeps too.

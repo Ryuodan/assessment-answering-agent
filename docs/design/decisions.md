@@ -394,6 +394,8 @@ a plan relies on it.
     questionnaire files still on disk, before anything is saved or read, and
     offered to open or start fresh (`if_already_open="ask"`, sent only by the
     Workbench). Not a stored fingerprint: that needs a migration (TD-046).
+    One nothing was read from is not offered: a Word file written as prose is
+    read as text again (plan 029's review; TD-065).
   - Each answer is saved as it finishes. One run at a time per questionnaire,
     held in memory (`src/busy.py`), and nothing else changes it until the run
     ends: one writer at a time, rather than letting edits through and merging

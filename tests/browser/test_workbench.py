@@ -371,6 +371,40 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     assert len(batches.recent(TEAM)) == 2
 
 
+def test_a_word_file_written_as_prose_is_read_again_as_text(page: Page, tmp_path: Path, monkeypatch) -> None:
+    """Plan 029's review: its first read leaves an empty questionnaire, and the second read offered
+    that, "0 of 0 answered", where it used to read the questions again."""
+    from docx import Document
+
+    from src import service
+    from src.models import Question
+
+    async def text_of(path):
+        return "1. Do you encrypt data at rest?\n2. How long are logs kept?"
+
+    async def questions_in(text):
+        return "en", [
+            Question(id="1", text="Do you encrypt data at rest?"),
+            Question(id="2", text="How long are logs kept?"),
+        ]
+
+    monkeypatch.setattr(service, "extracted_document_text", text_of)
+    monkeypatch.setattr(service, "extract_questions", questions_in)
+    prose = tmp_path / "questions.docx"
+    document = Document()
+    document.add_paragraph("1. Do you encrypt data at rest?")
+    document.add_paragraph("2. How long are logs kept?")
+    document.save(str(prose))
+
+    for _ in range(2):
+        page.goto("/workbench")
+        page.set_input_files("#assessmentInput", str(prose))
+        page.click("#extractBtn")
+        expect(page.locator("#extractStatus")).to_contain_text("Found 2 question(s) in questions.docx")
+        expect(page.locator("#alreadyOpen")).to_be_hidden()
+        expect(page.get_by_role("textbox", name="Type a question")).to_have_count(2)
+
+
 # --- a run carries on after a reload or a timeout, and is followed (plan 029, 1.4) ---
 
 
