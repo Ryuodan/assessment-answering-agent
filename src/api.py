@@ -17,14 +17,11 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 from src import web
 from src.logs import get_logger
 from src import (
-    batches,
     events,
-    forms,
     identity,
     llm,
     preferences,
@@ -41,6 +38,7 @@ from src.routes import admin as admin_routes
 from src.routes import knowledge as knowledge_routes
 from src.routes import memory as memory_routes
 from src.routes import chat as chat_routes
+from src.routes import forms as form_routes
 from src.routes.memory import scan_memory as _scan_memory
 from src.routes.knowledge import check_suffix
 from src.routes import products as product_routes
@@ -261,43 +259,7 @@ class SetAnswerRequest(BaseModel):
     """Which of the two lengths is being edited. See `tools.set_answer`."""
 
 
-@app.post("/api/forms")
-async def open_questionnaire(
-    file: UploadFile = File(...), product: str = Form(""), user: User = Depends(current_user)
-) -> dict:
-    """Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.
-
-    Nothing is answered here. The point of the separation is that a person sees
-    which sheets were used, which were skipped and why, and what each column was
-    taken to be, *before* a run that costs minutes.
-    """
-    # Checked against what `forms` can read, not against the knowledge base's
-    # list: the two accept different things. Policies come in as PDF or Word;
-    # questionnaires are mostly spreadsheets, which the knowledge-base check
-    # would have refused before the parser ever saw them.
-    name = file.filename or "questionnaire"
-    if Path(name).suffix.lower() not in forms.SUPPORTED:
-        raise forms.UnsupportedForm(
-            f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
-            f"Supported: {', '.join(forms.SUPPORTED)}."
-        )
-    product_id = products.chosen(user.team_id, product)  # before the file is kept
-    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
-    # In a thread: reading a workbook is a CPU-bound XML parse, and under the
-    # assisted and agent strategies it is also a network call. Either way it is
-    # not something to do on the event loop of a server answering other people.
-    batch = await run_in_threadpool(lambda: tools.open_form(user, path, product_id=product_id))
-    return tools.inspect(user, batch.id)
-
-
-@app.get("/api/forms")
-def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> dict:
-    return {"forms": batches.recent(user.team_id, actor_email=user.email, limit=limit)}
-
-
-@app.get("/api/forms/{batch_id}")
-def get_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict:
-    return tools.inspect(user, batch_id)
+app.include_router(form_routes.opening)  # opening and listing, src/routes/forms.py
 
 
 @app.post("/api/forms/{batch_id}/answer")
@@ -489,40 +451,7 @@ def approve_an_answer(
     return {**tools.inspect(user, batch_id), "remembered": entry_id}
 
 
-class FillRequest(BaseModel):
-    """How much of the questionnaire to write."""
-
-    include_unreviewed: bool = False
-    """Write answers nobody has confirmed as well.
-
-    Off by default, and deliberately awkward to turn on. Measured against the
-    security team's own answers, every answer that contradicted them came back
-    flagged and under 0.50 confidence -- so the default holds back exactly the
-    ones that would embarrass the organisation, and turning it off is a thing
-    somebody should have to mean.
-    """
-
-
-@app.post("/api/forms/{batch_id}/fill")
-def fill_questionnaire(
-    batch_id: str,
-    request: FillRequest | None = None,
-    user: User = Depends(current_user),
-) -> dict:
-    """Write the confirmed answers into a copy of the original, and report the rest."""
-    include = bool(request and request.include_unreviewed)
-    filled = tools.fill(user, batch_id, include_unreviewed=include)
-    return {
-        "file": filled.path.name,
-        "written": filled.written,
-        "created": filled.created,
-        "replaced": filled.replaced,
-        "intact": filled.intact,
-        "skipped": filled.skipped,
-        "blank": filled.blank,
-        "held_back": filled.held_back,
-        "because": filled.because,
-    }
+app.include_router(form_routes.router)  # filling, src/routes/forms.py
 
 
 OOXML_TYPES = {
@@ -1100,7 +1029,7 @@ async def answer_question_list(request: AnswerQuestionsRequest, user: User = Dep
         for index, item in enumerate(request.questions)
     ]
 
-    scope = {"product_id": products.chosen(user.team_id, request.product)} if request.product else {}
+    scope: dict[str, Any] = {"product_id": products.chosen(user.team_id, request.product)} if request.product else {}
     answers = await service.answer_questions(
         questions,
         language=request.language,

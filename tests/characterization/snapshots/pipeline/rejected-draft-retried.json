@@ -2,6 +2,7 @@
   "answered": {
     "answer": "All logical access is revoked within 24 hours of the end of employment.",
     "attempts": 2,
+    "before_approval": null,
     "brief": "",
     "by_hand": false,
     "citations": [

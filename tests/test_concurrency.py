@@ -120,6 +120,53 @@ async def test_progress_counts_every_question_once(monkeypatch, scrambled, concu
 
 
 @pytest.mark.asyncio
+async def test_each_answer_is_handed_over_as_it_finishes(monkeypatch, scrambled):
+    """Plan 029, 1.4: saved as each finishes, a run cut short keeps what it did."""
+    monkeypatch.setattr(settings, "max_concurrent_questions", 8)
+    handed: list[str] = []
+
+    answers = await service.answer_questions(
+        questions(8), language="en", on_answer=lambda answered: handed.append(answered.question.id)
+    )
+
+    assert handed == ["8", "7", "6", "5", "4", "3", "2", "1"], "in the order they finished"
+    assert [a.question.id for a in answers] == [str(i) for i in range(1, 9)], "returned in the order asked"
+
+
+@pytest.mark.asyncio
+async def test_each_answer_is_handed_over_before_it_is_counted(monkeypatch, scrambled):
+    """A page that reads "3 done" finds 3 saved."""
+    from src import progress
+
+    counted: list[int] = []
+    await service.answer_questions(
+        questions(3),
+        language="en",
+        run_id="counted-run",
+        on_answer=lambda answered: counted.append(progress.snapshot("counted-run")["completed"]),
+    )
+
+    assert sorted(counted) == [0, 1, 2]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_question_is_handed_over_too(monkeypatch):
+    async def flaky(question: Question, language, *, run_id="", **_):
+        if question.id == "2":
+            raise RuntimeError("429 rate limit")
+        return AnsweredQuestion(question=question, answer="ok", confidence=0.9, needs_review=False)
+
+    monkeypatch.setattr(service, "answer_one_question", flaky)
+    handed: list[AnsweredQuestion] = []
+
+    await service.answer_questions(questions(3), language="en", on_answer=handed.append)
+
+    assert sorted(a.question.id for a in handed) == ["1", "2", "3"]
+    [failed] = [a for a in handed if a.error]
+    assert failed.question.id == "2"
+
+
+@pytest.mark.asyncio
 async def test_the_document_flow_is_capped_the_same_way(monkeypatch):
     """Two entry points, one setting: the fan-out uses LangGraph's
     `max_concurrency` where the list flow uses a semaphore, and they must not

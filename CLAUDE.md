@@ -26,6 +26,7 @@ uv run python -m pytest tests/test_x.py -x      # one test file
 uv run python -m uvicorn src.api:app --reload   # the app on :8000
 uv run python -m src.cli doctor [--network]     # is this installation able to run? (read-only)
 uv run python -m src.cli inspect request <id>   # the server log's lines for one request ID
+uv run python -m src.cli inspect fills          # fills that wrote held-back answers (read-only, plan 029)
 ```
 
 Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).

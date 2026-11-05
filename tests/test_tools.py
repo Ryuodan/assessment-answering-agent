@@ -780,6 +780,85 @@ async def test_the_gate_can_be_opened_deliberately(batch, user, answers_doubtful
     assert filled.written == 4 and not filled.held_back
 
 
+def _filled_event(batch_id):
+    return [e for e in events.for_subject(batches.SUBJECT, batch_id) if e.kind == events.FILE_FILLED][-1]
+
+
+@pytest.mark.asyncio
+async def test_a_bypassed_fill_records_how_many_the_gate_held(batch, user, answers_doubtfully):
+    """TD-052: a fill that wrote held answers recorded `held_back=0`, so the log
+    could not show that unconfirmed answers had reached a customer's file."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, include_unreviewed=True)
+
+    recorded = _filled_event(batch.id).payload
+    assert recorded["held_back"] == 4 and recorded["include_unreviewed"] is True
+    assert filled.held_back == {}, "nothing was kept out, so nothing is offered to write anyway"
+
+
+@pytest.mark.asyncio
+async def test_a_gated_fill_records_that_the_gate_was_kept(batch, user, answers_doubtfully):
+    await tools.answer(user, batch.id)
+    tools.fill(user, batch.id)
+
+    recorded = _filled_event(batch.id).payload
+    assert recorded["held_back"] == 4 and recorded["include_unreviewed"] is False
+    assert recorded["written_anyway"] == []
+
+
+@pytest.mark.asyncio
+async def test_writing_anyway_writes_only_the_answers_the_person_agreed_to(batch, user, answers_doubtfully):
+    """Plan 029's review: the confirm counted the answers held at the last fill,
+    and the server wrote whatever was held by the time of the click. An answer
+    held since then went in under a count that did not include it."""
+    from src.forms.reading import read
+
+    await tools.answer(user, batch.id)
+    first, second, third, fourth = (q.id for q in batch.form.questions)
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, second)
+    shown = tools.fill(user, batch.id).held_back
+    assert set(shown) == {third, fourth}
+    tools.approve_answer(user, batch.id, first, approved=False)  # held again, after the person was shown two
+
+    filled = tools.fill(user, batch.id, include_unreviewed=True, unreviewed_ids=list(shown))
+
+    assert filled.written_anyway == [third, fourth]
+    assert set(filled.held_back) == {first}, "held since: kept out, and offered again"
+    assert filled.written == 3
+    recorded = _filled_event(batch.id).payload
+    assert recorded["held_back"] == 3 and recorded["written_anyway"] == [third, fourth]
+    written = read(filled.path, "rules").form.questions
+    assert [bool(q.existing_answer) for q in written] == [False, True, True, True]
+
+
+@pytest.mark.asyncio
+async def test_writing_anyway_without_naming_them_writes_every_held_answer(batch, user, answers_doubtfully):
+    """Scripts and the API that do not name the answers keep today's meaning."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, include_unreviewed=True)
+    assert filled.written_anyway == [q.id for q in batch.form.questions] and filled.held_back == {}
+
+
+@pytest.mark.asyncio
+async def test_naming_answers_does_not_open_the_gate_by_itself(batch, user, answers_doubtfully):
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, unreviewed_ids=[q.id for q in batch.form.questions])
+    assert filled.written == 0 and filled.written_anyway == [] and len(filled.held_back) == 4
+
+
+@pytest.mark.asyncio
+async def test_a_fill_that_held_everything_says_so(batch, user, answers_doubtfully):
+    """It said "none of them has a cell to go into", which sent the person to the
+    column mapping when what they had to do was review the answers."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id)
+
+    assert filled.written == 0
+    assert "4 answer(s) are held back" in filled.because
+    assert "cell to go into" not in filled.because
+
+
 @pytest.mark.asyncio
 async def test_a_confident_answer_still_goes_straight_in(batch, user, answers_yes):
     """The gate must not turn every run into a review queue."""
@@ -797,6 +876,169 @@ async def test_inspect_says_which_answers_would_be_written(batch, user, answers_
     question = view["questions"][0]
     assert question["will_be_written"] is False
     assert "flagged for review" in question["held_back_because"]
+
+
+# --- withdrawing an approval (TD-053) -------------------------------------------
+#
+# Approving clears the review's flag. Withdrawing used to leave it cleared, so an
+# answer the gate had held was written into the file as if confident.
+
+UNGROUNDED = "the reviewer did not find the answer grounded"
+WHY_LOW = "two of its citations were not found in the sources"
+
+
+@pytest.fixture
+def answers_flagged_but_sure(monkeypatch):
+    """Scored well, flagged anyway: the gate holds it on the flag alone."""
+
+    async def fake(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=q,
+                answer="Yes, backups are encrypted.",
+                confidence=0.85,
+                needs_review=True,
+                review_reasons=[UNGROUNDED],
+                confidence_reason=WHY_LOW,
+            )
+            for q in questions
+        ]
+
+    monkeypatch.setattr(tools.service, "answer_questions", fake)
+
+
+def _question(user, batch_id, question_id):
+    return next(q for q in tools.inspect(user, batch_id)["questions"] if q["id"] == question_id)
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_an_approval_holds_the_answer_back_again(batch, user, answers_flagged_but_sure):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    assert _question(user, batch.id, first)["will_be_written"] is True
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["needs_review"] is True and view["will_be_written"] is False
+    assert view["held_back_because"] == f"flagged for review -- {UNGROUNDED}"
+    assert view["answered"]["before_approval"] is None
+    assert first in tools.fill(user, batch.id).held_back
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_puts_back_the_reason_the_score_was_low(batch, user, answers_flagged_but_sure):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    assert batches.answers(batch.id)[first].confidence_reason == tools.APPROVED
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    assert batches.answers(batch.id)[first].confidence_reason == WHY_LOW
+
+
+@pytest.mark.asyncio
+async def test_approving_twice_keeps_what_the_review_said(batch, user, answers_flagged_but_sure):
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, first)
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    assert _question(user, batch.id, first)["will_be_written"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_confident_answer_withdrawn_still_goes_in(batch, user, answers_yes):
+    """Nothing held it before the approval, so nothing holds it after."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["will_be_written"] is True and view["needs_review"] is False
+
+
+@pytest.mark.asyncio
+async def test_an_approval_from_before_the_fix_is_judged_again_on_withdrawal(batch, user, answers_flagged_but_sure):
+    """Approved by the old code, which kept nothing: the review's own rule decides."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    old = batches.answers(batch.id)[first].model_copy(deep=True)
+    old.confidence_reason, old.needs_review = tools.APPROVED, False
+    batches.save_answers(batch.id, [old], edited_by=user.email)
+    assert old.before_approval is None
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["needs_review"] is True and view["will_be_written"] is False
+
+
+@pytest.mark.asyncio
+async def test_an_answer_the_old_withdrawal_released_is_held_after_approve_and_withdraw(
+    batch, user, answers_flagged_but_sure
+):
+    """Plan 029's review: the old withdrawal left the flag cleared and the reasons
+    kept. Approving that state recorded it, so withdrawing again released the
+    answer again, though the plan tells reviewers to approve these."""
+    from src import fill_audit
+
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    left = batches.answers(batch.id)[first].model_copy(deep=True)
+    left.needs_review, left.confidence_reason = False, ""  # what the withdrawal stored before TD-053's fix
+    batches.save_answers(batch.id, [left])
+    assert _question(user, batch.id, first)["will_be_written"] is True, "released, as the old code left it"
+
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["needs_review"] is True and view["will_be_written"] is False
+    assert fill_audit.released_by_withdrawal(settings.default_team) == []
+
+
+@pytest.mark.asyncio
+async def test_a_hand_written_answer_withdrawn_still_goes_in(batch, user, answers_flagged_but_sure):
+    """A person wrote it, so it was never held for the review; withdrawing the
+    approval takes it out of the answer memory and leaves it in the file."""
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.set_answer(user, batch.id, first, "Yes, with AES-256.")
+    tools.approve_answer(user, batch.id, first)
+
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["by_hand"] and view["will_be_written"] is True
+    assert batches.answers(batch.id)[first].confidence_reason == tools.HAND
+
+
+@pytest.mark.asyncio
+async def test_rewording_an_approved_answer_holds_it_back_again(batch, user, answers_flagged_but_sure, monkeypatch):
+    """The approval was for other words. Clearing only the mark released the
+    model's new wording unreviewed."""
+
+    async def reworded(answered, instruction, language=None, **_):
+        revised = answered.model_copy(deep=True)
+        revised.answer = "Backups are encrypted."
+        return revised
+
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    tools.approve_answer(user, batch.id, first)
+    monkeypatch.setattr(tools.rewrite, "rewrite", reworded)
+
+    await tools.revise(user, batch.id, "Shorter.", tools.Scope(ids=(first,)))
+
+    view = _question(user, batch.id, first)
+    assert view["answer"] == "Backups are encrypted."
+    assert view["approved"] is False and view["needs_review"] is True and view["will_be_written"] is False
 
 
 def test_approving_a_question_with_no_answer_is_refused(batch, user):
@@ -1046,3 +1288,147 @@ def test_an_answer_emptied_in_the_editor_is_simply_not_answered(batch, user):
     assert question.id not in batches.answers(batch.id)
     view = next(q for q in tools.inspect(user, batch.id)["questions"] if q["id"] == question.id)
     assert view["answered"] is None and not view["blanked"]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_brief_is_refused(batch, user, answers_doubtfully):
+    """Saved, it left the model's full answer in place marked as a person's, at
+    100%, so emptying the brief editor released an answer nobody had reviewed."""
+    await tools.answer(user, batch.id)
+    question = batch.form.questions[0]
+    before = batches.answers(batch.id)[question.id]
+
+    with pytest.raises(tools.ToolError, match="Leave blank"):
+        tools.set_answer(user, batch.id, question.id, "  ", which="brief")
+
+    assert batches.answers(batch.id)[question.id] == before
+    view = next(q for q in tools.inspect(user, batch.id)["questions"] if q["id"] == question.id)
+    assert view["will_be_written"] is False and not view["by_hand"]
+
+
+# --- each answer saved as it finishes; one run at a time (plan 029, 1.4) -------
+
+
+class Paused:
+    """The real `service.answer_questions`, over a stand-in for the per-question
+    pipeline that holds one question until `release` is set."""
+
+    def __init__(self, monkeypatch, wait_on: int = 1):
+        import asyncio
+
+        from src import service
+
+        self.calls: list[str] = []
+        self.waiting = asyncio.Event()
+        self.release = asyncio.Event()
+        self.wait_on = wait_on
+        monkeypatch.setattr(settings, "max_concurrent_questions", 1)
+        monkeypatch.setattr(service, "answer_one_question", self.answer_one)
+
+    async def answer_one(self, question, language, *, run_id="", **_):
+        self.calls.append(question.id)
+        if len(self.calls) == self.wait_on + 1:
+            self.waiting.set()
+            await self.release.wait()
+        return AnsweredQuestion(question=question, answer=f"Yes. [{question.id}]", confidence=0.9, needs_review=False)
+
+    async def during(self, user, batch, check, **answer_options):
+        """Run `tools.answer` and call `check` while it waits on the second question."""
+        import asyncio
+
+        run = asyncio.ensure_future(tools.answer(user, batch.id, **answer_options))
+        await asyncio.wait_for(self.waiting.wait(), timeout=5)
+        try:
+            await check()
+        finally:
+            self.release.set()
+        return await run
+
+
+@pytest.fixture
+def paused(monkeypatch):
+    return Paused(monkeypatch)
+
+
+async def test_answers_are_saved_as_each_one_finishes(batch, user, paused):
+    """A run's answers were saved only when it ended: one cut short lost them all."""
+    first, second = (q.id for q in batch.form.questions[:2])
+
+    async def check():
+        saved = batches.answers(batch.id)
+        assert first in saved and second not in saved
+
+    await paused.during(user, batch, check)
+
+    assert len(batches.answers(batch.id)) == 4
+
+
+async def test_a_second_run_on_a_questionnaire_being_answered_is_refused(batch, user, paused):
+    from src.errors import QuestionnaireBusy
+
+    async def check():
+        with pytest.raises(QuestionnaireBusy, match="being answered right now"):
+            await tools.answer(user, batch.id)
+
+    await paused.during(user, batch, check)
+
+    assert len(paused.calls) == 4, "every question answered once"
+
+
+async def test_nothing_changes_a_questionnaire_while_it_is_answered(batch, user, paused):
+    """An edit made during a run was overwritten by the run's last save."""
+    from src.errors import QuestionnaireBusy
+
+    first = batch.form.questions[0].id
+
+    async def check():
+        for change in (
+            lambda: tools.set_answer(user, batch.id, first, "Mine."),
+            lambda: tools.approve_answer(user, batch.id, first),
+            lambda: tools.blank_answer(user, batch.id, first),
+            lambda: tools.set_questions(user, batch.id, [{"id": first, "skip": True}]),
+        ):
+            with pytest.raises(QuestionnaireBusy):
+                change()
+        with pytest.raises(QuestionnaireBusy):
+            await tools.revise(user, batch.id, "Shorter.")
+        assert tools.inspect(user, batch.id)["counts"]["answered"] == 1
+        assert tools.fill(user, batch.id).written == 1, "filling only reads, and writes a copy"
+
+    await paused.during(user, batch, check)
+
+    assert batches.answers(batch.id)[first].answer == f"Yes. [{first}]"
+
+
+async def test_inspect_says_how_far_a_run_has_got(batch, user, paused):
+    async def check():
+        running = tools.inspect(user, batch.id)["running"]
+        assert running["run_id"] == batch.id and running["started_at"]
+        assert (running["stage"], running["completed"], running["total"]) == ("answering", 1, 4)
+
+    await paused.during(user, batch, check)
+
+    assert tools.inspect(user, batch.id)["running"] is None
+
+
+async def test_a_brief_questionnaire_still_gets_its_briefs(batch, user, answers_yes, shortens):
+    """A run shortens its own answers: the hold does not refuse the run that holds it."""
+    tools.set_detail(user, batch.id, "brief")
+
+    outcome = await tools.answer(user, batch.id)
+
+    assert outcome.answered == 4
+    assert all(a.brief == "Yes, briefly." for a in batches.answers(batch.id).values())
+    assert tools.inspect(user, batch.id)["running"] is None
+
+
+async def test_a_run_that_fails_lets_the_questionnaire_go(batch, user, monkeypatch):
+    async def broken(questions, **_):
+        raise RuntimeError("the pipeline fell over")
+
+    monkeypatch.setattr(tools.service, "answer_questions", broken)
+    with pytest.raises(RuntimeError):
+        await tools.answer(user, batch.id)
+
+    tools.set_answer(user, batch.id, batch.form.questions[0].id, "Mine.")
+    assert tools.inspect(user, batch.id)["running"] is None

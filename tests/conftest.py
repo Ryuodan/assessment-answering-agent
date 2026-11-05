@@ -33,7 +33,7 @@ os.environ["PHOENIX_TRACING"] = "false"
 
 import pytest
 
-from src import access_codes, answer_memory, credentials, store
+from src import access_codes, answer_memory, busy, credentials, store
 from src.chunking import chunk_document
 from src.config import PROJECT_ROOT, settings
 from src.knowledge import KnowledgeStore
@@ -100,6 +100,8 @@ def isolated_storage(tmp_path, monkeypatch):
             f"settings still pointing into the project during a test: {', '.join(unredirected)}\n"
             "  FIX: redirect each to tmp_path in `isolated_storage` (tests/conftest.py); tests never touch real data"
         )
+    # Which questionnaires are being answered: in memory, so per test too (plan 029).
+    monkeypatch.setattr(busy, "_HELD", {})
     store.reset_connection()
     answer_memory.forget_sync()
     yield

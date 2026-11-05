@@ -91,6 +91,16 @@ def test_the_shared_script_names_no_root_path_but_the_api():
     assert not rooted, f"cards.js addresses {rooted} from the domain root"
 
 
+def test_the_workbench_keeps_its_address_inside_the_prefix():
+    """Plan 029, 1.1: the open questionnaire goes into the address. Written
+    from the root, a reload under /assessment/ would leave the app."""
+    page = (api.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    calls = re.findall(r"history\.(?:replaceState|pushState)\(([^;]*)\)", page)
+    assert calls, "the workbench writes the open questionnaire into its address"
+    for arguments in calls:
+        assert not re.search(r"""["'`]/""", arguments), f"a rooted address: {arguments}"
+
+
 def test_the_old_chat_address_redirects_within_the_prefix(client):
     response = client.get("/chat", follow_redirects=False)
     assert response.status_code == 308

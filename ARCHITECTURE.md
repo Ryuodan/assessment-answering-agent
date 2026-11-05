@@ -18,7 +18,7 @@ any layer below it, never above, including from inside a function.
 | 2. integrations | everything that talks to something outside the process: the model provider, the embedding host, Docling, SQLite, Chroma, and the customer's PDF, Word and Excel files | `llm`, `embeddings`, `documents`, `store`, `knowledge`, `export_pdf`, `forms/` |
 | 3. records | what the system remembers about people and their work | `identity`, `events`, `runs`, `batches`, `conversations`, `answer_memory`, `storage` |
 | 4. answering | turning a question into a grounded answer | `graph/`, `extraction`, `relevance`, `rewrite`, `forms/reading.py`, `agents/excel_agent.py` |
-| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `search`, `selection`, `tools`, `agents/assistant.py` |
+| 5. operations | the use cases the web interface, the command line and the chat assistant share | `service`, `search`, `selection`, `tools`, `fill_audit`, `agents/assistant.py` |
 | 6. interfaces | how people and programs reach the system | `api`, `cli` |
 
 Why these lines (Claude's reasoning, recorded as D-012):
@@ -49,8 +49,7 @@ are deliberately not owned.
 **Exceptions allowed today**, each against a tech-debt item and listed in
 [layers.md](docs/generated/layers.md): `knowledge` imports `answer_memory` and
 `storage` imports `service`, the upward halves of two cycles (TD-007); `config`
-starts the Phoenix tracing libraries (TD-009); `service` renders Word previews
-with python-docx itself (TD-019). Not caught by the layers, because both ends
+starts the Phoenix tracing libraries (TD-009). Not caught by the layers, because both ends
 are in one layer: `forms.xlsx` and `forms.llm_layout` import each other
 (TD-007).
 
@@ -87,6 +86,14 @@ the person saw and run `python -m src.cli inspect request <id>`, which prints
 that request's lines from `SERVER_LOG_PATH`. Modules not yet converted
 (TD-028) still log prose, but their lines carry the ID too.
 
+`python -m src.cli inspect fills [--team T]` reads the event log and the answers
+as they are today, and changes nothing (`src/fill_audit.py`, plan 029). It lists
+the fills that wrote answers the review gate holds back: before plan 029 every
+Workbench fill did (TD-052), and since then a fill records it. An answer held
+today and unchanged since the fill was certainly written; one saved after the
+fill is reported as unknown. It also lists answers whose approval was withdrawn
+before plan 029 and that the gate still lets through (TD-053).
+
 `python -m src.cli doctor` checks an installation without changing it: the
 interpreter, the env file, whether the secrets are set (never their values),
 storage and the database, and with `--network` one request to each remote
@@ -98,6 +105,14 @@ service. Each failure prints a FIX line (`src/diagnostics.py`, plan 010).
 preferences pages, and the shared answer card (`cards.js`, `cards.css`). They
 talk to `src/api.py` over HTTP only.
 
+The Workbench keeps the open questionnaire in its own address, `?q=<id>`
+(plan 029), with `history.replaceState` on an address derived from the page's,
+so it stays under the deployment's prefix. A reload or a copied link opens it
+again, for its owner only. "Or pick up" lists every questionnaire of the
+person, last changed first (`form_batches.updated_at`). Its review shows the
+answers in tabs by the fill gate's verdict (`will_be_written`, from
+`tools.inspect`), with Fill in a bar that stays in view.
+
 `tests/browser/` drives them in headless Chromium (Playwright, plan 011): the
 app runs in a thread of the test process, so the suite's fixtures (temporary
 storage, faked model calls) apply to it, and a page that raises a JavaScript
@@ -108,7 +123,10 @@ error fails its test. `uv run poe browser` runs them; the gate includes them.
 `src/api.py` builds the app and still defines most routes. Routes grouped by
 area are moving into `src/routes/` as they change (plan 019, TD-006):
 `routes/auth.py` holds the dependencies every route uses (`current_user`,
-`current_admin`), and `routes/admin.py` the Access panel's routes. A router is
+`current_admin`), and `routes/admin.py` the Access panel's routes.
+`routes/forms.py` holds opening, listing, reading and filling a
+questionnaire (plan 029), in two routers: `opening` is included before the
+answering routes and `router` (filling) after approving. A router is
 included where its routes used to be defined, so the routes are registered,
 and the OpenAPI contract is ordered, as before. The SQLite schema's
 migrations are in `src/migrations.py`, applied by `src/store.py`.
@@ -179,16 +197,35 @@ The product is fixed when the questionnaire is opened or the chat starts
   are labelled with is kept in `deleted_products`. `products.refuse_deleted`
   and the store guard in `scoped_knowledge` refuse writes with 409
   `product_deleted`.
-- **The pages** (plan 024). The choice is made in two places:
-  - a coloured chip beside the chat box (`chat.html`), which can be changed
-    until the first message;
-  - a Product selector at the top of the workbench's questionnaire panel
-    (`index.html`), fixed while a questionnaire is open. Close questionnaire
-    frees it.
+- **The pages** (plan 024, plan 029). The choice is made in two places, with
+  one chip (`.product-chip`, `cards.css`):
+  - beside the chat box (`chat.html`), which can be changed until the first
+    message;
+  - at the top of the workbench's questionnaire panel (`index.html`), fixed
+    while a questionnaire is open, or while a typed list's answers are on the
+    page. Close questionnaire, and Clear all of an answered list, free it.
+
+  Neither page chooses for the person (D-022). Both start on "Product: choose…";
+  General is an explicit option ("General (shared policies only)"). Reading a
+  file and answering a typed or PDF list on the workbench, and a new chat's
+  first message (Send and Enter), wait for a choice; a file can be attached in
+  the chat before. On the workbench the check is in `readQuestionnaire`, which
+  every read goes through ("Start fresh" in the same-file box too, whose label
+  follows the selector). The page's choice is `""` (nothing), `Cards.GENERAL`, or a
+  product id, and the page sends `Cards.serverProduct(choice)`, which is still
+  `""` for General: the server does not yet refuse a missing product (TD-066).
+  "Last used" (`Cards.lastUsedButton`) fills the choice in one click and is
+  never preselected. It is derived, not stored: the product of the work last
+  opened, answered or closed on the page, else of the person's most recent
+  questionnaire (`GET /api/forms`, as "Or pick up" lists them) or chat
+  (`GET /api/chat`), skipping deleted products and offering nothing before the
+  products are listed.
 
   `Cards.productBadge` (`cards.js`) puts a product's name, in its colour, on
   the chats and questionnaires in the lists, and on an answer's sources that
-  came from the product's own knowledge base.
+  came from the product's own knowledge base. A fixed choice reads as a label
+  in its colour (`Cards.choiceTag`, General's neutral), and the workbench's
+  Review heading carries it.
 
 ## How a request flows
 
@@ -201,15 +238,36 @@ question/answer pairs, `knowledge.add_prior_answers`, and
 `answer_memory.adopt_file`.
 
 **Answering a questionnaire.** `POST /api/forms` saves the file and calls
-`tools.open_form`, for a `product` or General. That reads it (`forms.reading`, by default the guarded
+`tools.open_form`, for a `product` or General. With `if_already_open="ask"`
+(the Workbench) it first compares the bytes with this person's questionnaire
+files still on disk (`batches.same_upload`, leaving out one nothing was read
+from), and on a match saves and reads nothing and returns `already_open`, for
+them to open one or start fresh. That reads it (`forms.reading`, by default the guarded
 agent strategy) into a `Batch` of questions with write targets; nothing is
 answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 `service.answer_questions`, which runs the LangGraph pipeline once per question
 (`graph/workflow.py`): plan the searches, retrieve, rerank, draft, review, and
 either retry retrieval with a refined query or finalize with confidence and
-citations. Answers are saved on the batch (`batches.save_answers`) and an event
-is recorded. `POST /api/forms/{id}/fill` writes the ready answers into a copy
-of the customer's own file (`forms.xlsx` / `forms.docx`).
+citations. Each answer is saved on the batch as it finishes (`on_answer`,
+`batches.saver`), before it is counted in `progress`, and the run's styled
+answers are saved again at its end (`batches.save_answers`), with an event.
+While a run goes on, `busy` holds its questionnaire: a second run, and any
+change to it (an edit, an approval, a rewording), is refused with 409
+`questionnaire_busy`; reading and filling are not. `GET /api/forms/{id}` says
+how far the run has got and when it started (`running`), and the Workbench
+follows it after a reload or a timed-out request instead of offering Answer
+again. `busy`, like
+`progress`, is in the memory of the one process that serves the app (plan 029). `POST /api/forms/{id}/fill` writes the ready answers into a copy
+of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
+when `selection.ready_to_write` says so: a person confirmed it, or it is neither
+flagged nor under `REVIEW_CONFIDENCE_THRESHOLD`. The rest are held back and
+listed with their reasons, and written only when the request says
+`include_unreviewed` (the Workbench's "Write them in anyway"). The Workbench
+also names them (`unreviewed_ids`): the held answers the person was shown, so an
+answer held since stays out; the response says how many went in
+(`written_anyway`). The `file_filled` event records how many the gate held
+(`held_back`), whether they were written anyway (`include_unreviewed`), and
+which (`written_anyway`); events from before plan 029 have neither key.
 
 **Talking to the assistant.** `POST /api/chat` (`src/routes/chat.py`) loads a
 `Conversation`, or starts one for the `product` sent, and calls

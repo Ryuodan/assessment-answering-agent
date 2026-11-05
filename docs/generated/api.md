@@ -49,7 +49,7 @@ Errors: [errors.md](errors.md).
 | Method | Path | What it does |
 |---|---|---|
 | `POST` | `/api/forms` | Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it. |
-| `GET` | `/api/forms` | List Questionnaires |
+| `GET` | `/api/forms` | One person's questionnaires, last changed first. |
 | `GET` | `/api/forms/{batch_id}` | Get Questionnaire |
 | `POST` | `/api/forms/{batch_id}/answer` | Answer a selection. Long: a large questionnaire is minutes of work. |
 | `POST` | `/api/forms/{batch_id}/revise` | Revise Questionnaire |

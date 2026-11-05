@@ -6,6 +6,7 @@ python -m src.cli answer      new-assessment.docx --language ar --out filled.jso
 python -m src.cli stats
 python -m src.cli doctor [--network] [--json]
 python -m src.cli inspect request <request-id>
+python -m src.cli inspect fills [--team T] [--json]
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-from src import answer_memory, diagnostics, llm, service
+from src import answer_memory, diagnostics, fill_audit, llm, service
 from src.config import configure_logging, settings
 from src.models import SourceType
 
@@ -119,6 +120,16 @@ def _inspect_request(request_id: str, log: str | None) -> int:
     return 0
 
 
+def _inspect_fills(team: str, as_json: bool) -> int:
+    """Fills that wrote answers the review gate holds back, and withdrawn approvals left released (plan 029)."""
+    fills, released = fill_audit.held_fills(team), fill_audit.released_by_withdrawal(team)
+    if as_json:
+        print(json.dumps({"fills": [vars(f) for f in fills], "released": [vars(r) for r in released]}, indent=2))
+    else:
+        print("\n".join(fill_audit.report(fills, released)))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The command line's arguments: one subcommand per job."""
     parser = argparse.ArgumentParser(
@@ -161,6 +172,10 @@ def build_parser() -> argparse.ArgumentParser:
     request = what.add_parser("request", help="the server log's lines for one request ID")
     request.add_argument("request_id")
     request.add_argument("--log", default=None, help="the log file (default: SERVER_LOG_PATH)")
+    # A team's work, so --team here: the loop above ran before `inspect` was added.
+    fills = what.add_parser("fills", help="fills that wrote answers the review gate holds back (plan 029)")
+    fills.add_argument("--team", default=settings.default_team, help="whose fills (default: %(default)s)")
+    fills.add_argument("--json", action="store_true", help="the two lists as one JSON object")
 
     return parser
 
@@ -196,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
         return _stats(args.team)
     if args.command == "doctor":
         return _doctor(args.network, args.json)
+    if args.command == "inspect" and args.what == "fills":
+        return _inspect_fills(args.team, args.json)
     if args.command == "inspect":
         return _inspect_request(args.request_id, args.log)
 

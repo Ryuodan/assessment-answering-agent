@@ -336,3 +336,127 @@ a plan relies on it.
   approvals already in flight when a product is deleted are not stopped
   (TD-045). `migrations.py` is at its 400-line limit (TD-046).
 - **Date:** 2026-10-19. **Status:** accepted. **Decided by:** the user (files and warning, TD-039; read-only work, plan 027); Claude (the folder layout, the tombstone table).
+
+## D-020: what the review gate held is kept, not derived
+
+- **Context:** the review gate (`selection.ready_to_write`) holds flagged and
+  low-confidence answers back from the customer's file. Two places lost what
+  it had said. Approving cleared the flag, and withdrawing the approval did
+  not put it back (TD-053). And a fill that wrote held answers recorded
+  `held_back=0` (TD-052), so nothing could show afterwards which files held them.
+- **Decision:**
+  - An approval keeps the flag and the reason it replaced, in the answer's
+    stored JSON (`AnsweredQuestion.before_approval`) rather than a column:
+    no migration (TD-046), every stored answer loads unchanged, and an older
+    build ignores the key. Withdrawing restores them, and rewording an
+    approved answer withdraws the approval the same way
+    (`selection.approve`, `selection.withdraw_approval`). An approval from
+    before kept nothing, so withdrawing it applies the review's rule again.
+  - The `file_filled` event records the gate's count (`held_back`) whether or
+    not the gate was opened, and `include_unreviewed`. The fill response keeps
+    `held_back` empty after a deliberate "Write them in anyway".
+  - "Write them in anyway" names the held answers the person was shown
+    (`unreviewed_ids`), and only those are written; one held since stays out
+    and comes back in `held_back`. The event records which went in
+    (`written_anyway`), and the response how many (plan 029's review: the
+    confirm counted the last Fill's list, and the server wrote what was held
+    at the click). A request that names none writes every held answer, as
+    before.
+  - `python -m src.cli inspect fills` reads both to list the fills that wrote
+    held answers, and writes nothing. An answer cleared after a fill, and a
+    fill of a questionnaire no longer on the server, are listed as unknown.
+- **Consequences:** a withdrawal restores the flag the answer had, whatever
+  the threshold is now; only an approval from before this uses today's
+  threshold. Answers released by a withdrawal before this stay released until
+  somebody edits or approves them: they are listed, not repaired. Approving
+  one records what the review's own rule says (`selection.held_by_the_review`)
+  rather than the cleared flag, because the stored state contradicts that
+  rule and recording it would release the answer again on the next
+  withdrawal (plan 029's review). Events from before have no
+  `include_unreviewed` key.
+- **Date:** 2026-11-05. **Status:** accepted; a default the user can reverse
+  after testing plan 029. **Decided by:** the user (kept, not derived); Claude
+  (where it is kept, the event's fields, listing rather than repairing).
+
+## D-021: the Workbench keeps a person's place, and one run holds a questionnaire
+
+- **Context:** the team lost work on the Workbench (plan 029's feedback). A
+  reload opened nothing; "Or pick up" offered three questionnaires, by upload;
+  the same file again made a second, empty questionnaire; a run saved its
+  answers only at its end, outlived nginx's 15 minutes, and could be started
+  again, paid for twice, while it was still going.
+- **Decision:**
+  - A questionnaire's last use is its last change (`form_batches.updated_at`,
+    which every write moves). "Or pick up" lists every one, last changed first,
+    up to 500. The open one is in the page's address (`?q=<id>`), which opens
+    only for its owner. No migration.
+  - The same file again is matched by its bytes against this person's
+    questionnaire files still on disk, before anything is saved or read, and
+    offered to open or start fresh (`if_already_open="ask"`, sent only by the
+    Workbench). Not a stored fingerprint: that needs a migration (TD-046).
+    One nothing was read from is not offered: a Word file written as prose is
+    read as text again (plan 029's review; TD-065).
+  - Each answer is saved as it finishes. One run at a time per questionnaire,
+    held in memory (`src/busy.py`), and nothing else changes it until the run
+    ends: one writer at a time, rather than letting edits through and merging
+    at the end. A run carries on after a reload or a timeout, as before, and
+    the page follows it.
+  - Leaving the Workbench with work only the page holds asks first; nothing
+    is saved on the way out.
+- **Consequences:** opening or filling a questionnaire does not move it up the
+  list. During a run nobody can edit that questionnaire, in the Workbench or
+  the chat. The hold assumes one process (TD-063), and a run that never ends
+  holds its questionnaire until a restart (TD-064). The chat does not yet ask
+  about the same file (TD-062).
+- **Date:** 2026-11-05. **Status:** accepted; defaults the user can reverse
+  after testing plan 029. **Decided by:** Claude, on the design's
+  recommendations recorded in plan 029's decision log.
+
+## D-022: a questionnaire's or a chat's product is always chosen; General is a choice, never a default
+
+- **Context:** the team reported that the product "defaults to General and
+  sometimes resets" (plan 029's feedback), and it was reproduced: both pages
+  started on General, every reload rebuilt them on General, a deleted product
+  fell back to General, and New conversation carried the last choice over to
+  the next chat. A questionnaire answered for General by accident is answered
+  without the product's own policies and past answers, and its approvals are
+  filed in the shared memory.
+- **Decision:**
+  - The Workbench and the chat start with no product chosen ("Product:
+    choose…"). General is one of the choices, "General (shared policies
+    only)", chosen like any product.
+  - Reading any file (a PDF included), answering a typed or PDF list, and a
+    new chat's first message wait for a choice. Enter waits as Send does. In
+    the chat a file can be attached first: nothing reaches the server until
+    Send. A team with no products still chooses General.
+  - The rule is kept where a file is read, not on one button: the "You
+    already have this file" box's "Start fresh" is for the product chosen
+    now, and waits while nothing is (plan 029's review of Stage 2: it opened
+    the file as General after Clear all or a deletion). Its copies each name
+    their product, General's included.
+  - "Last used" fills the choice in one click and is never preselected. It is
+    derived from the person's own saved questionnaires and chats, and from
+    what they did on the page; nothing new is stored.
+  - Close questionnaire, Clear all of an answered list, New conversation from
+    an open chat, a reload and a deleted product all go back to "choose…". The
+    product of the work just left is offered as "Last used".
+  - A fixed product reads as a label in its colour, and the Workbench's review
+    heading names it.
+  - The server is unchanged: it still reads a missing product as General
+    (TD-066). The pages send `""` for General through `Cards.serverProduct`,
+    the one line to change when the server refuses a missing product.
+- **Alternatives:** remembering the last choice in the browser (per device,
+  empty in private windows, a choice rather than work done, so a product
+  chosen and abandoned would be suggested); or in the person's preferences on
+  the server (a new write on every questionnaire and chat start, in modules at
+  their size ceilings, and an API change). Deriving it needs neither, follows
+  the person across computers, and is literally their last work.
+- **Consequences:** one more click for every new questionnaire and chat, one
+  for a person who works on one product all day (on "Last used"). A typed list
+  answered and never saved is not remembered after a reload. Scripts, the API
+  and the evaluation can still answer as General without saying so (TD-066).
+- **Date:** 2026-11-05. **Status:** accepted; the defaults are the user's to
+  reverse after testing plan 029. **Decided by:** the user (no silent General,
+  a one-click "last used"); the defaults by Claude, from plan 029's design.
+  Supersedes plan 024's decision log entry of 2026-10-06 ("New conversation
+  keeps the chip's choice").

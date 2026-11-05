@@ -60,6 +60,12 @@ or docs and has not been verified by running anything.
   - `graph/nodes.py` 406 -> 402.
 
   The ceilings in `harness/arch-allowlist.toml` were lowered to match, each at the end of its plan.
+- **Update** 2026-11-05 (plan 029, Stage 1): room for the Workbench relief came from three behaviour-neutral moves, each in its own commit with `openapi.json` unchanged:
+  - `api.py` 1264 -> 1225: opening, listing and reading a questionnaire, to `src/routes/forms.py`.
+  - `tools.py` 1347 -> 1294: `in_house_style`, to `src/styling.py`; then 1303 with the run guard (1.4).
+  - `service.py` 591 -> 462: the Word preview, to `src/docx_preview.py` (TD-019); then 469 with saving each answer as it finishes (1.4).
+
+  The two raises after a move follow Stage 0's (`tools.py` 1,334 -> 1,347): the move commit has to lower the ceiling to the module's length, so the item after it raises it again, and each ceiling ends below where the stage started.
 
 ## TD-007: Import cycles and upward imports
 
@@ -178,6 +184,7 @@ or docs and has not been verified by running anything.
 - **Impact:** a library upgrade or replacement touches many modules; no single owner.
 - **Fix:** assign each IO or framework library to one layer and enforce it in `arch` (plan 003).
 - **Partly resolved** 2026-10-05 (plan 003): ownership is enforced (ARCH-OWNER); the one remaining exception, `service` importing `docx` for the Word preview, is allow-listed. `langchain_core` is deliberately not owned (D-012).
+- **Resolved** 2026-11-05 (Claude, plan 029): the Word preview moved out of `service` into `src/docx_preview.py`, in the integrations layer that owns python-docx, behaviour unchanged (`service.docx_preview_html` is still the name its callers use). The `src.service` / `docx` entry is gone from `harness/arch-allowlist.toml`; `tests/test_document_library.py` passes unchanged.
 
 ## TD-020: Commented-out implementation in `src/embeddings.py`
 
@@ -474,8 +481,109 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Every file filled from the Workbench also holds the answers the review gate holds back. Those are flagged or low-confidence answers: on the held-out set, 76.2% agreement and 11 of 12 contradictions, against 95.8% and 1 for the answers the gate lets through.
   - The FILE_FILLED event then records `held_back=0`, so the logs do not show it.
 - **Fix:** plan 029, approved by the user.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.1):
+  - The button calls `fillTheForm(false)`, and the request opens the gate only for an exact `true`, so a handler that passes an event fails closed.
+  - A fill that holds answers back says how many, lists each under "Which, and why" with its reason, and offers "Write them in anyway" behind a confirm that counts them. After that, the first line says how many unconfirmed answers were written.
+  - `FILE_FILLED` records the gate's count (`held_back`) in both modes, and `include_unreviewed`. Events from before have no `include_unreviewed` key.
+  - `python -m src.cli inspect fills` lists the fills that wrote held answers before the fix (`src/fill_audit.py`). It is certain only for answers unchanged since the fill. What to tell the team, and which sent files to re-check, is the user's decision.
+  - Tests: 2 browser tests in `tests/browser/test_workbench.py` (failing on the old page), 3 unit tests in `tests/test_tools.py`, 11 in `tests/test_fill_audit.py`.
+  - After the review of Stage 0: "Write them in anyway" counted the last Fill's list, but the server wrote whatever was held at the click, so an approval withdrawn in between went in under "Write 2" and "including 2" (3 were written). The request now names the answers it counted (`unreviewed_ids`), the server writes only those, and the first line says how many went in as the server counted them (`written_anyway`). The audit also lists answers cleared after a fill, and fills of questionnaires no longer on the server, as unknown. Tests: 3 unit and 1 API test, 1 browser test (failing on the old page), 5 in `tests/test_fill_audit.py`.
 
 ## TD-053: Withdrawing an approval leaves the answer released
 
 - **What:** found 2026-11-05 by the feedback review. Approving clears `needs_review`, and withdrawing the approval does not put it back. A held answer that was approved and then withdrawn is written to the file as if confident.
+  - The "why the score is low" sentence (`confidence_reason`) was lost too.
+  - Found by plan 029's design, and reproduced: rewording an approved answer (`revise`) cleared the approval the same way, so the reworded model text was released unreviewed.
 - **Fix:** plan 029.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.2):
+  - An approval keeps the flag and reason it replaced, in the answer's stored JSON (`AnsweredQuestion.before_approval`; no column, no migration). Withdrawing restores them; rewording an approved answer withdraws the approval by the same rule (`selection.approve`, `selection.withdraw_approval`).
+  - An approval made before the fix kept nothing: withdrawing it applies the review's rule again (any reason, or a score at or under the threshold, unless a person wrote the words).
+  - Answers already released by a withdrawal before the fix stay released until somebody edits or approves them. `python -m src.cli inspect fills` lists them (0.1b); they are not repaired.
+  - After the review of Stage 0: approving one of those recorded its cleared flag, so approving and then withdrawing released it again. An approval now records what the review's own rule says when the stored state contradicts it (not a person's words, flag cleared, and a reason or a score at or under the threshold), so the withdrawal holds it back. `tests/test_tools.py::test_an_answer_the_old_withdrawal_released_is_held_after_approve_and_withdraw` fails on the old code.
+  - Tests: 7 in `tests/test_tools.py` (5 failing on the old code, 2 pinning what stays), 1 in `tests/test_api_forms.py`, 1 browser test in `tests/browser/test_answer_card.py`.
+
+## TD-054: A fill that held every answer said none of them had a cell to go into
+
+- **What:** found 2026-11-05 by plan 029's design, and reproduced. When every answer that could be written was held back by the review gate, `fill` returned "The answers exist but none of them has a cell to go into -- check the answer column for each sheet in the reading report." `_nothing_written` had no case for held answers. The chat showed it above its own "N held back" line.
+- **Impact:** it sent the person to the column mapping when what they had to do was review the answers. After TD-052's fix the Workbench reaches this case often.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.1): the message is "Nothing was written: N answer(s) are held back until somebody edits or approves them." when answers were kept out. `tests/test_tools.py::test_a_fill_that_held_everything_says_so`.
+
+## TD-055: Saving an empty brief released the model's answer as a person's
+
+- **What:** found 2026-11-05 by plan 029's design, and reproduced. `set_answer(which="brief", text="")` left the model's full answer in place and marked the answer `by_hand`, confidence 1.0. The empty check covered the full answer only.
+- **Impact:** emptying the brief editor on a held answer released it unreviewed, as a person's words, at 100%.
+- **Resolved** 2026-11-05 (Claude, plan 029, item 0.5): an empty brief is refused (400 `operation_refused`, "A brief answer cannot be empty. To write nothing for this question, use Leave blank."); the stored answer is unchanged. `tests/test_tools.py::test_an_empty_brief_is_refused`, `tests/test_api_forms.py::test_an_empty_brief_is_a_400`.
+  - The card does not send an emptied brief: it puts the brief back and says to use Leave blank (`tests/browser/test_answer_card.py::test_emptying_a_brief_is_refused_on_the_card`). The editor of a Brief card now holds the brief, not the full answer.
+
+## TD-056: Rewording an answer a person wrote releases the model's new words unreviewed
+
+- **What:** found 2026-11-05 by plan 029's design, and reproduced. `revise(include_written=True)`, which the chat assistant can ask for, rewords a hand-written answer. The result has `by_hand` false and `confidence_reason` cleared, but keeps the `needs_review=False` and confidence 1.0 that writing by hand set, so the gate lets the model's new words through.
+- **Impact:** model text reaches the customer's file as if a person had confirmed it.
+- **Fix (needs a decision):** a reworded hand-written answer comes back held, as a reworded approved answer does since plan 029 (0.2).
+
+## TD-057: A brief-only edit marks the whole answer as a person's
+
+- **What:** read 2026-11-05 (plan 029's design). `set_answer(which="brief")` sets `by_hand`, confidence 1.0 and `HAND` on the answer, though the full answer is still the model's.
+- **Impact:** switched to Full, the model's full text is written as the person's. Approved in a Full questionnaire, it enters the answer memory under their name.
+- **Fix (needs a decision):** record which length a person wrote, or drop the brief's mark when the full answer is written.
+
+## TD-058: A set-aside question's held answer is counted as held back by fill
+
+- **What:** found 2026-11-05 while building plan 029's 0.1, and reproduced. `fill` checks the gate before it checks whether a question is set aside, so a set-aside question whose answer is held appears in `Filled.held_back` and in the `FILE_FILLED` event's `held_back` count. `inspect`'s `held_back` count leaves set-aside questions out, and `docs/design/questionnaires.md` says the fill report does too. Nothing is written for them either way.
+- **Impact:** the fill's "N held back" and its reasons can include questions that will never be written, and "Write them in anyway" counts them.
+- **Fix (needs approval):** skip set-aside questions before the gate in `fill`, with a test.
+
+## TD-059: Putting back the draft of an approved answer releases it unreviewed
+
+- **What:** found 2026-11-05 while building plan 029's 0.2, and reproduced. `restore_draft` clears `APPROVED` from `confidence_reason` but leaves `needs_review` false, as withdrawing did before TD-053's fix. A flagged answer that was reworded, then approved, then put back to its draft is written as if confident (seen at 0.85 with a reviewer's reason).
+- **Impact:** the model's draft reaches the customer's file without a person having confirmed it. Only answers that scored at or above the threshold: a low score is still held.
+- **Fix (needs approval):** `restore_draft` withdraws the approval with `selection.withdraw_approval(restored, reworded=True)`, as `revise` does since plan 029. One line, with a test.
+
+## TD-060: A late knowledge-base answer replaced the list for another scope
+
+- **What:** found 2026-11-05 by `poe check` during plan 029, when the existing browser test of removing a product's documents timed out under load. The Workbench loads the shared knowledge base when the page opens and the chosen one when the selector changes, and drew whichever answer came back last. A slow shared answer replaced a product's list while the selector still named the product.
+- **Impact:** the list, and since plan 029 the count in "Remove every policy document", could belong to another knowledge base than the one chosen. A "remove" clicked there was sent for the chosen one, and refused. The test failed intermittently.
+- **Resolved** 2026-11-05 (Claude, plan 029, with 0.3, whose count depends on it): `loadKnowledge` drops an answer for a scope the selector has left. `tests/browser/test_knowledge_scope.py::test_a_late_answer_for_the_shared_list_does_not_replace_a_products` delays the shared answer and fails on the old page.
+  - Fixed without asking first, unlike TD-056 to TD-059: it made a gate test flaky, and 0.3's count wrong. Recorded in plan 029's decision log as a default the user can reverse after testing.
+  - The review of Stage 0 found the count still wrong while a product's list was loading: "Remove every policy document" asked about the product with the shared knowledge base's count. `loadKnowledge` now forgets the count when it starts, so the question says "every policy document" until the chosen list arrives. `test_clearing_while_a_products_list_loads_does_not_count_another` fails on the old page.
+- **Still open:** the chat drawer's `loadSources` has the same race. Fix (needs approval): the same check.
+
+## TD-061: A product-memory test fails when its answers are recorded in different seconds
+
+- **What:** found 2026-11-05 by `poe check` during the review fixes of plan 029. `tests/test_product_memory.py::test_a_product_answer_that_differs_from_a_shared_one_is_not_a_disagreement` failed once in the full suite (`assert 0 == 1`). It passed 5 times out of 5 on its own, and in the next full run.
+  - `answer_memory.record` stamps `approved_on` to the second.
+  - `memory.compare` calls two disagreeing answers a conflict only when neither is later. When one is later, it supersedes the other, as designed.
+  - The test expects a conflict between two shared answers recorded with a scan between them, so it passes only when both land in the same second.
+  - Reproduced with a clock that ticks one second per call: the test's own assertion fails.
+- **Impact:** a flaky gate test, more likely under load. The product behaves as designed.
+- **Fix (needs approval):** pin `store.utcnow` in the test, or give the two shared answers the same `approved_on`, so that the test sets up the case where nothing says which answer is current.
+
+## TD-062: The chat opens the same file again as a second questionnaire
+
+- **What:** found 2026-11-05 while building plan 029's 1.2. The Workbench now asks before opening a file this person already has as a questionnaire (`if_already_open="ask"`). The chat's "+" attach still calls `tools.open_form` with no such check, so attaching the same file again makes a second, empty questionnaire, as the Workbench did before.
+- **Impact:** a chat that is sent the file again works on an empty copy, and "Or pick up" lists both.
+- **Fix (needs approval):** the same check in the chat, with the same choice offered; the design puts it with the chat parity work (Stage 5).
+
+## TD-063: The run guard and the progress counter are in one process's memory
+
+- **What:** found 2026-11-05 while building plan 029's 1.4, and by design. `src/busy.py` holds a questionnaire while a run answers it, and `src/progress.py` counts the run, in the memory of the process that serves the app. `serve.sh` and `run.sh` start one worker.
+- **Impact:** with a second worker, a request that reaches the other one sees no run: a second run, or an edit the first run overwrites, would be accepted again, and the page would not follow the run. A restart forgets every hold (the runs end with it).
+- **Fix (needs approval, only if more workers are wanted):** keep the hold in SQLite (a `running` column or table, so a migration: TD-046 first), with a lease the run renews.
+
+## TD-064: A run that never ends holds its questionnaire until a restart
+
+- **What:** found 2026-11-05 while building plan 029's 1.4. A hold is let go when its run ends, however it ends, and never expires: one that lapsed while the run went on would let the overwrite back in. `src/llm.py` sets no timeout of its own; the provider SDK's default applies (not verified).
+- **Impact:** a model call that hangs keeps the questionnaire locked, in the Workbench and the chat, until the run ends or the server restarts. The Workbench's "Being answered on the server" note says when the run started (`running.started_at`), so a run that has stopped moving can be told from a long one; the chat's refusal gives the count only. (The note was added after the review of Stage 1 found that this line claimed it before any page showed it.)
+- **Fix (needs approval):** a timeout on each model call, or a "Stop answering" control that cancels the run and lets the questionnaire go.
+
+## TD-065: Every read of a Word file written as prose keeps an empty questionnaire
+
+- **What:** found 2026-11-05 by the review of plan 029's Stage 1. `POST /api/forms` keeps a questionnaire for every file it reads, whatever it found. A Word file written as prose has no places for answers, so it is kept with 0 questions, and the Workbench then reads its questions as text. Older than plan 029.
+- **Impact:** "Or pick up" lists one "questions.docx" with nothing in it for each such read; opening one says "No questions were read". Since plan 029's 1.1 lists every questionnaire, not the last three, they all show. The review's other half, the second read offering that empty questionnaire instead of reading the file again, is fixed: `batches.same_upload` leaves out a questionnaire nothing was read from.
+- **Fix (needs approval):** do not keep a questionnaire when nothing was read from a Word file (the page reads it as text anyway), or leave those out of "Or pick up". Either changes what the chat's attach keeps too.
+
+## TD-066: The server still answers as General when no product is sent
+
+- **What:** found 2026-11-05 while designing plan 029's Stage 2, and left by decision (D-022). The pages no longer send a missing product: nothing is chosen until the person chooses, and General is sent only once chosen. The server still reads a missing or empty `product` as General at every entry point: `POST /api/forms` (`src/routes/forms.py`, `product: Form("")`, through `products.chosen`), `POST /api/assessments/answer-questions` and `POST /api/assessments/answer` (`src/api.py`), and a new chat's `POST /api/chat` and `POST /api/chat/upload` (`src/routes/chat.py`). The assistant's `open_questionnaire` opens a file for the chat's own product, fixed when the chat started, so it never picks one. The review of Stage 2 found that the Workbench's own guard had a gap too: the same-file box's "Start fresh" skipped it and sent `""` after Clear all or a deletion, so General was opened under "Product: choose…". The guard is now where every file is read (`readQuestionnaire`); the server would have refused it, had it refused a missing product.
+- **Impact:** scripts, `curl`, the evaluation (`eval/run_eval.py`, `eval/house.py`, `scripts/run_both_evals.py`, `scripts/eval_assistant.py` and the other scripts that open or answer questionnaires) and any other client can still answer a questionnaire or start a chat as General without saying so. The silent General the user ruled out is closed on the pages only.
+- **Fix (needs approval):** the server accepts `general` for General and refuses a missing product with an `AppError` (`code="product_required"`, 422), for new questionnaires, typed lists and new chats. The pages then change one line, `Cards.serverProduct` in `src/static/cards.js`. For whoever builds it: `src/products.py` is at the 400-line limit (`harness/arch.py`), so room is made first, for example by moving `seed()` out; the evaluation and the scripts that answer as General must then send `general`; and the server tests that pin `""` as General (`tests/test_product_questionnaires.py`, `tests/test_product_knowledge.py`) change with it.

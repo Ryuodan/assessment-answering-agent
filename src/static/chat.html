@@ -112,12 +112,16 @@
   }
   .side-head .spacer { flex: 1; }
   .side-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+  /* A row is two sibling buttons: the conversation, and Forget beside it. */
+  .convo-row { display: flex; align-items: flex-start; border-radius: var(--radius-sm); }
+  .convo-row:hover { background: var(--surface); }
+  .convo-row.on { background: var(--accent-soft); }
   .convo {
-    display: flex; align-items: flex-start; gap: 6px; width: 100%;
+    display: flex; align-items: flex-start; gap: 6px; flex: 1 1 auto; min-width: 0;
     background: transparent; border: 0; border-radius: var(--radius-sm);
     padding: 8px 10px; text-align: start; color: var(--ink-soft); font-size: 13.5px;
   }
-  .convo:hover { background: var(--surface); color: var(--ink); }
+  .convo-row:hover .convo { color: var(--ink); }
   .convo.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
   .convo .what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .convo .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -134,10 +138,19 @@
   }
   .convo.on .file { background: var(--surface); }
   .convo .file .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .convo .forget { opacity: 0; border: 0; background: transparent; color: var(--ink-faint); padding: 0 4px; }
-  .convo:hover .forget { opacity: 1; }
-  .convo .forget:hover { color: var(--err); }
-  @media (hover: none) { .convo .forget { opacity: 1; } }
+  /* Shown on hover, and whenever the row has the keyboard's focus; always on a
+     touch screen, which is safe now that it asks first. The keyboard's focus,
+     not any focus: a rebuilt list puts focus back on the conversation just
+     opened, and after a mouse click that should not leave its ✕ showing. */
+  .convo-row .forget {
+    flex: none; opacity: 0; border: 0; background: transparent; color: var(--ink-faint);
+    padding: 8px 8px; border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .convo-row:hover .forget, .convo-row:has(:focus-visible) .forget { opacity: 1; }
+  .convo-row .forget:hover { color: var(--err); }
+  @media (hover: none) { .convo-row .forget { opacity: 1; } }
+  .history-status { padding: 4px 14px 10px; }
+  .history-status:empty { display: none; }
 
   .middle { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
@@ -325,29 +338,12 @@
   .icon:hover { background: var(--surface-sunken); color: var(--ink); }
   .icon.send { background: var(--accent); color: var(--on-accent); }
   .icon.send:disabled { background: var(--line); color: var(--ink-faint); cursor: not-allowed; }
-  /* Which product the chat is for, beside the box (plan 024): General, or a
-     product in its own colour. */
-  .product-chip {
-    --product: var(--ink-faint);
-    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-    height: 34px; padding: 0 4px 0 10px; border-radius: var(--radius-pill);
-    border: 1px solid color-mix(in srgb, var(--product) 50%, var(--line));
-    background: color-mix(in srgb, var(--product) 10%, var(--surface));
-    color: color-mix(in srgb, var(--product) 70%, var(--ink));
-    font-size: 12.5px; font-weight: 600;
-  }
-  .product-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--product); flex: 0 0 auto; }
-  .product-chip select {
-    border: 0; background: transparent; color: inherit; font-weight: inherit; font-size: inherit;
-    max-width: 130px; padding: 4px 2px; cursor: pointer; outline: none; text-overflow: ellipsis;
-  }
-  .product-chip:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--product) 35%, transparent); }
-  /* Fixed once the chat has started (TD-040): no arrow and no pointer, so it
-     reads as a badge in the product's colour rather than a greyed-out menu. */
-  .product-chip select:disabled {
-    cursor: default; appearance: none; -webkit-appearance: none; opacity: 1; color: inherit;
-    padding-inline-end: 8px;
-  }
+  /* Which product the chat is for, beside the box: the chip is in cards.css,
+     shared with the Workbench (plan 029). Above the box, the line that asks
+     for one before a new chat's first message. */
+  .composer .product-needed { display: flex; max-width: 700px; margin: 0 auto 7px; }
+  /* On a phone the chip's longest label left the box a word wide. */
+  @media (max-width: 560px) { .composer .product-chip select { max-width: 104px; } }
   .convo .tag.product { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .attached {
     max-width: 700px; margin: 0 auto 7px; font-size: 13px; color: var(--ink-faint);
@@ -488,6 +484,7 @@
   <aside class="side" id="history">
     <div class="side-head"><span>Conversations</span></div>
     <div class="side-list" id="historyList"></div>
+    <div class="status error history-status" id="historyStatus" role="status"></div>
   </aside>
 
   <section class="middle">
@@ -507,6 +504,11 @@
         <button class="ghost" id="detach">remove</button>
       </div>
       <div class="status error composer-note" id="composerNote" role="alert" hidden></div>
+      <!-- A new chat waits for a product (plan 029, 2): nothing is chosen for
+           the person, General included. "Last used" fills it in one click. -->
+      <div class="product-needed" id="productNeeded" role="status" hidden>
+        <span id="productNeededText"></span><span id="chatLastUsed"></span>
+      </div>
       <div class="composer-inner">
         <label class="icon" for="fileInput" title="Attach a questionnaire">
           <input type="file" id="fileInput" accept=".xlsx,.xlsm,.docx" hidden />＋
@@ -514,10 +516,12 @@
         <!-- Which product this chat is for (plan 024). A new chat starts for it
              with its first message, and from then on it is fixed (TD-040): to
              work on another product, start a new chat. -->
-        <label class="product-chip" id="productChip">
+        <label class="product-chip unchosen" id="productChip">
           <span class="dot" aria-hidden="true"></span>
+          <!-- Described by #productNeeded only while that line shows: paintProductNeeded. -->
           <select id="productPick" aria-label="Which product this chat is for">
-            <option value="">General</option>
+            <option value="" disabled selected>Product: choose…</option>
+            <option value="general">General (shared policies only)</option>
           </select>
         </label>
         <textarea id="prompt" rows="1"
@@ -693,6 +697,13 @@
   let attached = null;
   let startingChat = false;  // the first message is on its way: the chip is fixed already
   let readOnly = false;  // a deleted product's chat: kept to read, never added to (plan 027)
+  // Which product a new chat is for (plan 029, 2): see "which product" below.
+  let teamProducts = [];
+  let deletedProducts = [];  // since plan 027: their chats are kept, read-only
+  let productsLoaded = false;  // the team's products were read at least once
+  let productsFailed = false;  // and the first read failed: said, rather than offering General alone
+  let pageLastUsed = "";  // the product of the chat last opened or started on this page
+  let historyChoices = [];  // the products of this person's chats, most recently used first
 
   const STARTERS = [
     "Read this questionnaire and tell me what is in it",
@@ -1032,6 +1043,9 @@
     const field = $("prompt");
     const message = field.value.trim();
     if ((!message && !attached) || busy || readOnly) return;
+    // A new chat waits for a product, Enter included: the words and the file
+    // stay where they are (plan 029, 2).
+    if (!conversationId && !productChosen()) { paintProductNeeded(true); return; }
 
     // The product this message starts a chat for, if it starts one. The chip
     // is fixed from here on, so it cannot change under the first turn.
@@ -1067,7 +1081,7 @@
         body.append("message", message);
         body.append("conversation_id", conversationId);
         body.append("run_id", runId);
-        body.append("product", chosenProduct());  // read only when this starts the chat
+        body.append("product", wireProduct());  // read only when this starts the chat
         data = await request("/api/chat/upload", { method: "POST", body });
         detach();
       } else {
@@ -1075,14 +1089,15 @@
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: message, conversation_id: conversationId, run_id: runId,
-            product: chosenProduct(),  // read only when this starts the chat
+            product: wireProduct(),  // read only when this starts the chat
           }),
         });
       }
       stop();
       conversationId = data.conversation_id;
       batchId = data.batch_id || batchId;
-      showProduct(data.product_id || "");
+      pageLastUsed = Cards.choiceOf(data.product_id);
+      showProduct(Cards.choiceOf(data.product_id));
       placeholder.replaceWith(turnElement("assistant", data.reply, data));
       $("thread").scrollTop = $("thread").scrollHeight;
       if (data.answers) showAnswers(data.answers);
@@ -1102,15 +1117,14 @@
         grow();
       }
       if (error.code === "product_not_found" && startingFor) {
-        // A new chat: the chip goes back to General, whether or not the list
-        // of products can be read again.
+        // A new chat: the chip goes back to nothing chosen, not to General,
+        // whether or not the list of products can be read again (plan 029, 2).
         const name = (teamProducts.find((p) => p.id === startingFor) || {}).name || "That product";
         teamProducts = teamProducts.filter((p) => p.id !== startingFor);
         await loadProducts();
         if (chosenProduct() === startingFor) showProduct("");
-        chipChoice = chosenProduct();
         noteByTheBox(name + " has been deleted, so the chat could not start for it. Nothing was sent. " +
-          "The chip is back on General: choose a product, or send it as General.");
+          "Choose another product, or General.");
         return;
       }
       if (error.code === "product_deleted") {
@@ -1422,11 +1436,13 @@
      to, falling back to the full answer when the brief one has not been
      derived yet. */
   let detailLevel = "full";
-  Cards.answerText = (item) => {
+  Cards.shownAnswer = (item) => {
     // The server resolved this answer's own length; the page does not repeat
     // the rule that turns a preference plus a default into a choice.
     const level = item.length || detailLevel;
-    return (level === "brief" && item.brief ? item.brief : item.answer) || "";
+    return level === "brief" && item.brief
+      ? { text: item.brief, which: "brief" }
+      : { text: item.answer || "", which: "answer" };
   };
   Cards.onOpenDocument = (doc) => showDocument(doc.name);
 
@@ -1435,19 +1451,17 @@
      the payload the server had sent and never from what was being typed.
      `onEditDone` fires once, when the editor is left, and is the point at which
      an edit is worth a request. */
-  Cards.onEdit = (item, index, text) => { item.answer = text; };
-  Cards.onEditDone = async (item, index, text) => {
+  /* `which` is what the card showed: the brief on a brief card (plan 029). */
+  Cards.onEdit = (item, index, text, which) => { item[which || "answer"] = text; };
+  Cards.onEditDone = async (item, index, text, which = "answer") => {
     if (!batchId || !item.question) return;
-    item.answer = text;
+    item[which] = text;
     try {
       showUpdated(await request("/api/forms/" + batchId + "/answers", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question_id: item.question.id, text: text,
-          // Editing the full answer discards the brief derived from it, so the
-          // two cannot disagree about what this organisation says.
-          which: (item.length || detailLevel) === "brief" && item.brief ? "brief" : "answer",
-        }),
+        // Editing the full answer discards the brief derived from it, so the
+        // two cannot disagree about what this organisation says.
+        body: JSON.stringify({ question_id: item.question.id, text: text, which: which }),
       }));
     } catch (error) {
       sayInPane("That edit could not be saved: " + error.message, "err");
@@ -1616,6 +1630,11 @@
     const host = $("historyList");
     try {
       const data = await request("/api/chat");
+      // "Last used" comes from this person's own chats, most recently used
+      // first: nothing new is stored, and it follows them to another computer.
+      historyChoices = (data.conversations || []).map((c) => Cards.choiceOf(c.product_id));
+      paintProductNeeded();
+      const back = keyboardPlace(host);
       host.replaceChildren();
       if (!(data.conversations || []).length) {
         const none = document.createElement("div");
@@ -1623,10 +1642,17 @@
         none.style.padding = "4px 10px";
         none.textContent = "Nothing yet.";
         host.append(none);
+        if (back) $("newChat").focus();
         return;
       }
       data.conversations.forEach((c) => {
+        /* Two buttons side by side, not one inside the other: the ✕ was a span
+           inside the row's button, which no keyboard could reach (plan 029). */
+        const item = document.createElement("div");
+        item.className = "convo-row" + (c.id === conversationId ? " on" : "");
+        item.dataset.id = c.id;
         const row = document.createElement("button");
+        row.type = "button";
         row.className = "convo" + (c.id === conversationId ? " on" : "");
         const what = document.createElement("span");
         what.className = "what";
@@ -1661,23 +1687,69 @@
         }
         const product = Cards.productBadge(c.product_id);
         if (product) what.append(product);
-        const forget = document.createElement("span");
+        row.append(what);
+        row.onclick = () => open(c.id);
+
+        // Forgetting deletes for good, so it asks first and names what it deletes.
+        const title = c.title || "New conversation";
+        const forget = document.createElement("button");
+        forget.type = "button";
         forget.className = "forget";
-        forget.textContent = "✕";
         forget.title = "Forget this conversation";
-        forget.onclick = async (event) => {
-          event.stopPropagation();
-          await request("/api/chat/" + c.id, { method: "DELETE" });
+        forget.setAttribute("aria-label", "Forget “" + title + "”");
+        const cross = document.createElement("span");
+        cross.textContent = "✕";
+        cross.setAttribute("aria-hidden", "true");
+        forget.append(cross);
+        forget.onclick = async () => {
+          const when = said(c.updated_at);
+          if (!confirm("Forget “" + title + "”" + (when ? " (" + when + ")" : "") + "?\n\n" +
+              "The conversation is deleted and cannot be recovered." +
+              (c.source_name ? "\n\nIts questionnaire, " + c.source_name +
+                ", and its answers are kept; open it from the Workbench." : ""))) return;
+          $("historyStatus").textContent = "";
+          try {
+            await request("/api/chat/" + c.id, { method: "DELETE" });
+          } catch (error) {
+            $("historyStatus").textContent = "Could not forget “" + title + "”: " + error.message;
+            return;
+          }
           if (c.id === conversationId) newConversation();
           loadHistory();
         };
-        row.append(what, forget);
-        row.onclick = () => open(c.id);
-        host.append(row);
+        item.append(row, forget);
+        host.append(item);
       });
+      if (back) putKeyboardBack(host, back);
     } catch (error) {
       host.textContent = error.message;
     }
+  }
+
+  /* Where the keyboard was in the history list, so a rebuilt list can put it
+     back. Opening a conversation and forgetting one both rebuild the list, and
+     focus fell to the page: Tab then went to the first row, not to the ✕ of
+     the row just opened (plan 029's review). */
+  function keyboardPlace(host) {
+    const active = document.activeElement;
+    const row = active && active.closest ? active.closest(".convo-row") : null;
+    if (!row || !host.contains(row)) return null;
+    return {
+      id: row.dataset.id,
+      forget: active.classList.contains("forget"),
+      index: Array.from(host.children).indexOf(row),
+    };
+  }
+
+  /* The same control of the same conversation; a forgotten one's place goes
+     to the conversation that took it, or the last one. */
+  function putKeyboardBack(host, back) {
+    const rows = Array.from(host.querySelectorAll(".convo-row"));
+    const same = rows.find((row) => row.dataset.id === back.id);
+    const target = same
+      ? same.querySelector(back.forget ? ".forget" : ".convo")
+      : rows[Math.min(back.index, rows.length - 1)].querySelector(".convo");
+    target.focus();
   }
 
   /* Dates the way somebody would say them: today and yesterday by the clock,
@@ -1714,7 +1786,10 @@
       // the page listed the products before the deletion.
       if (data.read_only && !(Cards.product(data.product_id) || {}).deleted) await loadProducts();
       setReadOnly(Boolean(data.read_only), data.product_id);
-      showProduct(data.product_id || "");
+      // Offered as "Last used" for the next new chat, never chosen for it (plan 029, 2).
+      if (!data.read_only) pageLastUsed = Cards.choiceOf(data.product_id);
+      showProduct(Cards.choiceOf(data.product_id));
+      refresh();
       $("thread").replaceChildren($("empty"));
       $("empty").hidden = (data.messages || []).length > 0;
       // With the steps and sources the turn was drawn with the first time: a
@@ -1730,13 +1805,19 @@
   }
 
   function newConversation() {
+    const fromAChat = Boolean(conversationId);
     conversationId = "";
     batchId = "";
     setReadOnly(false);
-    // The chip can be changed again, and starts on the product last chosen for
-    // a chat rather than on whichever chat was open: opening an old chat to
-    // read it is not choosing its product for the next one.
-    showProduct(chipChoice);
+    /* The chip can be changed again, and chooses nothing: the chat that was
+       open is offered as "Last used", one click, never chosen for the person.
+       Reading an old chat to check something, then asking a question for
+       another product, started a chat for the old one's (plan 029, 2; the
+       user's rule replaces plan 024's "New conversation keeps the choice").
+       A new chat with nothing sent yet keeps what the person chose for it. */
+    if (fromAChat) showProduct("");
+    else paintProductChip();
+    refresh();
     $("thread").replaceChildren($("empty"));
     $("empty").hidden = false;
     noAnswersToShow();
@@ -1763,8 +1844,12 @@
     if (field.value) field.style.height = Math.min(field.scrollHeight, 190) + "px";
   }
   function refresh() {
-    $("send").disabled = busy || readOnly || !($("prompt").value.trim() || attached);
+    // A new chat's first message waits for a product (plan 029, 2); a file can
+    // be attached before, because nothing reaches the server until Send.
+    $("send").disabled = busy || readOnly || !($("prompt").value.trim() || attached) ||
+      (!conversationId && !productChosen());
     $("prompt").disabled = busy || readOnly;
+    paintProductNeeded();
   }
   function detach() {
     attached = null;
@@ -1869,12 +1954,10 @@
         remove.className = "ghost";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          // A product's document goes with its file (TD-039), unless something
-          // else uses it too: one name is one document (plan 027). A shared one
-          // is only taken out of the index.
-          const files = kbScope() ? "\n\nIts file is deleted too, and cannot be recovered from here — unless " +
-            "the shared knowledge base, another product or a questionnaire also uses it." : "";
-          if (!confirm("Remove " + source.name + " from the knowledge base?" + files)) return;
+          // The Workbench's question, word for word (plan 029): a shared document is used by
+          // every product; a product's goes with its file (TD-039) unless something else uses it.
+          const scope = $("kbScope").selectedOptions[0];
+          if (!confirm(Cards.removalQuestion(source.name, kbScope() && scope ? scope.textContent : ""))) return;
           try {
             const removed = await request(
               "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"), { method: "DELETE" });
@@ -1932,80 +2015,144 @@
     });
   });
 
-  /* --- which product: General, or one of the team's (plan 024) -------------- */
+  /* --- which product: General, or one of the team's (plan 024, plan 029) --- */
 
-  let teamProducts = [];
-  let deletedProducts = [];  // since plan 027: their chats are kept, read-only
-  let chipChoice = "";  // what the person last chose on the chip, for the next new chat
+  /* The chip holds a choice (plan 029, 2): "" is nothing chosen yet, and the
+     first message of a new chat waits for one; Cards.GENERAL is General,
+     chosen on purpose; anything else is a product's id. The server still
+     reads "" as General (TD-066), so what is sent is wireProduct(). */
   function chosenProduct() { return $("productPick").value; }
+  function productChosen() { return chosenProduct() !== ""; }
+  function wireProduct() { return Cards.serverProduct(chosenProduct()); }
   /* A chat's product is fixed once it starts (TD-040): the chip can be changed
      only before the first message, and after that it is the chat's badge. To
      work on another product, start a new chat. */
   function paintProductChip() {
-    const product = teamProducts.find((p) => p.id === chosenProduct());
-    const gone = !product && Cards.product(chosenProduct());
+    const choice = chosenProduct();
+    const product = teamProducts.find((p) => p.id === choice);
+    const gone = !product && choice !== Cards.GENERAL && Cards.product(choice);
     const chip = $("productChip");
     const fixed = Boolean(conversationId) || startingChat;
     $("productPick").disabled = fixed;
+    chip.classList.toggle("unchosen", !choice);
     if (product && product.color) chip.style.setProperty("--product", product.color);
     else chip.style.removeProperty("--product");
-    chip.title = gone
-      ? gone.name + " was deleted. This chat is kept to read; start a new chat to carry on."
-      : (product
-        ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
-        : "General: answered from the shared knowledge base and answer memory.") +
-        (fixed ? " Fixed for this chat; start a new chat to work on another product." : "");
+    chip.title = !choice
+      ? "Choose which product this chat is for before you send."
+      : gone
+        ? gone.name + " was deleted. This chat is kept to read; start a new chat to carry on."
+        : (product
+          ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
+          : "General: answered from the shared knowledge base and answer memory.") +
+          (fixed ? " Fixed for this chat; start a new chat to work on another product." : "");
   }
   /* A deleted product cannot be chosen, so it is offered only as the badge of
      a chat kept from it: disabled and named as deleted, rather than the chip
      falling back to General and saying the wrong thing. */
-  function showProduct(productId) {
+  function showProduct(choice) {
     const select = $("productPick");
     [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
-    const gone = Cards.product(productId);
+    const gone = Cards.product(choice);
     if (conversationId && gone && gone.deleted) {
-      const option = new Option(gone.name + " (deleted)", productId);
+      const option = new Option(gone.name + " (deleted)", choice);
       option.disabled = true;
       option.dataset.deleted = "true";
       select.append(option);
     }
-    select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
+    select.value = choice && [...select.options].some((option) => option.value === choice) ? choice : "";
     paintProductChip();
   }
+
+  /* The line above the box while a new chat has no product: what to do, and
+     "Last used" in one click. Amber once there is something to send. Painted
+     on every keystroke, so it changes the page only when what it says changes:
+     a live region read out again on each key would drown the typing. */
+  function paintProductNeeded(attempted) {
+    const row = $("productNeeded");
+    const show = !conversationId && !readOnly && !startingChat && !productChosen();
+    row.hidden = !show;
+    /* The chip is described by the line only while it shows: a hidden element
+       named by aria-describedby is still read, and the chip said "Choose a
+       product to send this." for the rest of the chat (plan 029, 2's review). */
+    if (show) $("productPick").setAttribute("aria-describedby", "productNeeded");
+    else $("productPick").removeAttribute("aria-describedby");
+    if (!show) return;
+    const wanting = Boolean(attempted || $("prompt").value.trim() || attached);
+    row.classList.toggle("warn", wanting);
+    const text = productsFailed
+      ? "Your products could not be loaded. Reload the page before choosing; choose General only if " +
+        "this chat is about the whole company."
+      : wanting
+        ? "Choose a product to send this."
+        : "Which product is this chat for? Choose on the chip. General uses the shared policies only.";
+    if ($("productNeededText").textContent !== text) $("productNeededText").textContent = text;
+    const suggestion = lastUsedChoice();
+    const host = $("chatLastUsed");
+    const shown = host.firstElementChild;
+    if ((shown ? shown.dataset.choice : "") === suggestion) return;
+    host.replaceChildren();
+    if (suggestion) host.append(Cards.lastUsedButton(suggestion, pickLastUsed));
+  }
+  /* The product of the chat last opened or started here, else of this
+     person's most recently used chat: the first that can still be chosen.
+     Nothing until the products are listed, so a product not listed yet is
+     not passed over for an older General. */
+  function lastUsedChoice() {
+    if (!productsLoaded) return "";
+    return Cards.lastUsed([pageLastUsed].concat(historyChoices));
+  }
+  function pickLastUsed(choice) {
+    showProduct(choice);
+    noteByTheBox("");
+    refresh();
+    $("prompt").focus();  // the button has gone; the next thing to do is to send
+  }
+
   /* The team's products, again. Returns the name of the product the chip was
-     on if it has since been deleted -- the chip is then back on General, which
+     on if it has since been deleted -- the chip then chooses nothing, which
      the caller says -- and "" otherwise. A failed fetch keeps what the page had. */
   async function loadProducts() {
-    const chosen = chosenProduct();
-    const was = teamProducts.find((p) => p.id === chosen);
+    const before = teamProducts;
     try {
       const listed = await request("/api/products");
       teamProducts = listed.products || [];
       deletedProducts = listed.deleted || [];
-    } catch (error) { /* as it was */ }
+      productsLoaded = true;
+      productsFailed = false;
+    } catch (error) {
+      if (!productsLoaded) productsFailed = true;
+    }
+    // Read after the wait: General chosen while the list was on its way was
+    // put back to "choose…" when it arrived (plan 029, 2).
+    const chosen = chosenProduct();
+    const was = before.find((p) => p.id === chosen);
     Cards.setProducts(teamProducts, deletedProducts);
     const select = $("productPick");
-    select.replaceChildren(new Option("General", ""));
+    select.replaceChildren(
+      new Option("Product: choose…", "", true, true),
+      new Option(Cards.GENERAL_LABEL, Cards.GENERAL));
+    select.options[0].disabled = true;  // a prompt, never a choice
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
     showProduct(chosen);
+    refresh();
     return was && chosenProduct() !== chosen ? was.name : "";
   }
   // Only before the first message, and nothing is sent: the server reads the
   // product when the message starts the chat, and never changes it afterwards.
   $("productPick").addEventListener("change", () => {
-    chipChoice = chosenProduct();
     noteByTheBox("");
     paintProductChip();
+    refresh();  // Send waits for a choice, so a choice can let it go
   });
   // A tab left open while somebody deleted a product corrects itself when the
   // person comes back to it, rather than on the message that fails: a new
-  // chat's chip goes back to General, and an open chat of that product is
-  // opened again, read-only (plan 027).
+  // chat's chip goes back to nothing chosen, and an open chat of that product
+  // is opened again, read-only (plan 027).
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !$("gate").hidden) return;
     const gone = await loadProducts();
     if (conversationId && !readOnly && !busy && (Cards.product(chosenProduct()) || {}).deleted) open(conversationId);
-    else if (gone) noteByTheBox(gone + " has been deleted; the chip is back on General.");
+    else if (gone) noteByTheBox(gone + " has been deleted; choose a product again.");
   });
 
   /* --- start ---------------------------------------------------------------- */

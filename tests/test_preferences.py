@@ -298,8 +298,10 @@ async def test_preferences_are_never_handed_to_the_answering_pipeline(user, batc
     await tools.answer(user, batch.id)
 
     [call] = drafted["calls"]
-    # Which team's knowledge base to answer from is not a wording instruction.
-    assert set(call) <= {"questions", "language", "run_id", "team_id"}, call.keys()
+    # Which team's knowledge base to answer from is not a wording instruction,
+    # nor is where each answer is saved as it finishes (plan 029).
+    assert set(call) <= {"questions", "language", "run_id", "team_id", "on_answer"}, call.keys()
+    assert "on_answer" not in call or callable(call["on_answer"])
     assert all("N/A" not in (q.text + (q.section or "")) for q in call["questions"])
     assert reworded["instructions"] == [instruction] * len(batch.form.questions), (
         "it reaches the rewrite, after drafting, and only there"

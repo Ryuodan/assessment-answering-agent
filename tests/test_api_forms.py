@@ -43,7 +43,7 @@ def answers_yes(monkeypatch):
     monkeypatch.setattr("src.tools.service.answer_questions", fake)
 
 
-def _upload(client, path, name=None):
+def _upload(client, path, name=None, **fields):
     with open(path, "rb") as handle:
         return client.post(
             "/api/forms",
@@ -54,6 +54,7 @@ def _upload(client, path, name=None):
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             },
+            data=fields,
         )
 
 
@@ -134,8 +135,162 @@ def test_questionnaires_are_listed(client, tmp_path):
     assert [form["source_name"] for form in listed] == ["two.xlsx", "one.xlsx"]
 
 
+@pytest.fixture
+def clock(monkeypatch):
+    """`store.utcnow` one second later on every call, so the order of writes is the order of times."""
+    from datetime import datetime, timedelta, timezone
+    from itertools import count
+
+    start = datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc)
+    ticks = count()
+    monkeypatch.setattr(
+        "src.batches.store.utcnow",
+        lambda: (start + timedelta(seconds=next(ticks))).isoformat(timespec="seconds"),
+    )
+
+
+def test_questionnaires_are_listed_by_last_change(client, tmp_path, clock):
+    """Plan 029, 1.1: the one somebody worked on last is the one they look for,
+    whenever it was uploaded. Listed by upload, it fell off "Or pick up"."""
+    one = _upload(client, shapes.simple(tmp_path / "one.xlsx")).json()
+    _upload(client, shapes.simple(tmp_path / "two.xlsx"))
+    client.post(
+        f"/api/forms/{one['id']}/answers",
+        json={"question_id": one["questions"][0]["id"], "text": "We use AES-256 throughout."},
+    )
+
+    listed = client.get("/api/forms").json()["forms"]
+
+    assert [form["source_name"] for form in listed] == ["one.xlsx", "two.xlsx"]
+    assert listed[0]["updated_at"] > listed[1]["updated_at"]
+
+
 def test_an_unknown_questionnaire_is_a_404(client):
     assert client.get("/api/forms/nope").status_code == 404
+
+
+# --- the same file again (plan 029, 1.2) -------------------------------------
+
+
+def _my_uploads() -> list[str]:
+    folder = settings.user_upload_dir(settings.default_team, identity.LOCAL_EMAIL)
+    return sorted(path.name for path in folder.iterdir()) if folder.is_dir() else []
+
+
+def test_the_same_file_again_with_ask_offers_the_questionnaire_already_open(client, tmp_path, answers_yes):
+    """Uploading it again made a second, empty questionnaire beside the one with the answers."""
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+    client.post(f"/api/forms/{first['id']}/answer", json={})
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    [offered] = body["already_open"]
+    assert offered["id"] == first["id"] and offered["source_name"] == "vendor.xlsx"
+    assert offered["answered"] == 4 and offered["questions"] == 4
+    assert offered["product_id"] == "" and offered["updated_at"] >= offered["created_at"]
+    assert "source_path" not in offered, "a server's paths are not shown to people"
+    assert len(client.get("/api/forms").json()["forms"]) == 1
+
+
+def test_a_renamed_copy_is_recognised_by_its_bytes(client, tmp_path):
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+    kept = _my_uploads()
+
+    body = _upload(client, workbook, "copy of vendor.xlsx", if_already_open="ask").json()
+
+    assert [offered["id"] for offered in body["already_open"]] == [first["id"]]
+    assert _my_uploads() == kept, "no new file in the person's folder"
+
+
+def test_the_check_reads_nothing_and_keeps_nothing(client, tmp_path, monkeypatch):
+    from src import events
+
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    _upload(client, workbook)
+    kept = _my_uploads()
+    opened = len(events.recent(settings.default_team, kind=events.FORM_OPENED))
+    monkeypatch.setattr("src.tools.open_form", lambda *a, **k: pytest.fail("the file was read again"))
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    assert body["already_open"]
+    assert len(events.recent(settings.default_team, kind=events.FORM_OPENED)) == opened
+    assert len(client.get("/api/forms").json()["forms"]) == 1
+    assert _my_uploads() == kept
+
+
+def test_different_bytes_under_the_same_name_are_a_new_questionnaire(client, tmp_path):
+    _upload(client, shapes.simple(tmp_path / "vendor.xlsx"))
+    (tmp_path / "other").mkdir()
+    other = shapes.status_and_comment(tmp_path / "other" / "vendor.xlsx")
+
+    body = _upload(client, other, if_already_open="ask").json()
+
+    assert "already_open" not in body and body["counts"]["questions"]
+    assert len(client.get("/api/forms").json()["forms"]) == 2
+
+
+def test_someone_elses_copy_of_the_file_is_not_offered(client, tmp_path):
+    from src import service
+
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    bob = identity.User(email="bob@example.test", team_id=settings.default_team)
+    saved = service.save_upload("vendor.xlsx", workbook.read_bytes(), bob.team_id, owner=bob.email)
+    tools.open_form(bob, saved)
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    assert "already_open" not in body and body["counts"]["questions"] == 4
+
+
+def test_a_questionnaire_whose_upload_is_gone_is_not_offered(client, tmp_path):
+    """The storage limit removes old files and keeps their questionnaires: a file that is gone matches nothing."""
+    from src import batches
+
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+    batches.load(first["id"]).source_path.unlink()
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    assert "already_open" not in body and body["id"] != first["id"]
+
+
+def test_start_fresh_still_makes_a_new_questionnaire(client, tmp_path):
+    """Without asking, or with "new", the same file opens again as a new questionnaire, as it always did."""
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+
+    again = _upload(client, workbook).json()
+    fresh = _upload(client, workbook, if_already_open="new").json()
+
+    assert len({first["id"], again["id"], fresh["id"]}) == 3
+    assert len(client.get("/api/forms").json()["forms"]) == 3
+
+
+def test_a_questionnaire_nothing_was_read_from_is_not_offered(client, tmp_path):
+    """Plan 029's review: a Word file written as prose is read as text after an empty questionnaire is made.
+    Offered the second time, it was "0 of 0 answered", and opening it read nothing."""
+    from docx import Document
+
+    prose = tmp_path / "questions.docx"
+    document = Document()
+    document.add_paragraph("1. Do you encrypt data at rest?")
+    document.add_paragraph("2. How long are logs kept?")
+    document.save(str(prose))
+    first = _upload(client, prose, if_already_open="ask").json()
+    assert first["counts"]["questions"] == 0
+
+    again = _upload(client, prose, if_already_open="ask").json()
+
+    assert "already_open" not in again and again["counts"]["questions"] == 0
+
+
+def test_an_unknown_choice_for_a_file_already_open_is_a_422(client, tmp_path):
+    response = _upload(client, shapes.simple(tmp_path / "vendor.xlsx"), if_already_open="maybe")
+    assert response.status_code == 422
 
 
 # --- answering -------------------------------------------------------------
@@ -187,6 +342,27 @@ def test_revising_rewrites_what_is_already_answered(client, tmp_path, answers_ye
     client.post(f"/api/forms/{batch_id}/answer", json={})
     body = client.post(f"/api/forms/{batch_id}/revise", json={"instruction": "Keep it to one sentence."}).json()
     assert body["attempted"] == 4
+
+
+def test_a_busy_questionnaire_answers_409(client, tmp_path, answers_yes, monkeypatch):
+    """Plan 029, 1.4: one run at a time, and nothing changes it meanwhile."""
+    from src import busy
+
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+
+    with monkeypatch.context() as running:  # a run going on in another request
+        running.setitem(busy._HELD, opened["id"], busy._Hold(run_id="run-x", started_at="2026-11-05T09:00:00+00:00"))
+        answered = client.post(f"/api/forms/{opened['id']}/answer", json={})
+        edited = client.post(f"/api/forms/{opened['id']}/answers", json={"question_id": question, "text": "Mine."})
+        shown = client.get(f"/api/forms/{opened['id']}")
+
+    for refused in (answered, edited):
+        assert refused.status_code == 409
+        assert refused.json()["code"] == "questionnaire_busy"
+        assert "being answered right now" in refused.json()["detail"]
+    assert shown.status_code == 200 and shown.json()["running"]["run_id"] == "run-x"
+    assert client.get(f"/api/forms/{opened['id']}").json()["running"] is None
 
 
 # --- correcting ------------------------------------------------------------
@@ -265,6 +441,51 @@ def test_writing_an_unknown_question_is_a_400(client, tmp_path):
     assert response.status_code == 400
 
 
+def test_withdrawing_an_approval_over_http_restores_the_review(client, tmp_path, monkeypatch):
+    """TD-053, through the route both pages call."""
+
+    async def flagged(questions, language=None, run_id=None, **extra):
+        return [
+            AnsweredQuestion(
+                question=q,
+                answer="Yes.",
+                confidence=0.85,
+                needs_review=True,
+                review_reasons=["the reviewer did not find the answer grounded"],
+            )
+            for q in questions
+        ]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", flagged)
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    approved = client.post(f"/api/forms/{opened['id']}/approve", json={"question_id": question}).json()
+    shown = next(q for q in approved["questions"] if q["id"] == question)
+    assert shown["will_be_written"] is True
+    assert shown["answered"]["before_approval"] == {"needs_review": True, "confidence_reason": ""}
+
+    withdrawn = client.post(
+        f"/api/forms/{opened['id']}/approve", json={"question_id": question, "approved": False}
+    ).json()
+    shown = next(q for q in withdrawn["questions"] if q["id"] == question)
+    assert shown["needs_review"] is True and shown["will_be_written"] is False
+    assert shown["answered"]["before_approval"] is None
+
+
+def test_an_empty_brief_is_a_400(client, tmp_path, answers_yes):
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    question = opened["questions"][0]["id"]
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    response = client.post(
+        f"/api/forms/{opened['id']}/answers", json={"question_id": question, "text": "", "which": "brief"}
+    )
+
+    assert response.status_code == 400 and response.json()["code"] == "operation_refused"
+
+
 # --- filling and downloading -----------------------------------------------
 
 
@@ -279,6 +500,28 @@ def test_the_download_does_not_exist_until_the_form_is_filled(client, tmp_path, 
     download = client.get(f"/api/forms/{batch_id}/file")
     assert download.status_code == 200
     assert download.content[:2] == b"PK", "a real .xlsx comes back"
+
+
+def test_writing_anyway_over_http_writes_only_the_answers_named(client, tmp_path, monkeypatch):
+    """Plan 029's review: "Write them in anyway" names the held answers the person
+    agreed to, and the response says how many went in."""
+
+    async def flagged(questions, language=None, run_id=None, **extra):
+        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.3, needs_review=True) for q in questions]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", flagged)
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    first, second = (q["id"] for q in opened["questions"][:2])
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    gated = client.post(f"/api/forms/{opened['id']}/fill", json={"include_unreviewed": False}).json()
+    assert len(gated["held_back"]) == 4 and gated["written_anyway"] == 0
+
+    anyway = client.post(
+        f"/api/forms/{opened['id']}/fill", json={"include_unreviewed": True, "unreviewed_ids": [first, second]}
+    ).json()
+    assert anyway["written_anyway"] == 2 and anyway["written"] == 2
+    assert first not in anyway["held_back"] and len(anyway["held_back"]) == 2
 
 
 def test_filling_reports_what_was_left_blank_and_why(client, tmp_path, answers_yes):

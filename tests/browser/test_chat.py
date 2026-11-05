@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from src import identity, preferences, rewrite, service
 from src.agents import assistant
@@ -64,6 +64,7 @@ def test_the_count_does_not_start_again_when_the_answers_are_styled(
     page.goto("/")
     page.set_input_files("#fileInput", str(shapes.status_and_comment(tmp_path / "HR.xlsx")))
     page.fill("#prompt", "Answer it")
+    page.select_option("#productPick", "general")  # plan 029 (D-022): a new chat's first message waits for a choice
     page.click("#send")
     seen = watch_the_turn(page)
 
@@ -72,3 +73,43 @@ def test_the_count_does_not_start_again_when_the_answers_are_styled(
     assert not any(text.startswith("Answered") for text in seen[styling[0] :]), seen
     counts = [int(m.group(1)) for text in seen if (m := re.match(r"Answered (\d+) of", text))]
     assert counts == sorted(counts), f"the answered count went backwards: {seen}"
+
+
+def test_editing_a_brief_card_in_the_chat_edits_the_brief(
+    page: Page, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same card as the Workbench's: under Brief, Edit opened on the full answer (plan 029, 0.5)."""
+
+    async def answer_one(question, language, *, run_id="", team_id=None):
+        return AnsweredQuestion(question=question, answer="Yes, it is documented and reviewed.", confidence=0.9)
+
+    async def shorten(answered):
+        return "Yes."
+
+    monkeypatch.setattr(settings, "groq_api_key", "not-a-real-key")  # the model itself is scripted below
+    monkeypatch.setattr(service, "answer_one_question", answer_one)
+    monkeypatch.setattr(rewrite, "shorten", shorten)
+    script = [("open_questionnaire", {"file_name": ""}), ("answer_questions", {})]
+    monkeypatch.setattr(assistant, "_agent", lambda tools: _graph(script)(tools))
+
+    page.goto("/")
+    page.set_input_files("#fileInput", str(shapes.status_and_comment(tmp_path / "HR.xlsx")))
+    page.fill("#prompt", "Answer it")
+    page.select_option("#productPick", "general")  # plan 029 (D-022): a new chat's first message waits for a choice
+    page.click("#send")
+    pane = page.locator("#answersPane")
+    expect(pane.locator(".answer")).to_have_count(4, timeout=30_000)
+    expect(page.locator(".working")).to_have_count(0, timeout=30_000)  # the turn is over: nothing redraws the pane
+
+    pane.locator(".detail-pick").get_by_role("button", name="Brief").click()
+    card = pane.locator(".answer").first
+    expect(card.locator(".rendered")).to_have_text("Yes.")
+    card.get_by_role("button", name="Edit", exact=True).click()
+    expect(card.locator("textarea")).to_have_value("Yes.")
+
+    card.locator("textarea").fill("Yes, every year.")
+    with page.expect_request("**/answers") as sent:
+        card.get_by_role("button", name="Done editing").click()
+    assert sent.value.post_data_json["which"] == "brief"
+    assert sent.value.post_data_json["text"] == "Yes, every year."
+    expect(pane.locator(".answer").first.locator(".rendered")).to_have_text("Yes, every year.")

@@ -86,6 +86,18 @@ def _differs(path: Path, content: bytes) -> bool:
     return path.exists() and path.read_bytes() != content
 
 
+def holds(path: Path, content: bytes) -> bool:
+    """Whether the file at `path` is still there and holds exactly `content`.
+
+    The size first, so a person's other questionnaires are not read whole to
+    learn that they differ. A file the storage limit removed holds nothing.
+    """
+    try:
+        return path.is_file() and path.stat().st_size == len(content) and path.read_bytes() == content
+    except OSError:
+        return False
+
+
 def remove(paths: Iterable[Path], folder: Path | None = None) -> list[str]:
     """Delete files and the text read out of each, then `folder` with whatever is left in it.
 

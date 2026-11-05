@@ -12,8 +12,9 @@
      Cards.onDiscard(key)              throw a question away
      Cards.onRetry(keys, button)       answer a failed one again
      Cards.onOpenDocument(descriptor)  open the file a source came from
-     Cards.onEdit(item, index, text)      an answer is being edited, per keystroke
-     Cards.onEditDone(item, index, text)  the editor was left: worth storing
+     Cards.onEdit(item, index, text, which)      an answer is being edited, per keystroke
+     Cards.onEditDone(item, index, text, which)  the editor was left: worth storing
+                                          (`which`: "answer" or "brief", what the card shows)
      Cards.onBlank(item, index, blank)    leave this answer deliberately empty
      Cards.onApprove(item, index, ok)     accept it as it stands: fill writes it, memory keeps it
      Cards.onLength(item, index, prefer)  write this one answer full or brief
@@ -40,10 +41,12 @@ const Cards = (window.Cards = {
   onSetAside() {},
   canSetAside: false,
   readOnly: false,
-  /* Where the page keeps the answer being edited. The card shows and writes
-     through this rather than owning it, because the workbench holds a whole
-     run in memory and the chat page holds a batch. */
-  answerText(item) { return item.answer || ""; },
+  /* Which text the card shows, and so edits: `{ text, which }`, `which` being
+     "brief" only when the brief is what is shown, else "answer". The card shows
+     and writes through this rather than owning it, because the workbench holds
+     a whole run in memory and the chat page holds a batch. The editor opened
+     on the full answer under a brief card, and saved it as the brief (plan 029). */
+  shownAnswer(item) { return { text: item.answer || "", which: "answer" }; },
 });
 
 (function () {
@@ -245,6 +248,7 @@ const Cards = (window.Cards = {
       by_hand: question.by_hand,
       will_be_written: question.will_be_written,
       held_back_because: question.held_back_because,
+      edited_by: question.edited_by,  // a person's edit: the Workbench's "Done by a person" (plan 029)
       set_aside: question.skip,
       prefer: question.prefer,
       // What the server resolved this answer's length to: its own preference if
@@ -467,6 +471,8 @@ const Cards = (window.Cards = {
     return { key: "low", word: "Low confidence" };
   }
 
+  let refusedNotes = 0;  // each editor's refusal note has an id of its own, for aria-describedby
+
   function answerField(item, index) {
     const field = labelledField("Answer", "");
     const rendered = document.createElement("div");
@@ -480,7 +486,7 @@ const Cards = (window.Cards = {
     field.querySelector(".field-label").append(grow, toggle);
 
     const paint = () => {
-      const text = Cards.answerText(item, index);
+      const text = Cards.shownAnswer(item, index).text;
       rendered.innerHTML = "";
       if (item.blanked) {
         /* Deliberately empty is not the same as never answered, and the card
@@ -657,30 +663,91 @@ const Cards = (window.Cards = {
       field.querySelector(".field-label").append(blank);
     }
 
+    /* The editor holds the text the card shows: the brief on a brief card, and
+       says which back to the page, so an edit lands where it was made. */
+    let shown = Cards.shownAnswer(item, index);
+    /* Said to a screen reader too (plan 029's review): the text going back is
+       otherwise silent. A live region in place before it speaks, empty and
+       drawn at no height until then, and the editor's description. */
+    const refused = document.createElement("p");
+    refused.className = "held edit-refused";
+    refused.id = "edit-refused-" + (++refusedNotes);
+    refused.setAttribute("role", "status");
+    editor.setAttribute("aria-describedby", refused.id);
+    const sayRefused = (yes) => {
+      refused.textContent = yes ? "A brief answer cannot be empty. To write nothing here, use Leave blank." : "";
+    };
+
     let editing = false;
     const setMode = (next) => {
       editing = next;
+      if (editing) {
+        shown = Cards.shownAnswer(item, index);
+        editor.value = shown.text;
+        editor.dir = isArabic(shown.text) ? "rtl" : "ltr";
+        sayRefused(false);
+      }
       rendered.hidden = editing;
       editor.hidden = !editing;
       toggle.textContent = editing ? "Done editing" : "Edit";
       if (editing) { editor.focus(); } else { paint(); }
     };
 
-    editor.value = item.answer;
+    editor.value = shown.text;
     editor.hidden = true;
-    if (isArabic(item.answer)) editor.dir = "rtl";
-    editor.addEventListener("input", () => Cards.onEdit(item, index, editor.value));
+    if (isArabic(shown.text)) editor.dir = "rtl";
+    editor.addEventListener("input", () => Cards.onEdit(item, index, editor.value, shown.which));
     /* `input` fires on every keystroke, which is right for keeping the page in
        step and wrong for anything that leaves the browser. `change` fires once,
        when the editor is left and the text actually differs, which is the point
        at which an edit is worth storing. Leaving by the button fires it too,
-       because blur precedes the click. */
-    editor.addEventListener("change", () => Cards.onEditDone(item, index, editor.value));
+       because blur precedes the click.
+
+       An emptied brief is not sent: saved, it released the model's full answer
+       as a person's (TD-055). The brief comes back, and the card says why. */
+    editor.addEventListener("change", () => {
+      if (shown.which === "brief" && !editor.value.trim()) {
+        editor.value = shown.text;
+        Cards.onEdit(item, index, shown.text, shown.which);
+        sayRefused(true);
+        return;
+      }
+      sayRefused(false);
+      Cards.onEditDone(item, index, editor.value, shown.which);
+    });
     toggle.onclick = () => setMode(!editing);
 
-    field.append(rendered, editor);
+    field.append(rendered, editor, refused);
     setMode(false);
     return field;
+  }
+
+  /* What removing from a knowledge base asks first (plan 029), in one wording
+     for the workbench and the chat drawer. A shared document is used by every
+     questionnaire and chat, General and every product, so that is said; its
+     file stays. A product's takes its file with it (TD-039). */
+  const SHARED_IMPACT = "Every questionnaire and chat, General and every product, stops using ";
+  const PRODUCT_FILES = "cannot be recovered from here — unless the shared knowledge base, " +
+    "another product or a questionnaire also uses ";
+
+  function removalQuestion(name, productName) {
+    if (productName) {
+      return "Remove “" + name + "” from " + productName + "'s knowledge base?\n\n" +
+        "Its file is deleted too, and " + PRODUCT_FILES + "it.";
+    }
+    return "Remove “" + name + "” from the shared knowledge base?\n\n" + SHARED_IMPACT +
+      "it from now on. Answers already written are not changed.\n\n" +
+      "Its file stays on the server; to use it again, add it again.";
+  }
+
+  function clearQuestion(count, productName) {
+    const which = productName ? productName + "'s knowledge base" : "the shared knowledge base";
+    const what = count === 1 ? "the 1 policy document" : count > 1 ? "all " + count + " policy documents"
+      : "every policy document";
+    const impact = productName
+      ? "Their files are deleted too, and " + PRODUCT_FILES + "them."
+      : SHARED_IMPACT + "them from now on. Answers already written are not changed.";
+    return "Remove " + what + " from " + which + "?\n\n" + impact + "\n\nThe answer memory is not affected.";
   }
 
   /* Whose document a source is. Only drawn for external ones: "our policy" is
@@ -731,6 +798,56 @@ const Cards = (window.Cards = {
   function ownSourceBadge(source) {
     return productBadge(source && source.product_id,
       "From this product's own knowledge base. The drafter was told it takes precedence over the shared one.");
+  }
+
+  /* A product choice on a page (plan 029, 2): the user's rule is no silent
+     General. "" is nothing chosen yet, GENERAL is General chosen on purpose,
+     anything else a product's id. The server still reads "" as General
+     (TD-066), so a page sends serverProduct(choice), and a record's
+     product_id comes back as a choice through choiceOf. When the server
+     learns to refuse a missing product, only serverProduct changes. */
+  const GENERAL = "general";  // never a product's id: those are 12 hex characters (products.add)
+  const GENERAL_LABEL = "General (shared policies only)";
+
+  function serverProduct(choice) { return choice === GENERAL ? "" : choice || ""; }
+  function choiceOf(productId) { return productId || GENERAL; }
+
+  /* General, or a live product the page has listed. A deleted product is
+     never offered, and nor is one the page has not listed yet. */
+  function choosable(choice) {
+    if (choice === GENERAL) return true;
+    const found = product(choice);
+    return Boolean(found && !found.deleted);
+  }
+
+  /* The first of `choices` (most recent first) that can still be chosen, or "". */
+  function lastUsed(choices) {
+    return (choices || []).find((choice) => choice && choosable(choice)) || "";
+  }
+
+  /* A choice as a label: a product's badge, or General's, in the neutral colour. */
+  function choiceTag(choice, title) {
+    if (choice !== GENERAL) return productBadge(choice, title);
+    const tag = document.createElement("span");
+    tag.className = "tag product general";
+    tag.textContent = "General";
+    tag.title = title || "General: answered from the shared policies and answer memory only";
+    return tag;
+  }
+
+  /* "Last used: <label>". One click fills the choice; nothing is chosen until
+     then, because a choice carried over silently is how a questionnaire came
+     to be answered for General, or for yesterday's product, by accident. */
+  function lastUsedButton(choice, onPick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "last-used";
+    button.dataset.choice = choice;
+    const name = choice === GENERAL ? "General" : (product(choice) || {}).name || "";
+    button.append("Last used: ", choiceTag(choice, "Choose " + name));
+    button.title = "Choose " + name + ", the product of your most recent work. Nothing is chosen until you click.";
+    button.onclick = () => onPick(choice);
+    return button;
   }
 
   /* The source behind each citation, in the citations' order. A citation is a
@@ -1125,10 +1242,20 @@ const Cards = (window.Cards = {
     detailPicker: detailPicker,
     skillPicker: skillPicker,
     authorityBadge: authorityBadge,
+    removalQuestion: removalQuestion,
+    clearQuestion: clearQuestion,
     setProducts: setProducts,
     product: product,
     productBadge: productBadge,
     ownSourceBadge: ownSourceBadge,
+    GENERAL: GENERAL,
+    GENERAL_LABEL: GENERAL_LABEL,
+    serverProduct: serverProduct,
+    choiceOf: choiceOf,
+    choosable: choosable,
+    lastUsed: lastUsed,
+    choiceTag: choiceTag,
+    lastUsedButton: lastUsedButton,
     openDocumentButton: openDocumentButton,
     canOpenDocument: canOpenDocument,
     markdown: renderMarkdown,

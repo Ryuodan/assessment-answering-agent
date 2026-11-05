@@ -736,7 +736,7 @@
     "/api/forms": {
       "post": {
         "summary": "Open Questionnaire",
-        "description": "Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.",
+        "description": "Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.\n\n`if_already_open=\"ask\"`: when this person already has questionnaires read\nfrom a file with exactly these bytes, nothing is saved, read or created,\nand the answer is `{\"already_open\": [...]}`, last changed first, for them to\nopen one or start fresh (plan 029, 1.2). \"new\", the default, opens a new\nquestionnaire whatever there is, as it always did.",
         "operationId": "open_questionnaire_api_forms_post",
         "requestBody": {
           "required": true,
@@ -775,6 +775,7 @@
       },
       "get": {
         "summary": "List Questionnaires",
+        "description": "One person's questionnaires, last changed first.",
         "operationId": "list_questionnaires_api_forms_get",
         "parameters": [
           {
@@ -3792,6 +3793,17 @@
             "title": "Error",
             "description": "Why answering this question failed; '' when it produced an answer",
             "default": ""
+          },
+          "before_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BeforeApproval"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The review flag and reason as they were when a person approved this answer; null otherwise"
           }
         },
         "type": "object",
@@ -3891,6 +3903,17 @@
             "title": "Error",
             "description": "Why answering this question failed; '' when it produced an answer",
             "default": ""
+          },
+          "before_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BeforeApproval"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The review flag and reason as they were when a person approved this answer; null otherwise"
           }
         },
         "type": "object",
@@ -4016,6 +4039,25 @@
         "title": "AssessmentResult",
         "description": "Everything produced by one run over a submitted assessment."
       },
+      "BeforeApproval": {
+        "properties": {
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review"
+          },
+          "confidence_reason": {
+            "type": "string",
+            "title": "Confidence Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "needs_review"
+        ],
+        "title": "BeforeApproval",
+        "description": "What the review said of an answer when a person approved it, so withdrawing can put it back (TD-053)."
+      },
       "BlankAnswerRequest": {
         "properties": {
           "question_id": {
@@ -4107,6 +4149,12 @@
             "type": "string",
             "title": "Product",
             "default": ""
+          },
+          "if_already_open": {
+            "type": "string",
+            "pattern": "^(new|ask)$",
+            "title": "If Already Open",
+            "default": "new"
           }
         },
         "type": "object",
@@ -4535,6 +4583,21 @@
             "type": "boolean",
             "title": "Include Unreviewed",
             "default": false
+          },
+          "unreviewed_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unreviewed Ids"
           }
         },
         "type": "object",

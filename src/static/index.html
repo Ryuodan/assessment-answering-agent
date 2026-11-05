@@ -113,8 +113,15 @@
   }
 
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 13px; }
-  /* The chosen product's colour beside the questionnaire's Product selector (plan 024). */
-  .product-swatch { width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); flex: 0 0 auto; }
+  /* The product chip is in cards.css, shared with the chat (plan 029, 2). Its
+     hint sits in the row, not under a panel heading. */
+  #formProductRow .hint { margin: 0; flex: 1 1 260px; min-width: 0; }
+  .product-needed button.choose {
+    background: none; border: 0; padding: 0; color: var(--accent); font-weight: 550;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .results-product { align-self: center; }
+  .results-product .tag { text-transform: none; font-size: 11.5px; padding: 2px 9px; }
 
   label.file {
     display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
@@ -367,6 +374,59 @@
   .qn-recent { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
                font-size: 12.5px; color: var(--ink-faint); margin-top: 10px; }
   .qn-recent[hidden] { display: none; }
+  /* "Or pick up": every questionnaire of this person, last changed first (plan 029, 1.1).
+     Three or fewer sit on one line, as they always did; more scroll in a box. */
+  .form-recent { margin-top: 10px; }
+  .form-recent .recent-when { margin-inline-start: 6px; font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+  .form-recent .recent-list {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    max-height: 12em; overflow-y: auto; margin-top: 4px; padding: 4px 6px;
+    border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-sunken);
+  }
+  .form-recent .recent-list button { text-align: start; }
+  /* The same file again (plan 029, 1.2): open the questionnaire already read
+     from it, or start fresh. In the page, not a modal: the person may want to
+     look at "Or pick up" before choosing. */
+  .already-open {
+    margin-top: 12px; padding: 12px 14px; font-size: 13.5px; color: var(--ink);
+    border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-soft);
+  }
+  .already-open[hidden] { display: none; }
+  .already-open p { margin: 0; }
+  .already-open .match { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .already-open .row { margin-top: 10px; }
+
+  /* The review queue (plan 029, 1.3): tabs by what the fill gate says, with
+     Fill and the counts in a bar that stays below the page header while the
+     answers scroll. */
+  .review-bar {
+    position: sticky; top: var(--topbar-height, 0px); z-index: 15;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+    margin: 0 0 14px; padding: 10px 12px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+  .review-bar[hidden] { display: none; }
+  .review-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .review-tabs button {
+    background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong);
+    padding: 5px 10px; font-size: 12.5px; white-space: nowrap;
+  }
+  .review-tabs button:hover:not(:disabled) { color: var(--ink); filter: none; }
+  .review-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+  .review-side { display: flex; align-items: center; gap: 10px; margin-inline-start: auto; }
+  .review-counts { font-size: 12.5px; color: var(--ink-soft); }
+  .review-bar .review-status { flex-basis: 100%; margin: 0; min-height: 0; }
+  .review-bar .review-status:empty { display: none; }
+  @media (max-width: 600px) {
+    .review-tabs { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
+    .review-side { margin-inline-start: 0; flex-basis: 100%; justify-content: space-between; }
+  }
+  /* The question list, folded once answers exist: the cards are the work then. */
+  .question-fold > summary {
+    cursor: pointer; margin: 2px 0 8px; font-size: 13px; font-weight: 550; color: var(--accent-ink);
+  }
+  .question-fold > summary[hidden] { display: none; }
   .qn-summary {
     display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
     padding: 12px 0 4px; font-size: 13.5px;
@@ -429,6 +489,10 @@
   }
   .qn-filled[hidden] { display: none; }
   .qn-filled .blanks { color: var(--ink-faint); font-size: 12px; margin-top: 6px; }
+  .qn-filled .held-which { margin-top: 4px; color: var(--ink-soft); }
+  .qn-filled .held-which summary { cursor: pointer; }
+  .qn-filled .held-which ul { margin: 4px 0 0; padding-inline-start: 18px; max-height: 240px; overflow-y: auto; }
+  .qn-filled .held-which .why { color: var(--ink-faint); }
 
   .search-note {
     font-size: 11.5px; color: var(--warn, #b26a00); padding: 6px 0 2px;
@@ -666,14 +730,22 @@
     <div class="panel">
       <!-- Which product this questionnaire is answered for (plan 024): General,
            or a product's knowledge base and answer memory beside the shared ones.
-           Chosen before uploading, and fixed once a questionnaire is open
-           (TD-040): to answer the file for another product, close it and open
-           it again with that product chosen. -->
+           Chosen before reading a file or answering a list, never chosen for the
+           person, General included (plan 029, 2), and fixed once a questionnaire
+           is open (TD-040): to answer the file for another product, close it and
+           open it again with that product chosen. -->
       <div class="row kb-scope" id="formProductRow" style="margin:0 0 12px">
-        <label for="formProduct"><strong>Product</strong></label>
-        <span class="product-swatch" id="formProductSwatch" aria-hidden="true"></span>
-        <select id="formProduct"><option value="">General</option></select>
-        <span class="hint" id="formProductHint">Answered from the shared knowledge base and answer memory.</span>
+        <label class="product-chip unchosen" id="formProductChip">
+          <span class="dot" aria-hidden="true"></span>
+          <select id="formProduct" aria-label="Which product this questionnaire is for"
+                  aria-describedby="formProductHint">
+            <option value="" disabled selected>Product: choose…</option>
+            <option value="general">General (shared policies only)</option>
+          </select>
+        </label>
+        <span id="formLastUsed"></span>
+        <span class="hint" id="formProductHint">Choose the product this questionnaire is for. General answers from
+          the shared policies only; a product adds its own policies and past answers.</span>
         <button class="quiet" id="closeForm" hidden
                 title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
       </div>
@@ -684,10 +756,12 @@
         Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
         <span class="chosen" id="assessmentChosen"></span>
       </label>
+      <div class="already-open" id="alreadyOpen" role="group" aria-label="You already have this file" hidden></div>
       <div class="row">
         <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
-        <span class="adm-note" id="formRecent"></span>
+        <span class="product-needed warn" id="readNeedsProduct" hidden>Choose a product first.</span>
       </div>
+      <div class="adm-note form-recent" id="formRecent"></div>
       <div class="status" id="extractStatus"></div>
 
       <details id="formReport" hidden>
@@ -711,7 +785,10 @@
       </div>
       <p class="hint" id="questionListHint"></p>
 
-      <div id="questionList"></div>
+      <details class="question-fold" id="questionListFold" open>
+        <summary id="questionListSummary" hidden>Show the questions</summary>
+        <div id="questionList"></div>
+      </details>
 
       <div class="row changes-it" style="margin-top:14px">
         <button class="ghost" id="addQuestionBtn">+ Add a question</button>
@@ -722,6 +799,7 @@
           <option value="ar">Force Arabic — العربية</option>
         </select>
         <button id="answerBtn" disabled>Answer questions</button>
+        <span class="product-needed warn" id="answerNeedsProduct" hidden></span>
       </div>
       <div class="row changes-it" style="margin-top:10px">
         <input type="text" id="answerStyle" style="flex:1 1 320px;min-width:0"
@@ -740,10 +818,13 @@
     <div class="step-head">
       <span class="step-number">3</span>
       <h2>Review and export</h2>
+      <!-- The product the answers were written for, and approvals are filed
+           under, in sight of whoever is approving (plan 029, 2). -->
+      <span id="resultsProduct" class="results-product"></span>
     </div>
     <p class="step-hint">Read each answer, follow a citation to the exact clause it came from, and
-      edit anything you disagree with. Rewording, filling the original file and the downloads are
-      at the bottom, past the last answer.</p>
+      edit anything you disagree with. The answers that need you come first; filling the original
+      file stays in the bar above them, and rewording and the downloads are past the last answer.</p>
 
     <div class="summary" id="resultsSummary"></div>
 
@@ -753,6 +834,18 @@
 
     <div class="status changes-it" style="margin-bottom:18px">Edits you make here are kept, and go into
       the filled file and every download.</div>
+
+    <!-- The review queue (plan 029, 1.3): which answers to show, how many will
+         be written, and Fill, kept in reach while the answers scroll. -->
+    <div class="review-bar" id="reviewBar" hidden>
+      <div class="review-tabs" id="reviewTabs" role="group" aria-label="Show"></div>
+      <div class="review-side">
+        <span class="review-counts" id="reviewCounts" aria-live="polite"></span>
+        <button id="fillFormBtn" hidden title="Write the answers into the original file">Fill the original file</button>
+      </div>
+      <div class="status review-status" id="reviewStatus" role="status"></div>
+    </div>
+    <div class="qn-filled" id="formFilled" hidden></div>
 
     <div id="results"></div>
 
@@ -770,7 +863,6 @@
       <button id="exportPdf">Download PDF</button>
       <button id="exportDocx">Download Word</button>
       <button class="ghost" id="retryFailed" hidden>Try failed questions again</button>
-      <button id="fillFormBtn" hidden title="Write the answers into the original file">Fill the original file</button>
       <span class="divider"></span>
       <div class="pdf-options">
         <span class="caption">PDF and Word include</span>
@@ -779,7 +871,6 @@
         <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
       </div>
     </div>
-    <div class="qn-filled" id="formFilled" hidden></div>
 
     <div class="panel composer" id="composer">
       <h3>Ask another question</h3>
@@ -795,6 +886,7 @@
           <option value="ar">Force Arabic — العربية</option>
         </select>
         <button id="composerAnswer" disabled>Answer questions</button>
+        <span class="product-needed warn" id="composerNeedsProduct" hidden></span>
       </div>
       <div class="status" id="composerStatus"></div>
     </div>
@@ -1356,7 +1448,14 @@
      would otherwise run as a page for whoever next read the message. Line
      breaks in a message are kept by the style. */
   function setStatus(el, message, kind) {
-    el.className = "status" + (kind ? " " + kind : "");
+    paintStatus(el, message, kind, "status");
+    // What a click on a card did, said in the bar the reviewer is looking at
+    // too: the line above the cards can be thousands of pixels away (plan 029, 1.3).
+    if (el && el.id === "answerStatus") paintStatus($("reviewStatus"), message, kind, "status review-status");
+  }
+
+  function paintStatus(el, message, kind, base) {
+    el.className = base + (kind ? " " + kind : "");
     el.replaceChildren();
     if (kind === "busy") {
       const spinner = document.createElement("span");
@@ -1622,14 +1721,17 @@
   }
 
   // Wire a file input to its drop zone, chosen-file label and submit button.
-  function fileField(inputId, chosenId, buttonId) {
+  // `paint`, when given, is the button's own rule, run instead of "a file is
+  // chosen": the questionnaire's Read also waits for a product (plan 029, 2).
+  function fileField(inputId, chosenId, buttonId, paint) {
     const input = $(inputId), chosen = $(chosenId), button = $(buttonId);
     const zone = input.closest("label.file");
 
     function refresh() {
       const names = Array.from(input.files).map((f) => f.name);
       chosen.textContent = names.join(", ");
-      button.disabled = names.length === 0;
+      if (paint) paint();
+      else button.disabled = names.length === 0;
     }
 
     input.addEventListener("change", refresh);
@@ -1695,9 +1797,18 @@
 
   // --- knowledge base ------------------------------------------------------
 
+  let guidelineCount = null;  // what "Remove every policy document" counts in its question
   async function loadKnowledge() {
+    const scope = kbScope();
+    // Not known until this scope's list arrives: the last count belonged to the
+    // knowledge base the selector has left (plan 029's review).
+    guidelineCount = null;
     try {
       const stats = await request("/api/knowledge" + kbScopeQuery("?"));
+      // An answer for the knowledge base the selector has since left is dropped: arriving
+      // late, it replaced the list, and the count "Remove every policy document" names.
+      if (scope !== kbScope()) return;
+      guidelineCount = stats.sources.filter((s) => s.source_type === "guideline").length;
       $("kbSummary").innerHTML = stats.total_chunks
         ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
           "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
@@ -1742,12 +1853,9 @@
         remove.className = "quiet danger";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          // A product's document goes with its file (TD-039), so that one asks
-          // first; a shared one is taken out of the index as it always was.
-          // Its file stays only if something else uses it too: one name is one document (plan 027).
-          if (kbScope() && !confirm("Remove " + source.name + " from " + kbScopeName() +
-              "'s knowledge base?\n\nIts file is deleted too, and cannot be recovered from here — unless " +
-              "the shared knowledge base, another product or a questionnaire also uses it.")) return;
+          // Both ask first (plan 029): a shared document is used by every product, and a
+          // product's goes with its file (TD-039) unless something else uses it (plan 027).
+          if (!confirm(Cards.removalQuestion(source.name, kbScope() ? kbScopeName() : ""))) return;
           await removeFromKnowledge(
             "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
             "Removed " + source.name + ".");
@@ -1757,6 +1865,8 @@
         $("kbSources").append(item);
       });
     } catch (error) {
+      if (scope !== kbScope()) return;
+      guidelineCount = null;  // not known: the question says "every policy document"
       $("kbSummary").textContent = "Could not load the knowledge base: " + error.message;
     }
   }
@@ -1946,10 +2056,72 @@
      hooks below are the three things a card does that differ per page. */
 
 
-  function renderResult(data, options = {}) {
-    result = data;
+  /* --- the review queue (plan 029, 1.3) ------------------------------------
 
-    const reviewCount = data.answers.filter((a) => a.needs_review).length;
+     Each answer is in one tab, by what the fill gate said of it on the server
+     (`will_be_written`): the page does not repeat the threshold. Needing
+     review is what the gate holds back, and what failed; the "need review"
+     chip alone missed an answer below the threshold that nobody flagged. */
+  const REVIEW_TABS = [
+    ["review", "Needs review", "Held back until a person edits or approves them, and the ones that failed"],
+    ["written", "Will be written", "Confident answers nobody has checked: they go into the file as drafted"],
+    ["person", "Done by a person", "Approved, edited or written by a person"],
+    ["blank", "Blank or set aside", "Left blank on purpose, and rows set aside: nothing goes in for them"],
+    ["all", "All", "Every answer, in the file's order"],
+  ];
+  let reviewTab = null;  // the person's choice; null until the next draw picks the default
+
+  function reviewBucket(item) {
+    if (item.set_aside || item.blanked) return "blank";
+    // Typed beside the file: never written, so in a tab only when it needs a person.
+    if (item.will_be_written === undefined) return item.error || item.needs_review ? "review" : null;
+    if (item.error || !item.will_be_written) return "review";
+    return item.approved || item.by_hand || item.edited_by ? "person" : "written";
+  }
+
+  function renderReviewBar(counted, tab) {
+    const tabs = $("reviewTabs");
+    /* Drawn again with each count, so the keyboard's place goes with it: on
+       the tab chosen. Left alone, it dropped to the page and the next Tab
+       began again at the first tab (plan 029's review). */
+    const hadFocus = tabs.contains(document.activeElement);
+    tabs.replaceChildren();
+    REVIEW_TABS.forEach(([key, name, about]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = name + " (" + counted[key] + ")";
+      button.title = about;
+      button.dataset.tab = key;
+      button.setAttribute("aria-pressed", String(key === tab));
+      button.onclick = () => {
+        reviewTab = key;
+        renderResult(result, { keepQuestions: true });
+      };
+      tabs.append(button);
+    });
+    if (hadFocus) {
+      const chosen = tabs.querySelector('[data-tab="' + tab + '"]');
+      if (chosen) chosen.focus({ preventScroll: true });
+    }
+    $("reviewCounts").textContent = (counted.written + counted.person) + " will be written · " +
+      counted.review + " need review";
+  }
+
+  /* Each answer's tab, and how many each tab holds. The tabs are a
+     questionnaire's: a list of typed questions has no file to hold anything
+     back from, and shows every answer as it always did. */
+  function reviewCounts(data) {
+    const queue = Boolean(formBatch);
+    const buckets = data.answers.map(reviewBucket);
+    const setAside = queue ? questions.filter((entry) => entry.formId && entry.skip) : [];
+    const counted = { review: 0, written: 0, person: 0, blank: setAside.length, all: data.answers.length };
+    buckets.forEach((bucket) => { if (bucket) counted[bucket] += 1; });
+    return { queue, buckets, setAside, counted };
+  }
+
+  /* The summary above the answers, and the bar's tabs and counts. */
+  function paintCounts(data, counted, queue, tab) {
+    const reviewCount = queue ? counted.review : data.answers.filter((a) => a.needs_review).length;
     const summary = $("resultsSummary");
     summary.innerHTML = "";
     summary.append(
@@ -1958,10 +2130,41 @@
       Cards.stat(reviewCount, "need review", reviewCount ? "review" : ""),
       Cards.stat(data.language === "ar" ? "العربية" : "English", "output language")
     );
+    $("reviewBar").hidden = !queue;
+    if (queue) renderReviewBar(counted, tab);
+  }
 
+  function renderResult(data, options = {}) {
+    result = data;
+
+    // The first draw of a questionnaire, and the first after a run of its
+    // rows, opens on what needs a person; every other keeps the person's tab.
+    const { queue, buckets, setAside, counted } = reviewCounts(data);
+    if (queue && !reviewTab) reviewTab = counted.review ? "review" : "all";
+    const tab = queue ? reviewTab : "all";
+
+    // Each card keeps its index in `result.answers`: the card's hooks find it
+    // there. Its key says which answer it is when the list is drawn again.
     const container = $("results");
     container.innerHTML = "";
-    data.answers.forEach((item, index) => container.append(Cards.render(item, index)));
+    data.answers.forEach((item, index) => {
+      if (tab !== "all" && buckets[index] !== tab) return;
+      const card = Cards.render(item, index);
+      card.dataset.key = item.__key || "";
+      container.append(card);
+    });
+    // A row set aside has no card; its own row, with "Include", is how it comes back.
+    if (tab === "blank") setAside.forEach((entry) => container.append(questionRow(entry, questions.indexOf(entry))));
+    if (!container.childElementCount) {
+      const empty = document.createElement("div");
+      empty.className = "qlist-empty";
+      const going = counted.written + counted.person;
+      empty.textContent = tab === "review"
+        ? "Nothing needs review. " + going + " answer(s) will be written."
+        : "No answers here. " + counted.review + " need review, " + going + " will be written.";
+      container.append(empty);
+    }
+    paintCounts(data, counted, queue, tab);
     refreshRetryAll();
     $("resultsCard").hidden = false;
     // The caller scrolls when it is appending to a list the reader is already
@@ -2248,11 +2451,13 @@
     // These have enable rules of their own -- "Index guidelines" is disabled
     // until a file is chosen. Overwrite the flag while locked, then put back
     // exactly what was there, or unlocking would enable a button whose own
-    // logic wanted it off. Close has its own rule: `paintClose`.
+    // logic wanted it off. Close has its own rule: `paintClose`; so has Read,
+    // `paintRead`, worked out each time: a flag put back restored a state from
+    // before the product was chosen (plan 029, 2).
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
-     "composerAdd", "composerInput", "extractBtn", "assessmentInput",
+     "composerAdd", "composerInput", "assessmentInput",
      "guidelinesBtn", "kbClear", "retryFailed",
-     "fillFormBtn", "reviseBtn", "reviseInstruction"].forEach((id) => {
+     "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
       if (locked) {
@@ -2266,7 +2471,19 @@
       }
     });
     document.body.classList.toggle("answering", locked);
+    paintFill();
     describeFormProduct();  // fixed while answering, and once anything is answered
+  }
+
+  /* Fill waits while this page is answering, and rewording what it just
+     answered; while the server answers the questionnaire for a run this page
+     is not waiting on (plan 029, 1.4); and while a fill is on its way. Its
+     own rule, worked out each time: kept as a flag to put back, a redraw
+     during the run's rewording enabled it, and a fill could go out with
+     wording about to change (plan 029's review). */
+  let filling = false;
+  function paintFill() {
+    $("fillFormBtn").disabled = answering || running() || filling;
   }
 
   /* An edit on a card is the person overruling the system, and it has to reach
@@ -2276,26 +2493,114 @@
      answer belongs in, and recorded with their name on it. */
   const storedEdits = {};
 
-  async function storeEditedAnswer(item, index, text) {
-    if (result && result.answers[index]) result.answers[index].answer = text;
+  /* Edits typed into a card and not yet saved, by card and length, with the
+     text the card had before (plan 029, 1.5). The editor saves when it is
+     left, and leaving the page does not reliably leave it, so these are what
+     a reload would lose. Typing the old text back is no edit at all. */
+  const unsavedEdits = new Map();
+  function noteEdit(item, index, text, which = "answer") {
+    const held = result && result.answers[index];
+    const key = item.__key + "\n" + which;
+    if (!unsavedEdits.has(key)) unsavedEdits.set(key, held ? held[which] || "" : "");
+    if (unsavedEdits.get(key) === text) unsavedEdits.delete(key);
+    if (held) held[which] = text;
+  }
+
+  /* A press of the mouse, or a touch, still in progress. Drawing the cards
+     again between the press and the release moves the button pressed out
+     from under it, and the click is lost; the release resets this after its
+     click has run. */
+  let pressing = false;
+  document.addEventListener("pointerdown", () => { pressing = true; }, true);
+  ["pointerup", "pointercancel"].forEach((kind) => document.addEventListener(kind, () => {
+    setTimeout(() => { pressing = false; }, 0);
+  }, true));
+  async function afterThePress() {
+    for (let waited = 0; pressing && waited < 3000; waited += 25) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+
+  const typingInACard = () => {
+    const at = document.activeElement;
+    return Boolean(at && at.tagName === "TEXTAREA" && at.closest("#results .answer"));
+  };
+
+  /* Drawing the cards again drops the keyboard's place with the control it
+     was on. It goes back to the same control of the same answer when that is
+     still shown, to the answer itself otherwise, and, when the answer has
+     left the tab, to the one now in its place: the next in the queue. */
+  async function keepingPlace(redraw) {
+    const list = $("results");
+    const at = document.activeElement;
+    const card = at && list.contains(at) ? at.closest("#results > *") : null;
+    if (!card) return redraw();
+    const position = [...list.children].indexOf(card);
+    const key = card.dataset.key;
+    await redraw();
+    if (list.contains(document.activeElement)) return;
+    const shown = [...list.children];
+    const same = key ? shown.find((node) => node.dataset.key === key) : null;
+    const label = at.tagName === "BUTTON" ? at.textContent : "";
+    const control = same && label
+      ? [...same.querySelectorAll("button")].find((button) => button.textContent === label && !button.hidden) : null;
+    const target = control || same || shown[Math.min(position, shown.length - 1)];
+    if (!target) return;
+    if (!control) target.tabIndex = -1;
+    target.focus({ preventScroll: true });
+  }
+
+  /* One answer as the server now has it, and the counts with it; the cards
+     are left as drawn until the next draw. */
+  function recountWith(batch, index) {
+    formBatch = batch;
+    const item = result && result.answers[index];
+    const entry = item && questions.find((q) => q.key === item.__key);
+    const question = entry && (batch.questions || []).find((q) => q.id === entry.formId);
+    const fresh = question && Cards.fromQuestion(question);
+    if (fresh) Object.assign(item, fresh);
+    const { queue, counted } = reviewCounts(result);
+    paintCounts(result, counted, queue, queue ? reviewTab : "all");
+  }
+
+  /* `which` is the text the card showed and the person edited: the brief only
+     when the brief was on the card. Recomputed here, it said "brief" whenever
+     the length was brief, and a card showing the full answer, because no
+     brief existed, saved its full text as the brief (plan 029). */
+  async function storeEditedAnswer(item, index, text, which = "answer") {
+    if (result && result.answers[index]) result.answers[index][which] = text;
     const entry = questions.find((q) => q.key === item.__key);
-    if (!formBatch || !entry || !entry.formId) return;
-    if (storedEdits[entry.formId] === text) return;
+    if (!formBatch || !entry || !entry.formId) return;  // nowhere to keep it: still unsaved
+    if (storedEdits[entry.formId + "\n" + which] === text) {
+      unsavedEdits.delete(item.__key + "\n" + which);
+      return;
+    }
 
     const status = $("answerStatus");
     try {
       const updated = await request("/api/forms/" + formBatch.id + "/answers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question_id: entry.formId, text: text,
-          // Editing the full answer discards the brief derived from it.
-          which: (entry.length || detailLevel) === "brief" ? "brief" : "answer",
-        }),
+        // Editing the full answer discards the brief derived from it.
+        body: JSON.stringify({ question_id: entry.formId, text: text, which: which }),
       });
-      storedEdits[entry.formId] = text;
-      // A cleared answer is gone from the batch, so its card goes too.
-      if (!text.trim()) await adoptBatch(updated, { quiet: true });
+      storedEdits[entry.formId + "\n" + which] = text;
+      unsavedEdits.delete(item.__key + "\n" + which);
+      /* Drawn again from what the server now holds: an edit is a person's, so
+         the answer goes in, leaves "Needs review", and the counts follow. Kept
+         as it was, the card still said "Not going into the file yet" and the
+         bar's counts disagreed with Fill (plan 029's review). A cleared answer
+         is gone from the batch, so its card goes too.
+
+         An edit is saved when its editor is left, which is the press of the
+         next click: the redraw waits for that click to land. When the click
+         opened another card's editor, the person is typing there and a redraw
+         would close it under them: the counts follow now, the card at the
+         next draw. */
+      await afterThePress();
+      if (!formBatch || formBatch.id !== updated.id) return;  // that click put the questionnaire away
+      if (!text.trim() || !typingInACard()) await keepingPlace(() => adoptBatch(updated, { quiet: true }));
+      else recountWith(updated, index);
       setStatus(status, text.trim()
         ? "Your edit is saved, and is what will be written into the file."
         : "Cleared. Nothing is written for it: the file keeps whatever that cell already held.", "ok");
@@ -2320,7 +2625,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: entry.formId, blank: blank }),
       });
-      await adoptBatch(updated, { quiet: true });
+      await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       setStatus($("answerStatus"), blank
         ? "That row will be written empty when you fill the file."
         : "Back to unanswered. Answer it whenever you like.", "ok");
@@ -2367,7 +2672,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: entry.formId, approved: approved }),
       });
-      await adoptBatch(updated, { quiet: true });
+      // An approved answer leaves "Needs review": the keyboard goes on to the next.
+      await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       // Both halves of what the click did, and the second half only when it
       // actually happened: the memory takes an answer somebody wrote, not one
       // the model wrote and a reviewer agreed with.
@@ -2436,8 +2742,11 @@
     $("clearQuestions").hidden = questions.length === 0;
     $("questionListTitle").textContent = questions.length
       ? "Questions (" + questions.length + ")" : "Questions";
+    paintFold();
     $("questionListHint").textContent = !questions.length
       ? "Read them from a file above, or write your own — you do not need a file to ask a question."
+      : running()
+        ? answered + " answered so far. Being answered on the server: editing opens when it finishes."
       : readOnly()
         ? answered + " answered. Kept to read: nothing here can be answered or changed."
       : answered
@@ -2445,6 +2754,29 @@
         : "Edit anything that came out wrong, delete what is not a question, then answer.";
     refreshAnswerButton();
     if (!options.skipComposer) renderComposer();
+  }
+
+  /* The question list repeats every question above the cards, so once a
+     questionnaire has answer cards it is folded into one line (plan 029, 1.3),
+     unless the person opened or closed it for this questionnaire themselves.
+     Answers the file arrived with have no card, so they leave it open. */
+  let foldChosenFor = null;  // the questionnaire ("" for a typed list) whose fold the person set
+  function paintFold() {
+    const fold = $("questionListFold");
+    if (!questions.length) fold.open = true;
+    else if (foldChosenFor !== (formBatch ? formBatch.id : "")) {
+      fold.open = !(formBatch && result && result.answers.length);
+    }
+    paintFoldSummary();
+  }
+  function paintFoldSummary() {
+    const fold = $("questionListFold");
+    const answered = questions.filter((q) => q.status === "answered").length;
+    const summary = $("questionListSummary");
+    summary.hidden = !questions.length;
+    summary.textContent = (fold.open ? "Hide the " : "Show the ") + questions.length +
+      " question" + (questions.length === 1 ? "" : "s") + " (" + answered + " answered, " +
+      pendingQuestions().length + " waiting)";
   }
 
   /* The composer is a second view of the same list, not a second list. It
@@ -2462,22 +2794,53 @@
       .forEach((entry) => box.append(questionRow(entry, questions.indexOf(entry))));
 
     const button = $("composerAnswer");
-    button.disabled = pending.length === 0 || answering;
+    button.disabled = pending.length === 0 || answering || needsProduct();
     button.textContent = pending.length === 0
       ? "Nothing to answer"
       : "Answer " + pending.length + " question" + (pending.length === 1 ? "" : "s");
+    paintAnswerNeedsProduct();
   }
 
   function refreshAnswerButton() {
     const pending = pendingQuestions().length;
     const button = $("answerBtn");
-    button.disabled = pending === 0 || answering;
+    // A list of typed questions, or one read from a PDF, waits for a product;
+    // a questionnaire's was fixed when it was opened (plan 029, 2).
+    button.disabled = pending === 0 || answering || running() || needsProduct();
     button.textContent = pending === 0
       ? "Nothing to answer"
       : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
     $("composerAnswer").disabled = button.disabled;
     $("composerAnswer").textContent = button.textContent;
+    paintAnswerNeedsProduct();
     applyLock();
+  }
+
+  /* "Choose a product first" beside both Answer buttons while questions wait
+     and nothing is chosen, with "Last used" and a way to the selector. */
+  function paintAnswerNeedsProduct() {
+    const show = pendingQuestions().length > 0 && needsProduct();
+    ["answerNeedsProduct", "composerNeedsProduct"].forEach((id) => {
+      const hint = $(id);
+      hint.hidden = !show;
+      const suggestion = show ? lastUsedChoice() : "";
+      if (hint.dataset.painted === (show ? "on:" + suggestion : "off")) return;
+      hint.dataset.painted = show ? "on:" + suggestion : "off";
+      hint.replaceChildren();
+      if (!show) return;
+      hint.append("Choose a product first.");
+      if (suggestion) hint.append(Cards.lastUsedButton(suggestion, pickLastUsed));
+      const choose = document.createElement("button");
+      choose.type = "button";
+      choose.className = "choose";
+      choose.textContent = "Choose…";
+      choose.title = "Go to the Product box";
+      choose.onclick = () => {
+        $("formProduct").scrollIntoView({ behavior: "smooth", block: "center" });
+        $("formProduct").focus({ preventScroll: true });
+      };
+      hint.append(choose);
+    });
   }
 
   let answering = false;
@@ -2493,15 +2856,41 @@
   async function extractQuestions() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
-    const file = input.files[0];
-    const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+    await readQuestionnaire(input.files[0], false);
+  }
 
-    $("extractBtn").disabled = true;
+  /* Read waits for a file and a product, and while a file is being read or
+     questions answered; it names the product the file will be opened for,
+     which is the open questionnaire's while one is open (plan 029, 2). Worked
+     out from the page each time, never put back. */
+  let reading = false;
+  function paintRead() {
+    const button = $("extractBtn");
+    const file = $("assessmentInput").files.length > 0;
+    const chosen = productChosen();
+    button.disabled = !file || !chosen || reading || answering;
+    button.textContent = chosen ? "Read questions for " + choiceName(formProduct()) : "Read questions from file";
+    $("readNeedsProduct").hidden = !(file && !chosen);
+    paintAlreadyOpen();
+  }
+
+  /* `fresh` opens a new questionnaire even when this person already has one
+     read from the same file: their "Start fresh" (plan 029, 1.2). */
+  async function readQuestionnaire(file, fresh) {
+    // Any file, a PDF included, waits for a product: one rule, here so that
+    // every way in keeps it. "Start fresh" skipped it, and opened the file as
+    // General under "Product: choose…" (plan 029, 2, and its review).
+    if (!productChosen()) { paintRead(); $("formProduct").focus(); return; }
+    const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+    hideAlreadyOpen();
+
+    reading = true;
+    paintRead();
     setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
 
     let why = "";  // the questionnaire reader's own reason, when it found nothing
     try {
-      const form = FILLABLE.includes(suffix) ? await loadAsForm(file, suffix) : null;
+      const form = FILLABLE.includes(suffix) ? await loadAsForm(file, suffix, { fresh }) : null;
       if (form && form.opened) return;
       why = form ? form.why : "";
       await loadAsText(file);
@@ -2509,14 +2898,16 @@
       if (error.code === "product_not_found") await productGone($("extractStatus"), "the file was not opened for it");
       else setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
     } finally {
-      $("extractBtn").disabled = false;
+      reading = false;
+      paintRead();
       loadDocuments();
     }
   }
 
   /* The product chosen was deleted after this page listed it (TD-041, as the
      chat does it). The server refused before keeping anything; the selector
-     goes back to General, and the page says so where the person is looking. */
+     goes back to nothing chosen, not to General (plan 029, 2), and the page
+     says so where the person is looking. */
   async function productGone(status, what) {
     const gone = formProduct();
     const name = (Cards.product(gone) || {}).name || "That product";
@@ -2524,7 +2915,7 @@
     await loadFormProducts();
     if (formBatch && formBatch.product_id === gone) await redrawBatch();  // the open one is read-only now
     setStatus(status, name + " has been deleted, so " + what + ". Nothing was kept" +
-      (formBatch ? "." : ", and the product is back on General."), "error");
+      (formBatch ? "." : ". Choose another product, or General."), "error");
   }
 
   /* A questionnaire outlives the page that uploaded it: the answers are stored
@@ -2532,36 +2923,105 @@
      through 183 questions should not have to start again. Uploading the same
      file a second time would make a second batch and orphan the first. */
   let lastClosed = null;  // the questionnaire Close put away, as the list shows one
+  const RECENT_LIMIT = 500;
+  /* Every questionnaire of this person, last changed first (plan 029, 1.1):
+     three were shown, by when they were uploaded, so the one somebody worked
+     on yesterday was not there to pick up. Each appears exactly once. */
   async function listRecentForms() {
     const line = $("formRecent");
     let forms = [];
     try {
-      forms = (await request("/api/forms")).forms || [];
+      forms = (await request("/api/forms?limit=" + RECENT_LIMIT)).forms || [];
     } catch (error) {
       line.replaceChildren();
       return;
     }
+    // "Last used" reads the same list, so the two cannot disagree (plan 029, 2).
+    recentForms = forms;
+    paintLastUsed();
     // The one just closed first, so "it stays in Or pick up" is true however
     // far back it was picked up from.
     const others = forms.filter((form) => !formBatch || form.id !== formBatch.id);
     const closed = lastClosed && !(formBatch && formBatch.id === lastClosed.id)
       ? [others.find((form) => form.id === lastClosed.id) || lastClosed] : [];
-    const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id)).slice(0, 3);
+    const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id));
     line.replaceChildren();
     if (!open.length) return;
-    line.append(document.createTextNode("Or pick up: "));
-    open.forEach((form, index) => {
-      if (index) line.append(document.createTextNode(" · "));
+    const buttons = open.map((form) => {
       const link = document.createElement("button");
       link.className = "quiet";
       link.textContent = form.source_name +
         (form.answered ? " (" + form.answered + " answered)" : "");
       const product = Cards.productBadge(form.product_id);
       if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
-      link.title = "Loaded " + new Date(form.created_at).toLocaleString();
+      const changed = form.updated_at || form.created_at;
+      if (changed) {
+        const when = document.createElement("span");
+        when.className = "recent-when";
+        when.textContent = "changed " + new Date(changed).toLocaleString(undefined,
+          { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        link.append(when);
+        link.title = "Last changed " + new Date(changed).toLocaleString();
+      }
       link.onclick = () => reopenForm(form.id);
-      line.append(link);
+      return link;
     });
+    if (buttons.length <= 3) {
+      line.append(document.createTextNode("Or pick up: "));
+      buttons.forEach((link, index) => {
+        if (index) line.append(document.createTextNode(" · "));
+        line.append(link);
+      });
+      return;
+    }
+    line.append(document.createTextNode("Or pick up one of your " + buttons.length +
+      " questionnaires, last changed first:"));
+    const box = document.createElement("div");
+    box.className = "recent-list";
+    box.append(...buttons);
+    line.append(box);
+    if (forms.length >= RECENT_LIMIT) {
+      line.append(document.createTextNode("Showing the " + RECENT_LIMIT + " most recently changed."));
+    }
+  }
+
+  /* The open questionnaire is in the address, `?q=<id>`, so a reload or a
+     copied link opens it again (plan 029, 1.1). Derived from the page's own
+     address, so it stays under whatever prefix the deployment serves it at. */
+  function rememberInAddress(id) {
+    try {
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set("q", id); else url.searchParams.delete("q");
+      if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url.href);
+    } catch (error) { /* an address that cannot be changed: the page works as it did */ }
+  }
+
+  /* At start-up: the questionnaire the address names, if it is this person's.
+     Not theirs, or gone: said, and the address forgets it. Any other failure
+     -- not signed in yet, a dropped line -- keeps it, because signing in
+     reloads the page and that reload must still open it. */
+  async function openFromAddress() {
+    let id = "";
+    try { id = new URL(window.location.href).searchParams.get("q") || ""; } catch (error) { return; }
+    if (!id) return;
+    if (!/^[A-Za-z0-9]{1,64}$/.test(id)) { rememberInAddress(""); return; }
+    // After the products are listed, so the questionnaire's product shows as
+    // its label at once rather than as "choose…" until the list arrives.
+    await productsListed;
+    try {
+      const batch = await request("/api/forms/" + encodeURIComponent(id));
+      if (formBatch) return;  // something else was opened while this was on its way
+      await adoptBatch(batch, { quiet: true });
+      setStatus($("extractStatus"), "Reopened " + batch.source_name + ", as it was left.", "ok");
+    } catch (error) {
+      if (error.code === "questionnaire_not_found") {
+        rememberInAddress("");
+        setStatus($("extractStatus"), "The questionnaire in this address could not be opened: " +
+          "it is not one of yours, or it is no longer there.", "error");
+      } else if (error.status !== 401) {
+        setStatus($("extractStatus"), error.message, "error");
+      }
+    }
   }
 
   async function reopenForm(id) {
@@ -2583,10 +3043,13 @@
      back to it opened the status with "not supported, upload .pdf or .docx"
      above the reader's real reason. So a spreadsheet is opened whatever the
      reader found, and its "no questions were read, and why" is what is said. */
-  async function loadAsForm(file, suffix) {
+  async function loadAsForm(file, suffix, { fresh = false } = {}) {
     const body = new FormData();
     body.append("file", file);
-    body.append("product", formProduct());
+    body.append("product", wireProduct());
+    // Asked first, unless the person chose to start fresh: the same file again
+    // made a second, empty questionnaire beside the one with their answers.
+    body.append("if_already_open", fresh ? "new" : "ask");
     let batch;
     try {
       batch = await request("/api/forms", { method: "POST", body });
@@ -2597,11 +3060,103 @@
       if (SPREADSHEETS.includes(suffix) || error.code === "product_not_found") throw error;
       return { opened: false, why: "" };
     }
+    if (batch.already_open) {
+      offerAlreadyOpen(file, batch.already_open);
+      return { opened: true, why: "" };  // nothing more to try: the person chooses
+    }
     if (!batch.counts.questions && !SPREADSHEETS.includes(suffix)) {
       return { opened: false, why: (batch.warnings || []).join("\n") };
     }
     await adoptBatch(batch);
     return { opened: true, why: "" };
+  }
+
+  /* This person already has questionnaires read from a file with these exact
+     bytes, whatever it is called now (plan 029, 1.2). Nothing was kept or read:
+     open one of them, or start fresh for the product chosen now. */
+  function hideAlreadyOpen() {
+    $("alreadyOpen").hidden = true;
+    $("alreadyOpen").replaceChildren();
+    $("alreadyOpen").removeAttribute("aria-describedby");
+  }
+
+  /* The box follows the Product box, as Read does: "Start fresh" is for the
+     product chosen now and waits while nothing is, and each copy's label says
+     when its product has gone. It named the product chosen when it appeared,
+     and after Clear all or a deletion opened the file as General under
+     "Product: choose…" (plan 029, 2's review). "Open it" needs no choice:
+     a copy keeps its own product. */
+  function paintAlreadyOpen() {
+    const fresh = $("alreadyOpenFresh");
+    if (!fresh) return;
+    const chosen = productChosen();
+    fresh.disabled = !chosen || reading || answering;
+    fresh.textContent = chosen
+      ? "Start fresh (for " + choiceName(formProduct()) + ")"
+      : "Start fresh (choose a product first)";
+    $("alreadyOpen").querySelectorAll(".match").forEach((row) => {
+      const shown = row.querySelector(".tag.product");
+      const now = Cards.choiceTag(row.dataset.choice);
+      if (shown && now && shown.textContent !== now.textContent) shown.replaceWith(now);
+    });
+  }
+
+  function offerAlreadyOpen(file, matches) {
+    const panel = $("alreadyOpen");
+    panel.replaceChildren();
+    setStatus($("extractStatus"), "");
+    const day = (when) => new Date(when).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    const progress = (match) => match.answered + " of " + match.questions + " answered, last changed " +
+      day(match.updated_at || match.created_at);
+    const named = (text) => Object.assign(document.createElement("strong"), { textContent: text });
+    const lead = document.createElement("p");
+    lead.id = "alreadyOpenLead";
+    if (matches.length === 1) {
+      lead.append("You already have ", named(matches[0].source_name), ", with " + progress(matches[0]) +
+        ". Open it, or start fresh?");
+    } else {
+      lead.append("You already have " + matches.length + " questionnaires read from ", named(file.name),
+        ". Open one of them, or start fresh?");
+    }
+    panel.append(lead);
+    matches.forEach((match) => {
+      const row = document.createElement("div");
+      row.className = "match";
+      row.dataset.choice = Cards.choiceOf(match.product_id);
+      if (matches.length > 1) row.append(match.source_name + ": " + progress(match));
+      // Each copy names its product, General's included (plan 029, 2's review).
+      const badge = Cards.choiceTag(row.dataset.choice);
+      if (badge) row.append(badge);
+      const open = document.createElement("button");
+      open.textContent = "Open it";
+      open.onclick = () => { hideAlreadyOpen(); reopenForm(match.id); };
+      row.append(open);
+      panel.append(row);
+    });
+    const choices = document.createElement("div");
+    choices.className = "row";
+    const fresh = document.createElement("button");
+    fresh.id = "alreadyOpenFresh";
+    fresh.className = "ghost";
+    fresh.title = "Read the file again as a new questionnaire, with no answers";
+    fresh.onclick = () => readQuestionnaire(file, true);
+    const cancel = document.createElement("button");
+    cancel.className = "quiet";
+    cancel.textContent = "Cancel";
+    cancel.onclick = () => {
+      hideAlreadyOpen();
+      setStatus($("extractStatus"), "Nothing was opened.", "ok");
+    };
+    choices.append(fresh, cancel);
+    panel.append(choices);
+    paintAlreadyOpen();
+    panel.hidden = false;
+    /* The choice is where the keyboard goes, and the sentence is what the
+       group says when it gets there: it appeared silently, and a screen
+       reader heard nothing after "Read questions from file" (plan 029's review). */
+    panel.setAttribute("aria-describedby", lead.id);
+    const first = panel.querySelector("button");
+    if (first) first.focus();
   }
 
   /* `quiet` is for a correction rather than a load: the batch is rebuilt and
@@ -2612,13 +3167,26 @@
       // What was written for the last file says nothing about this one, and
       // nor does what filling it did.
       Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+      unsavedEdits.clear();
       forgetFilling();
+      reviewTab = null;  // opens on what needs a person
     }
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
+    rememberInAddress(batch.id);
+    hideAlreadyOpen();
+    // Being answered on the server, by a run this page is not itself waiting
+    // for: one started before a reload, in another tab, or by the chat.
+    if (batch.running && !answering) followRun(batch, "", false);  // drawn below, locked
+    else if (!batch.running) {
+      if (following && following.id === batch.id) setStatus($("answerStatus"), "The run has ended.", "ok");
+      stopFollowing();
+    }
     sourceName = batch.source_name || sourceName;
     paintReadOnly();
-    showFormProduct(batch.product_id || "");
+    // Offered as "Last used" once it is closed, never chosen (plan 029, 2).
+    if (!batch.read_only) pageLastUsed = Cards.choiceOf(batch.product_id);
+    showFormProduct(Cards.choiceOf(batch.product_id));
 
     /* Questions somebody typed into the list beside the file's own rows are
        kept. The batch does not know about them -- they have no cell in the
@@ -2733,6 +3301,8 @@
       forgetFilling();
     }
     formBatch = null;
+    rememberInAddress("");
+    stopFollowing();
     paintReadOnly();
     $("formReport").hidden = true;
     refreshFormControls();
@@ -2952,6 +3522,8 @@
     // Filling needs a file to fill. Rewording only needs answers, and works the
     // same on a list of typed questions as it does on a questionnaire.
     $("fillFormBtn").hidden = !formBatch;
+    paintFill();
+    $("reviewBar").hidden = !(formBatch && result && result.answers.length);
     $("reviseRow").hidden = !(result && result.answers.length);
     describeFormProduct();
   }
@@ -3088,7 +3660,7 @@
         language: $("languageSelect").value || null,
         run_id: runId,
         source_name: sourceName,
-        product: formProduct(),
+        product: wireProduct(),
       }),
     });
   }
@@ -3100,17 +3672,41 @@
     setStatus($("composerStatus"), "");
   }
 
-  async function fillTheForm(includeUnreviewed = false) {
+  /* Into view just under the page header and the review bar. Both stick to
+     the top, so scrolled into view as such, Fill's report from far down the
+     list landed behind them: the held count, "Write them in anyway" and the
+     download were all covered (plan 029's review). The bar sits right above
+     the report, so this is also where the bar stands of its own accord. */
+  function scrollUnderTheBar(element) {
+    const topbar = document.querySelector(".topbar");
+    const bar = $("reviewBar");
+    const covered = (topbar ? topbar.offsetHeight : 0) + (bar.hidden ? 0 : bar.offsetHeight);
+    element.style.scrollMarginTop = (covered + 14) + "px";  // 14: the bar's own margin below it
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* `includeUnreviewed` must be exactly `true` to open the gate: the button's
+     handler once passed its click event here, which is truthy, and every fill
+     from this page wrote the held answers (TD-052). `agreed` names the held
+     answers the person was shown and agreed to write anyway: the server writes
+     those and no others, so an answer held since the last fill (an approval
+     withdrawn, a new answer) cannot go in under a count that left it out. The
+     first line then says how many went in, as the server counted them. */
+  async function fillTheForm(includeUnreviewed, agreed) {
     if (!formBatch) return;
     // The questionnaire this filled, whatever is open by the time its file is downloaded.
     const id = formBatch.id;
-    const button = $("fillFormBtn");
-    button.disabled = true;
+    const batch = formBatch;
+    filling = true;
+    paintFill();
     try {
+      const body = { include_unreviewed: includeUnreviewed === true };
+      if (body.include_unreviewed) body.unreviewed_ids = agreed || [];
       const filled = await request("/api/forms/" + id + "/fill", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ include_unreviewed: Boolean(includeUnreviewed) }),
+        body: JSON.stringify(body),
       });
+      const unconfirmed = filled.written_anyway || 0;
       const panel = $("formFilled");
       panel.hidden = false;
       const blanks = Object.keys(filled.blank || {}).length;
@@ -3123,6 +3719,7 @@
       line.textContent = filled.because
         ? filled.because
         : "Wrote " + filled.written + " value(s) into " + filled.file +
+          (unconfirmed ? ", including " + unconfirmed + " answer(s) nobody has confirmed" : "") +
           (filled.intact ? " — every other part of the file is untouched." : ".");
       panel.append(line);
       if (blanks || refused) {
@@ -3137,22 +3734,58 @@
       /* Held back, and the way past it. An answer nobody has confirmed is not
          written, and the person has to be able to see which and decide -- so
          the count, the reason, and a button that writes them anyway. */
-      const heldCount = Object.keys(filled.held_back || {}).length;
+      const heldIds = Object.keys(filled.held_back || {});
+      const heldCount = heldIds.length;
       if (heldCount) {
         const note = document.createElement("div");
         note.className = "blanks held-note";
         note.textContent = heldCount + " answer(s) were held back because nobody has " +
           "confirmed them. Open them below to edit or approve, or write them in as they are.";
+        if (result && formBatch && formBatch.id === id) {
+          const show = document.createElement("button");
+          show.className = "quiet";
+          show.style.marginInlineStart = "8px";
+          show.textContent = "Show them";
+          show.title = "Show the answers that need review";
+          show.onclick = () => {
+            reviewTab = "review";
+            renderResult(result, { keepQuestions: true });
+            scrollUnderTheBar(panel);  // the report, and the answers it is about right below it
+          };
+          note.append(show);
+        }
         const anyway = document.createElement("button");
         anyway.className = "quiet";
         anyway.style.marginInlineStart = "8px";
         anyway.textContent = "Write them in anyway";
         anyway.onclick = () => {
           if (confirm("Write " + heldCount + " unconfirmed answer(s) into the file?\n\n" +
-                      "These are the ones the system is least sure about.")) fillTheForm(true);
+                      "These are the ones the system is least sure about. " +
+                      "Their reasons are listed under 'Which, and why'. " +
+                      "An answer held back since this list was made stays out.")) fillTheForm(true, heldIds);
         };
         note.append(anyway);
         panel.append(note);
+        /* Which, and why: folded, because a large file can hold back sixty.
+           As text: a question's words are the customer's. */
+        const which = document.createElement("details");
+        which.className = "held-which";
+        const summary = document.createElement("summary");
+        summary.textContent = "Which, and why";
+        const list = document.createElement("ul");
+        Object.entries(filled.held_back).forEach(([questionId, why]) => {
+          const question = ((batch && batch.questions) || []).find((q) => q.id === questionId) || {};
+          const text = question.text || "";
+          const row = document.createElement("li");
+          const reason = document.createElement("span");
+          reason.className = "why";
+          reason.textContent = " — " + why;
+          row.append((question.number || question.location || questionId) + "  " +
+            (text.length > 80 ? text.slice(0, 80) + "…" : text), reason);
+          list.append(row);
+        });
+        which.append(summary, list);
+        panel.append(which);
       }
 
       /* The one moment a person finds out their extra questions are not in the
@@ -3176,10 +3809,12 @@
         });
         panel.append(download);
       }
+      scrollUnderTheBar(panel);  // wherever the person was when they clicked
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     } finally {
-      button.disabled = false;
+      filling = false;
+      paintFill();
     }
   }
 
@@ -3218,6 +3853,8 @@
   async function answerPending(statusId = "answerStatus", only = null) {
     const batch = only || pendingQuestions();
     if (!batch.length) return;
+    // A list waits for a product, whichever way this was reached (plan 029, 2).
+    if (needsProduct()) { refreshAnswerButton(); $("formProduct").focus(); return; }
     const status = $(statusId);
 
     /* Answering through a batch is tracked under the batch's own id -- see the
@@ -3244,6 +3881,7 @@
       const data = formBatch
         ? await answerThroughBatch(batch, runId)
         : await answerLooseQuestions(batch, runId);
+      if (!formBatch) pageLastUsed = formProduct();  // a list answered: its product is the one last used
 
       // Positional: the endpoint answers the list it was given, in order. That
       // is what lets an answer be tied back to the row it came from, so a later
@@ -3265,10 +3903,26 @@
             questions_found: result.answers.length + data.answers.length }
         : data;
 
-      setStatus(status, "Answered " + data.answers.length + " question(s).", "ok");
+      /* After a run of the file's own rows, the review opens on what needs a
+         person. A question typed beside the file is in no tab unless it needs
+         a person, so after a run of typed questions alone, resetting the tab
+         hid the answer just asked for, and overrode the tab the person chose:
+         that run keeps the tab, or shows All when the tab would hide one of
+         its answers (plan 029's review). After a run of both, the status says
+         where the typed ones are. */
+      const typedOutOf = (tab) => !formBatch || !tab || tab === "all" ? 0 : data.answers.filter((answer, index) =>
+        batch[index] && !batch[index].formId && reviewBucket(answer) !== tab).length;
+      if (batch.some((entry) => entry.formId)) reviewTab = null;
+      else if (formBatch) {
+        if (!reviewTab) reviewTab = reviewCounts(result).counted.review ? "review" : "all";
+        if (typedOutOf(reviewTab)) reviewTab = "all";
+      }
       renderQuestions();
       renderResult(result, { keepQuestions: true });
       refreshFormControls();
+      const typedOut = typedOutOf(reviewTab);
+      setStatus(status, "Answered " + data.answers.length + " question(s)." + (typedOut
+        ? " The answers to " + typedOut + " you typed beside the file are under All: they are not rows in it." : ""), "ok");
 
       /* A wording instruction given before the run is applied after it, as a
          rewording pass over the answers just written. It is not injected into
@@ -3296,7 +3950,16 @@
     } catch (error) {
       stop();
       answering = false;
-      if (error.code === "product_not_found") await productGone(status, "they were not answered for it");
+      /* The run goes on on the server when the line drops or the proxy gives
+         up (nginx answers 502 or 504 with no code of its own), and a 409 means
+         one was already going. Followed, not offered again: pressing Answer
+         again started a second run, paid for twice (plan 029, 1.4). */
+      const carriesOn = error.code === "questionnaire_busy" || !error.status || (error.status >= 500 && !error.code);
+      if (formBatch && batch.some((entry) => entry.formId) && carriesOn) {
+        followRun(formBatch, error.code === "questionnaire_busy" ? error.message
+          : "The connection to the server timed out, but the answering carries on there. " +
+            "This page will show the answers when it finishes.");
+      } else if (error.code === "product_not_found") await productGone(status, "they were not answered for it");
       else setStatus(status, error.message, "error");
     } finally {
       stop();
@@ -3487,7 +4150,10 @@
 
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
-  fileField("assessmentInput", "assessmentChosen", "extractBtn");
+  fileField("assessmentInput", "assessmentChosen", "extractBtn", paintRead);  // a file and a product (plan 029, 2)
+  // Another file chosen: the offer was about the last one.
+  $("assessmentInput").addEventListener("change", hideAlreadyOpen);
+  $("assessmentInput").closest("label.file").addEventListener("drop", hideAlreadyOpen);
 
   $("guidelinesBtn").onclick = ingestHandler(
     guidelinesInput, "/api/knowledge/guidelines", $("guidelinesBtn"), $("guidelinesStatus"), "guideline(s)");
@@ -3495,7 +4161,7 @@
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
   $("retryFailed").onclick = () => retryQuestions(failedKeys(), $("retryFailed"));
-  $("fillFormBtn").onclick = fillTheForm;
+  $("fillFormBtn").onclick = () => fillTheForm(false);  // never the click event: it is truthy (TD-052)
   $("reviseBtn").onclick = rewordAnswers;
 
   function addFromComposer() {
@@ -3519,8 +4185,12 @@
   $("languageSelect").onchange = () => syncLanguage("languageSelect", "composerLanguage");
   $("composerLanguage").onchange = () => syncLanguage("composerLanguage", "languageSelect");
   $("extractBtn").onclick = extractQuestions;
+  $("questionListFold").addEventListener("toggle", paintFoldSummary);
+  $("questionListSummary").addEventListener("click", () => { foldChosenFor = formBatch ? formBatch.id : ""; });
   $("addQuestionBtn").onclick = () => {
     addQuestion("");
+    foldChosenFor = formBatch ? formBatch.id : "";  // opened to type into, and kept open
+    $("questionListFold").open = true;
     renderQuestions();
     const boxes = $("questionList").querySelectorAll("textarea:not(:disabled)");
     if (boxes.length) boxes[boxes.length - 1].focus();
@@ -3534,18 +4204,23 @@
     if (!confirm(warning)) return;
     questions = [];
     result = null;
+    unsavedEdits.clear();
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
     setStatus($("answerStatus"), "");
+    /* A list whose answers fixed its product goes back to "choose…", and that
+       product is offered as "Last used" (plan 029, 2). Typed questions with
+       nothing answered keep the person's choice. */
+    if (!formBatch && answered && productChosen()) {
+      pageLastUsed = formProduct();
+      showFormProduct("");
+    }
     renderQuestions();
   };
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
     const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
-    const files = kbScope() ? "\n\nTheir files are deleted too, and cannot be recovered from here — except " +
-      "any the shared knowledge base, another product or a questionnaire also uses." : "";
-    if (!confirm("Remove every policy document from " + which + "?" + files +
-        "\n\nThe answer memory is not affected.")) return;
+    if (!confirm(Cards.clearQuestion(guidelineCount, kbScope() ? kbScopeName() : ""))) return;
     await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), "Removed every policy document from " + which + ".");
   };
 
@@ -3586,77 +4261,152 @@
       if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
     } catch (error) { /* no products: the shared knowledge base is all there is */ }
   }
-  // --- which product a questionnaire is for (plan 024) ----------------------
+  // --- which product a questionnaire is for (plan 024, plan 029) ------------
 
   let teamProducts = [];
   let deletedProducts = [];  // since plan 027: their questionnaires are kept, read-only
+  let productsLoaded = false;  // the team's products were read at least once
+  let productsFailed = false;  // and the first read failed: said, rather than offering General alone
+  let pageLastUsed = "";  // the product of the work last opened, answered or closed on this page
+  let recentForms = [];  // this person's questionnaires, last changed first, as "Or pick up" lists them
+  /* The selector holds a choice (plan 029, 2): "" is nothing chosen yet, and
+     reading a file or answering a list waits for one; Cards.GENERAL is
+     General, chosen on purpose; anything else is a product's id. The server
+     still reads "" as General (TD-066), so what is sent is wireProduct(). */
   function formProduct() { return $("formProduct").value; }
+  function productChosen() { return formProduct() !== ""; }
+  function needsProduct() { return !formBatch && !productChosen(); }
+  function wireProduct() { return Cards.serverProduct(formProduct()); }
+  function choiceName(choice) {
+    if (choice === Cards.GENERAL) return "General";
+    return (Cards.product(choice) || {}).name || "the product chosen";
+  }
   /* The selector chooses the product the next file is opened for. Once a
      questionnaire is open its product is fixed (TD-040), and so is a typed
      list's once any of it is answered or answering: what is on the page was
      answered for one product, and the selector says which. Called whenever
-     any of the three changes. */
+     any of the three changes. A list whose product was deleted under it
+     chooses nothing, and is not fixed to that nothing. */
   function describeFormProduct() {
-    const product = teamProducts.find((p) => p.id === formProduct());
-    const gone = !product && Cards.product(formProduct());
-    const fixed = Boolean(formBatch) || answering || questions.some((q) => q.status === "answered");
+    const choice = formProduct();
+    const product = teamProducts.find((p) => p.id === choice);
+    const gone = !product && choice !== Cards.GENERAL && Cards.product(choice);
+    const fixed = Boolean(formBatch) || answering || (Boolean(choice) && questions.some((q) => q.status === "answered"));
     $("formProduct").disabled = fixed;
     paintClose();
-    $("formProductSwatch").style.background = product ? (product.color || "var(--accent)") : "var(--line-strong)";
-    $("formProductHint").textContent = gone
-      ? "Answered from " + gone.name + "'s knowledge base and answer memory, which were deleted with it."
-      : (product
-        ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
-        : "Answered from the shared knowledge base and answer memory.") +
+    const chip = $("formProductChip");
+    chip.classList.toggle("unchosen", !choice);
+    if (product && product.color) chip.style.setProperty("--product", product.color);
+    else chip.style.removeProperty("--product");
+    $("formProductHint").textContent = !choice
+      ? (productsFailed
+        ? "Your products could not be loaded. Reload the page before choosing; choose General only if this " +
+          "questionnaire is about the whole company."
+        : "Choose the product this questionnaire is for. General answers from the shared policies only; " +
+          "a product adds its own policies and past answers.")
+      : (gone
+        ? "Answered from " + gone.name + "'s knowledge base and answer memory, which were deleted with it."
+        : product
+          ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
+          : "Answered from the shared knowledge base and answer memory.") +
         (formBatch
           ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
           : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
+    // The review names the product its approvals are filed under (plan 029, 2).
+    const label = choice ? Cards.choiceTag(choice, "These answers are for " + choiceName(choice)) : null;
+    $("resultsProduct").replaceChildren(...(label ? [label] : []));
+    paintRead();
+    paintLastUsed();
   }
   /* A deleted product cannot be chosen, so it is offered only to show the
      product of a questionnaire kept from it: disabled, and named as deleted,
      rather than the selector falling back to General and saying the wrong thing. */
-  function showFormProduct(productId) {
+  function showFormProduct(choice) {
     const select = $("formProduct");
     [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
-    const gone = Cards.product(productId);
-    if (formBatch && gone && gone.deleted && formBatch.product_id === productId) {
-      const option = new Option(gone.name + " (deleted)", productId);
+    const gone = Cards.product(choice);
+    if (formBatch && gone && gone.deleted && formBatch.product_id === choice) {
+      const option = new Option(gone.name + " (deleted)", choice);
       option.disabled = true;
       option.dataset.deleted = "true";
       select.append(option);
     }
-    select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
+    select.value = choice && [...select.options].some((option) => option.value === choice) ? choice : "";
     describeFormProduct();
   }
+
+  /* "Last used", beside the selector while nothing is chosen and it can be:
+     the product of the work last opened, answered or closed on this page,
+     else of this person's most recently changed questionnaire, the first
+     that can still be chosen. Derived, not stored: it follows the person to
+     another computer. Nothing until the products are listed, so a product
+     not listed yet is not passed over for an older General. */
+  function lastUsedChoice() {
+    if (!productsLoaded) return "";
+    return Cards.lastUsed([pageLastUsed].concat(recentForms.map((form) => Cards.choiceOf(form.product_id))));
+  }
+  function paintLastUsed() {
+    const host = $("formLastUsed");
+    const suggestion = !formProduct() && !$("formProduct").disabled ? lastUsedChoice() : "";
+    const shown = host.firstElementChild;
+    if ((shown ? shown.dataset.choice : "") !== suggestion) {
+      host.replaceChildren();
+      if (suggestion) host.append(Cards.lastUsedButton(suggestion, pickLastUsed));
+    }
+    paintAnswerNeedsProduct();  // the hints beside Answer carry the same button
+  }
+  function pickLastUsed(choice) {
+    showFormProduct(choice);
+    refreshAnswerButton();
+    $("formProduct").focus();  // the button has gone; the keyboard stays by the choice it made
+  }
+
   /* The team's products, again. Returns the name of the product the selector
-     was on if it has since been deleted -- the selector is then back on
-     General, which the caller says -- and "" otherwise. A failed fetch keeps
-     what the page had. */
+     was on if it has since been deleted -- the selector then chooses nothing,
+     which the caller says -- and "" otherwise. A failed fetch keeps what the
+     page had, and a first one that fails is said beside the selector. */
   async function loadFormProducts() {
-    const chosen = formProduct();
-    const was = teamProducts.find((p) => p.id === chosen);
+    const before = teamProducts;
     try {
       const listed = await request("/api/products");
       teamProducts = listed.products || [];
       deletedProducts = listed.deleted || [];
-    } catch (error) { /* as it was */ }
+      productsLoaded = true;
+      productsFailed = false;
+    } catch (error) {
+      if (!productsLoaded) productsFailed = true;
+    }
+    // Read after the wait: General chosen while the list was on its way was
+    // put back to "choose…" when it arrived (plan 029, 2).
+    const chosen = formProduct();
+    const was = before.find((p) => p.id === chosen);
     Cards.setProducts(teamProducts, deletedProducts);
     if (documents.length) renderDocuments();  // the library's product badges, in their colours
     const select = $("formProduct");
-    select.replaceChildren(new Option("General", ""));
+    select.replaceChildren(
+      new Option("Product: choose…", "", true, true),
+      new Option(Cards.GENERAL_LABEL, Cards.GENERAL));
+    select.options[0].disabled = true;  // a prompt, never a choice
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
-    showFormProduct(formBatch ? formBatch.product_id || "" : chosen);
+    showFormProduct(formBatch ? Cards.choiceOf(formBatch.product_id) : chosen);
     paintReadOnly();  // its note names the product, which may only now be known
     listRecentForms();
     return was && !formBatch && formProduct() !== chosen ? was.name : "";
   }
   // What the next questionnaire is opened and answered for. Nothing is sent:
-  // an open one's product was fixed when it was opened.
-  $("formProduct").onchange = describeFormProduct;
+  // an open one's product was fixed when it was opened. Read and Answer wait
+  // for a choice, so a choice lets them go.
+  $("formProduct").onchange = () => {
+    describeFormProduct();
+    refreshAnswerButton();
+  };
 
   /* A deleted product's questionnaire: kept so its answers can be read and its
      filled file downloaded, and changed by nothing on this page (plan 027). */
-  function readOnly() { return Boolean(formBatch && formBatch.read_only); }
+  function readOnly() { return Boolean(formBatch && (formBatch.read_only || formBatch.running)); }
+  /* Being answered on the server (plan 029, 1.4): read like a deleted
+     product's until the run ends, because the server refuses any change. */
+  function running() { return Boolean(formBatch && formBatch.running); }
   function paintReadOnly() {
     const on = readOnly();
     Cards.readOnly = on;
@@ -3664,11 +4414,106 @@
     const note = $("formReadOnly");
     note.hidden = !on;
     if (!on) return;
+    if (running() && !formBatch.read_only) {
+      const run = formBatch.running;
+      const counted = run.total ? ": " + run.completed + " of " + run.total + " done" : "";
+      // When it started, so a run that has stopped moving can be told from a long one (TD-064).
+      const started = run.started_at ? new Date(run.started_at) : null;
+      const since = started && !isNaN(started) ? ", started at " + started.toLocaleString(undefined,
+        started.toDateString() === new Date().toDateString()
+          ? { hour: "2-digit", minute: "2-digit" }
+          : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+      note.textContent = "Being answered on the server" + counted + since + ". Answers appear here when it " +
+        "finishes; editing opens then.";
+      return;
+    }
     const name = (Cards.product(formBatch.product_id) || {}).name || "Its product";
     note.textContent = name + " was deleted. This questionnaire is kept so its answers can be read and its " +
       "filled file downloaded; it can no longer be answered, edited or approved. To answer the file again, " +
       "close it and open the file for another product or General.";
   }
+  /* A run on the server this page is not waiting on: started before a reload,
+     cut off by the proxy, or started elsewhere (plan 029, 1.4). The
+     questionnaire is locked and the progress shown; when the run ends it is
+     drawn again from the server. Plain `fetch`, so Close stays usable: Close
+     stops following, and the run carries on. */
+  let following = null;  // { id, stop }
+  function stopFollowing() {
+    if (following) following.stop();
+    following = null;
+  }
+  function followRun(batch, note, redraw = true) {
+    const id = batch.id;
+    if (following && following.id === id) return;
+    stopFollowing();
+    let stopped = false;
+    following = { id: id, stop: () => { stopped = true; } };
+    const runId = (batch.running && batch.running.run_id) || id;
+    if (!batch.running) batch.running = { run_id: runId, stage: "answering", total: 0, completed: 0 };
+    if (redraw) {  // locked from here: the cards lose their editing controls
+      paintReadOnly();
+      renderQuestions();
+      refreshFormControls();
+      if (result) renderResult(result, { keepQuestions: true });
+    }
+    const status = $("answerStatus");
+    setStatus(status, note || "Being answered on the server…", "busy");
+    const here = () => !stopped && formBatch && formBatch.id === id;
+    (async () => {
+      let looked = Date.now();
+      while (here()) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!here()) return;
+        let look = Date.now() - looked >= 20000;
+        try {
+          const response = await fetch("/api/assessments/progress/" + runId);
+          if (response.status === 404) look = true;
+          else if (response.ok) {
+            const state = await response.json();
+            if (state.stage === "done") look = true;
+            else if (here()) {
+              Object.assign(formBatch.running, state);
+              paintReadOnly();
+              status.innerHTML = progressMessage(state);
+              status.className = "status busy";
+            }
+          }
+        } catch (error) { /* a dropped poll: the next one will do */ }
+        if (!look || !here()) continue;
+        looked = Date.now();
+        let batchNow = null;
+        try {
+          const response = await fetch("/api/forms/" + id);
+          if (response.ok) batchNow = await response.json();
+        } catch (error) { /* the next look will say */ }
+        if (!batchNow || !here()) continue;
+        if (batchNow.running) {
+          formBatch.running = batchNow.running;
+          paintReadOnly();
+          continue;
+        }
+        following = null;
+        stopped = true;
+        reviewTab = null;  // after a run, what needs a person first
+        await adoptBatch(batchNow, { quiet: true });
+        /* The file's rows from the server, and the questions typed beside
+           them from this page: those go out after the file's rows, so a
+           request that failed never sent them, and the server does not keep
+           them. "Every question has an answer" was said with them still
+           waiting (plan 029's review). */
+        const left = (batchNow.counts || {}).still_blank || 0;
+        const typed = pendingQuestions().filter((entry) => !entry.formId).length;
+        const typedLeft = typed ? " The " + typed + " question(s) you typed beside the file were not answered: " +
+          "answer them again." : "";
+        setStatus(status, left
+          ? "The run has ended, and " + left + " question(s) still have no answer. Answer them to carry on." + typedLeft
+          : typed ? "The file's questions are answered." + typedLeft
+          : "Finished: every question has an answer.", left || typed ? "warn" : "ok");
+        return;
+      }
+    })();
+  }
+
   /* Drawn again from the server, quietly: what a refusal or another tab says has changed. */
   async function redrawBatch() {
     if (!formBatch) return;
@@ -3691,7 +4536,7 @@
     if (document.visibilityState !== "visible") return;
     const gone = await loadFormProducts();
     if (formBatch && !formBatch.read_only && (Cards.product(formBatch.product_id) || {}).deleted) redrawBatch();
-    else if (gone) setStatus($("extractStatus"), gone + " has been deleted; the product is back on General.", "error");
+    else if (gone) setStatus($("extractStatus"), gone + " has been deleted; choose a product again.", "error");
   });
 
   /* Close waits while answering, or while any request about the questionnaire
@@ -3716,27 +4561,36 @@
     const closed = formBatch;
     lastClosed = {
       id: closed.id, source_name: closed.source_name, product_id: closed.product_id,
-      created_at: closed.created_at, answered: (closed.counts || {}).answered || 0,
+      created_at: closed.created_at, updated_at: closed.updated_at, answered: (closed.counts || {}).answered || 0,
     };
     formBatch = null;
+    rememberInAddress("");
+    hideAlreadyOpen();
+    stopFollowing();  // the run carries on on the server, and the questionnaire reopens with it
+    reviewTab = null;
     questions = [];
     result = null;
     Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+    unsavedEdits.clear();
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
     $("formReport").hidden = true;
     forgetFilling();
     setStatus($("answerStatus"), "");
     paintReadOnly();
-    // A deleted product's questionnaire showed its product; the next file is for a live one.
-    if (closed.read_only) showFormProduct("");
+    /* The next file chooses its own product: the closed one's is offered as
+       "Last used", never kept chosen (plan 029, 2). A deleted product's
+       questionnaire is not offered: its product cannot be chosen. */
+    if (!closed.read_only) pageLastUsed = Cards.choiceOf(closed.product_id);
+    showFormProduct("");
     renderDetailPicker();
     renderQuestions();
     refreshFormControls();
     listRecentForms();
     setStatus($("extractStatus"), "Closed " + closed.source_name + ". It stays in “Or pick up” below.", "ok");
   };
-  loadFormProducts();
+  // Awaited before a questionnaire named in the address is opened (plan 029, 2).
+  const productsListed = loadFormProducts().catch(() => {});
 
   $("kbScope").onchange = () => {
     $("kbScopeHint").textContent = kbScope()
@@ -3768,7 +4622,7 @@
   Cards.onDiscard = discardQuestion;
   Cards.onRetry = retryQuestions;
   Cards.onOpenDocument = openDocument;
-  Cards.onEdit = (item, index, text) => { result.answers[index].answer = text; };
+  Cards.onEdit = (item, index, text, which) => noteEdit(item, index, text, which || "answer");
   Cards.onEditDone = storeEditedAnswer;
   Cards.onBlank = leaveAnswerBlank;
   Cards.onApprove = approveAnswer;
@@ -3776,20 +4630,49 @@
   Cards.onRestoreDraft = restoreDraft;
   /* Whichever length the questionnaire is set to. The workbench keeps the run
      in memory, so the brief travels on the same object as the answer. */
-  Cards.answerText = (item, index) => {
+  Cards.shownAnswer = (item, index) => {
     const held = (result && result.answers[index]) || item;
     // `length` is what the server resolved for this answer: its own choice if
     // it made one, otherwise the questionnaire's. The page does not repeat the
     // fallback rule, so the two cannot disagree about which is showing.
     const level = held.length || item.length || detailLevel;
-    return (level === "brief" && held.brief ? held.brief : held.answer) || "";
+    return level === "brief" && held.brief
+      ? { text: held.brief, which: "brief" }
+      : { text: held.answer || "", which: "answer" };
   };
+
+  /* The review bar sticks below the page header, whose height changes with
+     the window's width (plan 029, 1.3). */
+  (function stickBelowTheHeader() {
+    const topbar = document.querySelector(".topbar");
+    if (!topbar) return;
+    const measure = () => document.documentElement.style.setProperty("--topbar-height", topbar.offsetHeight + "px");
+    measure();
+    if (window.ResizeObserver) new ResizeObserver(measure).observe(topbar);
+  })();
+
+  /* Leaving with work only this page holds asks first (plan 029, 1.5): an
+     edit not yet saved, questions typed beside a file or into a list, and a
+     question half-typed into "Ask another question". Nothing is saved on the
+     way out: a half-typed answer saved would go into the file as the
+     person's own. A questionnaire being answered is not on the list: the run
+     carries on, and the questionnaire opens again. The browser words the
+     question itself. */
+  const unsavedWork = () => unsavedEdits.size > 0
+    || questions.some((q) => !q.formId && q.text.trim())
+    || $("composerInput").value.trim() !== "";
+  window.addEventListener("beforeunload", (event) => {
+    if (!unsavedWork()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
 
   loadSkills();
   loadKnowledge();
   loadDocuments();
   listRecentForms();
   renderQuestions();
+  openFromAddress();
 })();
 </script>
 

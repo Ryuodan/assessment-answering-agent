@@ -1,8 +1,10 @@
-"""Which questions an operation applies to, and when an answer counts as settled.
+"""Which questions an operation applies to, when an answer counts as settled, and what is written.
 
 Moved from `src/tools.py` (plan 023), which re-exports what its callers use:
 `tools.Scope`, `tools.HAND`, `tools.APPROVED` and `tools.ready_to_write` are
 the names the interface, the assistant and the tests have always used.
+`length_of` and `written_text` followed in plan 029, to make room in `tools.py`,
+and then `nothing_written` (`tools._nothing_written` until then).
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from dataclasses import dataclass
 
 from src.config import settings
 from src.forms.model import DetectedForm, FormQuestion
-from src.models import AnsweredQuestion
+from src.models import AnsweredQuestion, BeforeApproval
 
 # ---------------------------------------------------------------------------
 # Choosing which questions to act on
@@ -135,6 +137,57 @@ def written_by_a_person(answered: AnsweredQuestion | None) -> bool:
     return answered.by_hand or answered.confidence_reason == HAND
 
 
+def held_by_the_review(answered: AnsweredQuestion, threshold: float | None = None) -> bool:
+    """The review's own rule (`verification.assess`): any reason, or a score at or under the threshold.
+
+    Never for words a person wrote: those were not the model's to review.
+    """
+    floor = settings.review_confidence_threshold if threshold is None else threshold
+    return not written_by_a_person(answered) and (bool(answered.review_reasons) or answered.confidence <= floor)
+
+
+def approve(answered: AnsweredQuestion, *, threshold: float | None = None) -> AnsweredQuestion:
+    """Released by a person, keeping what the review said for a withdrawal (TD-053).
+
+    What the review said is the stored flag, unless the stored state contradicts
+    the review's own rule. The withdrawal before TD-053's fix left exactly that
+    (the flag cleared, the reasons kept), and recording it would release the
+    answer again on the next withdrawal (plan 029's review).
+    """
+    approved = answered.model_copy(deep=True)
+    if approved.confidence_reason != APPROVED:  # approving twice keeps the first record
+        approved.before_approval = BeforeApproval(
+            needs_review=approved.needs_review or held_by_the_review(approved, threshold),
+            confidence_reason=approved.confidence_reason,
+        )
+    approved.confidence_reason, approved.needs_review = APPROVED, False
+    return approved
+
+
+def withdraw_approval(
+    answered: AnsweredQuestion, *, reworded: bool = False, threshold: float | None = None
+) -> AnsweredQuestion:
+    """The answer as it stood before a person approved it.
+
+    The kept state first. An approval from before it was kept is judged again by
+    the review's own rule (`verification.assess`: any reason, or a score at or under
+    the threshold) unless a person wrote the words. `reworded`: the words are the
+    model's now, so "written by hand" goes too. Not approved: unchanged, but for that.
+    """
+    withdrawn = answered.model_copy(deep=True)
+    if withdrawn.confidence_reason == APPROVED:
+        kept = withdrawn.before_approval
+        if kept is not None:
+            withdrawn.needs_review, withdrawn.confidence_reason = kept.needs_review, kept.confidence_reason
+        else:
+            withdrawn.needs_review = held_by_the_review(withdrawn, threshold)
+            withdrawn.confidence_reason = HAND if written_by_a_person(withdrawn) else ""
+    withdrawn.before_approval = None
+    if reworded and withdrawn.confidence_reason == HAND:
+        withdrawn.confidence_reason = ""
+    return withdrawn
+
+
 def ready_to_write(
     answered: AnsweredQuestion | None, edited_by: str = "", *, threshold: float | None = None
 ) -> tuple[bool, str]:
@@ -160,6 +213,56 @@ def ready_to_write(
             f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed to write without a person looking"
         )
     return True, ""
+
+
+def length_of(answered: AnsweredQuestion, detail: str = "full") -> str:
+    """Which length this answer is written at: its own choice, else the file's."""
+    return answered.prefer or detail or "full"
+
+
+def written_text(answered: AnsweredQuestion, detail: str = "full") -> str:
+    """The words that go into the cell, at the length that was chosen for them.
+
+    Falls back to the full answer when a brief one has not been derived yet, so
+    switching a questionnaire to brief and filling it immediately writes the
+    long answers rather than blanks. The interface derives them first; this is
+    what happens when something else does not.
+    """
+    if length_of(answered, detail) == "brief" and answered.brief.strip():
+        return answered.brief.strip()
+    return answered.answer
+
+
+def nothing_written(form: DetectedForm, answered: dict[str, AnsweredQuestion], held: dict[str, str]) -> str:
+    """Why a fill wrote nothing. Only asked when it wrote nothing.
+
+    Four states arrive here looking identical and are not: work not started, work
+    already done by the file itself, every row struck out, and every answer held
+    back by the gate (`held`: what was kept out). The message has to name which,
+    because what the person should do next differs in each.
+    """
+    if not any(_has_answer(answered.get(q.id)) for q in form.questions):
+        already = form.answered_count
+        if already:
+            blank = sum(1 for q in form.questions if not _settled(answered.get(q.id), q))
+            return (
+                f"Nothing needed writing: the {already} answer(s) this questionnaire has "
+                "came with the file and are already in it."
+                + (
+                    f" {blank} question(s) are still blank — answer those and fill again."
+                    if blank
+                    else " Every question is answered."
+                )
+            )
+        return "Nothing has been answered yet, so there was nothing to write. Answer some questions first."
+    if all(q.skip for q in form.questions if _has_answer(answered.get(q.id))):
+        return "Every answered question is set aside, so nothing was written for any of them."
+    if held:
+        return f"Nothing was written: {len(held)} answer(s) are held back until somebody edits or approves them."
+    return (
+        "The answers exist but none of them has a cell to go into -- check the "
+        "answer column for each sheet in the reading report."
+    )
 
 
 def _settled(answered: AnsweredQuestion | None, question: FormQuestion) -> bool:

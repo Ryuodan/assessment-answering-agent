@@ -251,6 +251,13 @@ class Evidence(BaseModel):
         return (metadata.get("source_name", ""), int(metadata.get("chunk", -1)), entry)
 
 
+class BeforeApproval(BaseModel):
+    """What the review said of an answer when a person approved it, so withdrawing can put it back (TD-053)."""
+
+    needs_review: bool
+    confidence_reason: str = ""
+
+
 class AnsweredQuestion(BaseModel):
     """A question plus the agent's answer and its supporting evidence."""
 
@@ -334,6 +341,11 @@ class AnsweredQuestion(BaseModel):
     which the interface can only offer if it can tell the two apart without
     parsing an error message out of prose.
     """
+    before_approval: BeforeApproval | None = Field(
+        default=None,
+        description="The review flag and reason as they were when a person approved this answer; null otherwise",
+    )
+    """Kept while `confidence_reason` is `APPROVED`, and meaningless otherwise (`selection.approve`)."""
 
 
 class AssessmentResult(BaseModel):

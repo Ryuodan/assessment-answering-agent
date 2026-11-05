@@ -24,6 +24,7 @@ modules = [
     "src.roles",
     "src.verification",
     "src.progress",
+    "src.busy",
     "src.chunking",
 ]
 
@@ -47,6 +48,7 @@ modules = [
     "src.organisation",
     "src.export_pdf",
     "src.export_docx",
+    "src.docx_preview",
     "src.forms.*",
 ]
 
@@ -89,6 +91,8 @@ modules = [
     "src.service",
     "src.search",
     "src.selection",
+    "src.styling",
+    "src.fill_audit",
     "src.tools",
     "src.agents.assistant",
     "src.agents.assistant_prompt",

@@ -603,6 +603,50 @@ whole point of holding an answer is that somebody should look at it. The fill
 report says how many stayed behind and offers to write them anyway, which is a
 button somebody has to mean.
 
+The Workbench's Fill did not keep the gate until plan 029 (TD-052): its click
+event arrived where the "write them anyway" flag belonged, so every fill sent
+`include_unreviewed: true`. The flag now has to be exactly `true`, the held
+answers are listed under **Which, and why** with their reasons, and the fill
+event records what the gate held and whether it was opened. `python -m src.cli
+inspect fills` lists the fills from before the fix that wrote held answers.
+
+"Write them in anyway" names the answers it counted (`unreviewed_ids`), and the
+server writes those and no others. The list is the last Fill's, and answers
+change after it: an approval withdrawn, a question answered. Writing whatever
+was held at the click put answers in under a count that left them out, and the
+page then said the remembered number (plan 029's review). An answer held since
+the list was made stays out and is offered again, and the first line says how
+many went in as the server counted them (`written_anyway`).
+
+**The Workbench reviews in the gate's own terms** (plan 029, 1.3). Its answers
+are in tabs by what the server says `fill` would do with each
+(`will_be_written`): Needs review (held back, or failed), Will be written
+(confident, nobody has checked), Done by a person, Blank or set aside, and All.
+The page does not repeat the threshold. A questionnaire opens on Needs review
+when it has anything, and so does the first view after a run of its rows;
+otherwise the person's tab is kept. A question typed beside the file is in no
+tab unless it needs a person, so a run of typed questions alone keeps the tab,
+or shows All when the tab would hide one of its answers. An approval, a blank
+and an edit each draw the answers again from the server, so the card moves to
+its tab and the counts follow; an edit waits for the click that left its
+editor, and only recounts while another card's editor is being typed in. Fill
+and the counts stay in a bar under the page header, and "Write them in anyway"
+is offered only in Fill's report, never in the bar; the report scrolls to just
+under the bar. The "need review" count above the cards is the tab's count: it
+used to count the reviewer's flag, so an answer under the threshold that nobody
+flagged was held back by Fill and counted nowhere.
+
+**Withdrawing an approval puts the review back** (plan 029, TD-053). Approving
+clears the flag, and withdrawing used to leave it cleared, so an answer the gate
+had held went into the file as if confident. An approval now keeps the flag and
+the "why the score is low" sentence it replaced (`before_approval` on the answer,
+in its stored JSON; no migration), and withdrawing restores them
+(`selection.approve`, `selection.withdraw_approval`). An approval made before
+that kept nothing, so withdrawing it applies the review's own rule again: any
+reason, or a score at or under the threshold, is held, unless a person wrote the
+words. Rewording an approved answer withdraws the approval the same way, because
+the approval was for other words.
+
 **Silence is not a No.** Five of the eight contradictions that survived the
 identity fix were the same move: the corpus does not say whether we hold ISO
 27001, whether a DPA was signed with this customer, or whether a regulator

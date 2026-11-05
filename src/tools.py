@@ -24,6 +24,7 @@ re-exported here.
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,7 @@ from typing import Any
 import asyncio
 
 from src.config import settings
-from src import answer_memory, batches, events, preferences, products, progress, rewrite, service, store
+from src import answer_memory, batches, busy, events, preferences, products, progress, rewrite, service, store
 from src.formatting import to_cell_text
 from src.batches import Batch
 from src.forms import status as status_map
@@ -39,6 +40,7 @@ from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role,
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
 from src.errors import QuestionnaireNotFound, ToolError as ToolError
+from src.styling import in_house_style as in_house_style
 from src.selection import (
     APPROVED as APPROVED,
     BLANKED as BLANKED,
@@ -46,9 +48,14 @@ from src.selection import (
     Scope as Scope,
     _has_answer,
     _settled,
+    approve,
     confirmed_by_a_person as confirmed_by_a_person,
+    length_of,
+    nothing_written,
     ready_to_write as ready_to_write,
     written_by_a_person as written_by_a_person,
+    withdraw_approval,
+    written_text as written_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,6 +118,9 @@ class Filled:
     Distinct from `blank`, which is a decision already made, and from
     `skipped`, which is the file refusing a value.
     """
+
+    written_anyway: list[str] = field(default_factory=list)
+    """Held answers written all the same, because a person said so ("Write them in anyway")."""
 
     intact: bool = True
 
@@ -199,13 +209,15 @@ def _require(user: User, batch_id: str, *, reading: bool = False) -> Batch:
 
     Somebody else's questionnaire is "no questionnaire": the person who
     uploaded it owns it and its answers. A deleted product's is kept to be
-    read and filled, `reading`, and nothing else (plan 027).
+    read and filled, `reading`, and nothing else (plan 027); so is one another
+    run is answering, until it ends (`busy`, plan 029).
     """
     batch = batches.load(batch_id, team_id=user.team_id, actor_email=user.email)
     if batch is None:
         raise QuestionnaireNotFound(f"No questionnaire {batch_id!r}.")
     if not reading:
         products.refuse_deleted(user.team_id, batch.product_id)
+        busy.refuse(batch.id)
     return batch
 
 
@@ -289,6 +301,7 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict:
         "file_present": batch.exists,
         "created_at": batch.created_at,
         "updated_at": batch.updated_at,
+        "running": busy.state(batch.id),  # being answered now, and how far it has got (plan 029)
         "counts": {
             "questions": len(batch.form.questions),
             "answered": sum(1 for q in batch.form.questions if _has_answer(answered.get(q.id))),
@@ -378,98 +391,48 @@ async def answer(
     if not chosen:
         return outcome
 
-    # The questionnaire's product, from its knowledge base beside the shared one.
-    scope_of_answers: dict[str, Any] = {"product_id": batch.product_id} if batch.product_id else {}
-    results = await service.answer_questions(
-        [_as_question(question) for question in chosen],
-        run_id=run_id or batch.id,
-        team_id=user.team_id,
-        **scope_of_answers,
-    )
-    # Preferences are applied here, after drafting and review, and never
-    # handed to `service`: see `src.preferences` for why the drafter must not
-    # see them. Here rather than in each interface so the workbench and the
-    # assistant cannot disagree about whether it happened.
-    results = await in_house_style(user, results, run_id=run_id or batch.id)
-    outcome.styled = sum(1 for result in results if result.drafted)
-    batches.save_answers(batch.id, results)
-    # A questionnaire being filled in briefly needs the brief form of what was
-    # just answered. It used to get it only at the moment somebody switched the
-    # file to brief, so anything answered afterwards showed -- and was written
-    # -- at full length under a "Brief" label.
-    if batch.detail == "brief":
-        fresh = tuple(result.question.id for result in results if _has_answer(result))
-        if fresh:
-            await make_brief(user, batch.id, Scope(ids=fresh), run_id=run_id)
+    # One run at a time, and nothing else changes it meanwhile (plan 029). No
+    # await since `_require` looked, so no other run can have started since.
+    with busy.hold(batch.id, run_id or batch.id):
+        # The questionnaire's product, from its knowledge base beside the shared one.
+        scope_of_answers: dict[str, Any] = {"product_id": batch.product_id} if batch.product_id else {}
+        results = await service.answer_questions(
+            [_as_question(question) for question in chosen],
+            run_id=run_id or batch.id,
+            team_id=user.team_id,
+            on_answer=batches.saver(batch.id),  # each saved as it finishes: a run cut short keeps them
+            **scope_of_answers,
+        )
+        # Preferences are applied here, after drafting and review, and never
+        # handed to `service`: see `src.preferences` for why the drafter must not
+        # see them. Here rather than in each interface so the workbench and the
+        # assistant cannot disagree about whether it happened.
+        results = await in_house_style(user, results, run_id=run_id or batch.id)
+        outcome.styled = sum(1 for result in results if result.drafted)
+        batches.save_answers(batch.id, results)
+        # A questionnaire being filled in briefly needs the brief form of what was
+        # just answered. It used to get it only at the moment somebody switched the
+        # file to brief, so anything answered afterwards showed -- and was written
+        # -- at full length under a "Brief" label.
+        if batch.detail == "brief":
+            fresh = tuple(result.question.id for result in results if _has_answer(result))
+            if fresh:
+                await make_brief(user, batch.id, Scope(ids=fresh), run_id=run_id)
 
-    outcome.answered = sum(1 for r in results if not r.error)
-    outcome.failed = sum(1 for r in results if r.error)
-    outcome.needs_review = sum(1 for r in results if r.needs_review and not r.error)
-    events.record(
-        user,
-        events.BATCH_ANSWERED,
-        subject_type=batches.SUBJECT,
-        subject_id=batch.id,
-        scope=outcome.scope,
-        attempted=outcome.attempted,
-        answered=outcome.answered,
-        failed=outcome.failed,
-    )
-    return outcome
-
-
-async def in_house_style(
-    user: User,
-    results: list[AnsweredQuestion],
-    *,
-    run_id: str = "",
-    language: Language | None = None,
-) -> list[AnsweredQuestion]:
-    """Reword freshly drafted answers to this person's preferences, if they chose any.
-
-    Every answer keeps its draft in `drafted`, so what the rewording changed can
-    be seen and undone. An answer the rewrite could not reword comes back
-    exactly as drafted: preferences that fail cost the wording, never the answer.
-
-    Public because several paths draft: questionnaire rows here, questions
-    typed into the workbench, and a question asked in the assistant's
-    conversation, which is answered with no file.
-
-    `language` is the one the answers were forced into, when they were. Left
-    out, the rewrite writes in each question's own language -- which would
-    quietly translate an Arabic question's English answer back into Arabic.
-    """
-    instruction = preferences.load(user.email).instruction()
-    worth = [result for result in results if _has_answer(result)]
-    if not instruction or not worth:
-        return results
-
-    progress.start(run_id, stage="styling")
-    progress.set_total(run_id, len(worth))
-    try:
-
-        async def one(result: AnsweredQuestion) -> AnsweredQuestion:
-            try:
-                styled = await rewrite.rewrite(
-                    result,
-                    instruction,
-                    language,
-                    note="Reworded to your preferences.",
-                )
-            except Exception:  # noqa: BLE001 - one failure is one unstyled answer
-                logger.exception("Could not apply preferences to %s", result.question.id)
-                return result
-            finally:
-                progress.advance(run_id)
-            if styled is result:
-                return result
-            styled.drafted = result.answer
-            return styled
-
-        styled = {item.question.id: item for item in await asyncio.gather(*(one(r) for r in worth))}
-    finally:
-        progress.finish(run_id)
-    return [styled.get(result.question.id, result) for result in results]
+        outcome.answered = sum(1 for r in results if not r.error)
+        outcome.failed = sum(1 for r in results if r.error)
+        outcome.needs_review = sum(1 for r in results if r.needs_review and not r.error)
+        events.record(
+            user,
+            events.BATCH_ANSWERED,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            scope=outcome.scope,
+            attempted=outcome.attempted,
+            answered=outcome.answered,
+            failed=outcome.failed,
+        )
+        return outcome
 
 
 def restore_draft(user: User, batch_id: str, question_id: str) -> None:
@@ -552,66 +515,66 @@ async def revise(
     if not chosen:
         return outcome
 
-    # Reworded, not re-answered. Running the pipeline again with the instruction
-    # as a style would re-retrieve and re-review, so "make it shorter" could come
-    # back saying something different -- which is not what revise means. One call
-    # over the answer and the sources it already used keeps the facts, the
-    # citations and the clause a reader would go and check.
-    progress.start(run_id or batch.id, stage="rewriting")
-    progress.set_total(run_id or batch.id, len(chosen))
-    try:
+    with busy.hold(batch.id, run_id or batch.id):  # nothing else changes it meanwhile (plan 029)
+        # Reworded, not re-answered. Running the pipeline again with the instruction
+        # as a style would re-retrieve and re-review, so "make it shorter" could come
+        # back saying something different -- which is not what revise means. One call
+        # over the answer and the sources it already used keeps the facts, the
+        # citations and the clause a reader would go and check.
+        progress.start(run_id or batch.id, stage="rewriting")
+        progress.set_total(run_id or batch.id, len(chosen))
+        try:
 
-        async def one(question: FormQuestion) -> AnsweredQuestion:
-            original = existing[question.id]
-            try:
-                revised = await rewrite.rewrite(
-                    original,
-                    instruction,
-                    **({"language": language} if language else {}),
-                    **({"note": note} if note else {}),
-                )
-            finally:
-                progress.advance(run_id or batch.id)
-            if revised is not original:
-                # The first rewording keeps the draft, so any of them can be
-                # undone. Not a person's words, though: "put the draft back"
-                # would then restore them marked as the model's.
-                if not revised.drafted and not written_by_a_person(original):
-                    revised.drafted = original.answer
-                revised.by_hand = False
-                # The brief form was condensed from the words just replaced.
-                # Kept, it went on being what a brief questionnaire showed and
-                # wrote, so the rewording appeared to do nothing at all.
-                revised.brief = ""
-                if revised.confidence_reason in (APPROVED, HAND):
-                    revised.confidence_reason = ""
-            return revised
+            async def one(question: FormQuestion) -> AnsweredQuestion:
+                original = existing[question.id]
+                try:
+                    revised = await rewrite.rewrite(
+                        original,
+                        instruction,
+                        **({"language": language} if language else {}),
+                        **({"note": note} if note else {}),
+                    )
+                finally:
+                    progress.advance(run_id or batch.id)
+                if revised is not original:
+                    # The first rewording keeps the draft, so any of them can be
+                    # undone. Not a person's words, though: "put the draft back"
+                    # would then restore them marked as the model's.
+                    if not revised.drafted and not written_by_a_person(original):
+                        revised.drafted = original.answer
+                    revised.by_hand = False
+                    # The brief form was condensed from the words just replaced.
+                    # Kept, it went on being what a brief questionnaire showed and
+                    # wrote, so the rewording appeared to do nothing at all.
+                    revised.brief = ""
+                    revised = withdraw_approval(revised, reworded=True)  # held again if it was before approval
+                return revised
 
-        results = list(await asyncio.gather(*(one(q) for q in chosen)))
-    finally:
-        progress.finish(run_id or batch.id)
+            results = list(await asyncio.gather(*(one(q) for q in chosen)))
+        finally:
+            progress.finish(run_id or batch.id)
 
-    changed = [r for r in results if r is not existing[r.question.id]]
-    batches.save_answers(batch.id, changed)
-    # Derived again only where somebody is going to read the brief form.
-    shown_brief = tuple(r.question.id for r in changed if length_of(r, batch.detail) == "brief")
-    if shown_brief:
-        await make_brief(user, batch.id, Scope(ids=shown_brief), run_id=run_id)
+        changed = [r for r in results if r is not existing[r.question.id]]
+        batches.save_answers(batch.id, changed)
+        # Derived again only where somebody is going to read the brief form.
+        shown_brief = tuple(r.question.id for r in changed if length_of(r, batch.detail) == "brief")
+        if shown_brief:
+            await make_brief(user, batch.id, Scope(ids=shown_brief), run_id=run_id)
 
-    outcome.answered = len(changed)
-    outcome.failed = len(results) - len(changed)
-    outcome.needs_review = sum(1 for r in changed if r.needs_review and not r.error)
-    events.record(
-        user,
-        events.BATCH_REVISED,
-        subject_type=batches.SUBJECT,
-        subject_id=batch.id,
-        scope=outcome.scope,
-        instruction=instruction[:400],
-        attempted=outcome.attempted,
-        protected=outcome.protected,
-    )
-    return outcome
+        outcome.answered = len(changed)
+        outcome.failed = len(results) - len(changed)
+        outcome.needs_review = sum(1 for r in changed if r.needs_review and not r.error)
+        events.record(
+            user,
+            events.BATCH_REVISED,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            scope=outcome.scope,
+            instruction=instruction[:400],
+            attempted=outcome.attempted,
+            protected=outcome.protected,
+        )
+        return outcome
 
 
 async def apply_skill(
@@ -682,7 +645,10 @@ def set_answer(user: User, batch_id: str, question_id: str, text: str, *, which:
     # produced. Cleared, the question is simply unanswered, and the file keeps
     # whatever its cell already held -- empty stays empty, and an answer the
     # file arrived with stays. Leaving a cell empty over the file's own answer
-    # is "Leave blank", which is a decision rather than a deletion.
+    # is "Leave blank", which is a decision rather than a deletion. An empty brief
+    # released the model's full answer as a person's (plan 029), so it is refused.
+    if which == "brief" and not text.strip():
+        raise ToolError("A brief answer cannot be empty. To write nothing for this question, use Leave blank.")
     if which == "answer" and not text.strip():
         if existing is not None:
             batches.forget_answer(batch.id, question_id)
@@ -772,24 +738,6 @@ def blank_answer(user: User, batch_id: str, question_id: str, *, blank: bool = T
     )
 
 
-def length_of(answered: AnsweredQuestion, detail: str = "full") -> str:
-    """Which length this answer is written at: its own choice, else the file's."""
-    return answered.prefer or detail or "full"
-
-
-def written_text(answered: AnsweredQuestion, detail: str = "full") -> str:
-    """The words that go into the cell, at the length that was chosen for them.
-
-    Falls back to the full answer when a brief one has not been derived yet, so
-    switching a questionnaire to brief and filling it immediately writes the
-    long answers rather than blanks. The interface derives them first; this is
-    what happens when something else does not.
-    """
-    if length_of(answered, detail) == "brief" and answered.brief.strip():
-        return answered.brief.strip()
-    return answered.answer
-
-
 def prefer_length(user: User, batch_id: str, question_id: str, prefer: str) -> None:
     """Choose the length for one answer, overriding the questionnaire's default.
 
@@ -831,37 +779,38 @@ async def make_brief(user: User, batch_id: str, scope: Scope | None = None, run_
     if not chosen:
         return outcome
 
-    progress.start(run_id or batch.id, stage="shortening")
-    progress.set_total(run_id or batch.id, len(chosen))
-    try:
+    with busy.hold(batch.id, run_id or batch.id):  # nothing else changes it meanwhile (plan 029)
+        progress.start(run_id or batch.id, stage="shortening")
+        progress.set_total(run_id or batch.id, len(chosen))
+        try:
 
-        async def one(question: FormQuestion) -> AnsweredQuestion:
-            answered = existing[question.id].model_copy(deep=True)
-            try:
-                answered.brief = await rewrite.shorten(answered)
-            except Exception:  # noqa: BLE001 - one failure is one long answer, not a failed run
-                logger.exception("Could not shorten %s", question.id)
-            finally:
-                progress.advance(run_id or batch.id)
-            return answered
+            async def one(question: FormQuestion) -> AnsweredQuestion:
+                answered = existing[question.id].model_copy(deep=True)
+                try:
+                    answered.brief = await rewrite.shorten(answered)
+                except Exception:  # noqa: BLE001 - one failure is one long answer, not a failed run
+                    logger.exception("Could not shorten %s", question.id)
+                finally:
+                    progress.advance(run_id or batch.id)
+                return answered
 
-        results = list(await asyncio.gather(*(one(q) for q in chosen)))
-    finally:
-        progress.finish(run_id or batch.id)
+            results = list(await asyncio.gather(*(one(q) for q in chosen)))
+        finally:
+            progress.finish(run_id or batch.id)
 
-    # Saved under whoever had put their name to each answer. One save for all of
-    # them recorded every answer as edited by nobody, which erased the name of
-    # the person who had approved or corrected it.
-    edits = batches.edited_by(batch.id)
-    for who in {edits.get(r.question.id, "") for r in results}:
-        batches.save_answers(
-            batch.id,
-            [r for r in results if edits.get(r.question.id, "") == who],
-            edited_by=who,
-        )
-    outcome.answered = sum(1 for r in results if r.brief.strip())
-    outcome.failed = outcome.attempted - outcome.answered
-    return outcome
+        # Saved under whoever had put their name to each answer. One save for all of
+        # them recorded every answer as edited by nobody, which erased the name of
+        # the person who had approved or corrected it.
+        edits = batches.edited_by(batch.id)
+        for who in {edits.get(r.question.id, "") for r in results}:
+            batches.save_answers(
+                batch.id,
+                [r for r in results if edits.get(r.question.id, "") == who],
+                edited_by=who,
+            )
+        outcome.answered = sum(1 for r in results if r.brief.strip())
+        outcome.failed = outcome.attempted - outcome.answered
+        return outcome
 
 
 def set_detail(user: User, batch_id: str, detail: str) -> None:
@@ -922,9 +871,7 @@ def approve_answer(user: User, batch_id: str, question_id: str, *, approved: boo
 
     by_hand = written_by_a_person(existing)
 
-    answered = existing.model_copy(deep=True)
-    answered.confidence_reason = APPROVED if approved else (HAND if by_hand else "")
-    answered.needs_review = False if approved else existing.needs_review
+    answered = approve(existing) if approved else withdraw_approval(existing)  # puts back the review's flag (TD-053)
     batches.save_answers(batch.id, [answered], edited_by=user.email if approved else "")
     events.record(
         user,
@@ -997,6 +944,7 @@ def fill(
     destination: Path | None = None,
     *,
     include_unreviewed: bool = False,
+    unreviewed_ids: Collection[str] | None = None,
 ) -> Filled:
     """Write the answers into a copy of the original questionnaire.
 
@@ -1004,6 +952,10 @@ def fill(
     the answer says. Evidence columns are left blank, which is the default the
     cyber-team asked for; an instruction can fill them, and that is a later
     tool rather than a hidden setting here.
+
+    `include_unreviewed` writes the answers the gate holds as well; `unreviewed_ids` narrows
+    that to the ones a person was shown and agreed to ("Write them in anyway"), so an answer
+    held since then stays out rather than going in under a count that did not include it.
     """
     from src import forms
 
@@ -1018,6 +970,7 @@ def fill(
     values: dict[str, str] = {}
     blank: dict[str, str] = {}
     held: dict[str, str] = {}
+    anyway: list[str] = []  # held, and written all the same
 
     for question in batch.form.questions:
         result = answered.get(question.id)
@@ -1036,9 +989,11 @@ def fill(
         # contradicted the security team scored at or below 0.50 and was
         # flagged; none of them should reach a customer unread.
         allowed, because = ready_to_write(result, edits.get(question.id, ""))
-        if not allowed and not include_unreviewed:
+        if not allowed:
             held[question.id] = because
-            continue
+            if not include_unreviewed or (unreviewed_ids is not None and question.id not in unreviewed_ids):
+                continue
+            anyway.append(question.id)
         for target in question.writable:
             if target.role is Role.EVIDENCE:
                 blank[target.id] = "evidence columns are left blank by default"
@@ -1061,6 +1016,7 @@ def fill(
     destination = destination or _filled_path(batch)
     destination.parent.mkdir(parents=True, exist_ok=True)
     report = forms.write(batch.source_path, destination, values)
+    kept_out = {question_id: why for question_id, why in held.items() if question_id not in anyway}
     events.record(
         user,
         events.FILE_FILLED,
@@ -1070,7 +1026,10 @@ def fill(
         created=len(report.created),
         replaced=len(report.replaced),
         left_blank=len(blank),
+        # What the gate held, and which went in anyway ("Write them in anyway", TD-052).
         held_back=len(held),
+        include_unreviewed=include_unreviewed,
+        written_anyway=anyway,  # question ids, for `inspect fills`
     )
     return Filled(
         path=destination,
@@ -1079,39 +1038,10 @@ def fill(
         replaced=len(report.replaced),
         skipped=report.skipped,
         blank=blank,
-        held_back=held,
+        held_back=kept_out,
+        written_anyway=anyway,
         intact=report.intact,
-        because=_nothing_written(batch, answered) if not report.written else "",
-    )
-
-
-def _nothing_written(batch: Batch, answered: dict[str, AnsweredQuestion]) -> str:
-    """Why a fill wrote nothing. Only asked when it wrote nothing.
-
-    Three states arrive here looking identical and are not: work not started,
-    work already done by the file itself, and every row struck out. The message
-    has to name which, because what the person should do next differs and only
-    one of the three is a problem.
-    """
-    if not any(_has_answer(answered.get(q.id)) for q in batch.form.questions):
-        already = batch.form.answered_count
-        if already:
-            blank = sum(1 for q in batch.form.questions if not _settled(answered.get(q.id), q))
-            return (
-                f"Nothing needed writing: the {already} answer(s) this questionnaire has "
-                "came with the file and are already in it."
-                + (
-                    f" {blank} question(s) are still blank — answer those and fill again."
-                    if blank
-                    else " Every question is answered."
-                )
-            )
-        return "Nothing has been answered yet, so there was nothing to write. Answer some questions first."
-    if all(q.skip for q in batch.form.questions if _has_answer(answered.get(q.id))):
-        return "Every answered question is set aside, so nothing was written for any of them."
-    return (
-        "The answers exist but none of them has a cell to go into -- check the "
-        "answer column for each sheet in the reading report."
+        because=nothing_written(batch.form, answered, kept_out) if not report.written else "",
     )
 
 

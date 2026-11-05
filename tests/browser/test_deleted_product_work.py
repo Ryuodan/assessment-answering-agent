@@ -106,9 +106,12 @@ def test_a_deleted_products_questionnaire_is_shown_read_only_and_can_still_be_fi
     page.click("#closeForm")
     expect(note).to_be_hidden()
     expect(selector).to_be_enabled()
-    expect(selector).to_have_value("")
+    expect(selector).to_have_value("")  # nothing chosen since plan 029 (D-022), not General
     expect(selector.locator("option", has_text="(deleted)")).to_have_count(0)
     expect(page.locator("#answerBtn")).to_be_visible()
+    expect(page.locator("#formLastUsed button")).to_have_count(0)  # a deleted product is never offered
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "next.xlsx")))
+    expect(page.locator("#extractBtn")).to_be_disabled()  # the next file waits for a product
 
 
 def test_a_questionnaire_open_when_its_product_is_deleted_turns_read_only(
@@ -186,6 +189,12 @@ def test_a_deleted_products_chat_is_shown_read_only(page: Page, availo: products
     expect(pick).to_have_value("")
     expect(pick.locator("option", has_text="(deleted)")).to_have_count(0)
     page.fill("#prompt", "Hello")
+    # Changed on purpose by plan 029 (D-022): a new chat waited for nothing, and was General;
+    # it now waits for a product, and the deleted one is not offered as "Last used".
+    expect(page.locator("#send")).to_be_disabled()
+    expect(page.locator("#productNeeded")).to_be_visible()
+    expect(page.locator("#chatLastUsed")).not_to_contain_text("Availo")
+    page.select_option("#productPick", "general")
     expect(page.locator("#send")).to_be_enabled()
 
 

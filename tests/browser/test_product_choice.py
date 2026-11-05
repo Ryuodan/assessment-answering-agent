@@ -6,10 +6,15 @@ chat can be for another. On the workbench it is chosen before a questionnaire
 is opened, and fixed while it is open; closing it frees the selector for the
 next file. Neither page ever asks the server to change a product.
 
+Since plan 029 (D-022, the user's decision of 2026-11-05) nothing is chosen
+for the person, General included: General is chosen on purpose, and a new
+chat, Close and Clear all go back to "choose…". Tests here that read a file or
+send a first message choose first.
+
 Also here: a product deleted after the page listed it, chosen for a new chat,
-is refused beside the box and the chip goes back to General; and a source from
-a product's own knowledge base carries its badge in the chat as on the
-workbench (TD-041).
+is refused beside the box and the chip goes back to nothing chosen; and a
+source from a product's own knowledge base carries its badge in the chat as on
+the workbench (TD-041).
 """
 
 from __future__ import annotations
@@ -92,6 +97,7 @@ def test_a_chat_starts_for_the_product_beside_the_box_and_is_fixed(
     page.goto("/")
     chip, pick = page.locator("#productChip"), page.locator("#productPick")
     expect(pick).to_have_value("")
+    expect(pick.locator("option:checked")).to_have_text("Product: choose…")  # plan 029: nothing, not General
     expect(pick).to_be_enabled()
     page.select_option("#productPick", availo.id)
     colour = chip.evaluate("el => getComputedStyle(el).getPropertyValue('--product').trim()")
@@ -109,16 +115,20 @@ def test_a_chat_starts_for_the_product_beside_the_box_and_is_fixed(
     expect(pick).to_have_value(availo.id)
     expect(chip).to_have_attribute("title", re.compile("Fixed for this chat"))
 
+    # Changed on purpose by plan 029 (D-022, the user's decision of 2026-11-05): a new
+    # conversation chose the last chip choice; it now chooses nothing, and offers the
+    # chat that was open as "Last used", one click.
     page.click("#newChat")
     expect(pick).to_be_enabled()
-    expect(pick).to_have_value(availo.id)  # a new conversation keeps the choice
-    page.select_option("#productPick", "")  # for the next chat; nothing is sent
+    expect(pick).to_have_value("")
+    expect(page.locator("#chatLastUsed button")).to_have_text("Last used: Availo")
     page.click("#historyList .convo")  # the earlier chat
     expect(pick).to_be_disabled()
     expect(pick).to_have_value(availo.id)
     page.click("#newChat")
     expect(pick).to_be_enabled()
-    expect(pick).to_have_value("")  # the person's last choice, not the chat that was open
+    expect(pick).to_have_value("")  # nothing chosen; Last used offers the chat that was open
+    expect(page.locator("#chatLastUsed button")).to_have_text("Last used: Availo")
 
     assert not product_requests, "the page never asks to change a chat's product"
     assert conversations.load(chat["id"]).product_id == availo.id
@@ -153,14 +163,15 @@ def test_a_questionnaire_is_opened_for_the_product_chosen_and_fixed_until_closed
     close.click()
     expect(page.locator("#extractStatus")).to_contain_text("Closed vendor.xlsx")
     expect(selector).to_be_enabled()
+    expect(selector).to_have_value("")  # plan 029 (D-022): back to "choose…", not kept
     expect(questions).to_have_count(0)
     expect(page.locator("#resultsCard")).to_be_hidden()
     expect(close).to_be_hidden()
     assert batches.recent(TEAM)[0]["product_id"] == availo.id, "closing changes nothing on the server"
 
-    # Offered to pick up, with its badge, and fixed again when it is.
+    # Offered to pick up, with its badge, and fixed again when it is. (The selector
+    # was put on General here before; "" is now the placeholder, and already chosen.)
     expect(page.locator("#formRecent .tag.product")).to_have_text("Availo")
-    page.select_option("#formProduct", "")
     page.locator("#formRecent button", has_text="vendor.xlsx").click()
     expect(selector).to_have_value(availo.id)
     expect(selector).to_be_disabled()
@@ -185,6 +196,8 @@ def test_a_typed_list_keeps_its_product_while_its_answers_are_on_the_page(
     page.once("dialog", lambda dialog: dialog.accept())
     page.click("#clearQuestions")
     expect(selector).to_be_enabled()
+    expect(selector).to_have_value("")  # plan 029 (D-022): back to "choose…", and Availo offered as Last used
+    expect(page.locator("#formLastUsed button")).to_have_text("Last used: Availo")
 
 
 def test_a_deleted_product_chosen_before_the_first_message_is_refused_beside_the_box(
@@ -207,16 +220,18 @@ def test_a_deleted_product_chosen_before_the_first_message_is_refused_beside_the
     expect(note).not_to_contain_text(gone.id)
 
     pick = page.locator("#productPick")
-    expect(pick).to_have_value("")  # back on General
+    expect(pick).to_have_value("")  # nothing chosen (plan 029, D-022: it went back on General)
     expect(pick).to_be_enabled()
     expect(pick.locator("option", has_text="Msegat")).to_have_count(0)
     style = page.locator("#productChip").get_attribute("style") or ""
-    assert "--product" not in style, "the chip is General's colour again"
+    assert "--product" not in style, "the chip is no product's colour"
     expect(page.locator("#thread .turn")).to_have_count(0)  # nothing was said, so nothing is shown as said
     expect(page.locator("#empty")).to_be_visible()
     expect(page.locator("#prompt")).to_have_value("Do we encrypt backups?")
+    expect(page.locator("#send")).to_be_disabled()  # waits for a product again
     assert conversations.recent(TEAM) == [], "nothing was saved"
 
+    page.select_option("#productPick", "general")  # chosen on purpose now: it is no longer the default
     page.click("#send")  # as General, now
     # The reply itself, not the "working" placeholder drawn before the request is sent:
     # the chat is saved only by the time the reply arrives.
@@ -270,7 +285,8 @@ def test_a_deleted_product_chosen_for_a_chat_with_a_file_keeps_the_file_attached
     expect(page.locator("#attachedName")).to_have_text("HR.xlsx")
     expect(page.locator("#thread .turn")).to_have_count(0)
     expect(page.locator("#prompt")).to_have_value("Read this")
-    expect(page.locator("#productPick")).to_have_value("")
+    expect(page.locator("#productPick")).to_have_value("")  # nothing chosen (plan 029, D-022)
+    expect(page.locator("#send")).to_be_disabled()
     assert conversations.recent(TEAM) == [], "nothing was saved"
     folder = settings.user_upload_dir(TEAM, identity.local_user().email)
     assert not folder.exists() or not any(folder.iterdir()), "and no file was kept"
@@ -294,10 +310,12 @@ def test_a_product_deleted_after_the_workbench_listed_it_is_said_when_a_file_is_
     expect(status).not_to_contain_text(gone.id)
     expect(status).not_to_contain_text("not supported")
     selector = page.locator("#formProduct")
-    expect(selector).to_have_value("")
+    expect(selector).to_have_value("")  # nothing chosen (plan 029, D-022: it went back on General)
     expect(selector.locator("option", has_text="Msegat")).to_have_count(0)
+    expect(page.locator("#extractBtn")).to_be_disabled()  # waits for a product again
     assert batches.recent(TEAM) == []
 
+    page.select_option("#formProduct", "general")  # chosen on purpose now: it is no longer the default
     page.click("#extractBtn")  # as General, now
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     assert batches.recent(TEAM)[0]["product_id"] == ""
@@ -307,6 +325,7 @@ def test_closing_a_questionnaire_asks_about_typed_answers_and_forgets_the_fill(
     page: Page, tmp_path: Path, availo: products.Product, answers_from_availo: None
 ) -> None:
     page.goto("/workbench")
+    page.select_option("#formProduct", "general")  # plan 029 (D-022): reading waits for a choice
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     page.click("#extractBtn")
     questions = page.get_by_role("textbox", name="Type a question")
@@ -341,6 +360,8 @@ def test_closing_a_questionnaire_asks_about_typed_answers_and_forgets_the_fill(
 
     page.click("#addQuestionBtn")
     questions.last.fill("Do you encrypt backups?")
+    expect(page.locator("#answerBtn")).to_be_disabled()  # plan 029 (D-022): Close went back to "choose…"
+    page.select_option("#formProduct", "general")
     page.click("#answerBtn")
     expect(page.locator("#results .answer")).to_have_count(1, timeout=15_000)
     expect(page.locator("#formFilled")).to_be_hidden()  # the closed file's fill is not shown again
@@ -353,6 +374,7 @@ def test_close_waits_for_a_request_about_the_questionnaire(
 ) -> None:
     """A reply arriving after Close opened the closed questionnaire again."""
     page.goto("/workbench")
+    page.select_option("#formProduct", "general")  # plan 029 (D-022): reading waits for a choice
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     page.click("#extractBtn")
     page.click("#answerBtn")
@@ -377,6 +399,7 @@ def test_closing_while_typed_questions_are_reworded_drops_what_comes_back(
     away. Their reply, arriving after, went on to the questionnaire's own step, read the closed
     one's id, and said "Cannot read properties of null (reading 'id')" in the status line."""
     page.goto("/workbench")
+    page.select_option("#formProduct", "general")  # plan 029 (D-022): reading waits for a choice
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)

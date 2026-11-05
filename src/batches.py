@@ -14,13 +14,18 @@ is the difference between this and `runs`, which records one finished pass.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from src import store
+from src import store, uploads
 from src.forms.model import DetectedForm
 from src.identity import User
+from src.logs import get_logger
 from src.models import AnsweredQuestion
+
+logger = get_logger(__name__)
 
 SUBJECT = "batch"
 """What `events.record(subject_type=...)` should say about a batch."""
@@ -164,7 +169,12 @@ def claimed_sources(team_id: str) -> dict[str, str]:
 
 
 def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> list[dict]:
-    """One person's questionnaires, newest first, with how far each has got.
+    """One person's questionnaires, last changed first, with how far each has got.
+
+    Last changed is `updated_at`, which every write to a questionnaire or its
+    answers moves (plan 029, 1.1): the one somebody was working on is the one
+    they look for, whenever it was uploaded. Opening, filling and downloading
+    change nothing, so they do not move it.
 
     `actor_email=None` lists the team's, which nothing a person clicks asks for.
     """
@@ -180,9 +190,9 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
     if actor_email is not None:
         sql += " AND b.actor_email = ?"
         params.append(actor_email)
-    # rowid breaks the tie: `created_at` is accurate to the second, and two
+    # rowid breaks the tie: `updated_at` is accurate to the second, and two
     # files uploaded together came back in an arbitrary order without it.
-    sql += " GROUP BY b.batch_id ORDER BY b.created_at DESC, b.rowid DESC LIMIT ?"
+    sql += " GROUP BY b.batch_id ORDER BY b.updated_at DESC, b.rowid DESC LIMIT ?"
     params.append(max(1, limit))
     rows = conn.execute(sql, params).fetchall()
     return [
@@ -198,6 +208,59 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
         }
         for row in rows
     ]
+
+
+def same_upload(team_id: str, actor_email: str, content: bytes) -> list[dict[str, Any]]:
+    """This person's questionnaires read from a file with exactly these bytes, last changed first.
+
+    Uploading the same file again made a second, empty questionnaire beside
+    the one with the answers (plan 029, 1.2). Matched against the files still
+    on disk, whatever they are called -- a browser's "vendor (1).xlsx" is the
+    same file -- so nothing new is stored. A file the storage limit removed
+    matches nothing, and opening it again makes a new questionnaire, as before.
+
+    `answered` is counted as `recent` counts it, so the two agree; the server's
+    path to the file is not in what is returned.
+
+    One nothing was read from is not offered. A Word file written as prose
+    makes such a questionnaire on every read, and is then read as text;
+    offered, it was "0 of 0 answered", and opening it read nothing (plan 029's
+    review). Reading the file again is the only way on with it.
+    """
+    rows = (
+        store.connect()
+        .execute(
+            """
+        SELECT b.batch_id, b.source_name, b.source_path, b.detected, b.product_id,
+               b.created_at, b.updated_at, COUNT(a.question_id) AS answered
+        FROM form_batches b
+        LEFT JOIN batch_answers a ON a.batch_id = b.batch_id
+        WHERE b.team_id = ? AND b.actor_email = ?
+        GROUP BY b.batch_id ORDER BY b.updated_at DESC, b.rowid DESC
+        """,
+            (team_id, actor_email),
+        )
+        .fetchall()
+    )
+    found = []
+    for row in rows:
+        if not uploads.holds(Path(row["source_path"]), content):
+            continue
+        questions = len(DetectedForm.model_validate_json(row["detected"]).questions)
+        if not questions:
+            continue
+        found.append(
+            {
+                "id": row["batch_id"],
+                "source_name": row["source_name"],
+                "product_id": row["product_id"],
+                "answered": row["answered"],
+                "questions": questions,
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+        )
+    return found
 
 
 def save_answers(batch_id: str, answers: list[AnsweredQuestion], *, edited_by: str = "") -> None:
@@ -226,11 +289,36 @@ def save_answers(batch_id: str, answers: list[AnsweredQuestion], *, edited_by: s
         conn.execute("UPDATE form_batches SET updated_at = ? WHERE batch_id = ?", (now, batch_id))
 
 
+def saver(batch_id: str) -> Callable[[AnsweredQuestion], None]:
+    """Save one answer of a run the moment it is drafted (plan 029).
+
+    A run's answers were saved only when the whole run ended, so a large
+    questionnaire cut short -- a restart, a crash -- lost every answer it had
+    paid for. A failure here is logged and nothing more: the run's own last
+    save stores the answer again.
+    """
+
+    def save(answer: AnsweredQuestion) -> None:
+        try:
+            save_answers(batch_id, [answer])
+        except Exception:  # noqa: BLE001 - the run's last save stores it again
+            logger.exception("batches.save_failed", batch_id=batch_id, question_id=answer.question.id)
+
+    return save
+
+
 def answers(batch_id: str) -> dict[str, AnsweredQuestion]:
     """Everything answered so far, by question id."""
     conn = store.connect()
     rows = conn.execute("SELECT question_id, payload FROM batch_answers WHERE batch_id = ?", (batch_id,)).fetchall()
     return {row["question_id"]: AnsweredQuestion.model_validate_json(row["payload"]) for row in rows}
+
+
+def saved_at(batch_id: str) -> dict[str, str]:
+    """When each answer was last saved, by question id (`store.utcnow`, comparable as text)."""
+    conn = store.connect()
+    rows = conn.execute("SELECT question_id, answered_at FROM batch_answers WHERE batch_id = ?", (batch_id,)).fetchall()
+    return {row["question_id"]: row["answered_at"] for row in rows}
 
 
 def edited_by(batch_id: str) -> dict[str, str]:

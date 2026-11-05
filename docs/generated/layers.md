@@ -10,11 +10,12 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
+- **Modules:** `src`, `src.busy`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
 
 | Module | What it is |
 |---|---|
 | `src/__init__.py` | Agentic assessment answering: ingest guidelines and past answers, fill new assessments. |
+| `src/busy.py` | Which questionnaires are being answered right now: one run at a time on each. |
 | `src/chunking.py` | Structure-aware chunking for policy, standards and regulatory documents. |
 | `src/config.py` | Application settings — the single source of truth for configuration. |
 | `src/credentials.py` | Hashing and generating the secrets people type. |
@@ -32,7 +33,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
 
-- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.uploads`, `src.vector_names`, `src.forms.*`
+- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.docx_preview`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.uploads`, `src.vector_names`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
 | Module | What it is |
@@ -40,6 +41,7 @@ Everything that talks to something outside the process: model providers, the emb
 | `src/diagnostics.py` | Read-only diagnostics: can this installation run, and what happened to a request. |
 | `src/docling_client.py` | Client for the Docling conversion service. |
 | `src/documents.py` | PDF and DOCX text extraction. |
+| `src/docx_preview.py` | A Word document as a safe, self-contained HTML page, for the document viewer. |
 | `src/embeddings.py` | Embeddings client. |
 | `src/export_docx.py` | Render an answered assessment as a Word document. |
 | `src/export_pdf.py` | Render an answered assessment as a PDF. |
@@ -108,7 +110,7 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 
 The use cases the web interface, the command line and the chat assistant share.
 
-- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.search`, `src.selection`, `src.service`, `src.tools`
+- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.fill_audit`, `src.search`, `src.selection`, `src.service`, `src.styling`, `src.tools`
 - **Owns:** `langchain`
 
 | Module | What it is |
@@ -118,9 +120,11 @@ The use cases the web interface, the command line and the chat assistant share.
 | `src/agents/assistant_quotes.py` | Whether what an assistant reply sets out as a quotation is in what it could quote from (plan 027, TD-043). |
 | `src/agents/assistant_stopped.py` | What an assistant turn that stopped part way says (plan 027, TD-043). |
 | `src/agents/assistant_turn.py` | What one assistant turn may do (plan 027, TD-043). |
+| `src/fill_audit.py` | Which filled files may hold answers the review gate holds back (plan 029, TD-052, TD-053). |
 | `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
-| `src/selection.py` | Which questions an operation applies to, and when an answer counts as settled. |
+| `src/selection.py` | Which questions an operation applies to, when an answer counts as settled, and what is written. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |
+| `src/styling.py` | A person's preferences, applied to freshly drafted answers (the house style). |
 | `src/tools.py` | The operations the interface performs, and the chat assistant calls. |
 
 ## 6. interfaces
@@ -138,6 +142,7 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/admin.py` | The Access panel's routes: people, teams and access codes. Administrators only. |
 | `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
 | `src/routes/chat.py` | The assistant's routes: conversations, and one exchange at a time. |
+| `src/routes/forms.py` | A questionnaire's routes, moving here from `src/api.py` (plan 029). |
 | `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021). |
 | `src/routes/memory.py` | The answer memory's routes: the shared memory, or a product's (plan 022). |
 | `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |
@@ -157,4 +162,3 @@ Each is on `harness/arch-allowlist.toml` against a tech-debt item, and may only 
 | ARCH-LAYER | `src.knowledge` | `src.answer_memory` | TD-007 |
 | ARCH-OWNER | `src.config` | `phoenix` | TD-009 |
 | ARCH-OWNER | `src.config` | `openinference` | TD-009 |
-| ARCH-OWNER | `src.service` | `docx` | TD-019 |
