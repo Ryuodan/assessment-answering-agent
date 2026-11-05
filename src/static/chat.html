@@ -112,12 +112,16 @@
   }
   .side-head .spacer { flex: 1; }
   .side-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+  /* A row is two sibling buttons: the conversation, and Forget beside it. */
+  .convo-row { display: flex; align-items: flex-start; border-radius: var(--radius-sm); }
+  .convo-row:hover { background: var(--surface); }
+  .convo-row.on { background: var(--accent-soft); }
   .convo {
-    display: flex; align-items: flex-start; gap: 6px; width: 100%;
+    display: flex; align-items: flex-start; gap: 6px; flex: 1 1 auto; min-width: 0;
     background: transparent; border: 0; border-radius: var(--radius-sm);
     padding: 8px 10px; text-align: start; color: var(--ink-soft); font-size: 13.5px;
   }
-  .convo:hover { background: var(--surface); color: var(--ink); }
+  .convo-row:hover .convo { color: var(--ink); }
   .convo.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
   .convo .what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .convo .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -134,10 +138,17 @@
   }
   .convo.on .file { background: var(--surface); }
   .convo .file .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .convo .forget { opacity: 0; border: 0; background: transparent; color: var(--ink-faint); padding: 0 4px; }
-  .convo:hover .forget { opacity: 1; }
-  .convo .forget:hover { color: var(--err); }
-  @media (hover: none) { .convo .forget { opacity: 1; } }
+  /* Shown on hover, and whenever the row has the keyboard's focus; always on a
+     touch screen, which is safe now that it asks first. */
+  .convo-row .forget {
+    flex: none; opacity: 0; border: 0; background: transparent; color: var(--ink-faint);
+    padding: 8px 8px; border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .convo-row:hover .forget, .convo-row:focus-within .forget, .convo-row .forget:focus-visible { opacity: 1; }
+  .convo-row .forget:hover { color: var(--err); }
+  @media (hover: none) { .convo-row .forget { opacity: 1; } }
+  .history-status { padding: 4px 14px 10px; }
+  .history-status:empty { display: none; }
 
   .middle { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
@@ -488,6 +499,7 @@
   <aside class="side" id="history">
     <div class="side-head"><span>Conversations</span></div>
     <div class="side-list" id="historyList"></div>
+    <div class="status error history-status" id="historyStatus" role="status"></div>
   </aside>
 
   <section class="middle">
@@ -1626,7 +1638,12 @@
         return;
       }
       data.conversations.forEach((c) => {
+        /* Two buttons side by side, not one inside the other: the ✕ was a span
+           inside the row's button, which no keyboard could reach (plan 029). */
+        const item = document.createElement("div");
+        item.className = "convo-row" + (c.id === conversationId ? " on" : "");
         const row = document.createElement("button");
+        row.type = "button";
         row.className = "convo" + (c.id === conversationId ? " on" : "");
         const what = document.createElement("span");
         what.className = "what";
@@ -1661,19 +1678,38 @@
         }
         const product = Cards.productBadge(c.product_id);
         if (product) what.append(product);
-        const forget = document.createElement("span");
+        row.append(what);
+        row.onclick = () => open(c.id);
+
+        // Forgetting deletes for good, so it asks first and names what it deletes.
+        const title = c.title || "New conversation";
+        const forget = document.createElement("button");
+        forget.type = "button";
         forget.className = "forget";
-        forget.textContent = "✕";
         forget.title = "Forget this conversation";
-        forget.onclick = async (event) => {
-          event.stopPropagation();
-          await request("/api/chat/" + c.id, { method: "DELETE" });
+        forget.setAttribute("aria-label", "Forget “" + title + "”");
+        const cross = document.createElement("span");
+        cross.textContent = "✕";
+        cross.setAttribute("aria-hidden", "true");
+        forget.append(cross);
+        forget.onclick = async () => {
+          const when = said(c.updated_at);
+          if (!confirm("Forget “" + title + "”" + (when ? " (" + when + ")" : "") + "?\n\n" +
+              "The conversation is deleted and cannot be recovered." +
+              (c.source_name ? "\n\nIts questionnaire, " + c.source_name +
+                ", and its answers are kept; open it from the Workbench." : ""))) return;
+          $("historyStatus").textContent = "";
+          try {
+            await request("/api/chat/" + c.id, { method: "DELETE" });
+          } catch (error) {
+            $("historyStatus").textContent = "Could not forget “" + title + "”: " + error.message;
+            return;
+          }
           if (c.id === conversationId) newConversation();
           loadHistory();
         };
-        row.append(what, forget);
-        row.onclick = () => open(c.id);
-        host.append(row);
+        item.append(row, forget);
+        host.append(item);
       });
     } catch (error) {
       host.textContent = error.message;

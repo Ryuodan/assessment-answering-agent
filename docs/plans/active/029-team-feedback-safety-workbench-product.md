@@ -54,7 +54,7 @@ Stage 0, safety fixes:
 - [x] **0.1** Filling from the Workbench writes only what the gate allows. Held answers are reported with their count and reasons, and written only through "Write them in anyway". The FILE_FILLED event records whether the gate was bypassed and how many answers were held. A read-only command lists the questionnaires filled with held answers before the fix.
 - [x] **0.2** Withdrawing an approval puts back the answer's review flag and reasons as they were before the approval.
 - [x] **0.3** Removing a shared knowledge-base document, or clearing a knowledge base, on the Workbench asks first and says what is affected.
-- [ ] **0.4** Forgetting a chat asks first and names it. The control is a real button that can be reached with the keyboard and is not nested in another button.
+- [x] **0.4** Forgetting a chat asks first and names it. The control is a real button that can be reached with the keyboard and is not nested in another button.
 - [ ] **0.5** Edit on a Brief card edits the brief text that is shown.
 
 Stage 1, Workbench relief:
@@ -100,6 +100,7 @@ All stages:
   - 0.2: an approval keeps the review flag and reason it replaced (`before_approval` in the answer's JSON, no migration); withdrawing restores them, and rewording an approved answer withdraws it the same way (TD-053 resolved). 9 tests: 7 unit (5 failing on the old code), 1 API, 1 browser (failing on the old code). `poe gen` added the field to openapi.json; `poe snapshots` added `"before_approval": null` to the two pipeline snapshots and nothing else. `tools.py` ceiling 1,366 to 1,365. New debt found: TD-059 (putting back the draft of an approved answer releases it).
   - 0.1, the Workbench page: Fill sends `include_unreviewed: false` (the request opens the gate only for an exact `true`); the held answers are counted, listed under "Which, and why" with their reasons, and written only through "Write them in anyway", whose confirm counts them; afterwards the first line says how many unconfirmed answers went in. TD-052 resolved. 2 browser tests, both failing on the old page.
   - 0.3: removing a shared document on the Workbench asks first and says that every questionnaire and chat, General and every product, stops using it, and that its file stays. "Remove every policy document" counts them. The chat drawer asks the same question, from one wording in `cards.js` (`Cards.removalQuestion`, `Cards.clearQuestion`). A product's document keeps today's wording. 3 browser tests, all failing on the old pages.
+  - 0.4: each conversation in the chat's history is two sibling buttons, the conversation and Forget (✕, named "Forget “title”" for screen readers). Forget asks first, names the conversation and its time, says it cannot be recovered and that its questionnaire and answers are kept; a failed delete says so under the list. The ✕ shows on hover, on keyboard focus, and always on touch screens. 3 browser tests in `tests/browser/test_chat_history.py`, all failing on the old page; the history width test and the five tests that read the rows pass unchanged.
 
 ## Decision log
 
@@ -182,3 +183,10 @@ Use a local copy, not the team's data.
 2. Click "Remove every policy document". The question says how many ("the 1 policy document", "all 12 policy documents"). Click Cancel.
 3. On the chat page, open the knowledge-base drawer and click "remove" on a shared document. You see the same question. Click Cancel.
 4. Choose a product in the selector and remove one of its documents. The question names the product and says its file is deleted too, as before.
+
+### 0.4 Forgetting a chat asks first
+
+1. Open the chat. In the history list, point at a conversation: an ✕ appears at its right.
+2. Click ✕. A question names the conversation (and its file, if it has one) and says it cannot be recovered. Click Cancel: it is still there. Click ✕ again and OK: it is gone.
+3. With the keyboard: click a conversation, then press Tab. The ✕ of that row shows, highlighted. Press Enter: the same question. Click Cancel.
+4. On a phone or tablet the ✕ is always shown, and tapping it asks first.
