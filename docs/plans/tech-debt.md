@@ -466,3 +466,16 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** seen 2026-10-20 in plan 028's rehearsal. Deleting a product dropped its Chroma collection, its embeddings and its rows in `chroma.sqlite3`. Chroma left the collection's HNSW segment folder in `chroma_db/`: 4 files, about 424 KB, vectors and labels only, no text. The local data also holds 14 older unreferenced segment folders, dated 2026-10-05.
 - **Impact:** disk space, and vectors of deleted documents remain until removed. The text of those documents is gone.
 - **Fix:** after `delete_collection`, remove segment folders that `chroma.sqlite3` no longer references, with the app stopped or inside the delete. Or sweep them in the storage task.
+
+## TD-052: The Workbench's Fill writes held-back answers into the customer's file
+
+- **What:** found 2026-11-05 by the review of the team's feedback, and confirmed in the code. `index.html` sets `$("fillFormBtn").onclick = fillTheForm`. The click event therefore arrives as `includeUnreviewed`, and the request sends `include_unreviewed: true` on every click. The handler dates from 2026-09-07 (`cef554a`), before the gate existed, so every Workbench fill has bypassed the gate since the gate came in on 2026-09-09 (`fd1c01f`). The chat's Fill sends `false`.
+- **Impact:**
+  - Every file filled from the Workbench also holds the answers the review gate holds back. Those are flagged or low-confidence answers: on the held-out set, 76.2% agreement and 11 of 12 contradictions, against 95.8% and 1 for the answers the gate lets through.
+  - The FILE_FILLED event then records `held_back=0`, so the logs do not show it.
+- **Fix:** plan 029, approved by the user.
+
+## TD-053: Withdrawing an approval leaves the answer released
+
+- **What:** found 2026-11-05 by the feedback review. Approving clears `needs_review`, and withdrawing the approval does not put it back. A held answer that was approved and then withdrawn is written to the file as if confident.
+- **Fix:** plan 029.
