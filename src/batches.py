@@ -16,8 +16,9 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from src import store
+from src import store, uploads
 from src.forms.model import DetectedForm
 from src.identity import User
 from src.models import AnsweredQuestion
@@ -202,6 +203,48 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
             "product_id": row["product_id"],
         }
         for row in rows
+    ]
+
+
+def same_upload(team_id: str, actor_email: str, content: bytes) -> list[dict[str, Any]]:
+    """This person's questionnaires read from a file with exactly these bytes, last changed first.
+
+    Uploading the same file again made a second, empty questionnaire beside
+    the one with the answers (plan 029, 1.2). Matched against the files still
+    on disk, whatever they are called -- a browser's "vendor (1).xlsx" is the
+    same file -- so nothing new is stored. A file the storage limit removed
+    matches nothing, and opening it again makes a new questionnaire, as before.
+
+    `answered` is counted as `recent` counts it, so the two agree; the server's
+    path to the file is not in what is returned.
+    """
+    rows = (
+        store.connect()
+        .execute(
+            """
+        SELECT b.batch_id, b.source_name, b.source_path, b.detected, b.product_id,
+               b.created_at, b.updated_at, COUNT(a.question_id) AS answered
+        FROM form_batches b
+        LEFT JOIN batch_answers a ON a.batch_id = b.batch_id
+        WHERE b.team_id = ? AND b.actor_email = ?
+        GROUP BY b.batch_id ORDER BY b.updated_at DESC, b.rowid DESC
+        """,
+            (team_id, actor_email),
+        )
+        .fetchall()
+    )
+    return [
+        {
+            "id": row["batch_id"],
+            "source_name": row["source_name"],
+            "product_id": row["product_id"],
+            "answered": row["answered"],
+            "questions": len(DetectedForm.model_validate_json(row["detected"]).questions),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+        if uploads.holds(Path(row["source_path"]), content)
     ]
 
 

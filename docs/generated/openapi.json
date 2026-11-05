@@ -736,7 +736,7 @@
     "/api/forms": {
       "post": {
         "summary": "Open Questionnaire",
-        "description": "Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.",
+        "description": "Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.\n\nNothing is answered here. The point of the separation is that a person sees\nwhich sheets were used, which were skipped and why, and what each column was\ntaken to be, *before* a run that costs minutes.\n\n`if_already_open=\"ask\"`: when this person already has questionnaires read\nfrom a file with exactly these bytes, nothing is saved, read or created,\nand the answer is `{\"already_open\": [...]}`, last changed first, for them to\nopen one or start fresh (plan 029, 1.2). \"new\", the default, opens a new\nquestionnaire whatever there is, as it always did.",
         "operationId": "open_questionnaire_api_forms_post",
         "requestBody": {
           "required": true,
@@ -775,6 +775,7 @@
       },
       "get": {
         "summary": "List Questionnaires",
+        "description": "One person's questionnaires, last changed first.",
         "operationId": "list_questionnaires_api_forms_get",
         "parameters": [
           {
@@ -4148,6 +4149,12 @@
             "type": "string",
             "title": "Product",
             "default": ""
+          },
+          "if_already_open": {
+            "type": "string",
+            "pattern": "^(new|ask)$",
+            "title": "If Already Open",
+            "default": "new"
           }
         },
         "type": "object",

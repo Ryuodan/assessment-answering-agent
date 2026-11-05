@@ -329,6 +329,45 @@ def test_pick_up_lists_every_questionnaire_last_changed_first(
     expect(offered.first).to_have_attribute("title", re.compile("^Last changed "))
 
 
+# --- the same file again offers the questionnaire already open (plan 029, 1.2) ---
+
+
+def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
+    page: Page, tmp_path: Path, answers_yes: None
+) -> None:
+    """The same file again made a second, empty questionnaire beside the one with the answers."""
+    read_and_answer(page, tmp_path)
+    page.click("#closeForm")
+    page.click("#extractBtn")  # the same file, still chosen
+
+    offer = page.locator("#alreadyOpen")
+    expect(offer).to_contain_text("You already have vendor.xlsx")
+    expect(offer).to_contain_text("4 of 4 answered")
+    expect(page.locator("#extractStatus")).not_to_contain_text("Reading")
+    offer.get_by_role("button", name="Open it").click()
+
+    expect(page.locator("#results .answer")).to_have_count(4)
+    expect(offer).to_be_hidden()
+    assert len(batches.recent(TEAM)) == 1
+
+    page.click("#closeForm")
+    page.click("#extractBtn")
+    offer.get_by_role("button", name="Start fresh (for General)").click()
+
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
+    expect(page.locator("#results .answer")).to_have_count(0)
+    expect(offer).to_be_hidden()
+    assert [form["answered"] for form in batches.recent(TEAM)] == [0, 4]
+
+    page.click("#closeForm")
+    page.click("#extractBtn")
+    expect(offer).to_contain_text("You already have 2 questionnaires read from vendor.xlsx")
+    offer.get_by_role("button", name="Cancel").click()
+    expect(offer).to_be_hidden()
+    expect(page.locator("#extractStatus")).to_contain_text("Nothing was opened.")
+    assert len(batches.recent(TEAM)) == 2
+
+
 # --- leaving with unsaved work asks first (plan 029, 1.5) ------------------------
 
 

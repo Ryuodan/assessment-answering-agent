@@ -550,3 +550,9 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Reproduced with a clock that ticks one second per call: the test's own assertion fails.
 - **Impact:** a flaky gate test, more likely under load. The product behaves as designed.
 - **Fix (needs approval):** pin `store.utcnow` in the test, or give the two shared answers the same `approved_on`, so that the test sets up the case where nothing says which answer is current.
+
+## TD-062: The chat opens the same file again as a second questionnaire
+
+- **What:** found 2026-11-05 while building plan 029's 1.2. The Workbench now asks before opening a file this person already has as a questionnaire (`if_already_open="ask"`). The chat's "+" attach still calls `tools.open_form` with no such check, so attaching the same file again makes a second, empty questionnaire, as the Workbench did before.
+- **Impact:** a chat that is sent the file again works on an empty copy, and "Or pick up" lists both.
+- **Fix (needs approval):** the same check in the chat, with the same choice offered; the design puts it with the chat parity work (Stage 5).

@@ -60,7 +60,7 @@ Stage 0, safety fixes:
 Stage 1, Workbench relief:
 
 - [x] **1.1** Reloading the page reopens the open questionnaire. "Or pick up" lists every questionnaire of the person, most recently used first.
-- [ ] **1.2** Uploading a file the person already has as a questionnaire offers to open it, or to start fresh.
+- [x] **1.2** Uploading a file the person already has as a questionnaire offers to open it, or to start fresh.
 - [ ] **1.3** A "Needs review" filter with counts shows first the answers the gate holds back, plus failed ones. A fixed bar keeps Fill and the counts in reach.
 - [ ] **1.4** Each answer is saved as it finishes. A second run on a questionnaire that is still being answered is refused. Reopening it shows the progress.
 - [x] **1.5** Leaving the page with an unsaved answer or unsaved typed answers asks first.
@@ -116,6 +116,7 @@ All stages:
   - 1.1: the Workbench writes the open questionnaire into its address (`?q=<id>`) and opens it again at start-up; Close and reading a PDF take it out. Someone else's, or one that is gone, opens nothing and says so. `GET /api/forms` lists last changed first (`updated_at`, which every write moves; no migration), and "Or pick up" lists every questionnaire, up to 500, in a scrolling box when there are more than three, each with when it last changed. 6 tests: 1 API and 4 browser, each failing on the old code, and 1 static guard that the address stays inside the prefix. The existing pick-up, close and deleted-product tests pass unchanged.
   - 1.5: leaving the Workbench asks first (the browser's own "Leave site?") while it holds work only the page has: an edit typed into a card and not yet saved, questions typed beside a file or into a list, or a question in "Ask another question". Nothing is saved on the way out. 4 browser tests: 2 fail on the old page, 2 guard against asking when everything is saved.
   - Room for 1.2 (R1, behaviour-neutral, its own commit): opening, listing and reading a questionnaire (`POST /api/forms`, `GET /api/forms`, `GET /api/forms/{id}`) moved into `src/routes/forms.py`, as a second router included where the routes were. `poe gen` left `openapi.json` and `api.md` byte-identical; 195 existing tests over the routes, the error responses and the pages pass unchanged. `api.py` ceiling 1,264 to 1,225.
+  - 1.2: `POST /api/forms` takes `if_already_open` ("new", the default and today's behaviour, or "ask", which only the Workbench sends; anything else is a 422). With "ask", when this person already has questionnaires read from a file with exactly these bytes, whatever its name, nothing is saved, read or recorded, and the answer lists them (`batches.same_upload`, `uploads.holds`: the size first, then the bytes, against the files still on disk; no migration). The Workbench shows "You already have vendor.xlsx, with 4 of 4 answered…" with Open it, Start fresh (for the product chosen) and Cancel. 9 tests: 8 API (4 failing on the old code, 4 guards: different bytes, someone else's copy, a file the storage limit removed, and "new" still opening a second copy) and 1 browser, failing on the old page. The full browser suite (67) passes. The chat's "+" still opens a second copy (TD-062).
 
 ## Decision log
 
@@ -239,3 +240,13 @@ Use a local copy, not the team's data.
 2. Click outside the box and wait for "Your edit is saved". Press F5: no question this time, and the questionnaire opens again (1.1).
 3. Type a question of your own with "+ Add a question" and press F5: the browser asks first.
 4. With only a questionnaire's own rows, all answered and nothing being edited, press F5: no question.
+
+### 1.2 The same file again offers the questionnaire you already have
+
+1. Upload a questionnaire, answer some rows, then click "Close questionnaire".
+2. Upload the same file again and click "Read questions from file". A box says you already have it, with how many are answered and when it last changed.
+3. Click "Open it". Your answers are there, and no second copy appears under "Or pick up".
+4. Upload it again and click "Start fresh (for …)". A new, empty copy opens for the product chosen, and "Or pick up" now lists two.
+5. Rename the file on your computer and upload it: it is still recognised. With two copies, the box lists both, each with its own "Open it".
+6. Upload a different file with the same name: it opens normally, with no box.
+7. Click Cancel in the box: nothing is opened.

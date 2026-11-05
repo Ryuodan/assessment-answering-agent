@@ -43,7 +43,7 @@ def answers_yes(monkeypatch):
     monkeypatch.setattr("src.tools.service.answer_questions", fake)
 
 
-def _upload(client, path, name=None):
+def _upload(client, path, name=None, **fields):
     with open(path, "rb") as handle:
         return client.post(
             "/api/forms",
@@ -54,6 +54,7 @@ def _upload(client, path, name=None):
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             },
+            data=fields,
         )
 
 
@@ -166,6 +167,112 @@ def test_questionnaires_are_listed_by_last_change(client, tmp_path, clock):
 
 def test_an_unknown_questionnaire_is_a_404(client):
     assert client.get("/api/forms/nope").status_code == 404
+
+
+# --- the same file again (plan 029, 1.2) -------------------------------------
+
+
+def _my_uploads() -> list[str]:
+    folder = settings.user_upload_dir(settings.default_team, identity.LOCAL_EMAIL)
+    return sorted(path.name for path in folder.iterdir()) if folder.is_dir() else []
+
+
+def test_the_same_file_again_with_ask_offers_the_questionnaire_already_open(client, tmp_path, answers_yes):
+    """Uploading it again made a second, empty questionnaire beside the one with the answers."""
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+    client.post(f"/api/forms/{first['id']}/answer", json={})
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    [offered] = body["already_open"]
+    assert offered["id"] == first["id"] and offered["source_name"] == "vendor.xlsx"
+    assert offered["answered"] == 4 and offered["questions"] == 4
+    assert offered["product_id"] == "" and offered["updated_at"] >= offered["created_at"]
+    assert "source_path" not in offered, "a server's paths are not shown to people"
+    assert len(client.get("/api/forms").json()["forms"]) == 1
+
+
+def test_a_renamed_copy_is_recognised_by_its_bytes(client, tmp_path):
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+    kept = _my_uploads()
+
+    body = _upload(client, workbook, "copy of vendor.xlsx", if_already_open="ask").json()
+
+    assert [offered["id"] for offered in body["already_open"]] == [first["id"]]
+    assert _my_uploads() == kept, "no new file in the person's folder"
+
+
+def test_the_check_reads_nothing_and_keeps_nothing(client, tmp_path, monkeypatch):
+    from src import events
+
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    _upload(client, workbook)
+    kept = _my_uploads()
+    opened = len(events.recent(settings.default_team, kind=events.FORM_OPENED))
+    monkeypatch.setattr("src.tools.open_form", lambda *a, **k: pytest.fail("the file was read again"))
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    assert body["already_open"]
+    assert len(events.recent(settings.default_team, kind=events.FORM_OPENED)) == opened
+    assert len(client.get("/api/forms").json()["forms"]) == 1
+    assert _my_uploads() == kept
+
+
+def test_different_bytes_under_the_same_name_are_a_new_questionnaire(client, tmp_path):
+    _upload(client, shapes.simple(tmp_path / "vendor.xlsx"))
+    (tmp_path / "other").mkdir()
+    other = shapes.status_and_comment(tmp_path / "other" / "vendor.xlsx")
+
+    body = _upload(client, other, if_already_open="ask").json()
+
+    assert "already_open" not in body and body["counts"]["questions"]
+    assert len(client.get("/api/forms").json()["forms"]) == 2
+
+
+def test_someone_elses_copy_of_the_file_is_not_offered(client, tmp_path):
+    from src import service
+
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    bob = identity.User(email="bob@example.test", team_id=settings.default_team)
+    saved = service.save_upload("vendor.xlsx", workbook.read_bytes(), bob.team_id, owner=bob.email)
+    tools.open_form(bob, saved)
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    assert "already_open" not in body and body["counts"]["questions"] == 4
+
+
+def test_a_questionnaire_whose_upload_is_gone_is_not_offered(client, tmp_path):
+    """The storage limit removes old files and keeps their questionnaires: a file that is gone matches nothing."""
+    from src import batches
+
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+    batches.load(first["id"]).source_path.unlink()
+
+    body = _upload(client, workbook, if_already_open="ask").json()
+
+    assert "already_open" not in body and body["id"] != first["id"]
+
+
+def test_start_fresh_still_makes_a_new_questionnaire(client, tmp_path):
+    """Without asking, or with "new", the same file opens again as a new questionnaire, as it always did."""
+    workbook = shapes.simple(tmp_path / "vendor.xlsx")
+    first = _upload(client, workbook).json()
+
+    again = _upload(client, workbook).json()
+    fresh = _upload(client, workbook, if_already_open="new").json()
+
+    assert len({first["id"], again["id"], fresh["id"]}) == 3
+    assert len(client.get("/api/forms").json()["forms"]) == 3
+
+
+def test_an_unknown_choice_for_a_file_already_open_is_a_422(client, tmp_path):
+    response = _upload(client, shapes.simple(tmp_path / "vendor.xlsx"), if_already_open="maybe")
+    assert response.status_code == 422
 
 
 # --- answering -------------------------------------------------------------

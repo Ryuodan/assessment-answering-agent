@@ -377,6 +377,17 @@
     border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-sunken);
   }
   .form-recent .recent-list button { text-align: start; }
+  /* The same file again (plan 029, 1.2): open the questionnaire already read
+     from it, or start fresh. In the page, not a modal: the person may want to
+     look at "Or pick up" before choosing. */
+  .already-open {
+    margin-top: 12px; padding: 12px 14px; font-size: 13.5px; color: var(--ink);
+    border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-soft);
+  }
+  .already-open[hidden] { display: none; }
+  .already-open p { margin: 0; }
+  .already-open .match { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .already-open .row { margin-top: 10px; }
   .qn-summary {
     display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
     padding: 12px 0 4px; font-size: 13.5px;
@@ -698,6 +709,7 @@
         Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
         <span class="chosen" id="assessmentChosen"></span>
       </label>
+      <div class="already-open" id="alreadyOpen" role="group" aria-label="You already have this file" hidden></div>
       <div class="row">
         <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
       </div>
@@ -2533,15 +2545,21 @@
   async function extractQuestions() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
-    const file = input.files[0];
+    await readQuestionnaire(input.files[0], false);
+  }
+
+  /* `fresh` opens a new questionnaire even when this person already has one
+     read from the same file: their "Start fresh" (plan 029, 1.2). */
+  async function readQuestionnaire(file, fresh) {
     const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+    hideAlreadyOpen();
 
     $("extractBtn").disabled = true;
     setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
 
     let why = "";  // the questionnaire reader's own reason, when it found nothing
     try {
-      const form = FILLABLE.includes(suffix) ? await loadAsForm(file, suffix) : null;
+      const form = FILLABLE.includes(suffix) ? await loadAsForm(file, suffix, { fresh }) : null;
       if (form && form.opened) return;
       why = form ? form.why : "";
       await loadAsText(file);
@@ -2686,10 +2704,13 @@
      back to it opened the status with "not supported, upload .pdf or .docx"
      above the reader's real reason. So a spreadsheet is opened whatever the
      reader found, and its "no questions were read, and why" is what is said. */
-  async function loadAsForm(file, suffix) {
+  async function loadAsForm(file, suffix, { fresh = false } = {}) {
     const body = new FormData();
     body.append("file", file);
     body.append("product", formProduct());
+    // Asked first, unless the person chose to start fresh: the same file again
+    // made a second, empty questionnaire beside the one with their answers.
+    body.append("if_already_open", fresh ? "new" : "ask");
     let batch;
     try {
       batch = await request("/api/forms", { method: "POST", body });
@@ -2700,11 +2721,72 @@
       if (SPREADSHEETS.includes(suffix) || error.code === "product_not_found") throw error;
       return { opened: false, why: "" };
     }
+    if (batch.already_open) {
+      offerAlreadyOpen(file, batch.already_open);
+      return { opened: true, why: "" };  // nothing more to try: the person chooses
+    }
     if (!batch.counts.questions && !SPREADSHEETS.includes(suffix)) {
       return { opened: false, why: (batch.warnings || []).join("\n") };
     }
     await adoptBatch(batch);
     return { opened: true, why: "" };
+  }
+
+  /* This person already has questionnaires read from a file with these exact
+     bytes, whatever it is called now (plan 029, 1.2). Nothing was kept or read:
+     open one of them, or start fresh for the product chosen now. */
+  function hideAlreadyOpen() {
+    $("alreadyOpen").hidden = true;
+    $("alreadyOpen").replaceChildren();
+  }
+
+  function offerAlreadyOpen(file, matches) {
+    const panel = $("alreadyOpen");
+    panel.replaceChildren();
+    setStatus($("extractStatus"), "");
+    const day = (when) => new Date(when).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    const progress = (match) => match.answered + " of " + match.questions + " answered, last changed " +
+      day(match.updated_at || match.created_at);
+    const named = (text) => Object.assign(document.createElement("strong"), { textContent: text });
+    const lead = document.createElement("p");
+    if (matches.length === 1) {
+      lead.append("You already have ", named(matches[0].source_name), ", with " + progress(matches[0]) +
+        ". Open it, or start fresh?");
+    } else {
+      lead.append("You already have " + matches.length + " questionnaires read from ", named(file.name),
+        ". Open one of them, or start fresh?");
+    }
+    panel.append(lead);
+    matches.forEach((match) => {
+      const row = document.createElement("div");
+      row.className = "match";
+      if (matches.length > 1) row.append(match.source_name + ": " + progress(match));
+      const badge = Cards.productBadge(match.product_id);
+      if (badge) row.append(badge);
+      const open = document.createElement("button");
+      open.textContent = "Open it";
+      open.onclick = () => { hideAlreadyOpen(); reopenForm(match.id); };
+      row.append(open);
+      panel.append(row);
+    });
+    const choices = document.createElement("div");
+    choices.className = "row";
+    const product = teamProducts.find((p) => p.id === formProduct());
+    const fresh = document.createElement("button");
+    fresh.className = "ghost";
+    fresh.textContent = "Start fresh (for " + (product ? product.name : "General") + ")";
+    fresh.title = "Read the file again as a new questionnaire, with no answers";
+    fresh.onclick = () => readQuestionnaire(file, true);
+    const cancel = document.createElement("button");
+    cancel.className = "quiet";
+    cancel.textContent = "Cancel";
+    cancel.onclick = () => {
+      hideAlreadyOpen();
+      setStatus($("extractStatus"), "Nothing was opened.", "ok");
+    };
+    choices.append(fresh, cancel);
+    panel.append(choices);
+    panel.hidden = false;
   }
 
   /* `quiet` is for a correction rather than a load: the batch is rebuilt and
@@ -2721,6 +2803,7 @@
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
     rememberInAddress(batch.id);
+    hideAlreadyOpen();
     sourceName = batch.source_name || sourceName;
     paintReadOnly();
     showFormProduct(batch.product_id || "");
@@ -3629,6 +3712,9 @@
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
   fileField("assessmentInput", "assessmentChosen", "extractBtn");
+  // Another file chosen: the offer was about the last one.
+  $("assessmentInput").addEventListener("change", hideAlreadyOpen);
+  $("assessmentInput").closest("label.file").addEventListener("drop", hideAlreadyOpen);
 
   $("guidelinesBtn").onclick = ingestHandler(
     guidelinesInput, "/api/knowledge/guidelines", $("guidelinesBtn"), $("guidelinesStatus"), "guideline(s)");
@@ -3859,6 +3945,7 @@
     };
     formBatch = null;
     rememberInAddress("");
+    hideAlreadyOpen();
     questions = [];
     result = null;
     Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);

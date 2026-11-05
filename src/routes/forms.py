@@ -18,7 +18,10 @@ from starlette.concurrency import run_in_threadpool
 
 from src import batches, forms, products, service, tools
 from src.identity import User
+from src.logs import get_logger
 from src.routes.auth import current_user
+
+logger = get_logger(__name__)
 
 opening = APIRouter()
 router = APIRouter()
@@ -26,13 +29,22 @@ router = APIRouter()
 
 @opening.post("/api/forms")
 async def open_questionnaire(
-    file: UploadFile = File(...), product: str = Form(""), user: User = Depends(current_user)
+    file: UploadFile = File(...),
+    product: str = Form(""),
+    if_already_open: str = Form("new", pattern="^(new|ask)$"),
+    user: User = Depends(current_user),
 ) -> dict[str, Any]:
     """Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it.
 
     Nothing is answered here. The point of the separation is that a person sees
     which sheets were used, which were skipped and why, and what each column was
     taken to be, *before* a run that costs minutes.
+
+    `if_already_open="ask"`: when this person already has questionnaires read
+    from a file with exactly these bytes, nothing is saved, read or created,
+    and the answer is `{"already_open": [...]}`, last changed first, for them to
+    open one or start fresh (plan 029, 1.2). "new", the default, opens a new
+    questionnaire whatever there is, as it always did.
     """
     # Checked against what `forms` can read, not against the knowledge base's
     # list: the two accept different things. Policies come in as PDF or Word;
@@ -45,7 +57,13 @@ async def open_questionnaire(
             f"Supported: {', '.join(forms.SUPPORTED)}."
         )
     product_id = products.chosen(user.team_id, product)  # before the file is kept
-    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
+    content = await file.read()
+    if if_already_open == "ask":
+        matches = batches.same_upload(user.team_id, user.email, content)
+        if matches:
+            logger.info("forms.already_open", matches=len(matches))
+            return {"already_open": matches}
+    path = service.save_upload(name, content, user.team_id, owner=user.email)
     # In a thread: reading a workbook is a CPU-bound XML parse, and under the
     # assisted and agent strategies it is also a network call. Either way it is
     # not something to do on the event loop of a server answering other people.
@@ -55,6 +73,7 @@ async def open_questionnaire(
 
 @opening.get("/api/forms")
 def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> dict[str, Any]:
+    """One person's questionnaires, last changed first."""
     return {"forms": batches.recent(user.team_id, actor_email=user.email, limit=limit)}
 
 

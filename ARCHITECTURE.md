@@ -218,7 +218,10 @@ question/answer pairs, `knowledge.add_prior_answers`, and
 `answer_memory.adopt_file`.
 
 **Answering a questionnaire.** `POST /api/forms` saves the file and calls
-`tools.open_form`, for a `product` or General. That reads it (`forms.reading`, by default the guarded
+`tools.open_form`, for a `product` or General. With `if_already_open="ask"`
+(the Workbench) it first compares the bytes with this person's questionnaire
+files still on disk (`batches.same_upload`), and on a match saves and reads
+nothing and returns `already_open`, for them to open one or start fresh. That reads it (`forms.reading`, by default the guarded
 agent strategy) into a `Batch` of questions with write targets; nothing is
 answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 `service.answer_questions`, which runs the LangGraph pipeline once per question
