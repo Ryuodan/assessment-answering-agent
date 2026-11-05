@@ -156,6 +156,8 @@ All stages:
     - New steps: 2.1 steps 10 and 11 (the box follows the Product box) and 2.2 step 7 (the screen reader).
   - TD-066 (the server still answers as General when no product is sent) stays open, as decided. Its entry now records this gap in the page's own guard. ARCHITECTURE.md and D-022 say where the check is.
   - 3 browser tests added and 1 extended, each failing on the old pages; no other test changed. Pages only: no Python, API, setting, layer or size ceiling changed, and the mypy baseline stays at 237.
+  - `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,199 passed and 2 skipped, browser 110).
+  - Stage 2 waits for the user's test.
 
 ## Decision log
 
