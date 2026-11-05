@@ -226,9 +226,6 @@ src/rewrite.py: [no-untyped-def] Function is missing a type annotation
 src/rewrite.py: [type-arg] Missing type arguments for generic type "WeakKeyDictionary"
 src/runs.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/service.py: [arg-type] Argument "team_id" to "adopt_file" has incompatible type "str | None"; expected "str"
-src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
-src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
-src/service.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/service.py: [type-arg] Missing type arguments for generic type "dict"
 src/service.py: [type-arg] Missing type arguments for generic type "dict"
 src/service.py: [type-arg] Missing type arguments for generic type "dict"

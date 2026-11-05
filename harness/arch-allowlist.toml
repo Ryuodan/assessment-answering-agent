@@ -44,7 +44,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/service.py"
-max_lines = 591
+max_lines = 462
 debt = "TD-006"
 
 [[size]]
@@ -102,11 +102,6 @@ debt = "TD-009"
 module = "src.config"
 library = "openinference"
 debt = "TD-009"
-
-[[owner]]
-module = "src.service"
-library = "docx"
-debt = "TD-019"
 
 # Exceptions outside the AppError hierarchy (harness/error_rules.py), plan 004.
 [[error]]

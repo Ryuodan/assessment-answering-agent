@@ -178,6 +178,7 @@ or docs and has not been verified by running anything.
 - **Impact:** a library upgrade or replacement touches many modules; no single owner.
 - **Fix:** assign each IO or framework library to one layer and enforce it in `arch` (plan 003).
 - **Partly resolved** 2026-10-05 (plan 003): ownership is enforced (ARCH-OWNER); the one remaining exception, `service` importing `docx` for the Word preview, is allow-listed. `langchain_core` is deliberately not owned (D-012).
+- **Resolved** 2026-11-05 (Claude, plan 029): the Word preview moved out of `service` into `src/docx_preview.py`, in the integrations layer that owns python-docx, behaviour unchanged (`service.docx_preview_html` is still the name its callers use). The `src.service` / `docx` entry is gone from `harness/arch-allowlist.toml`; `tests/test_document_library.py` passes unchanged.
 
 ## TD-020: Commented-out implementation in `src/embeddings.py`
 

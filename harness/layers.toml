@@ -47,6 +47,7 @@ modules = [
     "src.organisation",
     "src.export_pdf",
     "src.export_docx",
+    "src.docx_preview",
     "src.forms.*",
 ]
 

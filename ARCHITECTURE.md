@@ -49,8 +49,7 @@ are deliberately not owned.
 **Exceptions allowed today**, each against a tech-debt item and listed in
 [layers.md](docs/generated/layers.md): `knowledge` imports `answer_memory` and
 `storage` imports `service`, the upward halves of two cycles (TD-007); `config`
-starts the Phoenix tracing libraries (TD-009); `service` renders Word previews
-with python-docx itself (TD-019). Not caught by the layers, because both ends
+starts the Phoenix tracing libraries (TD-009). Not caught by the layers, because both ends
 are in one layer: `forms.xlsx` and `forms.llm_layout` import each other
 (TD-007).
 
