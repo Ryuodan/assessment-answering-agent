@@ -71,7 +71,7 @@ Stage 2, product choice:
 
 All stages:
 
-- [ ] Every fix has a test that fails without it. `uv run poe check` passes. Tech-debt, ARCHITECTURE.md, decisions and the generated docs are updated.
+- [x] Every fix has a test that fails without it. `uv run poe check` passes. Tech-debt, ARCHITECTURE.md, decisions and the generated docs are updated.
 - [x] Each item has a "How to test it yourself" note for the user.
 
 ## Plan
@@ -145,6 +145,7 @@ All stages:
   - Found by the suite and fixed: a choice made before `/api/products` answered was put back to "choose…" when the list arrived, because both pages read the choice before waiting. They read it after now. 2 browser tests (one per page), both failing without the fix.
   - 18 browser tests in the new `tests/browser/test_choosing_a_product_first.py`, each failing on the pages before this stage. Changed on purpose, each saying so in a comment: the existing tests that read a file or send a first message choose first (General where they meant General: the new `tests/browser/choosing.py` helper in `test_workbench.py`, `test_review_filter.py`, `test_answer_card.py` and `test_workbench_status.py`; `test_chat.py` twice); `test_product_choice.py`'s chat test now expects New conversation to choose nothing and offer "Last used: Availo" (plan 024's "keeps the choice" is superseded, D-022); its Close, Clear all and deleted-product tests expect "choose…" and Read or Send disabled, and choose General before going on; `test_deleted_product_work.py` expects a new chat after a deleted product's to wait, with no "Last used" offered.
   - New debt: TD-066 (the server still answers as General when no product is sent). D-022 records the decision and its defaults.
+  - Stage 2 done, waiting for review and the user's test. `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,199 passed and 2 skipped, browser 107). Stage 2 added 18 browser tests and no unit test (no server code changed); `poe gen` left the generated docs unchanged. Every stage of this plan is now built.
 
 ## Decision log
 
