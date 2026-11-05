@@ -800,6 +800,56 @@ const Cards = (window.Cards = {
       "From this product's own knowledge base. The drafter was told it takes precedence over the shared one.");
   }
 
+  /* A product choice on a page (plan 029, 2): the user's rule is no silent
+     General. "" is nothing chosen yet, GENERAL is General chosen on purpose,
+     anything else a product's id. The server still reads "" as General
+     (TD-066), so a page sends serverProduct(choice), and a record's
+     product_id comes back as a choice through choiceOf. When the server
+     learns to refuse a missing product, only serverProduct changes. */
+  const GENERAL = "general";  // never a product's id: those are 12 hex characters (products.add)
+  const GENERAL_LABEL = "General (shared policies only)";
+
+  function serverProduct(choice) { return choice === GENERAL ? "" : choice || ""; }
+  function choiceOf(productId) { return productId || GENERAL; }
+
+  /* General, or a live product the page has listed. A deleted product is
+     never offered, and nor is one the page has not listed yet. */
+  function choosable(choice) {
+    if (choice === GENERAL) return true;
+    const found = product(choice);
+    return Boolean(found && !found.deleted);
+  }
+
+  /* The first of `choices` (most recent first) that can still be chosen, or "". */
+  function lastUsed(choices) {
+    return (choices || []).find((choice) => choice && choosable(choice)) || "";
+  }
+
+  /* A choice as a label: a product's badge, or General's, in the neutral colour. */
+  function choiceTag(choice, title) {
+    if (choice !== GENERAL) return productBadge(choice, title);
+    const tag = document.createElement("span");
+    tag.className = "tag product general";
+    tag.textContent = "General";
+    tag.title = title || "General: answered from the shared policies and answer memory only";
+    return tag;
+  }
+
+  /* "Last used: <label>". One click fills the choice; nothing is chosen until
+     then, because a choice carried over silently is how a questionnaire came
+     to be answered for General, or for yesterday's product, by accident. */
+  function lastUsedButton(choice, onPick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "last-used";
+    button.dataset.choice = choice;
+    const name = choice === GENERAL ? "General" : (product(choice) || {}).name || "";
+    button.append("Last used: ", choiceTag(choice, "Choose " + name));
+    button.title = "Choose " + name + ", the product of your most recent work. Nothing is chosen until you click.";
+    button.onclick = () => onPick(choice);
+    return button;
+  }
+
   /* The source behind each citation, in the citations' order. A citation is a
      locator, and remembered answers approved on one day share one -- "Answer
      memory (2026-10-19)" -- so each is cited, and here takes the next source
@@ -1198,6 +1248,14 @@ const Cards = (window.Cards = {
     product: product,
     productBadge: productBadge,
     ownSourceBadge: ownSourceBadge,
+    GENERAL: GENERAL,
+    GENERAL_LABEL: GENERAL_LABEL,
+    serverProduct: serverProduct,
+    choiceOf: choiceOf,
+    choosable: choosable,
+    lastUsed: lastUsed,
+    choiceTag: choiceTag,
+    lastUsedButton: lastUsedButton,
     openDocumentButton: openDocumentButton,
     canOpenDocument: canOpenDocument,
     markdown: renderMarkdown,

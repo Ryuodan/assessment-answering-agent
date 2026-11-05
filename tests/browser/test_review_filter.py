@@ -17,6 +17,7 @@ from playwright.sync_api import Page, expect
 
 from src.models import AnsweredQuestion
 from tests import forms_fixtures as shapes
+from tests.browser.choosing import choose_general
 
 pytestmark = pytest.mark.browser
 
@@ -73,6 +74,7 @@ def one_held(monkeypatch: pytest.MonkeyPatch) -> None:
 def answered(page: Page, workbook: Path, count: int) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(workbook))
+    choose_general(page)
     page.click("#extractBtn")
     expect(page.locator("#questionList .qrow")).to_have_count(count)
     page.click("#answerBtn")
@@ -232,6 +234,7 @@ def test_a_run_of_the_file_and_a_typed_question_says_where_the_typed_answer_is(
 ) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     expect(page.locator("#questionList .qrow")).to_have_count(4)
     page.click("#addQuestionBtn")
@@ -333,6 +336,7 @@ def test_fill_waits_while_the_run_is_reworded(page: Page, tmp_path: Path, one_he
     could go out with the wording about to change."""
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     expect(page.locator("#questionList .qrow")).to_have_count(4)
     page.fill("#answerStyle", "Shorter.")
@@ -386,6 +390,7 @@ def test_answers_the_file_arrived_with_leave_the_list_open(page: Page, tmp_path:
     """They have no card to review, so the list stays where the work is: "Answer it again" lives there."""
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.already_answered(tmp_path / "last year.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
 
     rows = page.locator("#questionList .qrow")

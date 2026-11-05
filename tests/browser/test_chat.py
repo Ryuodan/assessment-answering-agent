@@ -64,6 +64,7 @@ def test_the_count_does_not_start_again_when_the_answers_are_styled(
     page.goto("/")
     page.set_input_files("#fileInput", str(shapes.status_and_comment(tmp_path / "HR.xlsx")))
     page.fill("#prompt", "Answer it")
+    page.select_option("#productPick", "general")  # plan 029 (D-022): a new chat's first message waits for a choice
     page.click("#send")
     seen = watch_the_turn(page)
 
@@ -94,6 +95,7 @@ def test_editing_a_brief_card_in_the_chat_edits_the_brief(
     page.goto("/")
     page.set_input_files("#fileInput", str(shapes.status_and_comment(tmp_path / "HR.xlsx")))
     page.fill("#prompt", "Answer it")
+    page.select_option("#productPick", "general")  # plan 029 (D-022): a new chat's first message waits for a choice
     page.click("#send")
     pane = page.locator("#answersPane")
     expect(pane.locator(".answer")).to_have_count(4, timeout=30_000)

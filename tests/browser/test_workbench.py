@@ -12,6 +12,7 @@ from src import access_codes, batches, identity, products, tools
 from src.config import settings
 from src.models import AnsweredQuestion
 from tests import forms_fixtures as shapes
+from tests.browser.choosing import choose_general
 from tests.conftest import FakeVectorStore, bare_store
 
 pytestmark = pytest.mark.browser
@@ -85,6 +86,7 @@ def test_a_questionnaire_is_read_answered_and_shown_as_cards(page: Page, tmp_pat
 
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(workbook))
+    choose_general(page)
     page.click("#extractBtn")
     # Each question is an editable box: the list can be corrected before anything is answered.
     listed = page.get_by_role("textbox", name="Type a question")
@@ -120,6 +122,7 @@ def read_and_answer(page: Page, tmp_path: Path) -> Path:
     workbook = shapes.simple(tmp_path / "vendor.xlsx")
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(workbook))
+    choose_general(page)
     page.click("#extractBtn")
     page.click("#answerBtn")
     expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
@@ -224,6 +227,7 @@ def test_a_file_name_is_shown_as_text_never_as_markup(page: Page) -> None:
 
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", files=[{"name": name, "mimeType": "text/plain", "buffer": b"x"}])
+    choose_general(page)
     page.click("#extractBtn")
 
     status = page.locator("#extractStatus")
@@ -273,6 +277,7 @@ def test_a_reload_opens_the_questionnaire_that_was_open(
 def test_close_takes_the_questionnaire_out_of_the_address(page: Page, tmp_path: Path) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     questions = page.get_by_role("textbox", name="Type a question")
     expect(questions).to_have_count(4)
@@ -341,6 +346,7 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     """The same file again made a second, empty questionnaire beside the one with the answers."""
     read_and_answer(page, tmp_path)
     page.click("#closeForm")
+    choose_general(page)
     page.click("#extractBtn")  # the same file, still chosen
 
     offer = page.locator("#alreadyOpen")
@@ -354,6 +360,7 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     assert len(batches.recent(TEAM)) == 1
 
     page.click("#closeForm")
+    choose_general(page)
     page.click("#extractBtn")
     offer.get_by_role("button", name="Start fresh (for General)").click()
 
@@ -363,6 +370,7 @@ def test_opening_a_file_already_open_offers_to_open_it_or_start_fresh(
     assert [form["answered"] for form in batches.recent(TEAM)] == [0, 4]
 
     page.click("#closeForm")
+    choose_general(page)
     page.click("#extractBtn")
     expect(offer).to_contain_text("You already have 2 questionnaires read from vendor.xlsx")
     offer.get_by_role("button", name="Cancel").click()
@@ -378,6 +386,7 @@ def test_the_offer_of_a_file_already_open_takes_the_keyboard_and_says_why(
     had just pressed "Read questions from file" heard nothing."""
     read_and_answer(page, tmp_path)
     page.click("#closeForm")
+    choose_general(page)
     page.focus("#extractBtn")
     page.keyboard.press("Enter")
 
@@ -418,6 +427,7 @@ def test_a_word_file_written_as_prose_is_read_again_as_text(page: Page, tmp_path
     for _ in range(2):
         page.goto("/workbench")
         page.set_input_files("#assessmentInput", str(prose))
+        choose_general(page)
         page.click("#extractBtn")
         expect(page.locator("#extractStatus")).to_contain_text("Found 2 question(s) in questions.docx")
         expect(page.locator("#alreadyOpen")).to_be_hidden()
@@ -463,6 +473,7 @@ def test_a_reload_while_answering_follows_the_run_and_answers_once(page: Page, t
     """A reload mid-run showed 0 answered and Answer enabled: a second, paid run was one click away."""
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     page.click("#answerBtn")
@@ -512,6 +523,7 @@ def test_a_timed_out_answer_request_is_followed_not_repeated(page: Page, tmp_pat
     page.route("**/answer", proxy_gives_up)
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     page.click("#answerBtn")
 
@@ -552,6 +564,7 @@ def test_a_followed_run_says_the_questions_typed_beside_the_file_were_not_answer
     page.route("**/answer", proxy_gives_up)
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     page.click("#addQuestionBtn")
@@ -577,6 +590,7 @@ def test_a_run_being_followed_says_when_it_started(page: Page, tmp_path: Path, m
 
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     [opened] = batches.recent(TEAM)

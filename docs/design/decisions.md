@@ -411,3 +411,47 @@ a plan relies on it.
 - **Date:** 2026-11-05. **Status:** accepted; defaults the user can reverse
   after testing plan 029. **Decided by:** Claude, on the design's
   recommendations recorded in plan 029's decision log.
+
+## D-022: a questionnaire's or a chat's product is always chosen; General is a choice, never a default
+
+- **Context:** the team reported that the product "defaults to General and
+  sometimes resets" (plan 029's feedback), and it was reproduced: both pages
+  started on General, every reload rebuilt them on General, a deleted product
+  fell back to General, and New conversation carried the last choice over to
+  the next chat. A questionnaire answered for General by accident is answered
+  without the product's own policies and past answers, and its approvals are
+  filed in the shared memory.
+- **Decision:**
+  - The Workbench and the chat start with no product chosen ("Product:
+    choose…"). General is one of the choices, "General (shared policies
+    only)", chosen like any product.
+  - Reading any file (a PDF included), answering a typed or PDF list, and a
+    new chat's first message wait for a choice. Enter waits as Send does. In
+    the chat a file can be attached first: nothing reaches the server until
+    Send. A team with no products still chooses General.
+  - "Last used" fills the choice in one click and is never preselected. It is
+    derived from the person's own saved questionnaires and chats, and from
+    what they did on the page; nothing new is stored.
+  - Close questionnaire, Clear all of an answered list, New conversation from
+    an open chat, a reload and a deleted product all go back to "choose…". The
+    product of the work just left is offered as "Last used".
+  - A fixed product reads as a label in its colour, and the Workbench's review
+    heading names it.
+  - The server is unchanged: it still reads a missing product as General
+    (TD-066). The pages send `""` for General through `Cards.serverProduct`,
+    the one line to change when the server refuses a missing product.
+- **Alternatives:** remembering the last choice in the browser (per device,
+  empty in private windows, a choice rather than work done, so a product
+  chosen and abandoned would be suggested); or in the person's preferences on
+  the server (a new write on every questionnaire and chat start, in modules at
+  their size ceilings, and an API change). Deriving it needs neither, follows
+  the person across computers, and is literally their last work.
+- **Consequences:** one more click for every new questionnaire and chat, one
+  for a person who works on one product all day (on "Last used"). A typed list
+  answered and never saved is not remembered after a reload. Scripts, the API
+  and the evaluation can still answer as General without saying so (TD-066).
+- **Date:** 2026-11-05. **Status:** accepted; the defaults are the user's to
+  reverse after testing plan 029. **Decided by:** the user (no silent General,
+  a one-click "last used"); the defaults by Claude, from plan 029's design.
+  Supersedes plan 024's decision log entry of 2026-10-06 ("New conversation
+  keeps the chip's choice").

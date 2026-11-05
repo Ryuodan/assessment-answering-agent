@@ -248,6 +248,54 @@
   border: 1px dashed color-mix(in srgb, var(--product) 45%, var(--line-strong));
   font-weight: 600;
 }
+/* General chosen on purpose (plan 029, 2): a label like a product's, in the neutral colour. */
+.tag.product.general { --product: var(--ink-faint); }
+
+/* Which product a questionnaire or a chat is for, on both pages (plan 024,
+   plan 029): General, or a product in its own colour. Nothing chosen yet is
+   dashed and amber, so it cannot be read as General. */
+.product-chip {
+  --product: var(--ink-faint);
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 4px 0 10px; border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--product) 50%, var(--line));
+  background: color-mix(in srgb, var(--product) 10%, var(--surface));
+  color: color-mix(in srgb, var(--product) 70%, var(--ink));
+  font-size: 12.5px; font-weight: 600;
+}
+.product-chip.unchosen { --product: var(--warn); border-style: dashed; }
+.product-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--product); flex: 0 0 auto; }
+.product-chip select {
+  border: 0; background: transparent; color: inherit; font-weight: inherit; font-size: inherit;
+  max-width: 210px; padding: 4px 2px; cursor: pointer; outline: none; text-overflow: ellipsis;
+}
+.product-chip select option { color: var(--ink); background: var(--surface); }
+.product-chip:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--product) 35%, transparent); }
+/* Fixed once the questionnaire is open or the chat has started (TD-040): no
+   arrow and no pointer, so it reads as a label in the product's colour rather
+   than a greyed-out menu. */
+.product-chip select:disabled {
+  cursor: default; appearance: none; -webkit-appearance: none; opacity: 1; color: inherit;
+  padding-inline-end: 8px;
+}
+
+/* "Choose a product first", beside what waits for one, with "Last used". */
+.product-needed {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  font-size: 12.5px; color: var(--ink-faint);
+}
+.product-needed.warn { color: var(--warn); }
+.product-needed[hidden] { display: none; }
+button.last-used {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 12.5px; font-weight: 550;
+  background: var(--surface); color: var(--ink-soft);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-pill);
+  padding: 3px 5px 3px 11px; cursor: pointer;
+}
+button.last-used:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); filter: none; }
+button.last-used:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.last-used .tag { text-transform: none; }
 
 /* Not a state of the answer but a fact about the memory: quieter than the
    review and blank tags, which are things somebody has to act on. */

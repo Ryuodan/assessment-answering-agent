@@ -113,8 +113,15 @@
   }
 
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 13px; }
-  /* The chosen product's colour beside the questionnaire's Product selector (plan 024). */
-  .product-swatch { width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); flex: 0 0 auto; }
+  /* The product chip is in cards.css, shared with the chat (plan 029, 2). Its
+     hint sits in the row, not under a panel heading. */
+  #formProductRow .hint { margin: 0; flex: 1 1 260px; min-width: 0; }
+  .product-needed button.choose {
+    background: none; border: 0; padding: 0; color: var(--accent); font-weight: 550;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .results-product { align-self: center; }
+  .results-product .tag { text-transform: none; font-size: 11.5px; padding: 2px 9px; }
 
   label.file {
     display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
@@ -723,14 +730,22 @@
     <div class="panel">
       <!-- Which product this questionnaire is answered for (plan 024): General,
            or a product's knowledge base and answer memory beside the shared ones.
-           Chosen before uploading, and fixed once a questionnaire is open
-           (TD-040): to answer the file for another product, close it and open
-           it again with that product chosen. -->
+           Chosen before reading a file or answering a list, never chosen for the
+           person, General included (plan 029, 2), and fixed once a questionnaire
+           is open (TD-040): to answer the file for another product, close it and
+           open it again with that product chosen. -->
       <div class="row kb-scope" id="formProductRow" style="margin:0 0 12px">
-        <label for="formProduct"><strong>Product</strong></label>
-        <span class="product-swatch" id="formProductSwatch" aria-hidden="true"></span>
-        <select id="formProduct"><option value="">General</option></select>
-        <span class="hint" id="formProductHint">Answered from the shared knowledge base and answer memory.</span>
+        <label class="product-chip unchosen" id="formProductChip">
+          <span class="dot" aria-hidden="true"></span>
+          <select id="formProduct" aria-label="Which product this questionnaire is for"
+                  aria-describedby="formProductHint">
+            <option value="" disabled selected>Product: choose…</option>
+            <option value="general">General (shared policies only)</option>
+          </select>
+        </label>
+        <span id="formLastUsed"></span>
+        <span class="hint" id="formProductHint">Choose the product this questionnaire is for. General answers from
+          the shared policies only; a product adds its own policies and past answers.</span>
         <button class="quiet" id="closeForm" hidden
                 title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
       </div>
@@ -744,6 +759,7 @@
       <div class="already-open" id="alreadyOpen" role="group" aria-label="You already have this file" hidden></div>
       <div class="row">
         <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
+        <span class="product-needed warn" id="readNeedsProduct" hidden>Choose a product first.</span>
       </div>
       <div class="adm-note form-recent" id="formRecent"></div>
       <div class="status" id="extractStatus"></div>
@@ -783,6 +799,7 @@
           <option value="ar">Force Arabic — العربية</option>
         </select>
         <button id="answerBtn" disabled>Answer questions</button>
+        <span class="product-needed warn" id="answerNeedsProduct" hidden></span>
       </div>
       <div class="row changes-it" style="margin-top:10px">
         <input type="text" id="answerStyle" style="flex:1 1 320px;min-width:0"
@@ -801,6 +818,9 @@
     <div class="step-head">
       <span class="step-number">3</span>
       <h2>Review and export</h2>
+      <!-- The product the answers were written for, and approvals are filed
+           under, in sight of whoever is approving (plan 029, 2). -->
+      <span id="resultsProduct" class="results-product"></span>
     </div>
     <p class="step-hint">Read each answer, follow a citation to the exact clause it came from, and
       edit anything you disagree with. The answers that need you come first; filling the original
@@ -866,6 +886,7 @@
           <option value="ar">Force Arabic — العربية</option>
         </select>
         <button id="composerAnswer" disabled>Answer questions</button>
+        <span class="product-needed warn" id="composerNeedsProduct" hidden></span>
       </div>
       <div class="status" id="composerStatus"></div>
     </div>
@@ -1700,14 +1721,17 @@
   }
 
   // Wire a file input to its drop zone, chosen-file label and submit button.
-  function fileField(inputId, chosenId, buttonId) {
+  // `paint`, when given, is the button's own rule, run instead of "a file is
+  // chosen": the questionnaire's Read also waits for a product (plan 029, 2).
+  function fileField(inputId, chosenId, buttonId, paint) {
     const input = $(inputId), chosen = $(chosenId), button = $(buttonId);
     const zone = input.closest("label.file");
 
     function refresh() {
       const names = Array.from(input.files).map((f) => f.name);
       chosen.textContent = names.join(", ");
-      button.disabled = names.length === 0;
+      if (paint) paint();
+      else button.disabled = names.length === 0;
     }
 
     input.addEventListener("change", refresh);
@@ -2427,9 +2451,11 @@
     // These have enable rules of their own -- "Index guidelines" is disabled
     // until a file is chosen. Overwrite the flag while locked, then put back
     // exactly what was there, or unlocking would enable a button whose own
-    // logic wanted it off. Close has its own rule: `paintClose`.
+    // logic wanted it off. Close has its own rule: `paintClose`; so has Read,
+    // `paintRead`, worked out each time: a flag put back restored a state from
+    // before the product was chosen (plan 029, 2).
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
-     "composerAdd", "composerInput", "extractBtn", "assessmentInput",
+     "composerAdd", "composerInput", "assessmentInput",
      "guidelinesBtn", "kbClear", "retryFailed",
      "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
@@ -2768,22 +2794,53 @@
       .forEach((entry) => box.append(questionRow(entry, questions.indexOf(entry))));
 
     const button = $("composerAnswer");
-    button.disabled = pending.length === 0 || answering;
+    button.disabled = pending.length === 0 || answering || needsProduct();
     button.textContent = pending.length === 0
       ? "Nothing to answer"
       : "Answer " + pending.length + " question" + (pending.length === 1 ? "" : "s");
+    paintAnswerNeedsProduct();
   }
 
   function refreshAnswerButton() {
     const pending = pendingQuestions().length;
     const button = $("answerBtn");
-    button.disabled = pending === 0 || answering || running();
+    // A list of typed questions, or one read from a PDF, waits for a product;
+    // a questionnaire's was fixed when it was opened (plan 029, 2).
+    button.disabled = pending === 0 || answering || running() || needsProduct();
     button.textContent = pending === 0
       ? "Nothing to answer"
       : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
     $("composerAnswer").disabled = button.disabled;
     $("composerAnswer").textContent = button.textContent;
+    paintAnswerNeedsProduct();
     applyLock();
+  }
+
+  /* "Choose a product first" beside both Answer buttons while questions wait
+     and nothing is chosen, with "Last used" and a way to the selector. */
+  function paintAnswerNeedsProduct() {
+    const show = pendingQuestions().length > 0 && needsProduct();
+    ["answerNeedsProduct", "composerNeedsProduct"].forEach((id) => {
+      const hint = $(id);
+      hint.hidden = !show;
+      const suggestion = show ? lastUsedChoice() : "";
+      if (hint.dataset.painted === (show ? "on:" + suggestion : "off")) return;
+      hint.dataset.painted = show ? "on:" + suggestion : "off";
+      hint.replaceChildren();
+      if (!show) return;
+      hint.append("Choose a product first.");
+      if (suggestion) hint.append(Cards.lastUsedButton(suggestion, pickLastUsed));
+      const choose = document.createElement("button");
+      choose.type = "button";
+      choose.className = "choose";
+      choose.textContent = "Choose…";
+      choose.title = "Go to the Product box";
+      choose.onclick = () => {
+        $("formProduct").scrollIntoView({ behavior: "smooth", block: "center" });
+        $("formProduct").focus({ preventScroll: true });
+      };
+      hint.append(choose);
+    });
   }
 
   let answering = false;
@@ -2799,7 +2856,23 @@
   async function extractQuestions() {
     const input = $("assessmentInput");
     if (!input.files.length) return;
+    // Any file, a PDF included, waits for a product: one rule (plan 029, 2).
+    if (!productChosen()) { paintRead(); $("formProduct").focus(); return; }
     await readQuestionnaire(input.files[0], false);
+  }
+
+  /* Read waits for a file and a product, and while a file is being read or
+     questions answered; it names the product the file will be opened for,
+     which is the open questionnaire's while one is open (plan 029, 2). Worked
+     out from the page each time, never put back. */
+  let reading = false;
+  function paintRead() {
+    const button = $("extractBtn");
+    const file = $("assessmentInput").files.length > 0;
+    const chosen = productChosen();
+    button.disabled = !file || !chosen || reading || answering;
+    button.textContent = chosen ? "Read questions for " + choiceName(formProduct()) : "Read questions from file";
+    $("readNeedsProduct").hidden = !(file && !chosen);
   }
 
   /* `fresh` opens a new questionnaire even when this person already has one
@@ -2808,7 +2881,8 @@
     const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
     hideAlreadyOpen();
 
-    $("extractBtn").disabled = true;
+    reading = true;
+    paintRead();
     setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
 
     let why = "";  // the questionnaire reader's own reason, when it found nothing
@@ -2821,14 +2895,16 @@
       if (error.code === "product_not_found") await productGone($("extractStatus"), "the file was not opened for it");
       else setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
     } finally {
-      $("extractBtn").disabled = false;
+      reading = false;
+      paintRead();
       loadDocuments();
     }
   }
 
   /* The product chosen was deleted after this page listed it (TD-041, as the
      chat does it). The server refused before keeping anything; the selector
-     goes back to General, and the page says so where the person is looking. */
+     goes back to nothing chosen, not to General (plan 029, 2), and the page
+     says so where the person is looking. */
   async function productGone(status, what) {
     const gone = formProduct();
     const name = (Cards.product(gone) || {}).name || "That product";
@@ -2836,7 +2912,7 @@
     await loadFormProducts();
     if (formBatch && formBatch.product_id === gone) await redrawBatch();  // the open one is read-only now
     setStatus(status, name + " has been deleted, so " + what + ". Nothing was kept" +
-      (formBatch ? "." : ", and the product is back on General."), "error");
+      (formBatch ? "." : ". Choose another product, or General."), "error");
   }
 
   /* A questionnaire outlives the page that uploaded it: the answers are stored
@@ -2857,6 +2933,9 @@
       line.replaceChildren();
       return;
     }
+    // "Last used" reads the same list, so the two cannot disagree (plan 029, 2).
+    recentForms = forms;
+    paintLastUsed();
     // The one just closed first, so "it stays in Or pick up" is true however
     // far back it was picked up from.
     const others = forms.filter((form) => !formBatch || form.id !== formBatch.id);
@@ -2923,6 +3002,9 @@
     try { id = new URL(window.location.href).searchParams.get("q") || ""; } catch (error) { return; }
     if (!id) return;
     if (!/^[A-Za-z0-9]{1,64}$/.test(id)) { rememberInAddress(""); return; }
+    // After the products are listed, so the questionnaire's product shows as
+    // its label at once rather than as "choose…" until the list arrives.
+    await productsListed;
     try {
       const batch = await request("/api/forms/" + encodeURIComponent(id));
       if (formBatch) return;  // something else was opened while this was on its way
@@ -2961,7 +3043,7 @@
   async function loadAsForm(file, suffix, { fresh = false } = {}) {
     const body = new FormData();
     body.append("file", file);
-    body.append("product", formProduct());
+    body.append("product", wireProduct());
     // Asked first, unless the person chose to start fresh: the same file again
     // made a second, empty questionnaire beside the one with their answers.
     body.append("if_already_open", fresh ? "new" : "ask");
@@ -3027,10 +3109,9 @@
     });
     const choices = document.createElement("div");
     choices.className = "row";
-    const product = teamProducts.find((p) => p.id === formProduct());
     const fresh = document.createElement("button");
     fresh.className = "ghost";
-    fresh.textContent = "Start fresh (for " + (product ? product.name : "General") + ")";
+    fresh.textContent = "Start fresh (for " + choiceName(formProduct()) + ")";
     fresh.title = "Read the file again as a new questionnaire, with no answers";
     fresh.onclick = () => readQuestionnaire(file, true);
     const cancel = document.createElement("button");
@@ -3076,7 +3157,9 @@
     }
     sourceName = batch.source_name || sourceName;
     paintReadOnly();
-    showFormProduct(batch.product_id || "");
+    // Offered as "Last used" once it is closed, never chosen (plan 029, 2).
+    if (!batch.read_only) pageLastUsed = Cards.choiceOf(batch.product_id);
+    showFormProduct(Cards.choiceOf(batch.product_id));
 
     /* Questions somebody typed into the list beside the file's own rows are
        kept. The batch does not know about them -- they have no cell in the
@@ -3550,7 +3633,7 @@
         language: $("languageSelect").value || null,
         run_id: runId,
         source_name: sourceName,
-        product: formProduct(),
+        product: wireProduct(),
       }),
     });
   }
@@ -3743,6 +3826,8 @@
   async function answerPending(statusId = "answerStatus", only = null) {
     const batch = only || pendingQuestions();
     if (!batch.length) return;
+    // A list waits for a product, whichever way this was reached (plan 029, 2).
+    if (needsProduct()) { refreshAnswerButton(); $("formProduct").focus(); return; }
     const status = $(statusId);
 
     /* Answering through a batch is tracked under the batch's own id -- see the
@@ -3769,6 +3854,7 @@
       const data = formBatch
         ? await answerThroughBatch(batch, runId)
         : await answerLooseQuestions(batch, runId);
+      if (!formBatch) pageLastUsed = formProduct();  // a list answered: its product is the one last used
 
       // Positional: the endpoint answers the list it was given, in order. That
       // is what lets an answer be tied back to the row it came from, so a later
@@ -4037,7 +4123,7 @@
 
 
   const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
-  fileField("assessmentInput", "assessmentChosen", "extractBtn");
+  fileField("assessmentInput", "assessmentChosen", "extractBtn", paintRead);  // a file and a product (plan 029, 2)
   // Another file chosen: the offer was about the last one.
   $("assessmentInput").addEventListener("change", hideAlreadyOpen);
   $("assessmentInput").closest("label.file").addEventListener("drop", hideAlreadyOpen);
@@ -4095,6 +4181,13 @@
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
     setStatus($("answerStatus"), "");
+    /* A list whose answers fixed its product goes back to "choose…", and that
+       product is offered as "Last used" (plan 029, 2). Typed questions with
+       nothing answered keep the person's choice. */
+    if (!formBatch && answered && productChosen()) {
+      pageLastUsed = formProduct();
+      showFormProduct("");
+    }
     renderQuestions();
   };
   $("kbRefresh").onclick = loadKnowledge;
@@ -4141,73 +4234,145 @@
       if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
     } catch (error) { /* no products: the shared knowledge base is all there is */ }
   }
-  // --- which product a questionnaire is for (plan 024) ----------------------
+  // --- which product a questionnaire is for (plan 024, plan 029) ------------
 
   let teamProducts = [];
   let deletedProducts = [];  // since plan 027: their questionnaires are kept, read-only
+  let productsLoaded = false;  // the team's products were read at least once
+  let productsFailed = false;  // and the first read failed: said, rather than offering General alone
+  let pageLastUsed = "";  // the product of the work last opened, answered or closed on this page
+  let recentForms = [];  // this person's questionnaires, last changed first, as "Or pick up" lists them
+  /* The selector holds a choice (plan 029, 2): "" is nothing chosen yet, and
+     reading a file or answering a list waits for one; Cards.GENERAL is
+     General, chosen on purpose; anything else is a product's id. The server
+     still reads "" as General (TD-066), so what is sent is wireProduct(). */
   function formProduct() { return $("formProduct").value; }
+  function productChosen() { return formProduct() !== ""; }
+  function needsProduct() { return !formBatch && !productChosen(); }
+  function wireProduct() { return Cards.serverProduct(formProduct()); }
+  function choiceName(choice) {
+    if (choice === Cards.GENERAL) return "General";
+    return (Cards.product(choice) || {}).name || "the product chosen";
+  }
   /* The selector chooses the product the next file is opened for. Once a
      questionnaire is open its product is fixed (TD-040), and so is a typed
      list's once any of it is answered or answering: what is on the page was
      answered for one product, and the selector says which. Called whenever
-     any of the three changes. */
+     any of the three changes. A list whose product was deleted under it
+     chooses nothing, and is not fixed to that nothing. */
   function describeFormProduct() {
-    const product = teamProducts.find((p) => p.id === formProduct());
-    const gone = !product && Cards.product(formProduct());
-    const fixed = Boolean(formBatch) || answering || questions.some((q) => q.status === "answered");
+    const choice = formProduct();
+    const product = teamProducts.find((p) => p.id === choice);
+    const gone = !product && choice !== Cards.GENERAL && Cards.product(choice);
+    const fixed = Boolean(formBatch) || answering || (Boolean(choice) && questions.some((q) => q.status === "answered"));
     $("formProduct").disabled = fixed;
     paintClose();
-    $("formProductSwatch").style.background = product ? (product.color || "var(--accent)") : "var(--line-strong)";
-    $("formProductHint").textContent = gone
-      ? "Answered from " + gone.name + "'s knowledge base and answer memory, which were deleted with it."
-      : (product
-        ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
-        : "Answered from the shared knowledge base and answer memory.") +
+    const chip = $("formProductChip");
+    chip.classList.toggle("unchosen", !choice);
+    if (product && product.color) chip.style.setProperty("--product", product.color);
+    else chip.style.removeProperty("--product");
+    $("formProductHint").textContent = !choice
+      ? (productsFailed
+        ? "Your products could not be loaded. Reload the page before choosing; choose General only if this " +
+          "questionnaire is about the whole company."
+        : "Choose the product this questionnaire is for. General answers from the shared policies only; " +
+          "a product adds its own policies and past answers.")
+      : (gone
+        ? "Answered from " + gone.name + "'s knowledge base and answer memory, which were deleted with it."
+        : product
+          ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
+          : "Answered from the shared knowledge base and answer memory.") +
         (formBatch
           ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
           : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
+    // The review names the product its approvals are filed under (plan 029, 2).
+    const label = choice ? Cards.choiceTag(choice, "These answers are for " + choiceName(choice)) : null;
+    $("resultsProduct").replaceChildren(...(label ? [label] : []));
+    paintRead();
+    paintLastUsed();
   }
   /* A deleted product cannot be chosen, so it is offered only to show the
      product of a questionnaire kept from it: disabled, and named as deleted,
      rather than the selector falling back to General and saying the wrong thing. */
-  function showFormProduct(productId) {
+  function showFormProduct(choice) {
     const select = $("formProduct");
     [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
-    const gone = Cards.product(productId);
-    if (formBatch && gone && gone.deleted && formBatch.product_id === productId) {
-      const option = new Option(gone.name + " (deleted)", productId);
+    const gone = Cards.product(choice);
+    if (formBatch && gone && gone.deleted && formBatch.product_id === choice) {
+      const option = new Option(gone.name + " (deleted)", choice);
       option.disabled = true;
       option.dataset.deleted = "true";
       select.append(option);
     }
-    select.value = [...select.options].some((option) => option.value === productId) ? productId : "";
+    select.value = choice && [...select.options].some((option) => option.value === choice) ? choice : "";
     describeFormProduct();
   }
+
+  /* "Last used", beside the selector while nothing is chosen and it can be:
+     the product of the work last opened, answered or closed on this page,
+     else of this person's most recently changed questionnaire, the first
+     that can still be chosen. Derived, not stored: it follows the person to
+     another computer. Nothing until the products are listed, so a product
+     not listed yet is not passed over for an older General. */
+  function lastUsedChoice() {
+    if (!productsLoaded) return "";
+    return Cards.lastUsed([pageLastUsed].concat(recentForms.map((form) => Cards.choiceOf(form.product_id))));
+  }
+  function paintLastUsed() {
+    const host = $("formLastUsed");
+    const suggestion = !formProduct() && !$("formProduct").disabled ? lastUsedChoice() : "";
+    const shown = host.firstElementChild;
+    if ((shown ? shown.dataset.choice : "") !== suggestion) {
+      host.replaceChildren();
+      if (suggestion) host.append(Cards.lastUsedButton(suggestion, pickLastUsed));
+    }
+    paintAnswerNeedsProduct();  // the hints beside Answer carry the same button
+  }
+  function pickLastUsed(choice) {
+    showFormProduct(choice);
+    refreshAnswerButton();
+    $("formProduct").focus();  // the button has gone; the keyboard stays by the choice it made
+  }
+
   /* The team's products, again. Returns the name of the product the selector
-     was on if it has since been deleted -- the selector is then back on
-     General, which the caller says -- and "" otherwise. A failed fetch keeps
-     what the page had. */
+     was on if it has since been deleted -- the selector then chooses nothing,
+     which the caller says -- and "" otherwise. A failed fetch keeps what the
+     page had, and a first one that fails is said beside the selector. */
   async function loadFormProducts() {
-    const chosen = formProduct();
-    const was = teamProducts.find((p) => p.id === chosen);
+    const before = teamProducts;
     try {
       const listed = await request("/api/products");
       teamProducts = listed.products || [];
       deletedProducts = listed.deleted || [];
-    } catch (error) { /* as it was */ }
+      productsLoaded = true;
+      productsFailed = false;
+    } catch (error) {
+      if (!productsLoaded) productsFailed = true;
+    }
+    // Read after the wait: General chosen while the list was on its way was
+    // put back to "choose…" when it arrived (plan 029, 2).
+    const chosen = formProduct();
+    const was = before.find((p) => p.id === chosen);
     Cards.setProducts(teamProducts, deletedProducts);
     if (documents.length) renderDocuments();  // the library's product badges, in their colours
     const select = $("formProduct");
-    select.replaceChildren(new Option("General", ""));
+    select.replaceChildren(
+      new Option("Product: choose…", "", true, true),
+      new Option(Cards.GENERAL_LABEL, Cards.GENERAL));
+    select.options[0].disabled = true;  // a prompt, never a choice
     teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
-    showFormProduct(formBatch ? formBatch.product_id || "" : chosen);
+    showFormProduct(formBatch ? Cards.choiceOf(formBatch.product_id) : chosen);
     paintReadOnly();  // its note names the product, which may only now be known
     listRecentForms();
     return was && !formBatch && formProduct() !== chosen ? was.name : "";
   }
   // What the next questionnaire is opened and answered for. Nothing is sent:
-  // an open one's product was fixed when it was opened.
-  $("formProduct").onchange = describeFormProduct;
+  // an open one's product was fixed when it was opened. Read and Answer wait
+  // for a choice, so a choice lets them go.
+  $("formProduct").onchange = () => {
+    describeFormProduct();
+    refreshAnswerButton();
+  };
 
   /* A deleted product's questionnaire: kept so its answers can be read and its
      filled file downloaded, and changed by nothing on this page (plan 027). */
@@ -4344,7 +4509,7 @@
     if (document.visibilityState !== "visible") return;
     const gone = await loadFormProducts();
     if (formBatch && !formBatch.read_only && (Cards.product(formBatch.product_id) || {}).deleted) redrawBatch();
-    else if (gone) setStatus($("extractStatus"), gone + " has been deleted; the product is back on General.", "error");
+    else if (gone) setStatus($("extractStatus"), gone + " has been deleted; choose a product again.", "error");
   });
 
   /* Close waits while answering, or while any request about the questionnaire
@@ -4386,15 +4551,19 @@
     forgetFilling();
     setStatus($("answerStatus"), "");
     paintReadOnly();
-    // A deleted product's questionnaire showed its product; the next file is for a live one.
-    if (closed.read_only) showFormProduct("");
+    /* The next file chooses its own product: the closed one's is offered as
+       "Last used", never kept chosen (plan 029, 2). A deleted product's
+       questionnaire is not offered: its product cannot be chosen. */
+    if (!closed.read_only) pageLastUsed = Cards.choiceOf(closed.product_id);
+    showFormProduct("");
     renderDetailPicker();
     renderQuestions();
     refreshFormControls();
     listRecentForms();
     setStatus($("extractStatus"), "Closed " + closed.source_name + ". It stays in “Or pick up” below.", "ok");
   };
-  loadFormProducts();
+  // Awaited before a questionnaire named in the address is opened (plan 029, 2).
+  const productsListed = loadFormProducts().catch(() => {});
 
   $("kbScope").onchange = () => {
     $("kbScopeHint").textContent = kbScope()

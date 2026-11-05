@@ -14,6 +14,7 @@ from playwright.sync_api import Page, expect
 from src import identity, service, tools
 from src.config import settings
 from tests import forms_fixtures as shapes
+from tests.browser.choosing import choose_general
 
 pytestmark = pytest.mark.browser
 
@@ -41,6 +42,7 @@ def test_a_spreadsheet_uploaded_with_no_questions_says_why_and_nothing_false(pag
 
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(notes))
+    choose_general(page)
     page.click("#extractBtn")
 
     status = page.locator("#extractStatus")

@@ -19,6 +19,7 @@ from src import batches, identity, knowledge, products
 from src.config import settings
 from src.models import AnsweredQuestion, Evidence, SourceType
 from tests import forms_fixtures as shapes
+from tests.browser.choosing import choose_general
 from tests.conftest import FakeVectorStore, bare_store
 
 pytestmark = pytest.mark.browser
@@ -75,6 +76,7 @@ def test_each_cited_remembered_answer_has_a_chip_that_opens_it(
 
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     page.click("#answerBtn")
     card = page.locator("#results .answer").first
@@ -115,6 +117,7 @@ def flagged_but_sure(monkeypatch: pytest.MonkeyPatch) -> None:
 def answered_on_the_workbench(page: Page, tmp_path: Path) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    choose_general(page)
     page.click("#extractBtn")
     page.click("#answerBtn")
     expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)

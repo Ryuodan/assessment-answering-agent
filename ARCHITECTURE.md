@@ -197,16 +197,33 @@ The product is fixed when the questionnaire is opened or the chat starts
   are labelled with is kept in `deleted_products`. `products.refuse_deleted`
   and the store guard in `scoped_knowledge` refuse writes with 409
   `product_deleted`.
-- **The pages** (plan 024). The choice is made in two places:
-  - a coloured chip beside the chat box (`chat.html`), which can be changed
-    until the first message;
-  - a Product selector at the top of the workbench's questionnaire panel
-    (`index.html`), fixed while a questionnaire is open. Close questionnaire
-    frees it.
+- **The pages** (plan 024, plan 029). The choice is made in two places, with
+  one chip (`.product-chip`, `cards.css`):
+  - beside the chat box (`chat.html`), which can be changed until the first
+    message;
+  - at the top of the workbench's questionnaire panel (`index.html`), fixed
+    while a questionnaire is open, or while a typed list's answers are on the
+    page. Close questionnaire, and Clear all of an answered list, free it.
+
+  Neither page chooses for the person (D-022). Both start on "Product: choose…";
+  General is an explicit option ("General (shared policies only)"). Reading a
+  file and answering a typed or PDF list on the workbench, and a new chat's
+  first message (Send and Enter), wait for a choice; a file can be attached in
+  the chat before. The page's choice is `""` (nothing), `Cards.GENERAL`, or a
+  product id, and the page sends `Cards.serverProduct(choice)`, which is still
+  `""` for General: the server does not yet refuse a missing product (TD-066).
+  "Last used" (`Cards.lastUsedButton`) fills the choice in one click and is
+  never preselected. It is derived, not stored: the product of the work last
+  opened, answered or closed on the page, else of the person's most recent
+  questionnaire (`GET /api/forms`, as "Or pick up" lists them) or chat
+  (`GET /api/chat`), skipping deleted products and offering nothing before the
+  products are listed.
 
   `Cards.productBadge` (`cards.js`) puts a product's name, in its colour, on
   the chats and questionnaires in the lists, and on an answer's sources that
-  came from the product's own knowledge base.
+  came from the product's own knowledge base. A fixed choice reads as a label
+  in its colour (`Cards.choiceTag`, General's neutral), and the workbench's
+  Review heading carries it.
 
 ## How a request flows
 

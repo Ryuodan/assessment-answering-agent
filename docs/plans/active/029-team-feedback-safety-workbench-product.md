@@ -67,12 +67,12 @@ Stage 1, Workbench relief:
 
 Stage 2, product choice:
 
-- [ ] **2** The Workbench and the chat start with no product chosen. General is one of the choices, and reading a questionnaire or starting a chat waits for a choice. "Last used" fills the choice in one click and is never preselected. The chosen product shows as a label.
+- [x] **2** The Workbench and the chat start with no product chosen. General is one of the choices, and reading a questionnaire or starting a chat waits for a choice. "Last used" fills the choice in one click and is never preselected. The chosen product shows as a label.
 
 All stages:
 
 - [ ] Every fix has a test that fails without it. `uv run poe check` passes. Tech-debt, ARCHITECTURE.md, decisions and the generated docs are updated.
-- [ ] Each item has a "How to test it yourself" note for the user.
+- [x] Each item has a "How to test it yourself" note for the user.
 
 ## Plan
 
@@ -136,6 +136,15 @@ All stages:
   - 14 tests added, each failing on the old code: 1 API (`test_api_forms.py`) and 13 browser (8 in `test_review_filter.py`, 5 in `test_workbench.py`). No existing test was changed. No server size ceiling moved (`batches.py` is under the default limit); the mypy baseline stays at 237. `docs/design/questionnaires.md` and D-021 say what changed in the review queue and the same-file check; ARCHITECTURE.md says what `same_upload` leaves out and that `running` carries the start.
   - `uv run poe check`: every task passed (fmt, lint, types with 237 in the baseline, arch, docs, rules 94, test 2,199 passed and 2 skipped, browser 89).
   - Stage 1 waits for the user's test.
+- 2026-11-05, Stage 2 build (the product choice, as designed, on both pages; the pages only: no Python, API, setting, migration or size ceiling changed):
+  - Groundwork: the chip's rules moved from `chat.html` into `cards.css`, shared by both pages (the Workbench's swatch is gone). `cards.js` gained the choice helpers: `Cards.GENERAL` ("general", never a product id), `serverProduct` (General goes to the server as `""`, the one line to change for TD-066), `choiceOf`, `choosable`, `lastUsed`, `choiceTag` and `lastUsedButton`.
+  - 2.1, the Workbench: the selector starts on "Product: choose…" (dashed, amber); "General (shared policies only)" is an option. Read waits for a file and a product and names it ("Read questions for Msegat", also when a second file is read while one is open); Answer for a typed or PDF list waits too, with "Choose a product first.", "Last used" and "Choose…" beside both Answer buttons. Read's state is worked out each time (`paintRead`), and it left the lock's save-and-restore list. Close, Clear all of an answered list, a reload and a deleted product go back to "choose…"; the deleted-product notes say "Choose another product, or General". If the products cannot be loaded, the hint says so. A `?q=` questionnaire is opened after the products are listed, so its label shows at once.
+  - 2.2, the chat: the chip starts on "Product: choose…"; a line above the box asks for one, and turns amber ("Choose a product to send this.") once something is typed or attached. Send and Enter wait; a file can be attached first. New conversation from an open chat chooses nothing (`chipChoice` is gone); from an unsent new chat it keeps the choice.
+  - 2.3, "Last used": derived from the page's own last work, then the person's questionnaires (`GET /api/forms`, the "Or pick up" list) or chats (`GET /api/chat`), skipping deleted products and offering nothing until the products are listed. One click chooses; nothing is sent.
+  - 2.4: a fixed choice is a label in its colour on both pages (General's neutral), and the Workbench's "Review and export" heading carries it (`#resultsProduct`).
+  - Found by the suite and fixed: a choice made before `/api/products` answered was put back to "choose…" when the list arrived, because both pages read the choice before waiting. They read it after now. 2 browser tests (one per page), both failing without the fix.
+  - 18 browser tests in the new `tests/browser/test_choosing_a_product_first.py`, each failing on the pages before this stage. Changed on purpose, each saying so in a comment: the existing tests that read a file or send a first message choose first (General where they meant General: the new `tests/browser/choosing.py` helper in `test_workbench.py`, `test_review_filter.py`, `test_answer_card.py` and `test_workbench_status.py`; `test_chat.py` twice); `test_product_choice.py`'s chat test now expects New conversation to choose nothing and offer "Last used: Availo" (plan 024's "keeps the choice" is superseded, D-022); its Close, Clear all and deleted-product tests expect "choose…" and Read or Send disabled, and choose General before going on; `test_deleted_product_work.py` expects a new chat after a deleted product's to wait, with no "Last used" offered.
+  - New debt: TD-066 (the server still answers as General when no product is sent). D-022 records the decision and its defaults.
 
 ## Decision log
 
@@ -183,6 +192,12 @@ All stages:
     - Reading any file waits for a product, and the Read button names it.
     - A team with no products still chooses General explicitly.
     - The server is unchanged: scripts and the API can still answer as General without saying so (a tech-debt item).
+    - Added during the build of Stage 2:
+      - "Last used" offers nothing until the products are listed, so a product not yet listed is not passed over for an older General; if the products cannot be loaded, both pages say so and offer nothing.
+      - A deleted product's questionnaire or chat is never offered as "Last used", and closing one goes back to "choose…".
+      - Clicking "Last used" in the chat puts the cursor back in the box; on the Workbench it stays on the Product box.
+      - A typed list whose product was deleted under it chooses nothing, and is not fixed to that nothing: the person can choose again without clearing the list.
+      - On a phone-width chat (under 560 px) the chip is narrower, so the box keeps room to type.
 
 ## How to test it yourself
 
@@ -297,3 +312,41 @@ Use a local copy, not the team's data.
 9. Click "All" to see every answer, as before. Leave a card blank, or set a row aside: they are under "Blank or set aside", where a set-aside row has "Include".
 10. Still on "All", type a question into "Ask another question" at the bottom, click "+ Add to the list", then Answer. Its answer appears, and "All" stays chosen. Click "Needs review" and ask another: the page goes to "All", where the new answer is.
 11. Open a questionnaire with questions still waiting, add a question of your own with "+ Add a question", and click Answer. The review opens on "Needs review", and the status says your typed question's answer is under "All".
+
+### 2.1 The Workbench waits for a product
+
+1. Open the Workbench. In step 2, "Load a questionnaire", the Product box reads **Product: choose…**, with a dashed amber outline. The note beside it says what General and a product each answer from.
+2. Drop a spreadsheet on the drop zone. **Read questions from file** stays grey, and beside it: **Choose a product first.**
+3. Open the Product list. You see **General (shared policies only)**, then your products. Choose one, say Msegat. The button now reads **Read questions for Msegat**. Click it.
+4. The Product box is now a Msegat label in Msegat's colour, and cannot be changed. Drop another spreadsheet: the button reads **Read questions for Msegat**, because a file read while one is open takes its product.
+5. Click **Close questionnaire**. The box reads **Product: choose…** again.
+6. Click **+ Add a question** and type a question. **Answer 1 question** stays grey, with **Choose a product first.** beside it, and the same under "Ask another question". Click **Choose…** in that note: the page goes to the Product box. Choose **General (shared policies only)**: Answer works.
+7. Answer it, then click **Clear all** and OK. The box reads **Product: choose…** again.
+8. Reload the page. The box reads **Product: choose…**: nothing was chosen for you.
+9. Optional, with a PDF questionnaire: Read waits for a product too, and so does Answer.
+
+### 2.2 The chat waits for a product
+
+1. Open the chat (the home page). The chip beside the message box reads **Product: choose…**, and a line above the box asks which product this chat is for.
+2. Type a question and press Enter. Nothing is sent: the line turns amber and says **Choose a product to send this.** Your text stays in the box.
+3. Click **＋** and attach a questionnaire. It shows as attached, and the send arrow stays grey.
+4. Choose a product on the chip, say Ole5. The arrow lights up and the line goes. Send. The chip becomes an Ole5 label in Ole5's colour, and cannot be changed.
+5. Click **New conversation**. The chip reads **Product: choose…** again.
+6. Choose **General (shared policies only)** and send a question. The chip stays a grey **General (shared policies only)** label.
+
+### 2.3 "Last used", in one click, never chosen for you
+
+1. In the chat, send a question for Ole5, then click **New conversation**. Above the box: **Last used: Ole5**. Click it. The chip shows Ole5, the cursor is back in the box, and you can send.
+2. Reload the page. The chip reads **Product: choose…**, and **Last used** offers the product of your most recent chat. It comes from your own chats, so it is offered on another computer too.
+3. Open an older chat for another product, say RICH, from the history, then click **New conversation**. It offers **Last used: RICH**, and nothing is chosen until you click.
+4. On the Workbench, open a questionnaire for Msegat from "Or pick up" and close it. Beside the Product box: **Last used: Msegat**. Click it: Msegat is chosen, and nothing is opened or sent. Reload: it is offered again, and not chosen.
+5. Typed questions: with nothing chosen, the **Choose a product first.** note beside Answer carries the same **Last used** button.
+6. Optional: have a lead delete a test product you used last. It is no longer offered; the product before it is.
+
+### 2.4 A fixed product shows as a label
+
+1. Open a questionnaire for Availo on the Workbench. The Product box is an Availo label in Availo's colour.
+2. Answer it and scroll to **3 Review and export**. The Availo label is beside the heading, so whoever approves can see which product's memory the approvals go to.
+3. Open a General questionnaire: the label beside the heading reads **General**, in grey.
+4. In the chat, a chat started as General shows a grey **General (shared policies only)** label beside the box.
+5. If the products cannot be loaded (for example the server is restarting), the Product box and the chat's line say so and ask you to reload before choosing, rather than offering only General.
