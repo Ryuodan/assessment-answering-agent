@@ -40,6 +40,7 @@ from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role,
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
 from src.errors import QuestionnaireNotFound, ToolError as ToolError
+from src.styling import in_house_style as in_house_style
 from src.selection import (
     APPROVED as APPROVED,
     BLANKED as BLANKED,
@@ -425,60 +426,6 @@ async def answer(
         failed=outcome.failed,
     )
     return outcome
-
-
-async def in_house_style(
-    user: User,
-    results: list[AnsweredQuestion],
-    *,
-    run_id: str = "",
-    language: Language | None = None,
-) -> list[AnsweredQuestion]:
-    """Reword freshly drafted answers to this person's preferences, if they chose any.
-
-    Every answer keeps its draft in `drafted`, so what the rewording changed can
-    be seen and undone. An answer the rewrite could not reword comes back
-    exactly as drafted: preferences that fail cost the wording, never the answer.
-
-    Public because several paths draft: questionnaire rows here, questions
-    typed into the workbench, and a question asked in the assistant's
-    conversation, which is answered with no file.
-
-    `language` is the one the answers were forced into, when they were. Left
-    out, the rewrite writes in each question's own language -- which would
-    quietly translate an Arabic question's English answer back into Arabic.
-    """
-    instruction = preferences.load(user.email).instruction()
-    worth = [result for result in results if _has_answer(result)]
-    if not instruction or not worth:
-        return results
-
-    progress.start(run_id, stage="styling")
-    progress.set_total(run_id, len(worth))
-    try:
-
-        async def one(result: AnsweredQuestion) -> AnsweredQuestion:
-            try:
-                styled = await rewrite.rewrite(
-                    result,
-                    instruction,
-                    language,
-                    note="Reworded to your preferences.",
-                )
-            except Exception:  # noqa: BLE001 - one failure is one unstyled answer
-                logger.exception("Could not apply preferences to %s", result.question.id)
-                return result
-            finally:
-                progress.advance(run_id)
-            if styled is result:
-                return result
-            styled.drafted = result.answer
-            return styled
-
-        styled = {item.question.id: item for item in await asyncio.gather(*(one(r) for r in worth))}
-    finally:
-        progress.finish(run_id)
-    return [styled.get(result.question.id, result) for result in results]
 
 
 def restore_draft(user: User, batch_id: str, question_id: str) -> None:

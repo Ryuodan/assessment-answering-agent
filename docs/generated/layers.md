@@ -108,7 +108,7 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 
 The use cases the web interface, the command line and the chat assistant share.
 
-- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.fill_audit`, `src.search`, `src.selection`, `src.service`, `src.tools`
+- **Modules:** `src.agents.assistant`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.fill_audit`, `src.search`, `src.selection`, `src.service`, `src.styling`, `src.tools`
 - **Owns:** `langchain`
 
 | Module | What it is |
@@ -122,6 +122,7 @@ The use cases the web interface, the command line and the chat assistant share.
 | `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
 | `src/selection.py` | Which questions an operation applies to, when an answer counts as settled, and what is written. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |
+| `src/styling.py` | A person's preferences, applied to freshly drafted answers (the house style). |
 | `src/tools.py` | The operations the interface performs, and the chat assistant calls. |
 
 ## 6. interfaces
