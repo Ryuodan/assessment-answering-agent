@@ -389,6 +389,15 @@ def short_numbered(path: Path) -> Path:
     )
 
 
+def numbered(path: Path, n: int) -> Path:
+    """`n` numbered questions under `S.No | Question | Response`: a long questionnaire (plan 029, 1.3)."""
+    cells = {"A1": "S.No", "B1": "Vendor Due Diligence Questions", "C1": "Vendor Response"}
+    for row in range(2, n + 2):
+        cells[f"A{row}"] = f"{row - 1}.0"
+        cells[f"B{row}"] = f"Does the vendor keep control number {row - 1} documented and reviewed?"
+    return build(path, [SheetSpec("Questionnaire", cells)])
+
+
 def short_unnumbered(path: Path) -> Path:
     """Two questions under `Question | Answer | Domain`, with no numbering column.
 

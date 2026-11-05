@@ -9,6 +9,7 @@ answer cited after a shared one could not be read on the card.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,9 @@ def answered_on_the_workbench(page: Page, tmp_path: Path) -> None:
 def test_withdrawing_an_approval_shows_the_answer_held_again(page: Page, tmp_path: Path, flagged_but_sure) -> None:
     """TD-053: the card said "held back again" while the server had released it."""
     answered_on_the_workbench(page, tmp_path)
+    # Plan 029, 1.3: the review opens on "Needs review", which an approved
+    # answer leaves; this test follows one card through, so it shows All.
+    page.locator("#reviewTabs").get_by_role("button", name=re.compile("^All")).click()
     card = page.locator("#results .answer").first
     expect(card).to_contain_text("Not going into the file yet.")
 

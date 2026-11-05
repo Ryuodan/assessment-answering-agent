@@ -109,7 +109,9 @@ The Workbench keeps the open questionnaire in its own address, `?q=<id>`
 (plan 029), with `history.replaceState` on an address derived from the page's,
 so it stays under the deployment's prefix. A reload or a copied link opens it
 again, for its owner only. "Or pick up" lists every questionnaire of the
-person, last changed first (`form_batches.updated_at`).
+person, last changed first (`form_batches.updated_at`). Its review shows the
+answers in tabs by the fill gate's verdict (`will_be_written`, from
+`tools.inspect`), with Fill in a bar that stays in view.
 
 `tests/browser/` drives them in headless Chromium (Playwright, plan 011): the
 app runs in a thread of the test process, so the suite's fixtures (temporary

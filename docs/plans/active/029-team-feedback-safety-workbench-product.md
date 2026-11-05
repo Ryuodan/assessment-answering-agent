@@ -61,7 +61,7 @@ Stage 1, Workbench relief:
 
 - [x] **1.1** Reloading the page reopens the open questionnaire. "Or pick up" lists every questionnaire of the person, most recently used first.
 - [x] **1.2** Uploading a file the person already has as a questionnaire offers to open it, or to start fresh.
-- [ ] **1.3** A "Needs review" filter with counts shows first the answers the gate holds back, plus failed ones. A fixed bar keeps Fill and the counts in reach.
+- [x] **1.3** A "Needs review" filter with counts shows first the answers the gate holds back, plus failed ones. A fixed bar keeps Fill and the counts in reach.
 - [x] **1.4** Each answer is saved as it finishes. A second run on a questionnaire that is still being answered is refused. Reopening it shows the progress.
 - [x] **1.5** Leaving the page with an unsaved answer or unsaved typed answers asks first.
 
@@ -121,6 +121,7 @@ All stages:
   - Room for 1.4 (R3, behaviour-neutral, its own commit): the Word preview moved out of `service` into `src/docx_preview.py` (integrations layer, which owns python-docx); `service.docx_preview_html` still names it. TD-019 resolved: its allow-list entry is gone. Its three helpers gained type annotations, which drops 3 errors from the mypy baseline (240 to 237). `service.py` ceiling 591 to 462.
   - 1.4: `service.answer_questions` hands each answer, failed ones too, to `on_answer` before it is counted, and `tools.answer` saves it there (`batches.saver`); the end-of-run save stays, for the styled wording. `src/busy.py` (foundation layer, in memory) holds a questionnaire for the length of a run, a rewording or a shortening; `tools._require` refuses any change to it meanwhile with 409 `questionnaire_busy` (a `ToolError` too, so the chat's model is told), while reading and filling go on. `GET /api/forms/{id}` says how far the run has got (`running`). The Workbench locks a questionnaire being answered, shows the progress and draws it again when the run ends; after a reload, and when the answer request fails with no code of its own (nginx's 502 or 504, a dropped line) or with 409, it follows the run instead of offering Answer again. 21 tests: 19 unit and API (8 in the new `tests/test_busy.py`, 3 in `test_concurrency.py`, 6 in `test_tools.py`, 2 of them guarding that a brief questionnaire still gets its briefs and that a failed run lets go, 1 API, 1 assistant) and 2 browser (a reload mid-run, and a 504 from the proxy), each failing on the old code. Changed on purpose: `test_preferences_are_never_handed_to_the_answering_pipeline` now allows `on_answer` among the pipeline's arguments, which is where answers are saved, not a wording instruction. The full browser suite (69) passes.
   - Ceilings: the moves lowered `tools.py` to 1,294 and `service.py` to 462 in their own commits; 1.4 brings them to 1,303 and 469, still below where the stage started (1,347 and 591). The same as Stage 0's 1,334 to 1,347 (TD-006). New debt: TD-063 (the hold is per process), TD-064 (a run that never ends holds its questionnaire). D-021 records the defaults of 1.1, 1.2, 1.4 and 1.5.
+  - 1.3, the page only (and `edited_by` on the shared card): the review is in tabs, Needs review, Will be written, Done by a person, Blank or set aside, and All, each with its count, by the gate's verdict as the server gave it (`will_be_written`); failed answers count as needing review. It opens on Needs review when there is anything in it, and again after each run; approving or editing keeps the person's tab. Each card keeps its index in the answers, so the card's hooks are unchanged. A bar under the page header holds the tabs, "N will be written · M need review", Fill (moved there, its id kept) and what the last click did; Fill's report is under the bar, scrolled into view, and gains "Show them". "Write them in anyway" stays in the report only. The "need review" count above the cards is the tab's count. The question list folds into one line once a questionnaire has answers, unless the person opens or closes it themselves; "+ Add a question" opens it. 7 browser tests in the new `tests/browser/test_review_filter.py` (a 40-row fixture, `shapes.numbered`), each failing on the old page. Changed on purpose: the two browser tests that follow one held card through approving and withdrawing (`test_write_them_in_anyway_writes_no_more_than_it_counted`, `test_withdrawing_an_approval_shows_the_answer_held_again`) first click All, because an approved answer now leaves Needs review. The full browser suite (76) passes.
 
 ## Decision log
 
@@ -264,3 +265,13 @@ Use a local copy, not the team's data.
 5. Optional, in Chrome: during a run press F12, then Network, and set Offline, then back to Online. The page says the connection timed out but the answering carries on there, then shows the answers.
 6. On the server, answer a questionnaire of more than 100 questions. After 15 minutes, instead of "Request failed (504)", the page says it carries on, and the answers arrive.
 7. "Close questionnaire" works during a run: the run carries on, and opening the questionnaire again shows its progress.
+
+### 1.3 Reviewing starts with the answers that need you
+
+1. Open a questionnaire whose answers include some marked for review, and answer it.
+2. The review section opens on "Needs review", with a count on each tab. Only the answers that need you are shown: flagged ones, ones with a low confidence even when not flagged, and ones that failed.
+3. Approve or edit one. It leaves the list, the counts change, and the bar says what happened ("Approved…").
+4. Scroll anywhere among the answers. The bar with the tabs, the counts and "Fill the original file" stays at the top, under the page header.
+5. Click Fill. The result appears under the bar. Only there, if answers were held back, do you see the count, "Show them" and "Write them in anyway".
+6. The long question list above the answers is folded into one line ("Show the 59 questions…"). Click it to see the questions; "+ Add a question" opens it too.
+7. Click "All" to see every answer, as before. Leave a card blank, or set a row aside: they are under "Blank or set aside", where a set-aside row has "Include".

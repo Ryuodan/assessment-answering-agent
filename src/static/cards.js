@@ -248,6 +248,7 @@ const Cards = (window.Cards = {
       by_hand: question.by_hand,
       will_be_written: question.will_be_written,
       held_back_because: question.held_back_because,
+      edited_by: question.edited_by,  // a person's edit: the Workbench's "Done by a person" (plan 029)
       set_aside: question.skip,
       prefer: question.prefer,
       // What the server resolved this answer's length to: its own preference if

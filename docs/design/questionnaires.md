@@ -618,6 +618,18 @@ page then said the remembered number (plan 029's review). An answer held since
 the list was made stays out and is offered again, and the first line says how
 many went in as the server counted them (`written_anyway`).
 
+**The Workbench reviews in the gate's own terms** (plan 029, 1.3). Its answers
+are in tabs by what the server says `fill` would do with each
+(`will_be_written`): Needs review (held back, or failed), Will be written
+(confident, nobody has checked), Done by a person, Blank or set aside, and All.
+The page does not repeat the threshold. A questionnaire opens on Needs review
+when it has anything, and so does the first view after a run; otherwise the
+person's tab is kept. Fill and the counts stay in a bar under the page header,
+and "Write them in anyway" is offered only in Fill's report, never in the bar.
+The "need review" count above the cards is the tab's count: it used to count
+the reviewer's flag, so an answer under the threshold that nobody flagged was
+held back by Fill and counted nowhere.
+
 **Withdrawing an approval puts the review back** (plan 029, TD-053). Approving
 clears the flag, and withdrawing used to leave it cleared, so an answer the gate
 had held went into the file as if confident. An approval now keeps the flag and

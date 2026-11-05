@@ -192,6 +192,9 @@ def test_write_them_in_anyway_writes_no_more_than_it_counted(page: Page, tmp_pat
     from src.forms.reading import read
 
     read_and_answer(page, tmp_path)
+    # Plan 029, 1.3: the review opens on "Needs review", which an approved
+    # answer leaves; this test follows the cards themselves, so it shows All.
+    page.locator("#reviewTabs").get_by_role("button", name=re.compile("^All")).click()
     cards = page.locator("#results .answer")
     for index in (0, 1):
         cards.nth(index).get_by_role("button", name="Approve", exact=True).click()
