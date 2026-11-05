@@ -2422,7 +2422,7 @@
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
      "composerAdd", "composerInput", "extractBtn", "assessmentInput",
      "guidelinesBtn", "kbClear", "retryFailed",
-     "fillFormBtn", "reviseBtn", "reviseInstruction"].forEach((id) => {
+     "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
       if (locked) {
@@ -2436,8 +2436,19 @@
       }
     });
     document.body.classList.toggle("answering", locked);
-    if (running()) $("fillFormBtn").disabled = true;  // answered on the server: still arriving
+    paintFill();
     describeFormProduct();  // fixed while answering, and once anything is answered
+  }
+
+  /* Fill waits while this page is answering, and rewording what it just
+     answered; while the server answers the questionnaire for a run this page
+     is not waiting on (plan 029, 1.4); and while a fill is on its way. Its
+     own rule, worked out each time: kept as a flag to put back, a redraw
+     during the run's rewording enabled it, and a fill could go out with
+     wording about to change (plan 029's review). */
+  let filling = false;
+  function paintFill() {
+    $("fillFormBtn").disabled = answering || running() || filling;
   }
 
   /* An edit on a card is the person overruling the system, and it has to reach
@@ -3384,7 +3395,7 @@
     // Filling needs a file to fill. Rewording only needs answers, and works the
     // same on a list of typed questions as it does on a questionnaire.
     $("fillFormBtn").hidden = !formBatch;
-    $("fillFormBtn").disabled = running();  // its answers are still arriving (plan 029, 1.4)
+    paintFill();
     $("reviewBar").hidden = !(formBatch && result && result.answers.length);
     $("reviseRow").hidden = !(result && result.answers.length);
     describeFormProduct();
@@ -3559,8 +3570,8 @@
     // The questionnaire this filled, whatever is open by the time its file is downloaded.
     const id = formBatch.id;
     const batch = formBatch;
-    const button = $("fillFormBtn");
-    button.disabled = true;
+    filling = true;
+    paintFill();
     try {
       const body = { include_unreviewed: includeUnreviewed === true };
       if (body.include_unreviewed) body.unreviewed_ids = agreed || [];
@@ -3675,7 +3686,8 @@
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
     } finally {
-      button.disabled = running();
+      filling = false;
+      paintFill();
     }
   }
 

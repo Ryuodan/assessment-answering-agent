@@ -296,6 +296,43 @@ def test_fills_report_from_far_down_the_list_is_not_behind_the_bar(page: Page, t
         page.wait_for_function(UNCOVERED, arg=shown.element_handle(), timeout=5_000)
 
 
+@pytest.fixture
+def slow_rewording(monkeypatch: pytest.MonkeyPatch):
+    """The wording instruction's pass after a run, held until `set()`."""
+    import asyncio
+    import threading
+
+    gate = threading.Event()
+
+    async def reword(answered, instruction, language=None, *, note=""):
+        while not gate.is_set():
+            await asyncio.sleep(0.05)
+        return answered.model_copy(update={"answer": "Yes."})
+
+    monkeypatch.setattr("src.tools.rewrite.rewrite", reword)
+    yield gate
+    gate.set()  # a rewording never outlives its test waiting
+
+
+def test_fill_waits_while_the_run_is_reworded(page: Page, tmp_path: Path, one_held: None, slow_rewording) -> None:
+    """Plan 029's review: drawing the answers before the rewording pass enabled Fill, and a fill
+    could go out with the wording about to change."""
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
+    page.click("#extractBtn")
+    expect(page.locator("#questionList .qrow")).to_have_count(4)
+    page.fill("#answerStyle", "Shorter.")
+    page.click("#answerBtn")
+
+    expect(page.locator("#reviewBar")).to_be_visible(timeout=15_000)
+    expect(page.locator("#answerStatus")).to_contain_text("Reword")
+    expect(page.locator("#fillFormBtn")).to_be_disabled()
+
+    slow_rewording.set()
+    expect(page.locator("#answerStatus")).to_contain_text("Reworded 4 answer(s).")
+    expect(page.locator("#fillFormBtn")).to_be_enabled()
+
+
 def test_writing_held_answers_in_anyway_is_offered_only_after_fill(page: Page, tmp_path: Path, mixed: None) -> None:
     answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
     expect(page.locator("#reviewBar").get_by_role("button", name=re.compile("anyway"))).to_have_count(0)
