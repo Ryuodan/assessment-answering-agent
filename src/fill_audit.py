@@ -9,8 +9,11 @@ Read-only. Two lists, from the event log and the answers as they are today:
   that recorded 0, of a questionnaire with an answer the gate holds today that
   was last saved at or before the fill, wrote that answer: certain. An answer
   saved after the fill was in a state nothing recorded, so it is counted as
-  unknown. Since the fix, a fill records the gate's count and `include_unreviewed`,
-  so a deliberate "Write them in anyway" is listed from its own record.
+  unknown, and so is an answer cleared after it. A fill of a questionnaire that
+  is no longer on the server is listed as unknown rather than dropped. Since
+  the fix, a fill records the gate's count and `include_unreviewed`, and which
+  held answers "Write them in anyway" wrote (`written_anyway`), so that is
+  listed from its own record.
 - **Approvals withdrawn before plan 029.** Withdrawing an approval left the answer
   released (TD-053). Those still pass the gate today although the review's own
   rule (`verification.assess`: any reason, or a score at or under the threshold)
@@ -42,10 +45,21 @@ class HeldFill:
     held_back_recorded: int
     include_unreviewed: bool | None
     """None: recorded before plan 029, when a fill did not say."""
+    written_anyway: list[str] | None = None
+    """The held answers "Write them in anyway" wrote, by question id; None: not recorded (before plan 029's review)."""
     held_unchanged: list[str] = field(default_factory=list)
     """Questions held by the gate today and last saved at or before the fill: written held."""
     changed_since: list[str] = field(default_factory=list)
-    """Answers saved after the fill: what they were at the time is not known."""
+    """Answers saved or cleared after the fill: what they were at the time is not known."""
+    gone: bool = False
+    """The questionnaire is no longer on the server, so what the fill wrote cannot be read back."""
+
+    @property
+    def wrote_anyway(self) -> bool:
+        """Whether the record says held answers went in on purpose."""
+        if self.include_unreviewed is not True:
+            return False
+        return bool(self.written_anyway) if self.written_anyway is not None else self.held_back_recorded > 0
 
 
 @dataclass
@@ -66,39 +80,59 @@ class Released:
 def held_fills(team_id: str) -> list[HeldFill]:
     """The team's fills that wrote answers the gate holds back: certain ones first, then unknown ones."""
     found: list[HeldFill] = []
+    removed = _removed_at(team_id)
     for event in events.of_kind(team_id, events.FILE_FILLED):
         recorded = event.payload
         include = recorded.get("include_unreviewed")
         if recorded.get("held_back", 0) and include is not True:
             continue  # the gate held them back, and the record says so
+        anyway = recorded.get("written_anyway")
         batch = batches.load(event.subject_id, team_id=team_id)
-        if batch is None:
-            continue
-        answered, edits, saved = batches.answers(batch.id), batches.edited_by(batch.id), batches.saved_at(batch.id)
         fill = HeldFill(
             filled_at=event.created_at,
-            batch_id=batch.id,
-            source_name=batch.source_name,
+            batch_id=event.subject_id,
+            source_name=batch.source_name if batch else "",
             filled_by=event.actor_email,
-            owner=batch.actor_email,
+            owner=batch.actor_email if batch else "",
             written=int(recorded.get("written", 0)),
             held_back_recorded=int(recorded.get("held_back", 0)),
             include_unreviewed=include,
+            written_anyway=[str(q) for q in anyway] if isinstance(anyway, list) else None,
+            gone=batch is None,
         )
+        if batch is None:
+            if fill.wrote_anyway or (include is None and fill.written):
+                found.append(fill)  # what it held cannot be read back: unknown, not dropped
+            continue
+        answered, edits, saved = batches.answers(batch.id), batches.edited_by(batch.id), batches.saved_at(batch.id)
         for question in batch.form.questions:
             result = answered.get(question.id)
             if result is None:
+                # Cleared, or "Leave blank" taken back, after the fill: what it was then is not known.
+                if removed.get((batch.id, question.id), "") > event.created_at:
+                    fill.changed_since.append(question.id)
                 continue
             if saved.get(question.id, "") > event.created_at:
                 fill.changed_since.append(question.id)
             elif (
-                _has_answer(result) and not question.skip and not ready_to_write(result, edits.get(question.id, ""))[0]
+                _has_answer(result)
+                and not question.skip
+                and not ready_to_write(result, edits.get(question.id, ""))[0]
+                and (fill.written_anyway is None or question.id in fill.written_anyway)
             ):
                 fill.held_unchanged.append(question.id)
-        known = bool(fill.held_unchanged) or (include is True and fill.held_back_recorded > 0)
-        if known or (include is None and fill.changed_since and fill.written):
+        if fill.held_unchanged or fill.wrote_anyway or (include is None and fill.changed_since and fill.written):
             found.append(fill)
-    return sorted(found, key=lambda fill: not (fill.held_unchanged or fill.include_unreviewed))
+    return sorted(found, key=lambda fill: (fill.gone, not (fill.held_unchanged or fill.wrote_anyway)))
+
+
+def _removed_at(team_id: str) -> dict[tuple[str, str], str]:
+    """When each answer was last removed (cleared, or "Leave blank" taken back), by questionnaire and question."""
+    removed: dict[tuple[str, str], str] = {}
+    for event in events.of_kind(team_id, events.ANSWER_EDITED):
+        if event.payload.get("cleared") is True or event.payload.get("blanked") is False:
+            removed[(event.subject_id, str(event.payload.get("question_id", "")))] = event.created_at
+    return removed
 
 
 def released_by_withdrawal(team_id: str, *, threshold: float | None = None) -> list[Released]:
@@ -153,15 +187,20 @@ def report(fills: list[HeldFill], released: list[Released]) -> list[str]:
         how = "before the fix" if fill.include_unreviewed is None else "written anyway"
         if fill.include_unreviewed is False:
             how = "gate kept"
+        elif fill.written_anyway is not None:
+            how = f"{len(fill.written_anyway)} written anyway"
         lines.append(
-            f"{_when(fill.filled_at)}  {fill.source_name}  (batch {fill.batch_id})  filled by {fill.filled_by}"
+            f"{_when(fill.filled_at)}  {fill.source_name or 'questionnaire no longer on the server'}"
+            f"  (batch {fill.batch_id})  filled by {fill.filled_by}"
             f"  wrote {fill.written}  recorded held {fill.held_back_recorded}, {how}"
         )
+        if fill.gone:
+            lines.append("    the questionnaire is gone, so what this fill wrote is not known")
         if fill.held_unchanged:
             count = len(fill.held_unchanged)
             lines.append(f"    held today and unchanged since the fill: {count}  ({_some(fill.held_unchanged)})")
         if fill.changed_since:
-            lines.append(f"    saved after the fill, state then unknown: {len(fill.changed_since)}")
+            lines.append(f"    saved or cleared after the fill, state then unknown: {len(fill.changed_since)}")
     lines += ["", f"Approvals withdrawn before the fix, written as if confident: {len(released)}"]
     for answer in released:
         reasons = "; ".join(answer.reasons) or "no reason recorded"

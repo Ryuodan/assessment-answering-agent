@@ -115,6 +115,9 @@ All stages:
     - The fill event records what the gate held, and whether "Write them in anyway" was used.
     - The "nothing written" message says that answers are held back, when they are.
     - A read-only command (`inspect fills`) lists the questionnaires filled with held answers before the fix. The user decides what to tell the team.
+  - **0.1, after the review of Stage 0:**
+    - "Write them in anyway" writes only the held answers it listed and counted. An answer held after that list was made (an approval withdrawn, a question answered) stays out and is offered again. The first line says how many went in, as the server counted them.
+    - `inspect fills` lists an answer cleared after a fill, and a fill of a questionnaire that is gone, as unknown, rather than leaving them out.
   - **0.2:**
     - An approval keeps the review flag and reasons it replaced, and a withdrawal restores them.
     - Rewording follows the same rule.
@@ -158,14 +161,15 @@ Use a local copy of the app, not the server the team uses. Each item says what t
 4. Click "Which, and why". Each held question is listed with its number, the start of its text and the reason it was held.
 5. If anything was written, click "Download the filled file" and open it. The held questions are empty, or keep what the file already had.
 6. Click "Write them in anyway". A question asks first and counts them. Click Cancel: nothing changes. Click the button again and OK: the first line says "Wrote … including N answer(s) nobody has confirmed". Download again: those cells are now filled.
+7. Answers can change after Fill. Click Approve on two held cards, then Fill: the panel says 2 fewer were held back. Click "Approved ✓" on one of those two cards to withdraw it. Now click "Write them in anyway": the question still counts the answers in the list, and after OK the first line says that many went in. The card you withdrew was not in the list, so it is not written: the panel says "1 answer(s) were held back" and offers "Write them in anyway" for it alone.
 
 ### 0.1b Which files were already filled with held answers
 
 For whoever runs the server, in the app's folder:
 
 1. Run `uv run python -m src.cli inspect fills` (add `--team <team>` for another team). It changes nothing.
-2. It lists each fill that wrote answers the review gate holds back. Older Workbench fills say "before the fix"; the fill from step 6 above says "written anyway".
-3. Under each fill: how many held answers are unchanged since the fill (these certainly went into that file), and how many were saved after it (unknown).
+2. It lists each fill that wrote answers the review gate holds back. Older Workbench fills say "before the fix"; the fill from step 6 above says "4 written anyway" (the number it wrote).
+3. Under each fill: how many held answers are unchanged since the fill (these certainly went into that file), and how many were saved or cleared after it (unknown). A fill of a questionnaire that is no longer on the server is listed too, as "questionnaire no longer on the server": what it wrote is not known.
 4. At the end: answers whose approval was withdrawn before the fix and that still go into the file as if confident. Open each on the Workbench, and edit or approve it.
 
 ### 0.2 Withdrawing an approval holds the answer back again

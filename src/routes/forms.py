@@ -8,8 +8,10 @@ the same.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src import tools
 from src.identity import User
@@ -31,16 +33,25 @@ class FillRequest(BaseModel):
     somebody should have to mean.
     """
 
+    unreviewed_ids: list[str] | None = Field(default=None, max_length=2000)
+    """With `include_unreviewed`: which held answers to write, by question id.
+
+    The ones the person was shown and agreed to. An answer held since then
+    stays out and is reported as held back, so a confirm that counted N never
+    writes more than N (plan 029's review). Left out: every held answer.
+    """
+
 
 @router.post("/api/forms/{batch_id}/fill")
 def fill_questionnaire(
     batch_id: str,
     request: FillRequest | None = None,
     user: User = Depends(current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Write the confirmed answers into a copy of the original, and report the rest."""
     include = bool(request and request.include_unreviewed)
-    filled = tools.fill(user, batch_id, include_unreviewed=include)
+    chosen = request.unreviewed_ids if request else None
+    filled = tools.fill(user, batch_id, include_unreviewed=include, unreviewed_ids=chosen)
     return {
         "file": filled.path.name,
         "written": filled.written,
@@ -50,5 +61,6 @@ def fill_questionnaire(
         "skipped": filled.skipped,
         "blank": filled.blank,
         "held_back": filled.held_back,
+        "written_anyway": len(filled.written_anyway),
         "because": filled.because,
     }

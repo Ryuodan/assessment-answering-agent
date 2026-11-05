@@ -223,9 +223,12 @@ of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
 when `selection.ready_to_write` says so: a person confirmed it, or it is neither
 flagged nor under `REVIEW_CONFIDENCE_THRESHOLD`. The rest are held back and
 listed with their reasons, and written only when the request says
-`include_unreviewed` (the Workbench's "Write them in anyway"). The `file_filled`
-event records how many the gate held (`held_back`) and whether they were written
-anyway (`include_unreviewed`; absent on events from before plan 029).
+`include_unreviewed` (the Workbench's "Write them in anyway"). The Workbench
+also names them (`unreviewed_ids`): the held answers the person was shown, so an
+answer held since stays out; the response says how many went in
+(`written_anyway`). The `file_filled` event records how many the gate held
+(`held_back`), whether they were written anyway (`include_unreviewed`), and
+which (`written_anyway`); events from before plan 029 have neither key.
 
 **Talking to the assistant.** `POST /api/chat` (`src/routes/chat.py`) loads a
 `Conversation`, or starts one for the `product` sent, and calls

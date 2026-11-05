@@ -326,6 +326,28 @@ def test_the_download_does_not_exist_until_the_form_is_filled(client, tmp_path, 
     assert download.content[:2] == b"PK", "a real .xlsx comes back"
 
 
+def test_writing_anyway_over_http_writes_only_the_answers_named(client, tmp_path, monkeypatch):
+    """Plan 029's review: "Write them in anyway" names the held answers the person
+    agreed to, and the response says how many went in."""
+
+    async def flagged(questions, language=None, run_id=None, **extra):
+        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.3, needs_review=True) for q in questions]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", flagged)
+    opened = _upload(client, shapes.simple(tmp_path / "vendor.xlsx")).json()
+    first, second = (q["id"] for q in opened["questions"][:2])
+    client.post(f"/api/forms/{opened['id']}/answer", json={})
+
+    gated = client.post(f"/api/forms/{opened['id']}/fill", json={"include_unreviewed": False}).json()
+    assert len(gated["held_back"]) == 4 and gated["written_anyway"] == 0
+
+    anyway = client.post(
+        f"/api/forms/{opened['id']}/fill", json={"include_unreviewed": True, "unreviewed_ids": [first, second]}
+    ).json()
+    assert anyway["written_anyway"] == 2 and anyway["written"] == 2
+    assert first not in anyway["held_back"] and len(anyway["held_back"]) == 2
+
+
 def test_filling_reports_what_was_left_blank_and_why(client, tmp_path, answers_yes):
     path = shapes.build(
         tmp_path / "ev.xlsx",

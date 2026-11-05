@@ -610,6 +610,14 @@ answers are listed under **Which, and why** with their reasons, and the fill
 event records what the gate held and whether it was opened. `python -m src.cli
 inspect fills` lists the fills from before the fix that wrote held answers.
 
+"Write them in anyway" names the answers it counted (`unreviewed_ids`), and the
+server writes those and no others. The list is the last Fill's, and answers
+change after it: an approval withdrawn, a question answered. Writing whatever
+was held at the click put answers in under a count that left them out, and the
+page then said the remembered number (plan 029's review). An answer held since
+the list was made stays out and is offered again, and the first line says how
+many went in as the server counted them (`written_anyway`).
+
 **Withdrawing an approval puts the review back** (plan 029, TD-053). Approving
 clears the flag, and withdrawing used to leave it cleared, so an answer the gate
 had held went into the file as if confident. An approval now keeps the flag and

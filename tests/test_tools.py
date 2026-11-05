@@ -803,6 +803,48 @@ async def test_a_gated_fill_records_that_the_gate_was_kept(batch, user, answers_
 
     recorded = _filled_event(batch.id).payload
     assert recorded["held_back"] == 4 and recorded["include_unreviewed"] is False
+    assert recorded["written_anyway"] == []
+
+
+@pytest.mark.asyncio
+async def test_writing_anyway_writes_only_the_answers_the_person_agreed_to(batch, user, answers_doubtfully):
+    """Plan 029's review: the confirm counted the answers held at the last fill,
+    and the server wrote whatever was held by the time of the click. An answer
+    held since then went in under a count that did not include it."""
+    from src.forms.reading import read
+
+    await tools.answer(user, batch.id)
+    first, second, third, fourth = (q.id for q in batch.form.questions)
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, second)
+    shown = tools.fill(user, batch.id).held_back
+    assert set(shown) == {third, fourth}
+    tools.approve_answer(user, batch.id, first, approved=False)  # held again, after the person was shown two
+
+    filled = tools.fill(user, batch.id, include_unreviewed=True, unreviewed_ids=list(shown))
+
+    assert filled.written_anyway == [third, fourth]
+    assert set(filled.held_back) == {first}, "held since: kept out, and offered again"
+    assert filled.written == 3
+    recorded = _filled_event(batch.id).payload
+    assert recorded["held_back"] == 3 and recorded["written_anyway"] == [third, fourth]
+    written = read(filled.path, "rules").form.questions
+    assert [bool(q.existing_answer) for q in written] == [False, True, True, True]
+
+
+@pytest.mark.asyncio
+async def test_writing_anyway_without_naming_them_writes_every_held_answer(batch, user, answers_doubtfully):
+    """Scripts and the API that do not name the answers keep today's meaning."""
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, include_unreviewed=True)
+    assert filled.written_anyway == [q.id for q in batch.form.questions] and filled.held_back == {}
+
+
+@pytest.mark.asyncio
+async def test_naming_answers_does_not_open_the_gate_by_itself(batch, user, answers_doubtfully):
+    await tools.answer(user, batch.id)
+    filled = tools.fill(user, batch.id, unreviewed_ids=[q.id for q in batch.form.questions])
+    assert filled.written == 0 and filled.written_anyway == [] and len(filled.held_back) == 4
 
 
 @pytest.mark.asyncio

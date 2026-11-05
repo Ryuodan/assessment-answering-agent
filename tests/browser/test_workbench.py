@@ -171,12 +171,45 @@ def test_write_them_in_anyway_asks_first_then_writes_them(page: Page, tmp_path: 
     expect(filled).to_contain_text(
         "Wrote 4 value(s) into vendor - answered.xlsx, including 4 answer(s) nobody has confirmed"
     )
-    assert sent == [{"include_unreviewed": True}]
+    [batch] = batches.recent(settings.default_team)
+    opened = batches.load(batch["id"])
+    # The answers it was shown, by id, since plan 029's review: the server writes those and no others.
+    assert sent == [{"include_unreviewed": True, "unreviewed_ids": [q.id for q in opened.form.questions]}]
     expect(filled.get_by_role("button", name="Write them in anyway")).to_have_count(0)
+
+    written = read(tools._filled_path(opened), "rules").form.questions
+    assert [q.existing_answer for q in written] == [ANSWER] * 4
+
+
+def test_write_them_in_anyway_writes_no_more_than_it_counted(page: Page, tmp_path: Path, answers_doubtfully) -> None:
+    """Plan 029's review: the confirm counted the answers held at the last Fill,
+    and the server wrote whatever was held at the click. Withdrawing an approval
+    in between put a third answer in under "Write 2" and "including 2"."""
+    from src import batches, tools
+    from src.forms.reading import read
+
+    read_and_answer(page, tmp_path)
+    cards = page.locator("#results .answer")
+    for index in (0, 1):
+        cards.nth(index).get_by_role("button", name="Approve", exact=True).click()
+        expect(cards.nth(index).get_by_role("button", name="Approved ✓")).to_be_visible()
+    page.click("#fillFormBtn")
+    filled = page.locator("#formFilled")
+    expect(filled).to_contain_text("2 answer(s) were held back")
+
+    cards.first.get_by_role("button", name="Approved ✓").click()  # held again, after the list was made
+    expect(page.locator("#answerStatus")).to_contain_text("It will be held back")
+
+    asked: list[str] = []
+    page.once("dialog", lambda dialog: (asked.append(dialog.message), dialog.accept()))
+    filled.get_by_role("button", name="Write them in anyway").click()
+    expect(filled).to_contain_text("Wrote 3 value(s) into vendor - answered.xlsx, including 2 answer(s) nobody")
+    assert asked and "Write 2 unconfirmed answer(s)" in asked[0]
+    expect(filled).to_contain_text("1 answer(s) were held back")
 
     [batch] = batches.recent(settings.default_team)
     written = read(tools._filled_path(batches.load(batch["id"])), "rules").form.questions
-    assert [q.existing_answer for q in written] == [ANSWER] * 4
+    assert [q.existing_answer for q in written] == ["", ANSWER, ANSWER, ANSWER]
 
 
 def test_a_file_name_is_shown_as_text_never_as_markup(page: Page) -> None:

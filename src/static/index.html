@@ -3112,9 +3112,12 @@
 
   /* `includeUnreviewed` must be exactly `true` to open the gate: the button's
      handler once passed its click event here, which is truthy, and every fill
-     from this page wrote the held answers (TD-052). `unconfirmed` is how many
-     the person agreed to write anyway, said back in the first line. */
-  async function fillTheForm(includeUnreviewed, unconfirmed) {
+     from this page wrote the held answers (TD-052). `agreed` names the held
+     answers the person was shown and agreed to write anyway: the server writes
+     those and no others, so an answer held since the last fill (an approval
+     withdrawn, a new answer) cannot go in under a count that left it out. The
+     first line then says how many went in, as the server counted them. */
+  async function fillTheForm(includeUnreviewed, agreed) {
     if (!formBatch) return;
     // The questionnaire this filled, whatever is open by the time its file is downloaded.
     const id = formBatch.id;
@@ -3122,10 +3125,13 @@
     const button = $("fillFormBtn");
     button.disabled = true;
     try {
+      const body = { include_unreviewed: includeUnreviewed === true };
+      if (body.include_unreviewed) body.unreviewed_ids = agreed || [];
       const filled = await request("/api/forms/" + id + "/fill", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ include_unreviewed: includeUnreviewed === true }),
+        body: JSON.stringify(body),
       });
+      const unconfirmed = filled.written_anyway || 0;
       const panel = $("formFilled");
       panel.hidden = false;
       const blanks = Object.keys(filled.blank || {}).length;
@@ -3153,7 +3159,8 @@
       /* Held back, and the way past it. An answer nobody has confirmed is not
          written, and the person has to be able to see which and decide -- so
          the count, the reason, and a button that writes them anyway. */
-      const heldCount = Object.keys(filled.held_back || {}).length;
+      const heldIds = Object.keys(filled.held_back || {});
+      const heldCount = heldIds.length;
       if (heldCount) {
         const note = document.createElement("div");
         note.className = "blanks held-note";
@@ -3166,7 +3173,8 @@
         anyway.onclick = () => {
           if (confirm("Write " + heldCount + " unconfirmed answer(s) into the file?\n\n" +
                       "These are the ones the system is least sure about. " +
-                      "Their reasons are listed under 'Which, and why'.")) fillTheForm(true, heldCount);
+                      "Their reasons are listed under 'Which, and why'. " +
+                      "An answer held back since this list was made stays out.")) fillTheForm(true, heldIds);
         };
         note.append(anyway);
         panel.append(note);

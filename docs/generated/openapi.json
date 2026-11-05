@@ -4576,6 +4576,21 @@
             "type": "boolean",
             "title": "Include Unreviewed",
             "default": false
+          },
+          "unreviewed_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unreviewed Ids"
           }
         },
         "type": "object",

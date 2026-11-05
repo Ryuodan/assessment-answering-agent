@@ -480,6 +480,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - `FILE_FILLED` records the gate's count (`held_back`) in both modes, and `include_unreviewed`. Events from before have no `include_unreviewed` key.
   - `python -m src.cli inspect fills` lists the fills that wrote held answers before the fix (`src/fill_audit.py`). It is certain only for answers unchanged since the fill. What to tell the team, and which sent files to re-check, is the user's decision.
   - Tests: 2 browser tests in `tests/browser/test_workbench.py` (failing on the old page), 3 unit tests in `tests/test_tools.py`, 11 in `tests/test_fill_audit.py`.
+  - After the review of Stage 0: "Write them in anyway" counted the last Fill's list, but the server wrote whatever was held at the click, so an approval withdrawn in between went in under "Write 2" and "including 2" (3 were written). The request now names the answers it counted (`unreviewed_ids`), the server writes only those, and the first line says how many went in as the server counted them (`written_anyway`). The audit also lists answers cleared after a fill, and fills of questionnaires no longer on the server, as unknown. Tests: 3 unit and 1 API test, 1 browser test (failing on the old page), 5 in `tests/test_fill_audit.py`.
 
 ## TD-053: Withdrawing an approval leaves the answer released
 

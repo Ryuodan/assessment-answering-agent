@@ -98,6 +98,62 @@ def test_an_answer_saved_after_the_fill_is_counted_as_unknown(user, flagged, mon
     assert later not in found.held_unchanged and len(found.held_unchanged) == 3
 
 
+def test_written_anyway_lists_only_the_answers_it_wrote(user, flagged):
+    """Since plan 029's review "Write them in anyway" names the held answers, and
+    the event records which went in: the others were held and not written."""
+    agreed = [q.id for q in flagged.form.questions[:2]]
+    tools.fill(user, flagged.id, include_unreviewed=True, unreviewed_ids=agreed)
+
+    [found] = fill_audit.held_fills(TEAM)
+    assert found.written_anyway == agreed and found.held_unchanged == agreed
+    assert "2 written anyway" in "\n".join(fill_audit.report([found], []))
+
+
+def test_writing_none_of_them_anyway_is_not_listed(user, flagged):
+    tools.fill(user, flagged.id, include_unreviewed=True, unreviewed_ids=[])
+    assert fill_audit.held_fills(TEAM) == []
+
+
+def test_an_answer_cleared_after_the_fill_is_counted_as_unknown(user, flagged, monkeypatch):
+    """Plan 029's review: an answer emptied after a fill had no row left, and the
+    fill dropped out of the audit although the file sent may hold it."""
+    filled_before_the_fix(user, flagged)
+    monkeypatch.setattr(store, "utcnow", lambda: "2999-01-01T00:00:00+00:00")
+    cleared, unblanked = flagged.form.questions[0].id, flagged.form.questions[1].id
+    tools.set_answer(user, flagged.id, cleared, "")
+    tools.blank_answer(user, flagged.id, unblanked)
+    tools.blank_answer(user, flagged.id, unblanked, blank=False)
+    for question in flagged.form.questions[2:]:
+        tools.set_answer(user, flagged.id, question.id, "")
+
+    [found] = fill_audit.held_fills(TEAM)
+
+    assert sorted(found.changed_since) == sorted(q.id for q in flagged.form.questions)
+    assert found.held_unchanged == []
+
+
+def test_an_answer_cleared_before_the_fill_is_not_counted(user, flagged, monkeypatch):
+    first = flagged.form.questions[0].id
+    tools.set_answer(user, flagged.id, first, "")
+    monkeypatch.setattr(store, "utcnow", lambda: "2999-01-01T00:00:00+00:00")
+    filled_before_the_fix(user, flagged)
+
+    [found] = fill_audit.held_fills(TEAM)
+    assert first not in found.changed_since and first not in found.held_unchanged
+
+
+def test_a_fill_of_a_questionnaire_no_longer_here_is_listed_as_unknown(user, flagged):
+    filled_before_the_fix(user, flagged)
+    batches.delete(flagged.id)
+
+    [found] = fill_audit.held_fills(TEAM)
+
+    assert found.gone and found.batch_id == flagged.id and found.written == 4
+    assert not found.held_unchanged and not found.changed_since
+    printed = "\n".join(fill_audit.report([found], []))
+    assert "questionnaire no longer on the server" in printed and "not known" in printed
+
+
 def test_an_approved_answer_is_not_held_today(user, flagged):
     first = flagged.form.questions[0].id
     tools.approve_answer(user, flagged.id, first)

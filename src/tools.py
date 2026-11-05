@@ -24,6 +24,7 @@ re-exported here.
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -116,6 +117,9 @@ class Filled:
     Distinct from `blank`, which is a decision already made, and from
     `skipped`, which is the file refusing a value.
     """
+
+    written_anyway: list[str] = field(default_factory=list)
+    """Held answers written all the same, because a person said so ("Write them in anyway")."""
 
     intact: bool = True
 
@@ -984,6 +988,7 @@ def fill(
     destination: Path | None = None,
     *,
     include_unreviewed: bool = False,
+    unreviewed_ids: Collection[str] | None = None,
 ) -> Filled:
     """Write the answers into a copy of the original questionnaire.
 
@@ -991,6 +996,10 @@ def fill(
     the answer says. Evidence columns are left blank, which is the default the
     cyber-team asked for; an instruction can fill them, and that is a later
     tool rather than a hidden setting here.
+
+    `include_unreviewed` writes the answers the gate holds as well; `unreviewed_ids` narrows
+    that to the ones a person was shown and agreed to ("Write them in anyway"), so an answer
+    held since then stays out rather than going in under a count that did not include it.
     """
     from src import forms
 
@@ -1005,6 +1014,7 @@ def fill(
     values: dict[str, str] = {}
     blank: dict[str, str] = {}
     held: dict[str, str] = {}
+    anyway: list[str] = []  # held, and written all the same
 
     for question in batch.form.questions:
         result = answered.get(question.id)
@@ -1025,8 +1035,9 @@ def fill(
         allowed, because = ready_to_write(result, edits.get(question.id, ""))
         if not allowed:
             held[question.id] = because
-            if not include_unreviewed:
+            if not include_unreviewed or (unreviewed_ids is not None and question.id not in unreviewed_ids):
                 continue
+            anyway.append(question.id)
         for target in question.writable:
             if target.role is Role.EVIDENCE:
                 blank[target.id] = "evidence columns are left blank by default"
@@ -1049,7 +1060,7 @@ def fill(
     destination = destination or _filled_path(batch)
     destination.parent.mkdir(parents=True, exist_ok=True)
     report = forms.write(batch.source_path, destination, values)
-    kept_out = {} if include_unreviewed else held
+    kept_out = {question_id: why for question_id, why in held.items() if question_id not in anyway}
     events.record(
         user,
         events.FILE_FILLED,
@@ -1059,9 +1070,10 @@ def fill(
         created=len(report.created),
         replaced=len(report.replaced),
         left_blank=len(blank),
-        # What the gate held, and whether they went in anyway ("Write them in anyway", TD-052).
+        # What the gate held, and which went in anyway ("Write them in anyway", TD-052).
         held_back=len(held),
         include_unreviewed=include_unreviewed,
+        written_anyway=anyway,  # question ids, for `inspect fills`
     )
     return Filled(
         path=destination,
@@ -1071,6 +1083,7 @@ def fill(
         skipped=report.skipped,
         blank=blank,
         held_back=kept_out,
+        written_anyway=anyway,
         intact=report.intact,
         because=nothing_written(batch.form, answered, kept_out) if not report.written else "",
     )

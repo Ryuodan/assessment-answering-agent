@@ -355,8 +355,16 @@ a plan relies on it.
   - The `file_filled` event records the gate's count (`held_back`) whether or
     not the gate was opened, and `include_unreviewed`. The fill response keeps
     `held_back` empty after a deliberate "Write them in anyway".
+  - "Write them in anyway" names the held answers the person was shown
+    (`unreviewed_ids`), and only those are written; one held since stays out
+    and comes back in `held_back`. The event records which went in
+    (`written_anyway`), and the response how many (plan 029's review: the
+    confirm counted the last Fill's list, and the server wrote what was held
+    at the click). A request that names none writes every held answer, as
+    before.
   - `python -m src.cli inspect fills` reads both to list the fills that wrote
-    held answers, and writes nothing.
+    held answers, and writes nothing. An answer cleared after a fill, and a
+    fill of a questionnaire no longer on the server, are listed as unknown.
 - **Consequences:** a withdrawal restores the flag the answer had, whatever
   the threshold is now; only an approval from before this uses today's
   threshold. Answers released by a withdrawal before this stay released until
