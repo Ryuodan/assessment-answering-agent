@@ -336,3 +336,32 @@ a plan relies on it.
   approvals already in flight when a product is deleted are not stopped
   (TD-045). `migrations.py` is at its 400-line limit (TD-046).
 - **Date:** 2026-10-19. **Status:** accepted. **Decided by:** the user (files and warning, TD-039; read-only work, plan 027); Claude (the folder layout, the tombstone table).
+
+## D-020: what the review gate held is kept, not derived
+
+- **Context:** the review gate (`selection.ready_to_write`) holds flagged and
+  low-confidence answers back from the customer's file. Two places lost what
+  it had said. Approving cleared the flag, and withdrawing the approval did
+  not put it back (TD-053). And a fill that wrote held answers recorded
+  `held_back=0` (TD-052), so nothing could show afterwards which files held them.
+- **Decision:**
+  - An approval keeps the flag and the reason it replaced, in the answer's
+    stored JSON (`AnsweredQuestion.before_approval`) rather than a column:
+    no migration (TD-046), every stored answer loads unchanged, and an older
+    build ignores the key. Withdrawing restores them, and rewording an
+    approved answer withdraws the approval the same way
+    (`selection.approve`, `selection.withdraw_approval`). An approval from
+    before kept nothing, so withdrawing it applies the review's rule again.
+  - The `file_filled` event records the gate's count (`held_back`) whether or
+    not the gate was opened, and `include_unreviewed`. The fill response keeps
+    `held_back` empty after a deliberate "Write them in anyway".
+  - `python -m src.cli inspect fills` reads both to list the fills that wrote
+    held answers, and writes nothing.
+- **Consequences:** a withdrawal restores the flag the answer had, whatever
+  the threshold is now; only an approval from before this uses today's
+  threshold. Answers released by a withdrawal before this stay released until
+  somebody edits or approves them: they are listed, not repaired. Events from
+  before have no `include_unreviewed` key.
+- **Date:** 2026-11-05. **Status:** accepted; a default the user can reverse
+  after testing plan 029. **Decided by:** the user (kept, not derived); Claude
+  (where it is kept, the event's fields, listing rather than repairing).
