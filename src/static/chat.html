@@ -139,12 +139,14 @@
   .convo.on .file { background: var(--surface); }
   .convo .file .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Shown on hover, and whenever the row has the keyboard's focus; always on a
-     touch screen, which is safe now that it asks first. */
+     touch screen, which is safe now that it asks first. The keyboard's focus,
+     not any focus: a rebuilt list puts focus back on the conversation just
+     opened, and after a mouse click that should not leave its ✕ showing. */
   .convo-row .forget {
     flex: none; opacity: 0; border: 0; background: transparent; color: var(--ink-faint);
     padding: 8px 8px; border-radius: var(--radius-sm); cursor: pointer;
   }
-  .convo-row:hover .forget, .convo-row:focus-within .forget, .convo-row .forget:focus-visible { opacity: 1; }
+  .convo-row:hover .forget, .convo-row:has(:focus-visible) .forget { opacity: 1; }
   .convo-row .forget:hover { color: var(--err); }
   @media (hover: none) { .convo-row .forget { opacity: 1; } }
   .history-status { padding: 4px 14px 10px; }
@@ -1628,6 +1630,7 @@
     const host = $("historyList");
     try {
       const data = await request("/api/chat");
+      const back = keyboardPlace(host);
       host.replaceChildren();
       if (!(data.conversations || []).length) {
         const none = document.createElement("div");
@@ -1635,6 +1638,7 @@
         none.style.padding = "4px 10px";
         none.textContent = "Nothing yet.";
         host.append(none);
+        if (back) $("newChat").focus();
         return;
       }
       data.conversations.forEach((c) => {
@@ -1642,6 +1646,7 @@
            inside the row's button, which no keyboard could reach (plan 029). */
         const item = document.createElement("div");
         item.className = "convo-row" + (c.id === conversationId ? " on" : "");
+        item.dataset.id = c.id;
         const row = document.createElement("button");
         row.type = "button";
         row.className = "convo" + (c.id === conversationId ? " on" : "");
@@ -1711,9 +1716,36 @@
         item.append(row, forget);
         host.append(item);
       });
+      if (back) putKeyboardBack(host, back);
     } catch (error) {
       host.textContent = error.message;
     }
+  }
+
+  /* Where the keyboard was in the history list, so a rebuilt list can put it
+     back. Opening a conversation and forgetting one both rebuild the list, and
+     focus fell to the page: Tab then went to the first row, not to the ✕ of
+     the row just opened (plan 029's review). */
+  function keyboardPlace(host) {
+    const active = document.activeElement;
+    const row = active && active.closest ? active.closest(".convo-row") : null;
+    if (!row || !host.contains(row)) return null;
+    return {
+      id: row.dataset.id,
+      forget: active.classList.contains("forget"),
+      index: Array.from(host.children).indexOf(row),
+    };
+  }
+
+  /* The same control of the same conversation; a forgotten one's place goes
+     to the conversation that took it, or the last one. */
+  function putKeyboardBack(host, back) {
+    const rows = Array.from(host.querySelectorAll(".convo-row"));
+    const same = rows.find((row) => row.dataset.id === back.id);
+    const target = same
+      ? same.querySelector(back.forget ? ".forget" : ".convo")
+      : rows[Math.min(back.index, rows.length - 1)].querySelector(".convo");
+    target.focus();
   }
 
   /* Dates the way somebody would say them: today and yesterday by the clock,

@@ -197,7 +197,8 @@ Use a local copy, not the team's data.
 1. Open the chat. In the history list, point at a conversation: an ✕ appears at its right.
 2. Click ✕. A question names the conversation (and its file, if it has one) and says it cannot be recovered. Click Cancel: it is still there. Click ✕ again and OK: it is gone.
 3. With the keyboard: click a conversation, then press Tab. The ✕ of that row shows, highlighted. Press Enter: the same question. Click Cancel.
-4. On a phone or tablet the ✕ is always shown, and tapping it asks first.
+4. Still with the keyboard, on a conversation that is not the open one: press Tab to reach its ✕, press Enter, then OK. The conversation goes, and the keyboard is on the conversation below it (or the last one): press Tab and its ✕ is highlighted.
+5. On a phone or tablet the ✕ is always shown, and tapping it asks first.
 
 ### 0.5 Edit on a Brief card edits the brief
 
