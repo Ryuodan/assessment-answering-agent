@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Error, Page, expect
 
 from src import access_codes, batches, identity, products, tools
 from src.config import settings
@@ -327,3 +327,67 @@ def test_pick_up_lists_every_questionnaire_last_changed_first(
     expect(page.locator("#formRecent .recent-list")).to_be_visible()
     expect(offered.first).to_contain_text("(1 answered)")
     expect(offered.first).to_have_attribute("title", re.compile("^Last changed "))
+
+
+# --- leaving with unsaved work asks first (plan 029, 1.5) ------------------------
+
+
+def leave(page: Page) -> list[str]:
+    """Close the page as a person closing the tab would, and stay if asked. The kinds of dialog it raised."""
+    asked: list[str] = []
+
+    def stay(dialog) -> None:
+        asked.append(dialog.type)
+        dialog.dismiss()
+
+    page.on("dialog", stay)
+    page.close(run_before_unload=True)
+    for _ in range(60):
+        if asked or page.is_closed():
+            break
+        try:
+            page.wait_for_timeout(50)
+        except Error:  # it closed while waiting: nothing was asked
+            break
+    return asked
+
+
+def test_leaving_with_an_edit_not_yet_saved_asks_first(page: Page, tmp_path: Path, answers_yes: None) -> None:
+    """The editor saves when it is left, and closing the tab does not leave it."""
+    read_and_answer(page, tmp_path)
+    card = page.locator("#results .answer").first
+    card.get_by_role("button", name="Edit", exact=True).click()
+    card.locator("textarea").press_sequentially(" Reviewed in March.")
+
+    assert leave(page) == ["beforeunload"]
+    assert not page.is_closed()
+    expect(card.locator("textarea")).to_have_value(ANSWER + " Reviewed in March.")
+
+
+def test_typed_questions_ask_before_leaving(page: Page) -> None:
+    """A question typed into the list is kept only by this page."""
+    page.goto("/workbench")
+    page.click("#addQuestionBtn")
+    page.get_by_role("textbox", name="Type a question").last.press_sequentially("Do you test your backups?")
+
+    assert leave(page) == ["beforeunload"]
+    assert not page.is_closed()
+
+
+def test_leaving_after_the_edit_is_saved_does_not_ask(page: Page, tmp_path: Path, answers_yes: None) -> None:
+    read_and_answer(page, tmp_path)
+    card = page.locator("#results .answer").first
+    card.get_by_role("button", name="Edit", exact=True).click()
+    card.locator("textarea").press_sequentially(" Reviewed in March.")
+    card.get_by_role("button", name="Done editing").click()
+    expect(page.locator("#answerStatus")).to_contain_text("Your edit is saved")
+
+    assert leave(page) == []
+    assert page.is_closed()
+
+
+def test_a_questionnaire_with_everything_saved_leaves_quietly(page: Page, tmp_path: Path, answers_yes: None) -> None:
+    read_and_answer(page, tmp_path)
+
+    assert leave(page) == []
+    assert page.is_closed()

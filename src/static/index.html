@@ -2298,6 +2298,19 @@
      answer belongs in, and recorded with their name on it. */
   const storedEdits = {};
 
+  /* Edits typed into a card and not yet saved, by card and length, with the
+     text the card had before (plan 029, 1.5). The editor saves when it is
+     left, and leaving the page does not reliably leave it, so these are what
+     a reload would lose. Typing the old text back is no edit at all. */
+  const unsavedEdits = new Map();
+  function noteEdit(item, index, text, which = "answer") {
+    const held = result && result.answers[index];
+    const key = item.__key + "\n" + which;
+    if (!unsavedEdits.has(key)) unsavedEdits.set(key, held ? held[which] || "" : "");
+    if (unsavedEdits.get(key) === text) unsavedEdits.delete(key);
+    if (held) held[which] = text;
+  }
+
   /* `which` is the text the card showed and the person edited: the brief only
      when the brief was on the card. Recomputed here, it said "brief" whenever
      the length was brief, and a card showing the full answer, because no
@@ -2305,8 +2318,11 @@
   async function storeEditedAnswer(item, index, text, which = "answer") {
     if (result && result.answers[index]) result.answers[index][which] = text;
     const entry = questions.find((q) => q.key === item.__key);
-    if (!formBatch || !entry || !entry.formId) return;
-    if (storedEdits[entry.formId + "\n" + which] === text) return;
+    if (!formBatch || !entry || !entry.formId) return;  // nowhere to keep it: still unsaved
+    if (storedEdits[entry.formId + "\n" + which] === text) {
+      unsavedEdits.delete(item.__key + "\n" + which);
+      return;
+    }
 
     const status = $("answerStatus");
     try {
@@ -2317,6 +2333,7 @@
         body: JSON.stringify({ question_id: entry.formId, text: text, which: which }),
       });
       storedEdits[entry.formId + "\n" + which] = text;
+      unsavedEdits.delete(item.__key + "\n" + which);
       // A cleared answer is gone from the batch, so its card goes too.
       if (!text.trim()) await adoptBatch(updated, { quiet: true });
       setStatus(status, text.trim()
@@ -2698,6 +2715,7 @@
       // What was written for the last file says nothing about this one, and
       // nor does what filling it did.
       Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+      unsavedEdits.clear();
       forgetFilling();
     }
     const sameFile = formBatch && formBatch.id === batch.id;
@@ -3657,6 +3675,7 @@
     if (!confirm(warning)) return;
     questions = [];
     result = null;
+    unsavedEdits.clear();
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
     setStatus($("answerStatus"), "");
@@ -3843,6 +3862,7 @@
     questions = [];
     result = null;
     Object.keys(storedEdits).forEach((key) => delete storedEdits[key]);
+    unsavedEdits.clear();
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
     $("formReport").hidden = true;
@@ -3889,7 +3909,7 @@
   Cards.onDiscard = discardQuestion;
   Cards.onRetry = retryQuestions;
   Cards.onOpenDocument = openDocument;
-  Cards.onEdit = (item, index, text, which) => { result.answers[index][which || "answer"] = text; };
+  Cards.onEdit = (item, index, text, which) => noteEdit(item, index, text, which || "answer");
   Cards.onEditDone = storeEditedAnswer;
   Cards.onBlank = leaveAnswerBlank;
   Cards.onApprove = approveAnswer;
@@ -3907,6 +3927,22 @@
       ? { text: held.brief, which: "brief" }
       : { text: held.answer || "", which: "answer" };
   };
+
+  /* Leaving with work only this page holds asks first (plan 029, 1.5): an
+     edit not yet saved, questions typed beside a file or into a list, and a
+     question half-typed into "Ask another question". Nothing is saved on the
+     way out: a half-typed answer saved would go into the file as the
+     person's own. A questionnaire being answered is not on the list: the run
+     carries on, and the questionnaire opens again. The browser words the
+     question itself. */
+  const unsavedWork = () => unsavedEdits.size > 0
+    || questions.some((q) => !q.formId && q.text.trim())
+    || $("composerInput").value.trim() !== "";
+  window.addEventListener("beforeunload", (event) => {
+    if (!unsavedWork()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
 
   loadSkills();
   loadKnowledge();

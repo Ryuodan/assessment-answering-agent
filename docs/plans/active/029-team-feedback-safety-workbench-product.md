@@ -63,7 +63,7 @@ Stage 1, Workbench relief:
 - [ ] **1.2** Uploading a file the person already has as a questionnaire offers to open it, or to start fresh.
 - [ ] **1.3** A "Needs review" filter with counts shows first the answers the gate holds back, plus failed ones. A fixed bar keeps Fill and the counts in reach.
 - [ ] **1.4** Each answer is saved as it finishes. A second run on a questionnaire that is still being answered is refused. Reopening it shows the progress.
-- [ ] **1.5** Leaving the page with an unsaved answer or unsaved typed answers asks first.
+- [x] **1.5** Leaving the page with an unsaved answer or unsaved typed answers asks first.
 
 Stage 2, product choice:
 
@@ -114,6 +114,7 @@ All stages:
   - Stage 0 waits for the user's test.
 - 2026-11-05, Stage 1 build (in the order the design gives: 1.1, 1.5, 1.2, 1.4, 1.3):
   - 1.1: the Workbench writes the open questionnaire into its address (`?q=<id>`) and opens it again at start-up; Close and reading a PDF take it out. Someone else's, or one that is gone, opens nothing and says so. `GET /api/forms` lists last changed first (`updated_at`, which every write moves; no migration), and "Or pick up" lists every questionnaire, up to 500, in a scrolling box when there are more than three, each with when it last changed. 6 tests: 1 API and 4 browser, each failing on the old code, and 1 static guard that the address stays inside the prefix. The existing pick-up, close and deleted-product tests pass unchanged.
+  - 1.5: leaving the Workbench asks first (the browser's own "Leave site?") while it holds work only the page has: an edit typed into a card and not yet saved, questions typed beside a file or into a list, or a question in "Ask another question". Nothing is saved on the way out. 4 browser tests: 2 fail on the old page, 2 guard against asking when everything is saved.
 
 ## Decision log
 
@@ -230,3 +231,10 @@ Use a local copy, not the team's data.
 5. Under "Or pick up", every questionnaire you have is listed, each with when it last changed. With more than three they are in a box that scrolls. Open an old one, change one answer and close it: it is now at the top.
 6. On the server, repeat steps 2 to 4 under /assessment/.
 7. Send the address to a colleague. It opens nothing for them, and says the questionnaire is not one of theirs.
+
+### 1.5 Leaving with unsaved work asks first
+
+1. Answer a questionnaire. Click Edit on an answer, type something and do not click anywhere else. Try to close the tab or press F5: the browser asks "Leave site?". Choose to stay: your text is still in the box.
+2. Click outside the box and wait for "Your edit is saved". Press F5: no question this time, and the questionnaire opens again (1.1).
+3. Type a question of your own with "+ Add a question" and press F5: the browser asks first.
+4. With only a questionnaire's own rows, all answered and nothing being edited, press F5: no question.
