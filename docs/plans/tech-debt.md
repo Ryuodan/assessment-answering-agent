@@ -492,6 +492,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - An approval keeps the flag and reason it replaced, in the answer's stored JSON (`AnsweredQuestion.before_approval`; no column, no migration). Withdrawing restores them; rewording an approved answer withdraws the approval by the same rule (`selection.approve`, `selection.withdraw_approval`).
   - An approval made before the fix kept nothing: withdrawing it applies the review's rule again (any reason, or a score at or under the threshold, unless a person wrote the words).
   - Answers already released by a withdrawal before the fix stay released until somebody edits or approves them. `python -m src.cli inspect fills` lists them (0.1b); they are not repaired.
+  - After the review of Stage 0: approving one of those recorded its cleared flag, so approving and then withdrawing released it again. An approval now records what the review's own rule says when the stored state contradicts it (not a person's words, flag cleared, and a reason or a score at or under the threshold), so the withdrawal holds it back. `tests/test_tools.py::test_an_answer_the_old_withdrawal_released_is_held_after_approve_and_withdraw` fails on the old code.
   - Tests: 7 in `tests/test_tools.py` (5 failing on the old code, 2 pinning what stays), 1 in `tests/test_api_forms.py`, 1 browser test in `tests/browser/test_answer_card.py`.
 
 ## TD-054: A fill that held every answer said none of them had a cell to go into

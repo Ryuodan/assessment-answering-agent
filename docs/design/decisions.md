@@ -368,8 +368,12 @@ a plan relies on it.
 - **Consequences:** a withdrawal restores the flag the answer had, whatever
   the threshold is now; only an approval from before this uses today's
   threshold. Answers released by a withdrawal before this stay released until
-  somebody edits or approves them: they are listed, not repaired. Events from
-  before have no `include_unreviewed` key.
+  somebody edits or approves them: they are listed, not repaired. Approving
+  one records what the review's own rule says (`selection.held_by_the_review`)
+  rather than the cleared flag, because the stored state contradicts that
+  rule and recording it would release the answer again on the next
+  withdrawal (plan 029's review). Events from before have no
+  `include_unreviewed` key.
 - **Date:** 2026-11-05. **Status:** accepted; a default the user can reverse
   after testing plan 029. **Decided by:** the user (kept, not derived); Claude
   (where it is kept, the event's fields, listing rather than repairing).

@@ -122,6 +122,7 @@ All stages:
     - An approval keeps the review flag and reasons it replaced, and a withdrawal restores them.
     - Rewording follows the same rule.
     - Answers released by a withdrawal before the fix are listed, not repaired.
+    - After the review of Stage 0: approving one of those answers records what the review's own rule says, not the flag the old withdrawal cleared, so withdrawing that approval holds it back again.
   - **0.3 and 0.4:** they ask first. Who may remove shared documents, and an Undo for forgetting a chat, are for a later round.
   - **TD-060, fixed during the build without asking first:** the Workbench drops a knowledge-base list that arrives for a scope the selector has left, and forgets the count of "Remove every policy document" until the chosen list arrives. Why now: the late list made an existing gate test fail at random, and made 0.3's count name another knowledge base. The chat drawer's same race (`loadSources`) is recorded and waits for approval.
   - **0.5:** an empty brief is refused.
@@ -171,7 +172,7 @@ For whoever runs the server, in the app's folder:
 1. Run `uv run python -m src.cli inspect fills` (add `--team <team>` for another team). It changes nothing.
 2. It lists each fill that wrote answers the review gate holds back. Older Workbench fills say "before the fix"; the fill from step 6 above says "4 written anyway" (the number it wrote).
 3. Under each fill: how many held answers are unchanged since the fill (these certainly went into that file), and how many were saved or cleared after it (unknown). A fill of a questionnaire that is no longer on the server is listed too, as "questionnaire no longer on the server": what it wrote is not known.
-4. At the end: answers whose approval was withdrawn before the fix and that still go into the file as if confident. Open each on the Workbench, and edit or approve it.
+4. At the end: answers whose approval was withdrawn before the fix and that still go into the file as if confident. Open each on the Workbench, and edit or approve it. If you approve one and then withdraw the approval, it is held back again ("needs review"), and the command no longer lists it.
 
 ### 0.2 Withdrawing an approval holds the answer back again
 

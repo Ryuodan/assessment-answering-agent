@@ -137,12 +137,28 @@ def written_by_a_person(answered: AnsweredQuestion | None) -> bool:
     return answered.by_hand or answered.confidence_reason == HAND
 
 
-def approve(answered: AnsweredQuestion) -> AnsweredQuestion:
-    """Released by a person, keeping what the review said for a withdrawal (TD-053)."""
+def held_by_the_review(answered: AnsweredQuestion, threshold: float | None = None) -> bool:
+    """The review's own rule (`verification.assess`): any reason, or a score at or under the threshold.
+
+    Never for words a person wrote: those were not the model's to review.
+    """
+    floor = settings.review_confidence_threshold if threshold is None else threshold
+    return not written_by_a_person(answered) and (bool(answered.review_reasons) or answered.confidence <= floor)
+
+
+def approve(answered: AnsweredQuestion, *, threshold: float | None = None) -> AnsweredQuestion:
+    """Released by a person, keeping what the review said for a withdrawal (TD-053).
+
+    What the review said is the stored flag, unless the stored state contradicts
+    the review's own rule. The withdrawal before TD-053's fix left exactly that
+    (the flag cleared, the reasons kept), and recording it would release the
+    answer again on the next withdrawal (plan 029's review).
+    """
     approved = answered.model_copy(deep=True)
     if approved.confidence_reason != APPROVED:  # approving twice keeps the first record
         approved.before_approval = BeforeApproval(
-            needs_review=approved.needs_review, confidence_reason=approved.confidence_reason
+            needs_review=approved.needs_review or held_by_the_review(approved, threshold),
+            confidence_reason=approved.confidence_reason,
         )
     approved.confidence_reason, approved.needs_review = APPROVED, False
     return approved
@@ -164,10 +180,8 @@ def withdraw_approval(
         if kept is not None:
             withdrawn.needs_review, withdrawn.confidence_reason = kept.needs_review, kept.confidence_reason
         else:
-            floor = settings.review_confidence_threshold if threshold is None else threshold
-            by_hand = written_by_a_person(withdrawn)
-            withdrawn.needs_review = not by_hand and (bool(withdrawn.review_reasons) or withdrawn.confidence <= floor)
-            withdrawn.confidence_reason = HAND if by_hand else ""
+            withdrawn.needs_review = held_by_the_review(withdrawn, threshold)
+            withdrawn.confidence_reason = HAND if written_by_a_person(withdrawn) else ""
     withdrawn.before_approval = None
     if reworded and withdrawn.confidence_reason == HAND:
         withdrawn.confidence_reason = ""

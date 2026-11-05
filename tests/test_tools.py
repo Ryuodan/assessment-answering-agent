@@ -980,6 +980,30 @@ async def test_an_approval_from_before_the_fix_is_judged_again_on_withdrawal(bat
 
 
 @pytest.mark.asyncio
+async def test_an_answer_the_old_withdrawal_released_is_held_after_approve_and_withdraw(
+    batch, user, answers_flagged_but_sure
+):
+    """Plan 029's review: the old withdrawal left the flag cleared and the reasons
+    kept. Approving that state recorded it, so withdrawing again released the
+    answer again, though the plan tells reviewers to approve these."""
+    from src import fill_audit
+
+    await tools.answer(user, batch.id)
+    first = batch.form.questions[0].id
+    left = batches.answers(batch.id)[first].model_copy(deep=True)
+    left.needs_review, left.confidence_reason = False, ""  # what the withdrawal stored before TD-053's fix
+    batches.save_answers(batch.id, [left])
+    assert _question(user, batch.id, first)["will_be_written"] is True, "released, as the old code left it"
+
+    tools.approve_answer(user, batch.id, first)
+    tools.approve_answer(user, batch.id, first, approved=False)
+
+    view = _question(user, batch.id, first)
+    assert view["needs_review"] is True and view["will_be_written"] is False
+    assert fill_audit.released_by_withdrawal(settings.default_team) == []
+
+
+@pytest.mark.asyncio
 async def test_a_hand_written_answer_withdrawn_still_goes_in(batch, user, answers_flagged_but_sure):
     """A person wrote it, so it was never held for the review; withdrawing the
     approval takes it out of the answer memory and leaves it in the file."""
