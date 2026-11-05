@@ -1869,12 +1869,10 @@
         remove.className = "ghost";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          // A product's document goes with its file (TD-039), unless something
-          // else uses it too: one name is one document (plan 027). A shared one
-          // is only taken out of the index.
-          const files = kbScope() ? "\n\nIts file is deleted too, and cannot be recovered from here — unless " +
-            "the shared knowledge base, another product or a questionnaire also uses it." : "";
-          if (!confirm("Remove " + source.name + " from the knowledge base?" + files)) return;
+          // The Workbench's question, word for word (plan 029): a shared document is used by
+          // every product; a product's goes with its file (TD-039) unless something else uses it.
+          const scope = $("kbScope").selectedOptions[0];
+          if (!confirm(Cards.removalQuestion(source.name, kbScope() && scope ? scope.textContent : ""))) return;
           try {
             const removed = await request(
               "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"), { method: "DELETE" });

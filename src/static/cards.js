@@ -683,6 +683,34 @@ const Cards = (window.Cards = {
     return field;
   }
 
+  /* What removing from a knowledge base asks first (plan 029), in one wording
+     for the workbench and the chat drawer. A shared document is used by every
+     questionnaire and chat, General and every product, so that is said; its
+     file stays. A product's takes its file with it (TD-039). */
+  const SHARED_IMPACT = "Every questionnaire and chat, General and every product, stops using ";
+  const PRODUCT_FILES = "cannot be recovered from here — unless the shared knowledge base, " +
+    "another product or a questionnaire also uses ";
+
+  function removalQuestion(name, productName) {
+    if (productName) {
+      return "Remove “" + name + "” from " + productName + "'s knowledge base?\n\n" +
+        "Its file is deleted too, and " + PRODUCT_FILES + "it.";
+    }
+    return "Remove “" + name + "” from the shared knowledge base?\n\n" + SHARED_IMPACT +
+      "it from now on. Answers already written are not changed.\n\n" +
+      "Its file stays on the server; to use it again, add it again.";
+  }
+
+  function clearQuestion(count, productName) {
+    const which = productName ? productName + "'s knowledge base" : "the shared knowledge base";
+    const what = count === 1 ? "the 1 policy document" : count > 1 ? "all " + count + " policy documents"
+      : "every policy document";
+    const impact = productName
+      ? "Their files are deleted too, and " + PRODUCT_FILES + "them."
+      : SHARED_IMPACT + "them from now on. Answers already written are not changed.";
+    return "Remove " + what + " from " + which + "?\n\n" + impact + "\n\nThe answer memory is not affected.";
+  }
+
   /* Whose document a source is. Only drawn for external ones: "our policy" is
      the unmarked case and badging all four sources under every answer would
      make the exception invisible again. */
@@ -1125,6 +1153,8 @@ const Cards = (window.Cards = {
     detailPicker: detailPicker,
     skillPicker: skillPicker,
     authorityBadge: authorityBadge,
+    removalQuestion: removalQuestion,
+    clearQuestion: clearQuestion,
     setProducts: setProducts,
     product: product,
     productBadge: productBadge,

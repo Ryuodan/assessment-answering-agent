@@ -108,6 +108,73 @@ def test_removing_and_clearing_a_products_documents_takes_their_files_and_their_
     assert not own.exists()
 
 
+def answering(asked: list[str], accept: bool):
+    def handle(dialog) -> None:
+        asked.append(dialog.message)
+        dialog.accept() if accept else dialog.dismiss()
+
+    return handle
+
+
+def shared_names(stores) -> list[str]:
+    return [r["metadata"]["source_name"] for r in stores[(TEAM, "")]._store.records]
+
+
+def test_removing_a_shared_document_asks_first_and_names_the_impact(page: Page, stores) -> None:
+    """It went on one click, nine pixels from "view", out of every product's answers (plan 029)."""
+    asked: list[str] = []
+    page.goto("/workbench")
+    sources = page.locator("#kbSources")
+    row = sources.locator("li", has_text="Shared policy.pdf")
+    expect(row).to_have_count(1)
+
+    page.once("dialog", answering(asked, accept=False))
+    row.get_by_role("button", name="remove").click()
+    expect(row).to_have_count(1)
+    assert asked, "no question was asked"
+    assert "“Shared policy.pdf”" in asked[0] and "shared knowledge base" in asked[0]
+    assert "every product" in asked[0] and "Its file stays on the server" in asked[0]
+    assert shared_names(stores) == ["Shared policy.pdf"]
+
+    page.once("dialog", answering(asked, accept=True))
+    row.get_by_role("button", name="remove").click()
+    expect(page.locator("#kbStatus")).to_have_text("Removed Shared policy.pdf.")
+    expect(sources).not_to_contain_text("Shared policy.pdf")
+    assert shared_names(stores) == []
+
+
+def test_clearing_the_shared_knowledge_base_says_how_many(page: Page, stores) -> None:
+    asked: list[str] = []
+    page.goto("/workbench")
+    expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+
+    page.once("dialog", answering(asked, accept=False))
+    page.click("#kbClear")
+    expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+    assert asked and "Remove the 1 policy document from the shared knowledge base?" in asked[0]
+    assert "every product" in asked[0] and "The answer memory is not affected." in asked[0]
+    assert shared_names(stores) == ["Shared policy.pdf"]
+
+
+def test_the_assistants_drawer_names_the_same_impact(page: Page, stores) -> None:
+    on_the_workbench: list[str] = []
+    page.goto("/workbench")
+    page.once("dialog", answering(on_the_workbench, accept=False))
+    page.locator("#kbSources li", has_text="Shared policy.pdf").get_by_role("button", name="remove").click()
+    expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+
+    in_the_chat: list[str] = []
+    page.goto("/")
+    page.click("#openKb")
+    row = page.locator("#sources .source", has_text="Shared policy.pdf")
+    page.once("dialog", answering(in_the_chat, accept=False))
+    row.get_by_role("button", name="remove").click()
+    expect(row).to_have_count(1)
+
+    assert in_the_chat and in_the_chat == on_the_workbench
+    assert shared_names(stores) == ["Shared policy.pdf"]
+
+
 def test_the_assistants_drawer_has_the_same_selector(page: Page, stores) -> None:
     availo = products.add(None, TEAM, "Availo")
     page.goto("/")

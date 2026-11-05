@@ -53,7 +53,7 @@ Stage 0, safety fixes:
 
 - [x] **0.1** Filling from the Workbench writes only what the gate allows. Held answers are reported with their count and reasons, and written only through "Write them in anyway". The FILE_FILLED event records whether the gate was bypassed and how many answers were held. A read-only command lists the questionnaires filled with held answers before the fix.
 - [x] **0.2** Withdrawing an approval puts back the answer's review flag and reasons as they were before the approval.
-- [ ] **0.3** Removing a shared knowledge-base document, or clearing a knowledge base, on the Workbench asks first and says what is affected.
+- [x] **0.3** Removing a shared knowledge-base document, or clearing a knowledge base, on the Workbench asks first and says what is affected.
 - [ ] **0.4** Forgetting a chat asks first and names it. The control is a real button that can be reached with the keyboard and is not nested in another button.
 - [ ] **0.5** Edit on a Brief card edits the brief text that is shown.
 
@@ -99,6 +99,7 @@ All stages:
   - 0.1b, the read-only audit: `python -m src.cli inspect fills [--team T] [--json]` (`src/fill_audit.py`, operations layer). It lists the fills that wrote held answers (certain when the answer is unchanged since the fill, unknown when it was saved after) and the approvals withdrawn before the fix that still pass the gate. 11 tests in `tests/test_fill_audit.py`, one of them proving that the audit changes no row.
   - 0.2: an approval keeps the review flag and reason it replaced (`before_approval` in the answer's JSON, no migration); withdrawing restores them, and rewording an approved answer withdraws it the same way (TD-053 resolved). 9 tests: 7 unit (5 failing on the old code), 1 API, 1 browser (failing on the old code). `poe gen` added the field to openapi.json; `poe snapshots` added `"before_approval": null` to the two pipeline snapshots and nothing else. `tools.py` ceiling 1,366 to 1,365. New debt found: TD-059 (putting back the draft of an approved answer releases it).
   - 0.1, the Workbench page: Fill sends `include_unreviewed: false` (the request opens the gate only for an exact `true`); the held answers are counted, listed under "Which, and why" with their reasons, and written only through "Write them in anyway", whose confirm counts them; afterwards the first line says how many unconfirmed answers went in. TD-052 resolved. 2 browser tests, both failing on the old page.
+  - 0.3: removing a shared document on the Workbench asks first and says that every questionnaire and chat, General and every product, stops using it, and that its file stays. "Remove every policy document" counts them. The chat drawer asks the same question, from one wording in `cards.js` (`Cards.removalQuestion`, `Cards.clearQuestion`). A product's document keeps today's wording. 3 browser tests, all failing on the old pages.
 
 ## Decision log
 
@@ -172,3 +173,12 @@ For whoever runs the server, in the app's folder:
 5. Reload the page and reopen the questionnaire from "Or pick up": still held.
 6. Approve it again, then reword it (for example "make it shorter"). It comes back held.
 7. Edit a card's text yourself, Approve it, then withdraw: it still goes into the file, because a person wrote it.
+
+### 0.3 Removing from the shared knowledge base asks first
+
+Use a local copy, not the team's data.
+
+1. On the Workbench, step 1, with the knowledge base set to "Shared, for every product", click "remove" beside a document. A question names the document, says that every questionnaire and chat (General and every product) stops using it, and that its file stays on the server. Click Cancel: it is still listed.
+2. Click "Remove every policy document". The question says how many ("the 1 policy document", "all 12 policy documents"). Click Cancel.
+3. On the chat page, open the knowledge-base drawer and click "remove" on a shared document. You see the same question. Click Cancel.
+4. Choose a product in the selector and remove one of its documents. The question names the product and says its file is deleted too, as before.

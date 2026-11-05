@@ -1698,9 +1698,11 @@
 
   // --- knowledge base ------------------------------------------------------
 
+  let guidelineCount = null;  // what "Remove every policy document" counts in its question
   async function loadKnowledge() {
     try {
       const stats = await request("/api/knowledge" + kbScopeQuery("?"));
+      guidelineCount = stats.sources.filter((s) => s.source_type === "guideline").length;
       $("kbSummary").innerHTML = stats.total_chunks
         ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
           "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
@@ -1745,12 +1747,9 @@
         remove.className = "quiet danger";
         remove.textContent = "remove";
         remove.onclick = async () => {
-          // A product's document goes with its file (TD-039), so that one asks
-          // first; a shared one is taken out of the index as it always was.
-          // Its file stays only if something else uses it too: one name is one document (plan 027).
-          if (kbScope() && !confirm("Remove " + source.name + " from " + kbScopeName() +
-              "'s knowledge base?\n\nIts file is deleted too, and cannot be recovered from here — unless " +
-              "the shared knowledge base, another product or a questionnaire also uses it.")) return;
+          // Both ask first (plan 029): a shared document is used by every product, and a
+          // product's goes with its file (TD-039) unless something else uses it (plan 027).
+          if (!confirm(Cards.removalQuestion(source.name, kbScope() ? kbScopeName() : ""))) return;
           await removeFromKnowledge(
             "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
             "Removed " + source.name + ".");
@@ -1760,6 +1759,7 @@
         $("kbSources").append(item);
       });
     } catch (error) {
+      guidelineCount = null;  // not known: the question says "every policy document"
       $("kbSummary").textContent = "Could not load the knowledge base: " + error.message;
     }
   }
@@ -3569,10 +3569,7 @@
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
     const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
-    const files = kbScope() ? "\n\nTheir files are deleted too, and cannot be recovered from here — except " +
-      "any the shared knowledge base, another product or a questionnaire also uses." : "";
-    if (!confirm("Remove every policy document from " + which + "?" + files +
-        "\n\nThe answer memory is not affected.")) return;
+    if (!confirm(Cards.clearQuestion(guidelineCount, kbScope() ? kbScopeName() : ""))) return;
     await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), "Removed every policy document from " + which + ".");
   };
 
