@@ -1,4 +1,8 @@
-"""The workbench's knowledge-base selector in a real browser (plan 021)."""
+"""The knowledge-base selector in a real browser (plan 021).
+
+On the Workbench's first step until plan 030 moved it, unchanged, to the
+Knowledge base page; these tests moved with it.
+"""
 
 from __future__ import annotations
 
@@ -48,7 +52,7 @@ def test_the_selector_decides_which_knowledge_base_is_listed_and_uploaded_to(
 
     monkeypatch.setattr("src.routes.knowledge.service.ingest", indexed)
 
-    page.goto("/workbench")
+    page.goto("/knowledge")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
     expect(page.locator("#kbScope option", has_text="Availo")).to_have_count(1)
 
@@ -89,7 +93,7 @@ def test_removing_and_clearing_a_products_documents_takes_their_files_and_their_
         asked.append(dialog.message)
         dialog.accept()
 
-    page.goto("/workbench")
+    page.goto("/knowledge")
     page.select_option("#kbScope", availo.id)
     sources, library = page.locator("#kbSources"), page.locator("#uploadedDocuments .document-card")
     expect(sources).to_contain_text("Old policy.pdf")
@@ -125,7 +129,7 @@ def shared_names(stores) -> list[str]:
 def test_removing_a_shared_document_asks_first_and_names_the_impact(page: Page, stores) -> None:
     """It went on one click, nine pixels from "view", out of every product's answers (plan 029)."""
     asked: list[str] = []
-    page.goto("/workbench")
+    page.goto("/knowledge")
     sources = page.locator("#kbSources")
     row = sources.locator("li", has_text="Shared policy.pdf")
     expect(row).to_have_count(1)
@@ -147,7 +151,7 @@ def test_removing_a_shared_document_asks_first_and_names_the_impact(page: Page, 
 
 def test_clearing_the_shared_knowledge_base_says_how_many(page: Page, stores) -> None:
     asked: list[str] = []
-    page.goto("/workbench")
+    page.goto("/knowledge")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
 
     page.once("dialog", answering(asked, accept=False))
@@ -159,9 +163,9 @@ def test_clearing_the_shared_knowledge_base_says_how_many(page: Page, stores) ->
 
 
 def test_the_assistants_drawer_names_the_same_impact(page: Page, stores) -> None:
-    on_the_workbench: list[str] = []
-    page.goto("/workbench")
-    page.once("dialog", answering(on_the_workbench, accept=False))
+    on_the_page: list[str] = []
+    page.goto("/knowledge")
+    page.once("dialog", answering(on_the_page, accept=False))
     page.locator("#kbSources li", has_text="Shared policy.pdf").get_by_role("button", name="remove").click()
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
 
@@ -173,7 +177,7 @@ def test_the_assistants_drawer_names_the_same_impact(page: Page, stores) -> None
     row.get_by_role("button", name="remove").click()
     expect(row).to_have_count(1)
 
-    assert in_the_chat and in_the_chat == on_the_workbench
+    assert in_the_chat and in_the_chat == on_the_page
     assert shared_names(stores) == ["Shared policy.pdf"]
 
 
@@ -193,7 +197,7 @@ def test_a_late_answer_for_the_shared_list_does_not_replace_a_products(page: Pag
     sources = page.locator("#kbSources")
 
     with page.expect_response(lambda response: response.url.endswith("/api/knowledge")):
-        page.goto("/workbench")
+        page.goto("/knowledge")
         page.select_option("#kbScope", availo.id)
         expect(sources).to_contain_text("Availo policy.pdf")
     page.wait_for_timeout(500)  # time for the late answer to be drawn, were it drawn
@@ -217,7 +221,7 @@ def test_clearing_while_a_products_list_loads_does_not_count_another(page: Page,
 
     monkeypatch.setattr(service, "knowledge_stats", slow_for_a_product)
     asked: list[str] = []
-    page.goto("/workbench")
+    page.goto("/knowledge")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
 
     page.select_option("#kbScope", availo.id)

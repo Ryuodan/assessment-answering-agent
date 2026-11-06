@@ -1,4 +1,4 @@
-"""The knowledge base's routes: the shared knowledge base, or a product's (plan 021).
+"""The knowledge base's routes: the shared knowledge base, or a product's (plan 021), and its page (plan 030).
 
 Moved out of `src/api.py` and included where they were. Each takes an optional
 `product`; with none, every call below is the one these routes made before
@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi.responses import HTMLResponse
 
 from src import events, products, service, uploads
 from src.config import settings
@@ -20,6 +21,7 @@ from src.errors import Invalid, NotFound, UnsupportedFile
 from src.identity import User
 from src.models import IngestResult, SourceType
 from src.routes.auth import current_user
+from src.routes.pages import page
 
 router = APIRouter()
 
@@ -175,3 +177,14 @@ def clear_knowledge(product: str = "", user: User = Depends(current_user)) -> di
     )
     events.record(user, events.SOURCE_REMOVED, subject_type="document", subject_id="*", all=True, **scope)
     return {"cleared": True, "files_left": left or []}
+
+
+@router.get("/knowledge", include_in_schema=False)
+def knowledge_page() -> HTMLResponse:
+    """The Knowledge base page: adding, listing and removing documents, and the document library.
+
+    It was the Workbench's first step (plan 030). The Workbench is about one
+    questionnaire in front of you; building the corpus is a different job, done
+    at a different time, like keeping the answer memory.
+    """
+    return page("knowledge.html")

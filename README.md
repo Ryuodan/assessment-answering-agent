@@ -72,7 +72,8 @@ interpreter explicitly — `.venv/Scripts/python.exe -m uvicorn src.api:app
 uv run python -m uvicorn src.api:app --reload
 ```
 
-Open <http://127.0.0.1:8000>. Upload guidelines, then submit a new assessment. The document library opens original
+Open <http://127.0.0.1:8000>. Upload guidelines on the Knowledge base page, then submit a new assessment on the
+Workbench. The document library, on the Knowledge base page, opens original
 PDFs and shows the extracted text used by the agent. Results are editable inline and download
 as JSON, CSV (UTF-8 with a BOM, so Excel opens Arabic correctly), PDF or Word.
 
