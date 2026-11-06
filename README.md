@@ -209,6 +209,7 @@ The design history that used to follow here, with its measurements, is in
 | The answer memory | [docs/design/answer-memory.md](docs/design/answer-memory.md) |
 | Preferences and skills | [docs/design/preferences.md](docs/design/preferences.md) |
 | Signing in, teams, access, and facing a network | [docs/design/access.md](docs/design/access.md) |
+| The Arabic terms the interface is translated from (draft, for the user's check) | [docs/design/arabic-glossary.md](docs/design/arabic-glossary.md) |
 | Tracing with LangSmith or Phoenix | [docs/operations/tracing.md](docs/operations/tracing.md) |
 | Where the time goes, what a request costs, the storage limit | [docs/operations/time-cost-storage.md](docs/operations/time-cost-storage.md) |
 | Evaluation, and what the measurements changed | [docs/measurements/evaluation.md](docs/measurements/evaluation.md) |
