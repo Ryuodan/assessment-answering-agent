@@ -90,14 +90,15 @@ def test_another_conversation_is_free() -> None:
 
 
 class Turns:
-    """`assistant.say`, stubbed. A turn held back by its run id waits until the test lets it go."""
+    """`assistant.say`, stubbed. A turn held back by its run id, or by what was said, waits until the test lets it go."""
 
     def __init__(self) -> None:
         self.gates: dict[str, threading.Event] = {}
         self.said: list[tuple[str, str, str]] = []
+        self.run_ids: list[str] = []
 
-    def hold_back(self, run_id: str) -> None:
-        self.gates[run_id] = threading.Event()
+    def hold_back(self, run_id_or_message: str) -> None:
+        self.gates[run_id_or_message] = threading.Event()
 
     def let_go(self) -> None:
         for gate in self.gates.values():
@@ -105,8 +106,10 @@ class Turns:
 
     async def say(self, user, conversation, message, *, upload=None, run_id=""):
         self.said.append((conversation.id, message, upload.name if upload else ""))
-        if run_id in self.gates:
-            await asyncio.to_thread(self.gates[run_id].wait, 10)
+        self.run_ids.append(run_id)
+        gate = self.gates.get(run_id) or self.gates.get(message)
+        if gate is not None:
+            await asyncio.to_thread(gate.wait, 10)
         return assistant.Turn(conversation_id=conversation.id, batch_id=conversation.batch_id, reply="Done.")
 
 
@@ -280,3 +283,106 @@ def test_a_turn_that_fails_lets_the_conversation_take_another_message(client, mo
     assert failed.status_code == 500
     assert client.get(f"/api/chat/{conversation_id}").json()["running"] is None
     assert client.delete(f"/api/chat/{conversation_id}").status_code == 200
+
+
+# --- the review of plan 031 ---------------------------------------------------------
+
+
+def test_a_turn_sent_without_a_run_id_is_held_and_watched_under_one(client, turns, background, tmp_path) -> None:
+    """A script's turn was held under "": a page that opened the conversation took it for
+    a different turn on every check, and drew the conversation again every few seconds."""
+    conversation_id = an_open_conversation()
+    turns.hold_back("No run id here")
+    sent = background.submit(
+        client.post, "/api/chat", json={"message": "No run id here", "conversation_id": conversation_id}
+    )
+    held = until(lambda: chat_running.running(conversation_id), "the turn")
+
+    assert held["run_id"], "named, never empty"
+    assert turns.run_ids == [held["run_id"]], "and its progress is reported under the same name"
+    turns.let_go()
+    assert sent.result(timeout=10).status_code == 200
+
+    path = shapes.simple(tmp_path / "Vendor.xlsx")
+    turns.hold_back("Read Vendor.xlsx and tell me what is in it.")
+    uploaded = background.submit(
+        client.post,
+        "/api/chat/upload",
+        data={"message": "", "conversation_id": conversation_id},
+        files={"file": (path.name, path.read_bytes(), "application/octet-stream")},
+    )
+    held = until(lambda: chat_running.running(conversation_id), "the upload's turn")
+    assert held["run_id"] and turns.run_ids[-1] == held["run_id"]
+    turns.let_go()
+    assert uploaded.result(timeout=10).status_code == 200
+
+
+def test_a_file_for_an_open_conversation_is_kept_only_once_its_turn_is_held(
+    client, turns, monkeypatch, tmp_path
+) -> None:
+    """The upload was refused after its file was saved when a message from another tab took
+    the conversation between the check and the hold; now the hold comes first."""
+    from src import service
+
+    conversation_id = an_open_conversation()
+    real = service.save_upload
+    seen: list[dict[str, str] | None] = []
+
+    def save_upload(*args, **kwargs):
+        seen.append(chat_running.running(conversation_id))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(service, "save_upload", save_upload)
+    path = shapes.simple(tmp_path / "Vendor.xlsx")
+
+    sent = client.post(
+        "/api/chat/upload",
+        data={"message": "Answer it", "conversation_id": conversation_id, "run_id": "up-2"},
+        files={"file": (path.name, path.read_bytes(), "application/octet-stream")},
+    )
+
+    assert sent.status_code == 200
+    assert seen and seen[0] is not None, "the file was kept before the conversation was held"
+    assert (seen[0]["run_id"], seen[0]["message"]) == ("up-2", "Answer it")
+    [(_, _, kept_as)] = turns.said
+    assert kept_as.endswith(".xlsx")
+
+
+def test_the_file_a_held_turn_shows_is_the_name_it_was_kept_under(client, turns, background, tmp_path) -> None:
+    """Held before the file is saved, then told the name saving gave it, as the transcript will show it."""
+    conversation_id = an_open_conversation()
+    path = shapes.simple(tmp_path / "Vendor.xlsx")
+    turns.hold_back("up-3")
+    sent = background.submit(
+        client.post,
+        "/api/chat/upload",
+        data={"message": "Answer it", "conversation_id": conversation_id, "run_id": "up-3"},
+        files={"file": (path.name, path.read_bytes(), "application/octet-stream")},
+    )
+    until(lambda: turns.said, "the upload's turn")
+
+    [(_, _, kept_as)] = turns.said
+    assert chat_running.running(conversation_id)["file"] == kept_as
+    turns.let_go()
+    assert sent.result(timeout=10).status_code == 200
+
+
+def test_a_turn_that_ends_while_its_conversation_is_read_is_still_reported(
+    client, turns, background, monkeypatch
+) -> None:
+    """`running` was read last, after the answers: a turn that ended in between came back as
+    an old transcript with no turn, and the page drew neither the message nor its reply."""
+    conversation_id = an_open_conversation()
+    sent = started(client, turns, background, message="Answer everything", conversation_id=conversation_id, run_id="r1")
+
+    def answers_for(user, conversation):
+        turns.let_go()  # the turn ends while the conversation is being read
+        until(lambda: chat_running.running(conversation_id) is None, "the turn to end")
+        return None
+
+    monkeypatch.setattr(assistant, "answers_for", answers_for)
+    shown = client.get(f"/api/chat/{conversation_id}").json()
+
+    assert shown["messages"] == [], "read before the turn was saved"
+    assert shown["running"] and shown["running"]["run_id"] == "r1", "so it comes with the turn it is missing"
+    assert sent.result(timeout=10).status_code == 200

@@ -18,11 +18,14 @@ agent that replies "Reply to: <what was asked>", and saves the conversation.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
+import httpx
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from playwright.sync_api import Page, expect
@@ -280,6 +283,231 @@ def test_after_a_reload_the_running_conversation_shows_its_message_and_then_its_
     expect(working(page)).to_have_count(0)
     expect(said_by_you(page).filter(has_text=asked)).to_have_count(1)
     expect(page.locator("#prompt")).to_be_enabled()
+
+
+# --- the review of plan 031: the races it found ----------------------------------------
+
+
+def until_caught(page: Page, caught: list, what: str) -> None:
+    for _ in range(200):
+        if caught:
+            return
+        page.wait_for_timeout(50)
+    raise AssertionError(f"the page never asked for {what}")
+
+
+def test_a_reply_that_arrives_while_its_conversation_is_opening_is_drawn(page: Page, turns: Turns) -> None:
+    """The conversation was read while the turn ran, and the reply reached the page before
+    that reading was drawn: the page knew the turn had ended, dropped the server's word that
+    it was running, and drew neither the message nor its reply."""
+    running = chat("Do we log access?", "Yes, access is logged.")
+    chat("Do we encrypt backups?", "Yes, with AES-256.")
+    asked = "Answer the governance questions"
+    turns.hold(asked)
+    page.goto("/")
+    row_of(page, "Do we log access?").locator(".convo").click()
+    send(page, asked)
+    expect(working(page)).to_contain_text(WORKING)
+    row_of(page, "Do we encrypt backups?").locator(".convo").click()
+    expect(page.locator("#thread")).to_contain_text("Yes, with AES-256.")
+
+    caught: list = []
+
+    def answered_while_running(route) -> None:
+        if caught:
+            route.continue_()
+            return
+        caught.append((route, route.fetch()))  # read now, while the turn still runs; drawn later
+
+    page.route(f"**/api/chat/{running}", answered_while_running)
+    row_of(page, "Do we log access?").locator(".convo").click()
+    until_caught(page, caught, "the conversation")
+    turns.release(asked)
+    expect(row_of(page, "Do we log access?").locator(".new-reply")).to_be_visible(
+        timeout=15_000
+    )  # the reply came first
+    route, response = caught[0]
+    route.fulfill(response=response)
+
+    expect(reply_on_screen(page)).to_have_text(f"Reply to: {asked}")
+    expect(said_by_you(page).filter(has_text=asked)).to_have_count(1)
+    expect(working(page)).to_have_count(0)
+
+
+def test_a_turn_ending_in_the_background_does_not_undo_a_click(page: Page, turns: Turns) -> None:
+    """The redraw of the conversation on screen, when its turn ended, counted as the latest
+    open: the conversation the person had just clicked was never drawn."""
+    chat("Do we log access?", "Yes, access is logged.")
+    clicked = chat("Do we encrypt backups?", "Yes, with AES-256.")
+    asked = "Answer the governance questions"
+    turns.hold(asked)
+    page.goto("/")
+    row_of(page, "Do we log access?").locator(".convo").click()
+    send(page, asked)
+    expect(working(page)).to_contain_text(WORKING)
+    page.reload()
+    row_of(page, "Do we log access?").locator(".convo").click()
+    expect(working(page)).to_contain_text(WORKING)
+
+    caught: list = []
+    page.route(f"**/api/chat/{clicked}", lambda route: caught.append(route))  # its answer waits
+    row_of(page, "Do we encrypt backups?").locator(".convo").click()
+    until_caught(page, caught, "the conversation clicked")
+    turns.release(asked)
+    expect(row_of(page, "Do we log access?").locator(".working-now")).to_have_count(0, timeout=15_000)
+    caught[0].continue_()
+
+    expect(page.locator("#thread")).to_contain_text("Yes, with AES-256.")
+    expect(page.locator("#thread")).not_to_contain_text(f"Reply to: {asked}")
+    expect(row_of(page, "Do we encrypt backups?")).to_have_class(re.compile(r"\bon\b"))
+
+
+def lose_the_reply(page: Page, server: str, *, and_the_next_list: bool = False) -> list:
+    """The page's message reaches the server, which runs the turn; the page is told 504, as a
+    proxy that gave up waiting would tell it. Optionally the list read after that is lost too."""
+    lost: list = []
+
+    def proxy(route) -> None:
+        request = route.request
+        if request.method == "GET" and lost and and_the_next_list and len(lost) == 1:
+            lost.append("list")
+            route.abort()
+            return
+        if request.method != "POST":
+            route.continue_()
+            return
+        body = request.post_data or ""
+        threading.Thread(
+            target=lambda: httpx.post(
+                server + "/api/chat", content=body, headers={"content-type": "application/json"}, timeout=60
+            ),
+            daemon=True,
+        ).start()
+        run_id = json.loads(body)["run_id"]
+        for _ in range(200):
+            if any(held["run_id"] == run_id for held in chat_running._RUNNING.values()):
+                break
+            time.sleep(0.05)
+        lost.append(run_id)
+        route.fulfill(status=504, body="Gateway Timeout", content_type="text/plain")
+
+    page.route("**/api/chat", proxy)
+    return lost
+
+
+def test_a_turn_whose_reply_was_lost_on_the_way_is_followed_not_failed(page: Page, turns: Turns, server: str) -> None:
+    """A proxy's timeout said "That did not work" while the turn carried on."""
+    chat("Do we log access?", "Yes, access is logged.")
+    asked = "Answer everything"
+    turns.hold(asked)
+    lose_the_reply(page, server)
+    page.goto("/")
+    row_of(page, "Do we log access?").locator(".convo").click()
+    send(page, asked)
+
+    expect(working(page)).to_contain_text(WORKING)
+    page.wait_for_timeout(1500)  # well past the 504 and the check that follows it
+    expect(page.locator("#thread")).not_to_contain_text("That did not work")
+    expect(working(page)).to_contain_text(WORKING)
+    expect(page.locator("#prompt")).to_be_disabled()
+
+    turns.release(asked)
+    expect(reply_on_screen(page)).to_have_text(f"Reply to: {asked}", timeout=15_000)
+    expect(working(page)).to_have_count(0)
+    expect(said_by_you(page).filter(has_text=asked)).to_have_count(1)
+    expect(page.locator("#prompt")).to_be_enabled()
+
+
+def test_a_turn_found_running_on_screen_is_drawn_and_the_box_says_why_it_waits(
+    page: Page, turns: Turns, server: str
+) -> None:
+    """When even the check after the 504 was lost, the next list found the turn and the box
+    went disabled mid-typing with nothing on screen saying why."""
+    chat("Do we log access?", "Yes, access is logged.")
+    asked = "Answer everything"
+    turns.hold(asked)
+    lost = lose_the_reply(page, server, and_the_next_list=True)
+    page.goto("/")
+    row_of(page, "Do we log access?").locator(".convo").click()
+    send(page, asked)
+    for _ in range(200):
+        if "list" in lost:
+            break
+        page.wait_for_timeout(50)
+    assert "list" in lost, "the check after the 504 was not lost, so this tested nothing"
+    page.wait_for_timeout(1500)  # the failure drawn, and the list read after it
+
+    expect(page.locator("#thread")).not_to_contain_text("That did not work")
+    expect(working(page)).to_contain_text(WORKING)
+    expect(said_by_you(page).filter(has_text=asked)).to_have_count(1)
+    expect(page.locator("#prompt")).to_be_disabled()
+
+    turns.release(asked)
+    expect(reply_on_screen(page)).to_have_text(f"Reply to: {asked}", timeout=15_000)
+    expect(page.locator("#prompt")).to_be_enabled()
+
+
+def test_a_turn_running_off_screen_is_watched_through_the_list(page: Page, turns: Turns) -> None:
+    """Every running conversation was read whole, answers and all, every 2.4 s, on screen or not."""
+    running = chat("Do we log access?", "Yes, access is logged.")
+    chat("Do we encrypt backups?", "Yes, with AES-256.")
+    asked = "Answer the governance questions"
+    turns.hold(asked)
+    page.goto("/")
+    row_of(page, "Do we log access?").locator(".convo").click()
+    send(page, asked)
+    expect(working(page)).to_contain_text(WORKING)
+    page.reload()
+    expect(row_of(page, "Do we log access?").locator(".working-now")).to_be_visible()
+
+    read: list[str] = []
+    page.on(
+        "request", lambda request: read.append(request.url) if request.url.endswith(f"/api/chat/{running}") else None
+    )
+    row_of(page, "Do we encrypt backups?").locator(".convo").click()
+    expect(page.locator("#thread")).to_contain_text("Yes, with AES-256.")
+    page.wait_for_timeout(5500)  # two of the page's checks, and more
+    assert read == [], f"the conversation off screen was read whole: {read}"
+
+    turns.release(asked)
+    expect(row_of(page, "Do we log access?").locator(".new-reply")).to_be_visible(timeout=15_000)
+    assert read == [], "its end was learned from the list"
+    row_of(page, "Do we log access?").locator(".convo").click()
+    expect(reply_on_screen(page)).to_have_text(f"Reply to: {asked}")
+    assert len(read) == 1, f"read once, to draw it: {read}"
+
+
+def test_a_turn_already_in_the_transcript_is_not_drawn_twice(page: Page) -> None:
+    """TD-075: the conversation is saved a moment before its turn is let go, and opening it
+    then drew the person's message twice, once stored and once pending."""
+    asked, at = "Do we log access?", "2026-11-06T09:00:00+00:00"
+    conversation = assistant.start(identity.local_user(), asked)
+    conversation.messages = [HumanMessage(asked, additional_kwargs={"at": at}), AIMessage("Yes, access is logged.")]
+    conversations.save(conversation)
+    told: list[bool] = []
+
+    def still_running(route) -> None:
+        response = route.fetch()
+        body = response.json()
+        if not told:  # once: the next reading is the server's own
+            told.append(True)
+            body["running"] = {"run_id": "saved-a-moment-ago", "message": asked, "file": "", "at": at}
+        route.fulfill(response=response, json=body)
+
+    page.route(f"**/api/chat/{conversation.id}", still_running)
+    page.goto("/")
+    page.locator("#historyList .convo").click()
+
+    expect(page.locator("#thread")).to_contain_text("Yes, access is logged.")
+    assert told, "the reading was not the one that says it is still running"
+    # Counted as drawn, not waited for: the page reads the conversation again a few seconds
+    # later, and that drawing would hide a duplicate drawn now. A pending turn is drawn with
+    # the transcript, in the same moment.
+    assert said_by_you(page).filter(has_text=asked).count() == 1, "the message drawn twice"
+    assert working(page).count() == 0, "a working bubble for a turn the transcript holds"
+    page.wait_for_timeout(3000)  # past the page's next check: still once, and nothing working
+    expect(said_by_you(page).filter(has_text=asked)).to_have_count(1)
+    expect(working(page)).to_have_count(0)
 
 
 # --- the Documents drawer is gone ---------------------------------------------------

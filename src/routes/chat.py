@@ -5,6 +5,7 @@ Moved out of `src/api.py` (plan 023) and included where they were.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -114,12 +115,13 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
         if request.conversation_id
         else assistant.start(user, request.message, request.product)
     )
-    with chat_running.hold(conversation.id, run_id=request.run_id, message=assistant.spoken(request.message)):
+    run_id = chat_running.run_id_for(request.run_id)  # never "": its progress and its hold are named by it
+    with chat_running.hold(conversation.id, run_id=run_id, message=assistant.spoken(request.message)):
         turn = await assistant.say(
             user,
             conversation,
             request.message,
-            run_id=request.run_id,
+            run_id=run_id,
         )
     return _turn_response(turn, conversation, user)
 
@@ -148,18 +150,26 @@ async def say_with_a_file(
             f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
             f"Supported: {', '.join(forms.SUPPORTED)}."
         )
-    # Checked before the file is kept: the conversation's, or a new one's product,
-    # and that no turn is running in it (plan 031).
+    # Checked before the file is kept: the conversation's, or a new one's product.
     existing = _open(_conversation(conversation_id, user), user) if conversation_id else None
     if existing is None:
         products.chosen(user.team_id, product)
-    else:
-        chat_running.refuse(existing.id)
-    path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
-    conversation = existing or assistant.start(user, message or f"Read {name}", product)
     said = message or f"Read {name} and tell me what is in it."
-    # What the transcript will show once the turn is saved: the words, and the file as it was kept.
-    with chat_running.hold(conversation.id, run_id=run_id, message=assistant.spoken(said), file=path.name):
+    run_id = chat_running.run_id_for(run_id)
+    # Held with what the transcript will show once the turn is saved: the words, and the file as it was kept.
+    with ExitStack() as held:
+        if existing is not None:
+            # Before the file is kept (plan 031): a message from another tab meanwhile is the one refused,
+            # not this upload once its file is in the folder. A new chat's id is nobody else's yet.
+            held.enter_context(chat_running.hold(existing.id, run_id=run_id, message=assistant.spoken(said), file=name))
+        path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
+        conversation = existing or assistant.start(user, message or f"Read {name}", product)
+        if existing is None:
+            held.enter_context(
+                chat_running.hold(conversation.id, run_id=run_id, message=assistant.spoken(said), file=path.name)
+            )
+        else:
+            chat_running.kept_as(conversation.id, run_id, path.name)
         turn = await assistant.say(user, conversation, said, upload=path, run_id=run_id)
     return _turn_response(turn, conversation, user)
 
@@ -172,7 +182,13 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
     resumes from them. What comes back here is the readable half of that -- who
     said what -- because a person scrolling their own conversation has no use
     for a serialised tool call.
+
+    `running` is read before the conversation is loaded (plan 031): a turn
+    that ends in between comes back saved and still reported, which the
+    page's next check corrects. Read after, a slow `answers_for` let a turn
+    end unseen, and the page drew a transcript without it, and no turn.
     """
+    running = chat_running.running(conversation_id)
     conversation = _conversation(conversation_id, user)
     transcript = []
     for message in conversation.messages:
@@ -224,7 +240,7 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
         "messages": transcript,
         "answers": assistant.answers_for(user, conversation),
         # The turn still running in it, or null: its message is not in the transcript until it ends (plan 031).
-        "running": chat_running.running(conversation.id),
+        "running": running,
     }
 
 
