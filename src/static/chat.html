@@ -658,6 +658,7 @@
   let me = null;
   async function whoAmI() {
     try { me = await request("/api/auth/session"); } catch (error) { me = null; }
+    Cards.setReviewThreshold(me && me.review_threshold);  // before anything is drawn (plan 030)
     const needed = me && me.sign_in_required && !me.email;
     $("gate").hidden = !needed;
     // As on the other pages: only where more than one person can appear. On an

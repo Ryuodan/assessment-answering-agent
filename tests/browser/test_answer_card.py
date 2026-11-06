@@ -140,7 +140,7 @@ def test_withdrawing_an_approval_shows_the_answer_held_again(page: Page, tmp_pat
     expect(page.locator("#answerStatus")).to_contain_text("It will be held back until somebody edits or approves it.")
     expect(card).to_contain_text("Not going into the file yet.")
     expect(card).to_contain_text(UNGROUNDED)
-    expect(card.locator(".tag.warn", has_text="needs review")).to_have_count(1)
+    expect(card.locator(".answer-status .status-word")).to_have_text("Needs review")  # the status leads (plan 030)
 
 
 # --- Edit on a Brief card edits the brief (plan 029, 0.5) ------------------------

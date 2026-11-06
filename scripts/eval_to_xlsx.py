@@ -68,7 +68,10 @@ def _judge(case: dict) -> str:
 
 
 def _written(case: dict) -> str:
-    held = case.get("needs_review") or (case.get("confidence") or 0) < 0.6
+    from src.config import settings
+    from src.verification import held_by_score  # the gate's own threshold rule (plan 030)
+
+    held = case.get("needs_review") or held_by_score(case.get("confidence") or 0, settings.review_confidence_threshold)
     return "held for review" if held else "yes"
 
 

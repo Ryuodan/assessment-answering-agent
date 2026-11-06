@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 
 from src import batches, events
 from src.config import settings
-from src.selection import _has_answer, confirmed_by_a_person, ready_to_write
+from src.selection import _has_answer, confirmed_by_a_person, held_by_the_review, ready_to_write
 
 
 @dataclass
@@ -154,8 +154,8 @@ def released_by_withdrawal(team_id: str, *, threshold: float | None = None) -> l
             continue
         if confirmed_by_a_person(result, batches.edited_by(batch.id).get(question_id, "")):
             continue
-        passes = not result.needs_review and result.confidence >= floor
-        if passes and (result.review_reasons or result.confidence <= floor):
+        # The gate lets it through, and the review's own rule would hold it: both by the one threshold rule (plan 030).
+        if ready_to_write(result, threshold=floor)[0] and held_by_the_review(result, floor):
             found.append(
                 Released(
                     batch_id=batch.id,

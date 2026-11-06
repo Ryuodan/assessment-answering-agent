@@ -26,6 +26,16 @@
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
    control simply does nothing rather than throwing.
+
+   One thing every page sets before it draws (plan 030):
+
+     Cards.setReviewThreshold(value)      the server's review threshold, from the
+                                          session the page reads on load
+
+   A card leads with its status, "Will be written" or "Needs review" and why,
+   coloured by that status; the score is secondary. Where the server has said
+   whether the fill writes an answer (`will_be_written`), the card says the
+   same; elsewhere it applies the server's own rule with that threshold.
 */
 
 const Cards = (window.Cards = {
@@ -41,6 +51,7 @@ const Cards = (window.Cards = {
   onSetAside() {},
   canSetAside: false,
   readOnly: false,
+  reviewThreshold: null,  // the server's, once the page has set it; never a number of the card's own
   /* Which text the card shows, and so edits: `{ text, which }`, `which` being
      "brief" only when the brief is what is shown, else "answer". The card shows
      and writes through this rather than owning it, because the workbench holds
@@ -465,10 +476,94 @@ const Cards = (window.Cards = {
     return wrap;
   }
 
-  function confidenceBand(value) {
-    if (value >= 0.75) return { key: "high", word: "High confidence" };
-    if (value > 0.6) return { key: "medium", word: "Moderate" };
-    return { key: "low", word: "Low confidence" };
+  /* --- the status a card leads with (plan 030) ----------------------------
+
+     The card coloured its score by band, with 0.6 written in here, so an
+     answer the gate held could read "High confidence 90%" beside "needs
+     review". It now says first what happens to the answer, and why, and the
+     score follows. The threshold is the server's (`setReviewThreshold`). */
+
+  function setReviewThreshold(value) {
+    Cards.reviewThreshold = typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
+  /* The server's one rule (`verification.held_by_score`): at or under the threshold is held. */
+  function heldByScore(confidence) {
+    const threshold = Cards.reviewThreshold;
+    return typeof threshold === "number" && (confidence || 0) <= threshold;
+  }
+
+  /* Each check's reason, as `review_reasons` words it (`verification.py`), as a
+     short chip. Matched on the words that say which check it was, so answers
+     stored under earlier wordings read the same. */
+  const REASON_CHIPS = [
+    [/not consistent|disagree/i, "Sources disagree"],
+    [/not find the answer grounded|not grounded/i, "Not backed by our documents"],
+    [/rests only on what we told/i, "Only from previous answers"],
+    [/part of a split source/i, "Partial source"],
+    [/cites clauses not covered|not covered by its sources/i, "Cites clauses not in its sources"],
+  ];
+
+  function reasonChips(item) {
+    const chips = [];
+    (item.review_reasons || []).forEach((reason) => {
+      const known = REASON_CHIPS.find(([pattern]) => pattern.test(reason));
+      const label = known ? known[1] : "Flagged";
+      const same = chips.find((chip) => chip.label === label);
+      if (same) same.why.push(reason); else chips.push({ label, why: [reason] });
+    });
+    // No check spoke: held for the score itself, unless it is above the line,
+    // which only an answer flagged by hand before the checks had reasons is.
+    if (!chips.length) {
+      const above = typeof Cards.reviewThreshold === "number" && !heldByScore(item.confidence);
+      chips.push({ label: above ? "Flagged" : "Low confidence", why: [item.held_back_because || ""] });
+    }
+    return chips;
+  }
+
+  function byAPerson(item) {
+    return Boolean(item.approved || item.by_hand || item.edited_by)
+      || ["approved by a reviewer", "written by hand"].includes(item.confidence_reason);
+  }
+
+  /* `will_be_written` is the fill gate's own verdict, from `inspect`; an answer
+     that never came through it -- one typed on the Workbench, one in the chat
+     -- is judged by the same rule here, and goes into no file. */
+  function statusOf(item) {
+    if (item.blanked) return { key: "blank", word: "Left blank" };
+    if (item.set_aside) return { key: "aside", word: "Set aside" };
+    if (item.error) return { key: "failed", word: "Could not be answered" };
+    if (byAPerson(item)) return { key: "person", word: "Done by a person" };
+    const judged = item.will_be_written !== undefined;
+    const held = judged ? !item.will_be_written : Boolean(item.needs_review) || heldByScore(item.confidence);
+    if (held) return { key: "review", word: "Needs review", chips: reasonChips(item) };
+    return { key: "ready", word: judged ? "Will be written" : "Ready to use" };
+  }
+
+  function statusBar(item, status) {
+    const bar = document.createElement("div");
+    bar.className = "answer-status " + status.key;
+    const word = document.createElement("strong");
+    word.className = "status-word";
+    word.textContent = status.word;
+    bar.append(word);
+    (status.chips || []).forEach((chip) => {
+      const tag = document.createElement("span");
+      tag.className = "reason-chip";
+      tag.textContent = chip.label;
+      const why = chip.why.filter(Boolean).join("\n");
+      if (why) tag.title = why;
+      bar.append(tag);
+    });
+    // Nothing was drafted for a blank or a failure, so there is no score to show.
+    if (status.key !== "blank" && status.key !== "failed") {
+      const score = document.createElement("span");
+      score.className = "status-score";
+      score.textContent = Math.round((item.confidence || 0) * 100) + "% confidence";
+      score.title = "How well the models found the sources support the answer. Whether it goes in is the status.";
+      bar.append(score);
+    }
+    return bar;
   }
 
   let refusedNotes = 0;  // each editor's refusal note has an id of its own, for aria-describedby
@@ -936,9 +1031,12 @@ const Cards = (window.Cards = {
 
   function renderAnswer(item, index) {
     const card = document.createElement("div");
-    card.className = "answer" + (item.needs_review ? " review" : "") + (item.set_aside ? " set-aside" : "");
+    // The card's colour follows its status, not the score (plan 030).
+    const status = statusOf(item);
+    const held = status.key === "review" || status.key === "failed";
+    card.className = "answer" + (held ? " review" : "") + (item.set_aside ? " set-aside" : "");
 
-    // --- head: number, question, confidence
+    // --- head: number, question
     const head = document.createElement("div");
     head.className = "answer-head";
 
@@ -979,12 +1077,6 @@ const Cards = (window.Cards = {
 
     const meta = document.createElement("div");
     meta.className = "qmeta";
-    if (item.needs_review) {
-      const chip = document.createElement("span");
-      chip.className = "tag warn";
-      chip.textContent = "needs review";
-      meta.append(chip);
-    }
     const bits = [];
     if (item.question.section) bits.push(item.question.section);
     bits.push(item.question.question_type.replace(/_/g, " "));
@@ -1006,34 +1098,6 @@ const Cards = (window.Cards = {
 
     body.append(question, meta);
 
-    const percent = Math.round(item.confidence * 100);
-    const band = confidenceBand(item.confidence);
-    const confidence = document.createElement("div");
-    confidence.className = "confidence " + band.key;
-    /* Nothing was drafted, so there is nothing to be confident about. The card
-       said "100% — High confidence" over an answer somebody had deliberately
-       emptied, which is a score for a decision rather than for an answer. */
-    if (item.blanked) {
-      confidence.className = "confidence blanked";
-      const caption = document.createElement("div");
-      caption.className = "caption";
-      caption.textContent = "Left blank";
-      confidence.append(caption);
-    } else {
-      const value = document.createElement("div");
-      value.className = "value";
-      value.textContent = percent + "%";
-      const caption = document.createElement("div");
-      caption.className = "caption";
-      caption.textContent = band.word;
-      const meter = document.createElement("div");
-      meter.className = "meter";
-      const fill = document.createElement("span");
-      fill.style.width = percent + "%";
-      meter.append(fill);
-      confidence.append(value, caption, meter);
-    }
-
     // Removing the pair belongs here, beside what it removes. Only offered for
     // answers this session produced, since an imported result has no question
     // row behind it to keep in step.
@@ -1044,9 +1108,9 @@ const Cards = (window.Cards = {
       remove.textContent = "✕";
       remove.title = "Remove this question and its answer";
       remove.onclick = () => Cards.onDiscard(item.__key);
-      head.append(number, body, confidence, remove);
+      head.append(number, body, remove);
     } else {
-      head.append(number, body, confidence);
+      head.append(number, body);
     }
 
     // --- body: answer, citations, flags, reasoning, evidence
@@ -1161,7 +1225,8 @@ const Cards = (window.Cards = {
        was removed. Each bubble opens the clause with its relevance, the
        formatted/raw switch and the document, which is all the list had. */
 
-    card.append(head, content);
+    // The status first, above the question: what happens to this answer, and why.
+    card.append(statusBar(item, status), head, content);
     return card;
   }
 
@@ -1233,6 +1298,7 @@ const Cards = (window.Cards = {
   // What the pages use. Everything else above is private to the card.
   Object.assign(Cards, {
     render: renderAnswer,
+    setReviewThreshold: setReviewThreshold,
     withdrawnMessage: withdrawnMessage,
     stat: statCard,
     chunk: renderChunk,

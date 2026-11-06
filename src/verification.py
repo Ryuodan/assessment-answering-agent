@@ -13,13 +13,26 @@ Two failure modes motivated this module, both observed in evaluation runs:
 
 Both checks are mechanical. They read retrieval metadata rather than asking the
 model to grade itself, so they hold even when the model is confidently wrong.
+
+What a hold does to the score shown is decided here too (plan 030): see
+`held_confidence`, and `held_by_score` for the one threshold rule.
 """
 
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 
 from src.models import Evidence, SourceType
+from src.prompts import REVIEW_UNGROUNDED_CEILING
+
+# Why a check holds an answer, as `review_reasons` carries them. The cards turn
+# each into a short chip (`cards.js`), so the wording is part of the contract.
+UNSUPPORTED_CLAUSES = "cites clauses not covered by its sources: "
+PARTIAL_SOURCE = "holds only part of a split source; the set may be incomplete"
+MEMORY_ALONE = "nothing in our documents backs this — it rests only on what we told somebody before"
+UNGROUNDED = "the reviewer did not find the answer grounded"
+INCONSISTENT = "we are not consistent about this: "
 
 # "§7.2.1", "§ 7.2", and the same with an en-dash range: "§5.1–5.6".
 _CLAUSE_MENTION = re.compile(r"\u00a7\s*(\d+(?:\.\d+){0,7})(?:\s*[\u2013\u2014-]\s*(\d+(?:\.\d+){0,7}))?")
@@ -163,6 +176,46 @@ def incomplete_units(
     return sorted(incomplete)
 
 
+def held_by_score(confidence: float, threshold: float) -> bool:
+    """The one threshold rule (plan 030): a score at or under the review threshold is held.
+
+    The review (`assess`), the fill gate (`selection.ready_to_write`) and the
+    pages' cards all compare this way. The gate used to hold only a score under
+    the threshold, which no answer the review passed could reach.
+    """
+    return confidence <= threshold
+
+
+def held_confidence(confidence: float, *, held: bool, grounded: bool, review_threshold: float) -> float:
+    """The score an answer shows, once the checks have decided whether to hold it (plan 030).
+
+    A held answer never shows more than the review threshold, so its number
+    cannot read above "needs review" while the gate keeps it out of the file:
+    measured on the evaluations on file, held answers showing 0.85 or more
+    contradicted the team about ten times as often as released ones. One the
+    reviewer found not grounded shows no more than the top of the reviewer's
+    own scale for that (`REVIEW_UNGROUNDED_CEILING`). Only ever lowers, and a
+    released answer is untouched, so no answer's release changes.
+    """
+    if not held:
+        return confidence
+    ceiling = review_threshold if grounded else min(review_threshold, REVIEW_UNGROUNDED_CEILING)
+    return min(confidence, ceiling)
+
+
+class Assessment(NamedTuple):
+    """What the checks decided about one drafted answer."""
+
+    confidence: float
+    """The score the answer shows: capped when it is held (`held_confidence`)."""
+    needs_review: bool
+    reasons: list[str]
+    scored: float
+    """The score before that cap: the models' rating, lowered only by the mechanical checks.
+    `explain_confidence` explains this one, so its sentence says why the rating
+    is what it is; why the answer is held is in `reasons`."""
+
+
 def assess(
     answer: str,
     cited: list[Evidence],
@@ -173,33 +226,48 @@ def assess(
     review_threshold: float,
     incomplete_cap: float,
     completable_parts: int | None = None,
-) -> tuple[float, bool, list[str]]:
-    """Return adjusted confidence, whether review is needed, and the reasons why.
+    inconsistency: str = "",
+) -> Assessment:
+    """Return the confidence shown, whether review is needed, the reasons why, and the score before any hold.
 
     Completeness combines both views — see `incomplete_units`. A model that
     reads four parts and cites one has seen the full list and is not flagged;
     one that cites a part whose siblings were never retrieved is.
+
+    `inconsistency` is the drafter's `contradicts_memory`: a previous answer
+    that disagrees with our own policy is something only the drafter can see,
+    since no mechanical check compares two sources for meaning. It travels as a
+    reason rather than as prose, because `answer` goes into a cell and a note
+    about our own inconsistency is not something to send a customer. It is
+    worded for what the reviewer has to do: the drafter also reports two of our
+    own policies disagreeing, and "we are not consistent about this" is true of
+    both. It was added in `graph.nodes.finalize` until plan 030 put every hold
+    through the one cap here.
     """
     reasons: list[str] = []
 
     missing = unsupported_clauses(answer, cited, retrieved)
     if missing:
-        reasons.append("cites clauses not covered by its sources: " + ", ".join(missing))
+        reasons.append(UNSUPPORTED_CLAUSES + ", ".join(missing))
         confidence = min(confidence, incomplete_cap)
 
     partial = incomplete_units(cited, retrieved, completable_parts=completable_parts)
     if partial:
-        reasons.append("holds only part of a split source; the set may be incomplete")
+        reasons.append(PARTIAL_SOURCE)
         confidence = min(confidence, incomplete_cap)
 
     if rests_on_memory_alone(cited):
-        reasons.append("nothing in our documents backs this — it rests only on what we told somebody before")
+        reasons.append(MEMORY_ALONE)
 
     if not grounded:
-        reasons.append("the reviewer did not find the answer grounded")
+        reasons.append(UNGROUNDED)
 
-    needs_review = bool(reasons) or confidence <= review_threshold
-    return confidence, needs_review, reasons
+    if inconsistency.strip():
+        reasons.append(INCONSISTENT + inconsistency.strip())
+
+    needs_review = bool(reasons) or held_by_score(confidence, review_threshold)
+    shown = held_confidence(confidence, held=needs_review, grounded=grounded, review_threshold=review_threshold)
+    return Assessment(shown, needs_review, reasons, confidence)
 
 
 def rests_on_memory_alone(cited: list[Evidence]) -> bool:
@@ -214,10 +282,12 @@ def rests_on_memory_alone(cited: list[Evidence]) -> bool:
     Data", answered at 0.90 confidence and on its way into a customer's file
     with no document of ours behind it.
 
-    Deliberately not a confidence penalty. The score measures how well the
-    answer is supported by what it was given, and it was well supported -- by
-    the wrong kind of source. That is a fact about provenance, and provenance is
-    what a reviewer is for.
+    Not a penalty on the rating: the score measures how well the answer is
+    supported by what it was given, and it was well supported -- by the wrong
+    kind of source. That is a fact about provenance, and provenance is what a
+    reviewer is for. Since plan 030 the score *shown* is capped like any held
+    answer's (`held_confidence`), so it cannot read as "High" while the gate
+    holds it; the rating it explains is kept (`Assessment.scored`).
     """
     return bool(cited) and all(item.source_type is SourceType.PRIOR_ANSWER for item in cited)
 
@@ -249,7 +319,7 @@ def explain_confidence(
     the retriever: no thresholds, no clause arithmetic, no talk of chunks. It
     ends with the thing that reviewer should actually go and do.
     """
-    if confidence > review_threshold and grounded:
+    if grounded and not held_by_score(confidence, review_threshold):
         return ""
 
     sources = len(cited)

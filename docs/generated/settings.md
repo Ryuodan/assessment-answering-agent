@@ -104,7 +104,7 @@ source. The description is the comment above the field, the field's
 | `MAX_CONCURRENT_REWRITES` | `int` | `8` | Rewordings reaching the model at once: preferences, skills, "make them shorter", and the brief form, each one call per answer. Unbounded, 80 at once lost 44 to Groq's rate limit and every lost one stayed as it was. |
 | `STORAGE_LIMIT_PER_USER_MB` | `int` | `2048` | Stored files per person: the questionnaires they uploaded and the filled copies written from them. Under the limit nothing is removed; over it, the files of the work they have not used longest go first -- never a document the team's knowledge base was built from, and never anything used in the last STORAGE_KEEP_DAYS days, whatever the limit says. Per person, because that is who a questionnaire belongs to, so a new colleague brings their own allowance. 0 turns the limit off. |
 | `STORAGE_KEEP_DAYS` | `int` | `30` | Nothing used this recently is removed, even over the limit. |
-| `REVIEW_CONFIDENCE_THRESHOLD` | `float` | `0.6` | Below this, an answer is flagged for review. |
+| `REVIEW_CONFIDENCE_THRESHOLD` | `float` | `0.6` | At or below this, an answer is held for review, and a held answer never shows a higher score. |
 | `CHUNK_SIZE` | `int` | `1200` | 1200, not the 1800 this carried while Markdown tables still held Docling's alignment padding. De-padding changed what the number buys: at 1800 a chunk held 1,118 characters of content instead of 950, the corpus became coarser than the retriever was tuned for, and measured accuracy fell 4.4 points. 1200 restores the granularity and still holds more content than 1800 did. |
 | `CHUNK_OVERLAP` | `int` | `150` |  |
 | `MAX_EXPANDED_CHARS` | `int` | `12000` |  |

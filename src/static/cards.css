@@ -183,25 +183,32 @@
   margin-top: 6px; font-size: 11.5px; color: var(--ink-faint);
 }
 
-/* Confidence is a headline, not a footnote: a labelled meter beside the
-   question, sized so it reads before the answer does. */
-.confidence { flex: 0 0 auto; width: 116px; text-align: end; }
-.confidence .value { font-size: 19px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; }
-.confidence .caption {
-  font-size: 10.5px; font-weight: 650; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--ink-faint);
+/* The status is the headline (plan 030): what happens to the answer, and why,
+   in the status's colour; the score is a secondary number after it. It was a
+   score coloured by band, which showed a held answer as "High confidence". */
+.answer-status {
+  --status: var(--ink-faint);
+  --status-soft: var(--surface-sunken);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  padding: 8px 18px; background: var(--status-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--status) 30%, var(--line));
+  border-inline-start: 4px solid var(--status);
+  font-size: 12.5px; color: var(--ink-soft);
 }
-.meter { height: 5px; border-radius: var(--radius-pill); background: var(--line); margin-top: 6px; overflow: hidden; }
-.meter span { display: block; height: 100%; border-radius: var(--radius-pill); }
-.confidence.high .value { color: var(--ok); }
-.confidence.high .meter span { background: var(--ok); }
-.confidence.medium .value { color: var(--warn); }
-.confidence.medium .meter span { background: var(--warn); }
-.confidence.low .value { color: var(--err); }
-.confidence.low .meter span { background: var(--err); }
-/* Nothing was drafted, so there is no score to draw -- just the word, where a
-   reader's eye already goes for the state of the answer. */
-.confidence.blanked .caption { color: var(--ink-faint); }
+.answer-status.ready, .answer-status.person { --status: var(--ok); --status-soft: var(--ok-soft); }
+.answer-status.review { --status: var(--warn); --status-soft: var(--warn-soft); }
+.answer-status.failed { --status: var(--err); --status-soft: var(--err-soft); }
+.answer-status .status-word {
+  color: var(--status); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+}
+.answer-status .reason-chip {
+  padding: 1px 9px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 600;
+  color: var(--status); background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--status) 45%, transparent);
+}
+.answer-status .status-score {
+  margin-inline-start: auto; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+}
 
 /* Held back from the file. Warning-coloured rather than error-coloured: the
    answer is not wrong, it is unread, and the difference matters to somebody

@@ -1048,6 +1048,7 @@
   }
 
   function apply(session) {
+    Cards.setReviewThreshold(session.review_threshold);  // the cards compare with the server's (plan 030)
     const signedIn = Boolean(session.email);
     gate.hidden = signedIn || !session.sign_in_required;
     // The address is only worth showing where more than one person can appear.

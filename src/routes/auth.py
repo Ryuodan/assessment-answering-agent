@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Depends, Request
 
 from src import identity
+from src.config import settings
 from src.errors import Forbidden, SignInRequired
 from src.identity import User
 
@@ -32,13 +33,19 @@ def current_user(request: Request) -> User:
 
 
 def user_payload(user: User) -> dict[str, Any]:
-    """Who is signed in, as the pages read it, and whether this deployment asks anyone to sign in."""
+    """Who is signed in, as the pages read it, and whether this deployment asks anyone to sign in.
+
+    With the review threshold, which the answer cards compare a score with
+    (plan 030): the pages read it here, on load, rather than hard-coding 0.6.
+    Nothing is drawn signed out, so the signed-out shape leaves it out.
+    """
     return {
         "email": user.email,
         "team": user.team_id,
         "role": user.role,
         "is_admin": user.is_admin,
         "sign_in_required": identity.sign_in_required(),
+        "review_threshold": settings.review_confidence_threshold,
     }
 
 

@@ -330,7 +330,7 @@ async def finalize(state: QuestionState) -> dict:
     # remembered answers approved on one day share "Answer memory (date)", and each is still its own (plan 027).
     citations = [locator for locator, _ in dict.fromkeys((item.locator, item.entry_id) for item in cited)]
 
-    confidence, needs_review, review_reasons = assess(
+    checked = assess(
         drafted.answer,
         cited,
         min(drafted.confidence, verdict.confidence),
@@ -341,32 +341,20 @@ async def finalize(state: QuestionState) -> dict:
         # The retriever never completes a unit past this, so the completeness
         # check must not demand that it did.
         completable_parts=settings.max_expanded_parts,
+        # A disagreement only the drafter can see: a flag for the reviewer,
+        # never prose in the answer (see `assess`).
+        inconsistency=drafted.contradicts_memory,
     )
-
-    # A previous answer that disagrees with our own policy is something only the
-    # drafter can see -- no mechanical check compares two sources for meaning.
-    # It travels to the reviewer as a flag rather than as prose, because the
-    # whole system is built to put `answer` into a cell and a note about our own
-    # inconsistency is not something to send a customer.
-    conflict = drafted.contradicts_memory.strip()
-    if conflict:
-        needs_review = True
-        # Worded for what the reviewer has to do rather than for which two
-        # things disagreed. It is asked for as a previous answer against a
-        # policy, and that is the common case, but the drafter also reaches for
-        # it when two of our own policies disagree -- and "we are not consistent
-        # about this" is true of both and is the part somebody must act on.
-        review_reasons = [*review_reasons, f"we are not consistent about this: {conflict}"]
 
     answered = AnsweredQuestion(
         question=question,
         answer=strip_source_markers(drafted.answer).strip(),
         rationale=(drafted.rationale or verdict.verdict_reason).strip(),
-        confidence=confidence,
-        needs_review=needs_review,
-        review_reasons=review_reasons,
+        confidence=checked.confidence,  # capped when held (plan 030)
+        needs_review=checked.needs_review,
+        review_reasons=checked.reasons,
         confidence_reason=explain_confidence(
-            confidence,
+            checked.scored,  # the rating, not the cap: why it is held is in `review_reasons`
             cited,
             grounded=verdict.grounded,
             review_threshold=settings.review_confidence_threshold,

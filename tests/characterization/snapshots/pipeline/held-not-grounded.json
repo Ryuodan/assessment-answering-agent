@@ -8,7 +8,7 @@
     "citations": [
       "Access Control Policy.pdf §3.4–3.5.2"
     ],
-    "confidence": 0.8,
+    "confidence": 0.3,
     "confidence_reason": "A second model read the answer against the sources and could not trace every statement in it back to them. The reviewer's note:\n 'Promptly' is not in the sources. \nVerify each claim against the 1 cited source before submitting.",
     "drafted": "",
     "error": "",
