@@ -789,18 +789,14 @@ async def search_knowledge(
 
     Separate from answering: this is for a person checking what the corpus
     actually says, so it returns the chunks that matched rather than an answer
-    written from them. With a `product`, its knowledge base is searched too.
+    written from them. With a `product`, its knowledge base is searched too, and
+    the team's earlier answers have a share of the results (TD-074).
     """
     scope = {"product_id": products.chosen(user.team_id, product)} if product else {}
     if mode not in ("semantic", "keyword", "hybrid"):
         raise Unprocessable(f"unknown search mode '{mode}'", code="search_mode_unknown")
     return await service.search_knowledge(
-        q,
-        mode=mode,
-        limit=limit,
-        source_name=source,
-        team_id=user.team_id,
-        **scope,
+        q, mode=mode, limit=limit, source_name=source, team_id=user.team_id, earlier_answers=True, **scope
     )
 
 

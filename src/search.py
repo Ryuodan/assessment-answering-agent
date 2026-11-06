@@ -44,6 +44,7 @@ async def search_knowledge(
     source_name: str = "",
     team_id: str | None = None,
     product_id: str = "",
+    earlier_answers: bool = False,
 ) -> dict[str, Any]:
     """Search a team's indexed corpus directly, for a person rather than the drafter.
 
@@ -64,6 +65,14 @@ async def search_knowledge(
     own list (plan 021): the vectors return `limit` passages however far they
     are, so the product's hits, put first and cut at the limit, filled it alone
     and the shared policies were never shown.
+
+    With `earlier_answers`, the team's remembered answers get a share of the limit
+    of their own, as each knowledge base does (TD-074). Listed after every
+    guideline and then cut, they almost never appeared in the Workbench's search.
+    The assistant's `search_policies` leaves it off: it looks up what the
+    documents say, and what it reads is as it was. `source_name` is applied in
+    each store, before its cut, so one file's passages are not lost behind better
+    ones elsewhere.
     """
     query = (query or "").strip()
     if not query:
@@ -89,7 +98,8 @@ async def search_knowledge(
         if mode in ("semantic", "hybrid"):
             try:
                 dense = await asyncio.wait_for(
-                    store.search(query, source_type, limit, expand=False), SEARCH_EMBED_TIMEOUT
+                    store.search(query, source_type, limit, expand=False, source_name=source_name),
+                    SEARCH_EMBED_TIMEOUT,
                 )
             except Exception as error:  # noqa: BLE001 - search degrades to keyword results, it does not fail
                 # The embedding service is remote and occasionally slow to
@@ -98,10 +108,10 @@ async def search_knowledge(
                 degraded.append(str(error) or repr(error))
                 logger.warning("search.semantic_unavailable", error=str(error) or repr(error))
         if mode in ("keyword", "hybrid"):
-            literal = await asyncio.to_thread(store.text_search, query, source_type, limit)
+            literal = await asyncio.to_thread(store.text_search, query, source_type, limit, source_name)
         if not dense and degraded and mode == "semantic":
             # Nothing to show otherwise: answer the query the one way still working.
-            literal = await asyncio.to_thread(store.text_search, query, source_type, limit)
+            literal = await asyncio.to_thread(store.text_search, query, source_type, limit, source_name)
         if mode != "hybrid":
             return dense or literal
 
@@ -128,17 +138,23 @@ async def search_knowledge(
     for (_, _, owner, _), batch in zip(jobs, batches):
         for item in batch:
             item.product_id = owner or item.product_id
-    if source_name:
-        batches = [[item for item in batch if item.source_name == source_name] for batch in batches]
 
     # Each knowledge base's hits in its own order, guidelines then remembered
     # answers; each keeps its share of the limit, and they are listed as before.
-    by_base = [
-        [item for (_, _, owner, _), batch in zip(jobs, batches) if owner == base for item in batch]
+    # With `earlier_answers`, each knowledge base's remembered answers have a share too.
+    kinds = (SourceType.GUIDELINE, SourceType.PRIOR_ANSWER) if earlier_answers else (None,)
+    groups = [
+        [
+            item
+            for (_, _, owner, kind), batch in zip(jobs, batches)
+            if owner == base and wanted in (None, kind)
+            for item in batch
+        ]
+        for wanted in kinds
         for _, base in stores
     ]
-    shares = _shares([len(hits) for hits in by_base], limit)
-    kept = {id(item) for hits, share in zip(by_base, shares) for item in hits[:share]}
+    shares = _shares([len(hits) for hits in groups], limit)
+    kept = {id(item) for hits, share in zip(groups, shares) for item in hits[:share]}
     found = [item for batch in batches for item in batch if id(item) in kept]
 
     return {

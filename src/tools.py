@@ -1072,8 +1072,7 @@ async def search(
     product_id: str = "",
 ) -> dict:
     """Look something up in a team's indexed policies, and a product's beside them, without touching a batch."""
-    scope = {"product_id": product_id} if product_id else {}
-    return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id, **scope)
+    return await service.search_knowledge(query, mode=mode, limit=limit, team_id=team_id, product_id=product_id)
 
 
 def _working_copy(existing: AnsweredQuestion | None, question: FormQuestion) -> AnsweredQuestion:

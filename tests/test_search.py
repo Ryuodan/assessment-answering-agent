@@ -37,15 +37,17 @@ class FakeStore:
         self.expand_calls = []
         self.searched_types = []
 
-    async def search(self, query, source_type, k, *, expand=True):
+    async def search(self, query, source_type, k, *, expand=True, source_name=""):
         self.searched_types.append(source_type)
         if self.dense_error:
             raise self.dense_error
         self.expand_calls.append(expand)
-        return self.dense if source_type is SourceType.GUIDELINE else []
+        found = self.dense if source_type is SourceType.GUIDELINE else []
+        return [item for item in found if not source_name or item.source_name == source_name]
 
-    def text_search(self, query, source_type, k):
-        return self.lexical if source_type is SourceType.GUIDELINE else []
+    def text_search(self, query, source_type, k, source_name=""):
+        found = self.lexical if source_type is SourceType.GUIDELINE else []
+        return [item for item in found if not source_name or item.source_name == source_name]
 
     def counts_by_type(self):
         # Prior answers are empty, as they are on the real corpus.
@@ -106,10 +108,10 @@ def remembered(entry_id: str, score: float, lexical: bool = False) -> Evidence:
 class MemoryStore(FakeStore):
     """Remembered answers only, found by both the vectors and the text."""
 
-    async def search(self, query, source_type, k, *, expand=True):
+    async def search(self, query, source_type, k, *, expand=True, source_name=""):
         return [remembered("mem-a", 0.80), remembered("mem-b", 0.70)] if source_type is SourceType.PRIOR_ANSWER else []
 
-    def text_search(self, query, source_type, k):
+    def text_search(self, query, source_type, k, source_name=""):
         if source_type is not SourceType.PRIOR_ANSWER:
             return []
         return [remembered("mem-b", 1.0, lexical=True), remembered("mem-a", 0.5, lexical=True)]
@@ -206,7 +208,7 @@ class Passages(FakeStore):
         super().__init__(dense=[hit(name, chunk, 0.9 - chunk / 100) for chunk in range(n)])
         self.name = name
 
-    async def search(self, query, source_type, k, *, expand=True):
+    async def search(self, query, source_type, k, *, expand=True, source_name=""):
         return (self.dense if source_type is SourceType.GUIDELINE else [])[:k]
 
     def documents_indexed(self):
@@ -248,3 +250,95 @@ async def test_what_one_knowledge_base_leaves_the_other_takes(monkeypatch):
 async def test_the_shared_policies_alone_are_searched_as_before(monkeypatch):
     knowledge_bases(monkeypatch, shared=30, own=30)
     assert await found(20) == ["Shared policy.pdf"] * 20
+
+
+# --- the team's earlier answers, and one file's passages (TD-074) -------------------------
+
+
+class Both(FakeStore):
+    """A knowledge base of `guidelines` passages and `answers` remembered answers, `k` at most each."""
+
+    def __init__(self, guidelines: int, answers: int):
+        super().__init__()
+        self.guidelines = [hit("Policy.pdf", chunk, 0.9 - chunk / 100) for chunk in range(guidelines)]
+        self.answers = [remembered(f"mem-{n}", 0.8 - n / 100) for n in range(answers)]
+
+    async def search(self, query, source_type, k, *, expand=True, source_name=""):
+        return (self.guidelines if source_type is SourceType.GUIDELINE else self.answers)[:k]
+
+    def counts_by_type(self):
+        return {SourceType.GUIDELINE.value: len(self.guidelines), SourceType.PRIOR_ANSWER.value: len(self.answers)}
+
+
+def kinds_of(body: dict) -> list[str]:
+    return [r["source_type"] for r in body["results"]]
+
+
+@pytest.mark.asyncio
+async def test_a_persons_search_gives_the_teams_earlier_answers_a_share(monkeypatch):
+    """TD-074: remembered answers were listed after every guideline and cut, so on a real
+    corpus the Workbench's search never showed one. They take what the policies leave too."""
+    monkeypatch.setattr(knowledge, "get_store", lambda team_id=None: Both(guidelines=30, answers=30))
+    body = await search.search_knowledge("backups", mode="semantic", limit=20, earlier_answers=True)
+    assert kinds_of(body) == ["guideline"] * 10 + ["prior_answer"] * 10
+
+    monkeypatch.setattr(knowledge, "get_store", lambda team_id=None: Both(guidelines=30, answers=4))
+    body = await search.search_knowledge("backups", mode="semantic", limit=20, earlier_answers=True)
+    assert kinds_of(body) == ["guideline"] * 16 + ["prior_answer"] * 4
+
+
+@pytest.mark.asyncio
+async def test_the_assistants_lookups_read_what_they_read_before(monkeypatch):
+    """`search_policies` looks up what the documents say: without the share, guidelines fill it."""
+    monkeypatch.setattr(knowledge, "get_store", lambda team_id=None: Both(guidelines=30, answers=30))
+    body = await search.search_knowledge("backups", mode="semantic", limit=8)
+    assert kinds_of(body) == ["guideline"] * 8
+
+
+def test_the_workbench_search_asks_for_the_earlier_answers(monkeypatch):
+    monkeypatch.setattr(knowledge, "get_store", lambda team_id=None: Both(guidelines=30, answers=30))
+    body = get(q="backups", mode="semantic").json()
+    assert kinds_of(body).count("prior_answer") == 10
+
+
+def test_one_files_passages_are_found_however_others_rank():
+    """TD-074: the file filter ran after each store's cut, so a file whose passages ranked
+    below the best `limit` elsewhere read as "nothing matched" though it held the words."""
+    from tests.conftest import FakeVectorStore, bare_store
+
+    store = bare_store(FakeVectorStore([]))
+    for n in range(6):
+        store.add_guideline(f"Retention {n}.pdf", "## 1 Scope\n\nRetention retention retention is 90 days.")
+    store.add_guideline("Backups.pdf", "## 1 Scope\n\nBackups follow the retention schedule.")
+
+    assert all(hit.source_name != "Backups.pdf" for hit in store.text_search("retention", SourceType.GUIDELINE, 3))
+    found = store.text_search("retention", SourceType.GUIDELINE, 3, "Backups.pdf")
+    assert [hit.source_name for hit in found] == ["Backups.pdf"]
+
+
+@pytest.mark.asyncio
+async def test_the_vectors_are_asked_for_one_files_passages(monkeypatch):
+    """The filter goes to Chroma with the kind, so one file's nearest come back, not the corpus's."""
+    from tests.conftest import FakeVectorStore, bare_store
+
+    store = bare_store(FakeVectorStore([]))
+    asked: list = []
+    real = store._store.similarity_search_by_vector_with_relevance_scores
+
+    def recorded(vector, k, where=None, **kwargs):
+        asked.append(where)
+        return real(vector, k, where, **kwargs)
+
+    store._store.similarity_search_by_vector_with_relevance_scores = recorded
+    monkeypatch.setattr(store, "_embed_query", lambda query: _vector())
+    await store.search("retention", SourceType.GUIDELINE, 5, expand=False, source_name="Backups.pdf")
+    await store.search("retention", SourceType.GUIDELINE, 5, expand=False)
+
+    assert asked == [
+        {"$and": [{"source_type": "guideline"}, {"source_name": "Backups.pdf"}]},
+        {"source_type": "guideline"},
+    ]
+
+
+async def _vector() -> list[float]:
+    return [0.0] * 8

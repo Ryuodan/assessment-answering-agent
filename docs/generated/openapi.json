@@ -2708,7 +2708,7 @@
     "/api/search": {
       "get": {
         "summary": "Search Knowledge",
-        "description": "Search the indexed corpus directly.\n\nSeparate from answering: this is for a person checking what the corpus\nactually says, so it returns the chunks that matched rather than an answer\nwritten from them. With a `product`, its knowledge base is searched too.",
+        "description": "Search the indexed corpus directly.\n\nSeparate from answering: this is for a person checking what the corpus\nactually says, so it returns the chunks that matched rather than an answer\nwritten from them. With a `product`, its knowledge base is searched too, and\nthe team's earlier answers have a share of the results (TD-074).",
         "operationId": "search_knowledge_api_search_get",
         "parameters": [
           {

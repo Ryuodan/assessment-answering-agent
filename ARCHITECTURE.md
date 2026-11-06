@@ -117,7 +117,9 @@ to the page for the knowledge base it chose. The Workbench keeps the document
 viewer that citations open, and Search. Search follows the Workbench's product
 unless "Search in" says otherwise; a product's search shares its `limit` with
 the shared knowledge base (`search._shares`), and its hits carry the product's
-badge. The chat has no knowledge-base drawer since plan 031: the page is where
+badge. A person's search gives the team's earlier answers a share of their own
+(TD-074); the assistant's `search_policies` does not. A file filter is applied
+inside each store's search. The chat has no knowledge-base drawer since plan 031: the page is where
 documents are managed. No page uses `GET /api/documents` any more.
 
 The answer card leads with its status (plan 030): "Will be written" (or "Ready to

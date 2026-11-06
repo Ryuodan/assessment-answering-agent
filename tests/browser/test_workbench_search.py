@@ -206,3 +206,22 @@ def test_the_drawer_follows_the_workbench_when_it_opens_and_keeps_a_scope_chosen
     page.click("#searchOpen")
     expect(scope).to_have_value("")
     assert searched == [], "nothing was typed, so nothing was searched"
+
+
+def test_an_earlier_answer_is_told_apart_from_a_policy(page: Page, availo, monkeypatch) -> None:
+    """TD-074: search shows the team's earlier answers now, so each says what it is."""
+    remembered = {**hit("Answer memory"), "source_type": "prior_answer", "locator": "Answer memory (2026-10-01)"}
+
+    async def search_knowledge(query, **options):
+        return {"query": query, "mode": "hybrid", "results": [hit("Access.pdf"), remembered], "documents": []}
+
+    monkeypatch.setattr("src.api.service.search_knowledge", search_knowledge)
+    page.goto("/workbench")
+    choose_general(page)
+    page.click("#searchOpen")
+    search(page)
+
+    hits = page.locator("#searchResults .search-hit")
+    expect(hits).to_have_count(2)
+    expect(hits.filter(has_text="Answer memory").locator(".tag.prior_answer")).to_have_text("previous answer")
+    expect(hits.filter(has_text="Access.pdf").locator(".tag.prior_answer")).to_have_count(0)

@@ -82,6 +82,11 @@ def _split_bold(text: str) -> list[tuple[str, bool]]:
     return [span for span in spans if span[0]] or [("", False)]
 
 
+# Brackets holding nothing once the numbers are out, or only what joined them:
+# commas, "and", "see". A bracket with any other word in it stays.
+_LEFT_EMPTY = re.compile(r"[ \t]*[(（][\s,،;:]*(?:(?:and|or|see(?:\s+also)?|و)[\s,،;:]*)*[)）]", re.IGNORECASE)
+
+
 def _unless_a_real_reference(match: re.Match[str]) -> str:
     """'' for a leaked source number; the text itself for "annex [1]" and the like."""
     before = match.string[max(0, match.start() - 30) : match.start()]
@@ -90,8 +95,13 @@ def _unless_a_real_reference(match: re.Match[str]) -> str:
 
 def strip_source_markers(text: str) -> str:
     """Remove internal source indices the drafter leaked into the prose."""
-    cleaned = _SOURCE_MARKER.sub("", text or "")
+    original = text or ""
+    cleaned = _SOURCE_MARKER.sub("", original)
     cleaned = _BRACKET_MARKER.sub(_unless_a_real_reference, cleaned)
+    if cleaned != original:
+        # "tested quarterly ([3])" left "tested quarterly ()", and "([4], [5])" left
+        # "(,)", in a customer's file (TD-073). Only after a number was taken out.
+        cleaned = _LEFT_EMPTY.sub("", cleaned)
     # The marker usually trails a closing bracket or a space; tidy what is left
     # so the sentence does not end " ." or carry a double space.
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)

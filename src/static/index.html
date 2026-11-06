@@ -1619,6 +1619,14 @@
       const ownName = (Cards.product(item.product_id) || {}).name || "this product";
       const own = Cards.productBadge(item.product_id, "From " + ownName + "'s own documents, not the shared policies");
       if (own) head.append(own);
+      // What the team said before, told apart from a policy now that search shows them (TD-074).
+      if (item.source_type === "prior_answer") {
+        const earlier = document.createElement("span");
+        earlier.className = "tag prior_answer";
+        earlier.textContent = "previous answer";
+        earlier.title = "What the team answered before, from the answer memory";
+        head.append(earlier);
+      }
       head.append(badge);
       if (authority) head.append(authority);
       const openIt = Cards.openDocumentButton(item.source_name, item.source_type);

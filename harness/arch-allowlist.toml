@@ -4,7 +4,7 @@
 
 [[size]]
 path = "src/api.py"
-max_lines = 1225
+max_lines = 1221
 debt = "TD-006"
 
 [[size]]
@@ -14,7 +14,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/tools.py"
-max_lines = 1303
+max_lines = 1302
 debt = "TD-006"
 
 [[size]]
@@ -34,7 +34,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/knowledge.py"
-max_lines = 785
+max_lines = 759
 debt = "TD-006"
 
 [[size]]

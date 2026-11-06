@@ -588,6 +588,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Impact:** scripts, `curl`, the evaluation (`eval/run_eval.py`, `eval/house.py`, `scripts/run_both_evals.py`, `scripts/eval_assistant.py` and the other scripts that open or answer questionnaires) and any other client can still answer a questionnaire or start a chat as General without saying so. The silent General the user ruled out is closed on the pages only.
 - **Adding documents, too (plan 031):** the Knowledge base page now asks which knowledge base before it adds, removes or clears anything, but `POST /api/knowledge/guidelines`, `DELETE /api/knowledge/sources/{name}` and `DELETE /api/knowledge` still read a missing `product` as the shared knowledge base. The same fix would accept an explicit value for the shared one and refuse a missing one.
 - **Fix (needs approval):** the server accepts `general` for General and refuses a missing product with an `AppError` (`code="product_required"`, 422), for new questionnaires, typed lists and new chats. The pages then change one line, `Cards.serverProduct` in `src/static/cards.js`. For whoever builds it: `src/products.py` is at the 400-line limit (`harness/arch.py`), so room is made first, for example by moving `seed()` out; the evaluation and the scripts that answer as General must then send `general`; and the server tests that pin `""` as General (`tests/test_product_questionnaires.py`, `tests/test_product_knowledge.py`) change with it.
+- **Left as it is** 2026-11-07, by the user: every page asks for the product or knowledge base, and only the pages and the team's own scripts call the API. Revisit if another client is added.
 
 ## TD-067: The document viewer exists in three copies
 
@@ -639,6 +640,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Checked:** none had: no memory entry and no index row in the local data names the eval's fixture file.
 - **Impact:** a run against a live installation could put test answers into the shared answer memory.
 - **Fix (needs approval):** point the script at a scratch copy of the index too, as plan 031's run did by hand (`CHROMA_DIR` set to a copy).
+- **Resolved** 2026-11-07 (Claude, plan 032): `scripts/eval_assistant.py` copies the index to a scratch folder and searches the copy, as it records into a scratch database; the copy is removed when the run ends. `CHROMA_DIR` set explicitly still wins. `tests/test_eval_assistant_storage.py`.
 
 ## TD-073: Removing a leaked source number can leave empty brackets
 
@@ -647,6 +649,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - It is the same code path as before; the product block makes the drafter cite inline a little more often.
 - **Impact:** a stray "()" in a customer's file.
 - **Fix (needs approval):** drop brackets left empty, or holding only separators, after the numbers are removed. A characterization test pins today's output first.
+- **Resolved** 2026-11-07 (Claude, plan 032, approved by the user): after a number is removed, `formatting.strip_source_markers` drops brackets left holding nothing, or only what joined the numbers (commas, "and", "see", Arabic "،" and "و"). A bracket with any other word stays, and text with no number in it is untouched. `tests/test_formatting.py`.
 
 ## TD-074: Search rarely shows remembered answers, and filters by file after the cut
 
@@ -656,6 +659,11 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - **Cost:** a product's search embeds the query once per knowledge base and kind (up to four calls), where answering embeds it once.
 - **Impact:** a person checking "what did we say before" in search, or the assistant searching, does not see the answer memory; a filtered search can miss text that is there.
 - **Fix (needs approval, it changes what the assistant reads):** give remembered answers their own share of the limit, as plan 031 gave each knowledge base its share. Filter by file inside `KnowledgeStore.search` and `text_search` (`src/knowledge.py`).
+- **Resolved** 2026-11-07 (Claude, plan 032, approved by the user):
+  - A person's search (`GET /api/search`) gives the team's earlier answers a share of the limit of their own, beside each knowledge base's guidelines; the Workbench marks each "previous answer". The assistant's `search_policies` reads what it read before: it looks up what the documents say.
+  - The file filter goes into each store's search: to Chroma with the kind, and to the literal search, so one file's passages are found however the rest of the corpus ranks.
+  - The store's unused `lexical_search` is removed to make room; `src/knowledge.py`'s ceiling went from 785 to 759.
+  - Left as it was: a product's search still embeds the query once per knowledge base and kind.
 
 ## TD-075: Small things plan 031's chat work left
 

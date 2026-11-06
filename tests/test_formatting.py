@@ -198,3 +198,29 @@ def test_a_cell_keeps_arabic_and_plain_text_as_it_is():
 
     assert to_cell_text("نعم، يتم تشفير البيانات.") == "نعم، يتم تشفير البيانات."
     assert to_cell_text("Yes. 2 * 3 = 6, and a_b stays.") == "Yes. 2 * 3 = 6, and a_b stays."
+
+
+@pytest.mark.parametrize(
+    ("leaked", "clean"),
+    [
+        ("Cloud environments are tested quarterly ([3]).", "Cloud environments are tested quarterly."),
+        (
+            "Testing is performed regularly ([4], [5], [6], [7]) across our services.",
+            "Testing is performed regularly across our services.",
+        ),
+        ("Logs are kept for a year ([2] and [4]).", "Logs are kept for a year."),
+        ("Backups are encrypted (see [3]).", "Backups are encrypted."),
+        ("تُشفَّر النسخ الاحتياطية ([2]، [3]).", "تُشفَّر النسخ الاحتياطية."),
+        ("Reviews are yearly (Access Control Policy [3]).", "Reviews are yearly (Access Control Policy)."),
+    ],
+)
+def test_brackets_left_holding_nothing_go_with_the_numbers(leaked, clean):
+    """TD-073: "tested quarterly ([3])" became "tested quarterly ()" in a customer's
+    file, and "([4], [5], [6], [7])" became "(,,,)". Words left in the brackets stay."""
+    assert strip_source_markers(leaked) == clean
+
+
+def test_empty_brackets_the_drafter_meant_are_left_alone():
+    """Only brackets a removed number emptied: text with no number in it is untouched."""
+    text = "Enter the value in the field marked () on the form."
+    assert strip_source_markers(text) == text

@@ -24,6 +24,7 @@ import asyncio
 import logging
 import threading
 from contextlib import contextmanager
+from typing import Any
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -350,14 +351,16 @@ class KnowledgeStore:
             return evidence
         return [item for item in evidence if item.entry_id not in replaced]
 
-    async def search(self, query: str, source_type: SourceType, k: int, *, expand: bool = True) -> list[Evidence]:
+    async def search(
+        self, query: str, source_type: SourceType, k: int, *, expand: bool = True, source_name: str = ""
+    ) -> list[Evidence]:
         """Return the `k` closest chunks of one type, best first.
 
         A hit inside a split table or clause series is expanded to the whole unit
         before returning. Retrieval ranks fragments, but the drafter must see the
         complete series or it will present a fragment as the whole set.
         """
-        found = await self.search_types(query, [(source_type, k)], expand=expand)
+        found = await self.search_types(query, [(source_type, k)], expand=expand, source_name=source_name)
         return found.get(source_type, [])
 
     async def _embed_query(self, query: str) -> list[float]:
@@ -377,6 +380,7 @@ class KnowledgeStore:
         *,
         expand: bool = True,
         vector: list[float] | None = None,
+        source_name: str = "",
     ) -> dict[SourceType, list[Evidence]]:
         """Search several source types against a single embedding of `query`.
 
@@ -410,58 +414,26 @@ class KnowledgeStore:
             # Over-fetch when a lexical pass will re-rank: fusion can only
             # promote a chunk that one of the two lists actually returned.
             dense_k = k * 3 if settings.hybrid_search else k
+            # Any: Chroma takes `$and`, which langchain_chroma's `dict[str, str]` does not admit.
+            where: Any = {"source_type": source_type.value}
+            if source_name:  # one file's best, not the corpus's best then filtered (TD-074)
+                where = {"$and": [where, {"source_name": source_name}]}
             hits = await asyncio.to_thread(
-                self._store.similarity_search_by_vector_with_relevance_scores,
-                vector,
-                dense_k,
-                {"source_type": source_type.value},
+                self._store.similarity_search_by_vector_with_relevance_scores, vector, dense_k, where
             )
             evidence = [self._evidence(document, to_relevance(distance), source_type) for document, distance in hits]
             if source_type is SourceType.PRIOR_ANSWER:
                 evidence = self._still_standing(evidence)
             if settings.hybrid_search:
                 evidence = self._fuse_with_lexical(query, evidence, source_type, k)
+            evidence = [item for item in evidence if item.source_name == source_name] if source_name else evidence
             evidence = evidence[:k]
             return self._expand_units(evidence) if expand else evidence
 
         found = await asyncio.gather(*(one(source_type, k) for source_type, k in wanted))
         return {source_type: hits for (source_type, _), hits in zip(wanted, found)}
 
-    def lexical_search(self, query: str, source_type: SourceType, k: int) -> list[Evidence]:
-        """Keyword (BM25) hits, best first — no embedding involved.
-
-        Exposed for the search tool, where the two retrieval modes are offered
-        side by side: a person checking whether a policy says "90 days" wants
-        the literal string, and an embedding is the wrong instrument for that.
-        Scored on the same 0-1 scale as a cosine so one result list can mix
-        both, but the figure is a BM25 rank normalised to the best hit, not a
-        similarity — `is_lexical` says which it is.
-        """
-        if k <= 0 or not query.strip():
-            return []
-
-        index, documents = self._lexical(source_type)
-        if not len(index):
-            return []
-
-        keys = index.search(query, k)
-        found: list[Evidence] = []
-        for rank, key in enumerate(keys):
-            record = documents.get(key)
-            if record is None:
-                continue
-            text, metadata = record
-            item = self._evidence(
-                Document(page_content=text, metadata=metadata),
-                0.0,
-                source_type,
-                similarity=round(1.0 - rank / max(len(keys), 1), 4),
-            )
-            item.is_lexical = True
-            found.append(item)
-        return found
-
-    def text_search(self, query: str, source_type: SourceType, k: int) -> list[Evidence]:
+    def text_search(self, query: str, source_type: SourceType, k: int, source_name: str = "") -> list[Evidence]:
         """Literal text search over one collection, with search-box notation.
 
         BM25 matches whole words, which is wrong for a person at a search box:
@@ -488,6 +460,8 @@ class KnowledgeStore:
         scored: list[tuple[float, tuple, str, dict]] = []
 
         for key, (text, metadata) in documents.items():
+            if source_name and metadata.get("source_name") != source_name:
+                continue
             haystack = fold_digits(text).casefold()
             if any(bad in haystack for bad in excluded):
                 continue

@@ -785,10 +785,42 @@ def _use_a_scratch_database() -> Path | None:
     return settings.db_path
 
 
+def _use_a_scratch_index() -> Path | None:
+    """Point the run at a copy of the index unless one was named (TD-072).
+
+    The scratch database scoped the record, not the index. A case that has the
+    assistant write an answer by hand records it in the answer memory, and that
+    indexes it: into the deployment's own Chroma collection, where the memory
+    adopts it into the real database the next time it is read. A copy keeps the
+    retrieval the cases measure, the real corpus, and takes the writes. It is
+    removed when the run ends. `CHROMA_DIR` set explicitly still wins.
+    """
+    import atexit
+    import os
+    import shutil
+
+    from src.config import settings
+
+    if os.environ.get("CHROMA_DIR"):
+        return None
+    folder = Path(tempfile.mkdtemp(prefix="eval_assistant_index_"))
+    scratch = folder / "chroma_db"
+    if settings.chroma_dir.exists():
+        shutil.copytree(settings.chroma_dir, scratch)
+    else:
+        scratch.mkdir()
+    settings.chroma_dir = scratch
+    atexit.register(shutil.rmtree, folder, ignore_errors=True)
+    return scratch
+
+
 def main() -> int:
     scratch = _use_a_scratch_database()
     if scratch:
         print(f"Recording into a scratch database: {scratch}")
+    index = _use_a_scratch_index()
+    if index:
+        print(f"Searching a copy of the index, removed afterwards: {index}")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repeat", type=int, default=1, help="Run every case this many times")
     parser.add_argument("--only", default="", help="Only cases whose name contains this")
