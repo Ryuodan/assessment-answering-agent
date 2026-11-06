@@ -87,11 +87,14 @@ def test_the_page_opens_with_no_knowledge_base_chosen_and_adds_nothing_until_one
     expect(button).to_be_disabled()
     expect(why).to_be_visible()
     expect(why).to_contain_text("Choose the knowledge base")
+    expect(button).to_have_accessible_description("Choose the knowledge base they go to, above, first.")
     assert listed == [], "the shared list was read with nothing chosen"
 
     page.select_option("#kbScope", "general")
     expect(button).to_be_enabled()
     expect(why).to_be_hidden()
+    # A hidden description is still read out: it goes with the line (plan 031's review).
+    expect(button).to_have_accessible_description("")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
     expect(page.locator("#kbClear")).to_be_visible()
     page.click("#guidelinesBtn")

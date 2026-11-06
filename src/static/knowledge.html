@@ -320,6 +320,7 @@
             which is not evidence that we do it.</span></label>
       </fieldset>
       <div class="row">
+        <!-- Described by #guidelinesNeedsScope only while that line shows: paintGuidelines. -->
         <button id="guidelinesBtn" disabled aria-describedby="guidelinesNeedsScope">Index guidelines</button>
         <span class="needs-scope" id="guidelinesNeedsScope">Choose the knowledge base they go to, above, first.</span>
       </div>
@@ -529,6 +530,10 @@
   function paintGuidelines() {
     $("guidelinesBtn").disabled = indexing || !$("guidelinesInput").files.length || !kbChosen();
     $("guidelinesNeedsScope").hidden = kbChosen();
+    // A description is read out even when its element is hidden, so it goes with
+    // the line (plan 031's review; plan 029's review fixed #productPick the same way).
+    if (kbChosen()) $("guidelinesBtn").removeAttribute("aria-describedby");
+    else $("guidelinesBtn").setAttribute("aria-describedby", "guidelinesNeedsScope");
   }
 
   async function indexGuidelines() {
