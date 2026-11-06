@@ -22,6 +22,20 @@ logger = get_logger(__name__)
 SEARCH_EMBED_TIMEOUT = 10.0
 
 
+def _shares(sizes: list[int], limit: int) -> list[int]:
+    """How many of each list a result of `limit` keeps: one each in turn, the first list first.
+
+    So neither crowds the other out, and what one does not use the other takes.
+    One list keeps its first `limit`, as a search of the shared policies always did.
+    """
+    shares = [0] * len(sizes)
+    while sum(shares) < limit and any(share < size for share, size in zip(shares, sizes)):
+        for index, size in enumerate(sizes):
+            if shares[index] < size and sum(shares) < limit:
+                shares[index] += 1
+    return shares
+
+
 async def search_knowledge(
     query: str,
     *,
@@ -45,7 +59,11 @@ async def search_knowledge(
     search result should be the chunk that actually matched.
 
     With a `product_id`, the product's knowledge base is searched as well as
-    the shared one, and its hits come first and carry its id (plan 023).
+    the shared one, and its hits come first and carry its id (plan 023). The
+    `limit` is shared between the two (plan 031), as answering keeps each its
+    own list (plan 021): the vectors return `limit` passages however far they
+    are, so the product's hits, put first and cut at the limit, filled it alone
+    and the shared policies were never shown.
     """
     query = (query or "").strip()
     if not query:
@@ -110,15 +128,23 @@ async def search_knowledge(
     for (_, _, owner, _), batch in zip(jobs, batches):
         for item in batch:
             item.product_id = owner or item.product_id
-    found = [item for batch in batches for item in batch]
-
     if source_name:
-        found = [item for item in found if item.source_name == source_name]
+        batches = [[item for item in batch if item.source_name == source_name] for batch in batches]
+
+    # Each knowledge base's hits in its own order, guidelines then remembered
+    # answers; each keeps its share of the limit, and they are listed as before.
+    by_base = [
+        [item for (_, _, owner, _), batch in zip(jobs, batches) if owner == base for item in batch]
+        for _, base in stores
+    ]
+    shares = _shares([len(hits) for hits in by_base], limit)
+    kept = {id(item) for hits, share in zip(by_base, shares) for item in hits[:share]}
+    found = [item for batch in batches for item in batch if id(item) in kept]
 
     return {
         "query": query,
         "mode": mode,
-        "results": [item.model_dump() for item in found[:limit]],
+        "results": [item.model_dump() for item in found],
         "documents": list(
             dict.fromkeys(
                 name
