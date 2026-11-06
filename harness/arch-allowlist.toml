@@ -9,7 +9,7 @@ debt = "TD-006"
 
 [[size]]
 path = "src/agents/assistant.py"
-max_lines = 1447
+max_lines = 1386
 debt = "TD-006"
 
 [[size]]

@@ -73,10 +73,16 @@ answer_directly      answer a question asked in the conversation, with no file
 rest?" is a fair thing to ask, and making somebody build a spreadsheet to find
 out would be absurd. `answer_directly` runs the same pipeline a questionnaire
 row goes through -- retrieval, drafting, review, citations -- over a question
-somebody typed, and the assistant relays the draft verbatim with the clauses
-folded under it. It stores nothing: no cells, no cards, nothing to come back
-to, which is why it takes five questions at most. A longer list is a
-questionnaire and belongs in a file, and it says so.
+somebody typed. Each draft is drawn under the reply as the Workbench's answer
+card, word for word, with its status, its confidence and the clauses it cites
+(plan 030, `src/agents/assistant_cards.py`), and the clauses it cited are
+folded under the reply. The model is told the card shows the answer, so its own
+reply is one sentence leading into it: when it relayed the draft itself, six of
+twelve came back paraphrased, and one, in Arabic, contradicted the draft. The
+card is read-only and is kept with the reply, so a reopened conversation draws
+it again. Nothing else is stored: no cells, nothing to approve or fill, which
+is why it takes five questions at most. A longer list is a questionnaire and
+belongs in a file, and it says so.
 
 **The two interfaces do not share a working session, on purpose.** A batch is
 visible to the whole team either way -- it is one `batches` table -- but the

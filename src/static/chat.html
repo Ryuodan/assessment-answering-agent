@@ -290,6 +290,10 @@
   /* Sources under a reply use the same bubbles as an answer card, so a claim
      about the policies can be opened and checked the same way. */
   .turn .cites { margin-top: 9px; }
+  /* A question answered in the chat: its answer card, under the reply (plan 030). */
+  .asked-cards { margin-top: 10px; }
+  .asked-cards .answer { margin-bottom: 10px; }
+  .asked-cards .answer:last-child { margin-bottom: 0; }
   .sources { margin-top: 9px; }
   .sources > summary {
     cursor: pointer; font-size: 12px; color: var(--ink-faint);
@@ -797,6 +801,13 @@
     if (Cards.isArabic(text)) bubble.dir = "rtl";
     turn.append(bubble);
 
+    /* A question answered here, as the card the Workbench draws: the answer
+       word for word, its status, its confidence and the clauses it cites
+       (plan 030). The reply above only leads into it. Kept with the reply, so
+       a reopened conversation draws it again; one stored before has none. */
+    const asked = data && data.direct_answers;
+    if (role === "assistant" && asked && asked.length) turn.append(askedCards(asked));
+
     /* The answers, one click from the reply that changed them. The panel may be
        closed, or showing a different file's answers from earlier in the day. */
     if (role === "assistant" && data && (data.changed || data.refreshed)) {
@@ -823,6 +834,19 @@
     const sources = data && data.sources;
     if (sources && sources.length) turn.append(sourceBubbles(sources));
     return turn;
+  }
+
+  /* Read-only: a question asked in the chat has no questionnaire to approve,
+     edit or set it aside in. Numbered by its place in the reply, not by the
+     pipeline's own id ("asked-1"). */
+  function askedCards(answers) {
+    const wrap = document.createElement("div");
+    wrap.className = "asked-cards";
+    answers.forEach((answer, index) => {
+      const item = Object.assign({}, answer, { question: Object.assign({}, answer.question, { id: "" }) });
+      wrap.append(Cards.renderReadOnly(item, index));
+    });
+    return wrap;
   }
 
   /* Each tool, as something a person would say it did. A step arrives as the

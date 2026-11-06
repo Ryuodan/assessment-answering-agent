@@ -23,6 +23,8 @@
      Cards.canSetAside                    whether the page offers that on the card
      Cards.readOnly                       the answers are to read, not change: a deleted
                                           product's (plan 027), so no control that changes one
+     Cards.renderReadOnly(item, index)    one card drawn that way whatever the page's setting:
+                                          a question answered in the chat (plan 030)
 
    A page that can honour one assigns it; a page that cannot leaves it, and the
    control simply does nothing rather than throwing.
@@ -1165,6 +1167,20 @@ const Cards = (window.Cards = {
     return card;
   }
 
+  /* One card with no control that changes it, whatever the page's own cards
+     may do (plan 030): a question answered in the chat has no questionnaire to
+     approve, edit, blank or set it aside in. Drawn through `Cards.readOnly`, as
+     a deleted product's answers are, and the page's setting is put back. */
+  function renderReadOnly(item, index) {
+    const page = { readOnly: Cards.readOnly, canSetAside: Cards.canSetAside };
+    Object.assign(Cards, { readOnly: true, canSetAside: false });
+    try {
+      return renderAnswer(item, index);
+    } finally {
+      Object.assign(Cards, page);
+    }
+  }
+
   function statCard(value, label, tone) {
     const stat = document.createElement("div");
     stat.className = "stat" + (tone ? " " + tone : "");
@@ -1233,6 +1249,7 @@ const Cards = (window.Cards = {
   // What the pages use. Everything else above is private to the card.
   Object.assign(Cards, {
     render: renderAnswer,
+    renderReadOnly: renderReadOnly,
     withdrawnMessage: withdrawnMessage,
     stat: statCard,
     chunk: renderChunk,
