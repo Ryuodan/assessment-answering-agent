@@ -207,3 +207,21 @@ def to_plain_text(text: str) -> str:
         else:
             lines.append(body)
     return "\n".join(lines)
+
+
+def same_wording(asked: str, question: str) -> bool:
+    """Whether two questions are the same words, case, punctuation, spacing and digits' script aside (plan 034).
+
+    Deliberately exact. Questions that read alike and are not the same -- an
+    incident-response drill and a business-continuity drill -- are the failure the
+    drafting prompt warns about, and a looser match would put one's answer first
+    for the other.
+    """
+    return bool(asked.strip()) and _wording(asked) == _wording(question)
+
+
+def _wording(text: str) -> str:
+    from src.chunking import fold_digits
+
+    folded = re.sub(r"[ً-ْـ]", "", fold_digits(text).casefold())  # harakat and tatweel
+    return " ".join(re.findall(r"\w+", folded))

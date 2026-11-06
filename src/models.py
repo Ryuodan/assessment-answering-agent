@@ -240,6 +240,13 @@ class Evidence(BaseModel):
         return (self.source_name, self.chunk, self.entry_id)
 
     @property
+    def asked(self) -> str:
+        """A previous answer's question, as it was stored ("Q: ... / A: ..."); "" for anything else (plan 034)."""
+        if self.source_type is not SourceType.PRIOR_ANSWER or not self.snippet.startswith("Q:"):
+            return ""
+        return self.snippet[2:].split("\nA:", 1)[0].strip()
+
+    @property
     def unit_key(self) -> tuple[str, str, str]:
         """The unit this chunk is ranked, kept and judged with: its split series, or itself."""
         return (self.source_name, self.unit_id or f"chunk-{self.chunk}", self.entry_id)

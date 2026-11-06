@@ -61,11 +61,12 @@ def _sources(state: QuestionState) -> list[Evidence]:
         available,
         limit=settings.max_evidence_chunks,
         prior_cap=settings.max_prior_answer_chunks,
+        question=getattr(state.get("question"), "text", ""),
     )
 
 
-def _sources_block(evidence: list[Evidence], product: str = "") -> str:
-    return format_sources_block(evidence, product)
+def _sources_block(evidence: list[Evidence], product: str = "", question: str = "") -> str:
+    return format_sources_block(evidence, product, question)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +285,7 @@ async def draft(state: QuestionState) -> dict:
             "user",
             ANSWER_USER.format(
                 question_block=_question_block(state),
-                sources_block=_sources_block(_sources(state), product),
+                sources_block=_sources_block(_sources(state), product, state["question"].text),
                 language_name=language_name,
             ),
         ),
@@ -305,7 +306,7 @@ async def review(state: QuestionState) -> dict:
             REVIEW_USER.format(
                 question_block=_question_block(state),
                 answer=state["draft"].answer,
-                sources_block=_sources_block(_sources(state), product),
+                sources_block=_sources_block(_sources(state), product, state["question"].text),
             ),
         ),
     ]

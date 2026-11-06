@@ -10,6 +10,7 @@ import operator
 from typing import Annotated, TypedDict
 
 from src.config import settings
+from src.formatting import same_wording
 from src.models import AnsweredQuestion, Language, Question, Evidence, SourceType
 from src.schemas import AnswerReview, DraftedAnswer
 
@@ -166,7 +167,7 @@ def prune_weak_units(evidence: list[Evidence], floor: float, minimum: int) -> li
     return kept
 
 
-def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> list[Evidence]:
+def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int, question: str = "") -> list[Evidence]:
     """The chunks that fit in the drafting prompt: the best of each kind.
 
     Ordering and selection were the same operation, and that was a bug. Prior
@@ -188,6 +189,10 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> lis
     So prior answers keep their place at the front and lose their claim on the
     whole budget. Whatever they do not use goes to guidelines, and vice versa:
     a question with no useful policy material still fills up with prior answers.
+
+    A prior answer to this same `question`, word for word, is kept whatever its
+    score and listed first (plan 034): it is how we answered exactly this before,
+    and it should not depend on how this run's searches happened to rank it.
     """
     if limit <= 0:
         return []
@@ -198,9 +203,11 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> lis
         return item.source_type is SourceType.PRIOR_ANSWER
 
     prior_positions = [index for index, item in enumerate(evidence) if is_prior(item)]
-    ranked_positions = sorted(prior_positions, key=lambda index: -evidence[index].score)
-    keep = set(ranked_positions[: max(prior_cap, 0)])
-    spare = ranked_positions[max(prior_cap, 0) :]
+    same = [index for index in prior_positions if question and same_wording(evidence[index].asked, question)][:2]
+    others = [index for index in prior_positions if index not in same]
+    ranked_positions = same + sorted(others, key=lambda index: -evidence[index].score)
+    keep = set(ranked_positions[: max(prior_cap, 0) + len(same)])
+    spare = ranked_positions[max(prior_cap, 0) + len(same) :]
 
     selected = [index for index, item in enumerate(evidence) if not is_prior(item) or index in keep][:limit]
 
@@ -208,6 +215,8 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int) -> lis
     if len(selected) < limit and spare:
         selected = sorted(selected + spare[: limit - len(selected)])
 
+    first = set(same)
+    selected.sort(key=lambda index: (index not in first, index))  # stable otherwise
     return [evidence[index] for index in selected]
 
 

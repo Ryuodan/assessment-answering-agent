@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.formatting import same_wording
 from src.product_prompts import SHARED, product_sources_line
 
 if TYPE_CHECKING:
@@ -84,6 +85,7 @@ How to answer:
   2. Check it against OUR POLICY above. The policies are what the team wrote that answer from, so they remain the authority — a previous answer that conflicts with them is out of date rather than a new position.
   3. If they agree, answer as we answered, adjusted to what this question actually asks.
   4. If they conflict, follow the policy, and put one sentence in `contradicts_memory` saying what each says. Do not put it in `answer`. The answer goes into a customer's spreadsheet and a note about our own inconsistency is not something to send them; the reviewer sees it beside the answer instead, and somebody reconciles the two.
+  A PREVIOUS ANSWER TO THIS SAME QUESTION answered these very words before. Keep its position and its facts, worded for the format this question asks for, unless OUR POLICY now says otherwise; then follow the policy and say what changed in `contradicts_memory`. The same question answered differently each time is a failure an assessor notices.
   A previous answer to a *different* question is not evidence about this one. Questions about neighbouring controls — an incident-response drill and a business-continuity drill, a DPA with a customer and a DPA with a sub-processor — read alike and are not the same question.
 - Answer in the format the question asks for. For a yes/no question, open with the verdict and then justify it. For a choice question, use one of the listed options exactly as written.
 - Length follows the question, not a fixed target. A question asking for one value deserves two or three sentences. A question asking how a whole process works, or about a programme, or listing several obligations, needs every one of them — write those as a short list rather than compressing them into a paragraph that names two and implies the rest.
@@ -97,6 +99,7 @@ How to answer:
 Grounding is the hard constraint. Every sentence has to be traceable to a source above, and where the sources run out, so does the answer:
 - Do not mention our own records in the answer. "as confirmed in our prior answer", "our previous response states", "referenced in previous answers" — the reader is an assessor outside this organisation, and how we keep our own answers is not part of what they asked. Write the position as a fact about us: "Removable media is blocked on company laptops", not "our prior response confirms that removable media is blocked". Measured on the held-out questionnaires, 11 answers in 135 carried a phrase like that into what would have gone into a customer's file.
 - If two PREVIOUS ANSWERS disagree with each other and no policy settles it, do not report the disagreement to the assessor. Answer from OUR POLICY if it covers the question, otherwise from the more specific of the two, and put one sentence in `contradicts_memory` saying what each said. "Our records contain conflicting statements regarding web content filtering: a prior response indicated X; another stated Y" is a true sentence about our bookkeeping and an unanswered question for the customer.
+- Do not take a technology, product, tool or programme name from the question and claim it as ours unless a source names it. Asked about "NAC", "a SIEM" or "DLP" where the sources describe network access controls, log monitoring or data-loss controls without that name, say what the sources describe, not that we have the named product. Measured on one question, 4 of 7 wordings claimed "Network Access Control (NAC)", which no source named.
 - Do not supply a control, figure, certification, tool, role, framework or deadline from general knowledge of how organisations usually work, or of what a standard like ISO 27001, SOC 2 or the GDPR typically requires. If it is not in the sources, this organisation has not told you it is true.
 - Do not soften a gap into a plausible generality. "Access is revoked in line with industry best practice" asserts something no source says; "the documentation does not state a timeframe" is the honest answer and the useful one.
 - Where the sources cover part of the question, answer that part and say plainly which part is not covered, rather than rounding the whole thing up or down.
@@ -148,6 +151,7 @@ Read every sentence of the answer against the sources. A sentence that sounds li
 
 Set `grounded` to false when any of these hold:
 - The answer asserts a fact — a certification, control, tool, frequency, date, role or number — that is not present in the sources.
+- It claims a technology, product or programme by a name the question used and no source does.
 - It generalises beyond the sources: an appeal to industry practice, to what a standard usually requires, or to what is "typically" done, where the sources say nothing.
 - The answer contradicts the sources.
 - The answer does not actually address what the question asked.
@@ -212,12 +216,14 @@ system prompt; kept for a caller that does not. Never shown for General.
 """
 
 
-def format_sources_block(sources: list["Evidence"], product: str = "") -> str:
+def format_sources_block(sources: list["Evidence"], product: str = "", question: str = "") -> str:
     """Render retrieved evidence as a numbered, locator-labelled block.
 
     `product` is the name of the product a product's questionnaire is about:
     each source is then marked FOR it or SHARED (plan 031). Without it, a
     product's own source is marked FOR THIS PRODUCT under a note, as before.
+    A previous answer to this same `question`, word for word, is marked as such
+    (plan 034).
     """
     if not sources:
         return "(no relevant sources were found in the knowledge base)"
@@ -225,7 +231,11 @@ def format_sources_block(sources: list["Evidence"], product: str = "") -> str:
     blocks = []
     for index, item in enumerate(sources, start=1):
         if item.source_type.value == "prior_answer":
-            label = "PREVIOUS ANSWER"
+            label = (
+                "PREVIOUS ANSWER TO THIS SAME QUESTION"
+                if question and same_wording(item.asked, question)
+                else "PREVIOUS ANSWER"
+            )
         elif getattr(item, "authority", "ours") == "external":
             # Named at the point of use rather than left to the file name. A
             # regulation quoted as our own control is the failure this label
