@@ -660,6 +660,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 ## TD-075: Small things plan 031's chat work left
 
 - **What:** found 2026-11-06 by plan 031's chat builder. Minor; not fixed.
-  - Between `assistant.say` saving a conversation and its turn being released (only `events.record` runs between them), opening that conversation draws the person's message twice, once stored and once pending, until the reply is drawn.
+  - ~~Between `assistant.say` saving a conversation and its turn being released, opening that conversation drew the person's message twice.~~ Fixed by plan 031's review: the page skips a pending message the transcript already ends with.
   - The answers panel's resizer assumes left to right. The page has no right-to-left mode, so nothing shows it today.
-- **Fix:** release the hold before the event is recorded (`src/agents/assistant.py`, at its size ceiling), or have the page skip a pending message the transcript already ends with.
+  - Before the server has a turn the page sent, the "already in the transcript" check matches the words only: the same message sent twice in a row, and the conversation reopened in that moment, shows no pending message until the reply arrives.
+- **Fix:** make the answers panel's resizer follow the page's direction, as the conversation list's does.

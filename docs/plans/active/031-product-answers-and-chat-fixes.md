@@ -51,37 +51,37 @@ never which product, and nothing about the rest.
 
 Product answers:
 
-- [ ] A product's questionnaire tells the drafter and the reviewer which product it is about, its description if it has one, and the team's other products.
-- [ ] Every source is marked FOR the product, or SHARED. A line above the sources says which are the product's own, or that none is.
-- [ ] The drafter states a shared policy as the organisation's policy, and takes no product-specific fact from a shared source.
-- [ ] The reviewer holds an answer that states a product-specific fact that only shared sources support.
-- [ ] The assistant's own searches in a product's conversation mark shared clauses the same way.
-- [ ] A General questionnaire's prompts are unchanged, byte for byte. A test pins it.
-- [ ] Measured before and after on the same 24 product questions.
+- [x] A product's questionnaire tells the drafter and the reviewer which product it is about, its description if it has one, and the team's other products.
+- [x] Every source is marked FOR the product, or SHARED. A line above the sources says which are the product's own, or that none is.
+- [x] The drafter states a shared policy as the organisation's policy, and takes no product-specific fact from a shared source.
+- [x] The reviewer holds an answer that states a product-specific fact that only shared sources support.
+- [x] The assistant's own searches in a product's conversation mark shared clauses the same way.
+- [x] A General questionnaire's prompts are unchanged, byte for byte. A test pins it.
+- [x] Measured before and after on the same 24 product questions.
 
 Adding documents:
 
-- [ ] The Knowledge base page starts with no knowledge base chosen. Adding, removing and clearing wait for a choice.
-- [ ] The page's address can name the shared knowledge base, so a reload keeps that choice. The Workbench's "Manage" link names the choice the Workbench made.
+- [x] The Knowledge base page starts with no knowledge base chosen. Adding, removing and clearing wait for a choice.
+- [x] The page's address can name the shared knowledge base, so a reload keeps that choice. The Workbench's "Manage" link names the choice the Workbench made.
 
 The chat and the Knowledge base page:
 
-- [ ] The chat's "Documents" button and drawer are gone. The document viewer that opens cited clauses stays.
-- [ ] "Your documents" is gone from the Knowledge base page. "view" still opens a document and the text read from it.
-- [ ] A conversation working on a turn keeps its message and progress when you switch away and back, and after a reload. Its reply lands in its own conversation, and the conversation on screen is untouched.
-- [ ] Another conversation can be used meanwhile. A second message to the busy conversation is refused (409 `conversation_busy`).
-- [ ] The conversation list can be resized by dragging or with the keyboard. The width is remembered.
+- [x] The chat's "Documents" button and drawer are gone. The document viewer that opens cited clauses stays.
+- [x] "Your documents" is gone from the Knowledge base page. "view" still opens a document and the text read from it.
+- [x] A conversation working on a turn keeps its message and progress when you switch away and back, and after a reload. Its reply lands in its own conversation, and the conversation on screen is untouched.
+- [x] Another conversation can be used meanwhile. A second message to the busy conversation is refused (409 `conversation_busy`).
+- [x] The conversation list can be resized by dragging or with the keyboard. The width is remembered.
 
 Search:
 
-- [ ] The Workbench's search searches a product's knowledge base as well as the shared one, following the Workbench's product. A "Search in" choice changes it, and a product's hits carry its badge.
+- [x] The Workbench's search searches a product's knowledge base as well as the shared one, following the Workbench's product. A "Search in" choice changes it, and a product's hits carry its badge.
 
 All:
 
-- [ ] The assistant's evaluation (`scripts/eval_assistant.py`) is run, and its result recorded.
-- [ ] Every change has a test that fails without it. `uv run poe check` passes.
-- [ ] The docs are updated: ARCHITECTURE.md, decisions, tech-debt, and the generated docs.
-- [ ] A "How to test it yourself" section covers each item.
+- [x] The assistant's evaluation (`scripts/eval_assistant.py`) is run, and its result recorded.
+- [x] Every change has a test that fails without it. `uv run poe check` passes.
+- [x] The docs are updated: ARCHITECTURE.md, decisions, tech-debt, and the generated docs.
+- [x] A "How to test it yourself" section covers each item.
 
 ## Plan
 
@@ -138,8 +138,22 @@ All:
     - 12 unit tests and 10 browser tests; 9 of the 10 failed on the old page.
     - Recorded, not fixed: TD-075.
 
+- 2026-11-06: an adversarial review of the merged change. It found nothing wrong in product drafting or in search, and five defects elsewhere, four reproduced. All are fixed, each with a test that failed before:
+  - **A reply that arrived while its conversation was being opened** left it showing neither the message nor the reply. The route reads `running` before the transcript now, and the page reads the conversation again when a reading reports a turn it knows has ended.
+  - **A turn ending in the background discarded the conversation the person had just clicked.** Background redraws apply only to the conversation last asked for.
+  - **A turn sent without a run id** (scripts, not the page) made an open conversation redraw itself every 2.4 s. The routes mint one.
+  - **An upload to a busy conversation could be saved and then refused.** The hold is taken before the file is saved.
+  - **"Index guidelines" kept its hidden hint as its accessible description** after a choice was made (`53c6528`).
+  - Two lesser things, also fixed. A reply lost to a proxy timeout no longer reads "That did not work" while the turn goes on: the page checks the server and follows the turn. Running turns are watched through the list, `GET /api/chat`, instead of re-reading each whole conversation every 2.4 s.
+  - TD-075's duplicate message is fixed too: a pending message the transcript already ends with is not drawn again.
+
 ## Decision log
 
+- 2026-11-06, Claude, on defaults the user has not decided (each can be reversed):
+  - The shared knowledge base is `?product=general` in the Knowledge base page's address, the value the Workbench uses for General.
+  - Workbench search follows the Workbench's product, because searching changes nothing; "Search in" changes it.
+  - The product's search shares its limit with the shared knowledge base, a builder's fix of a bug the brief allowed.
+  - The wording of plan 030's chat rule was changed after the evaluation found it read as "never reword".
 - 2026-11-06, by the user:
   - the prompt is reworked so shared material does not read as the product's;
   - the assistant's evaluation is run;

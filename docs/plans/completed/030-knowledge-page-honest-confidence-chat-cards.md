@@ -1,6 +1,6 @@
 # Plan 030: The team's feedback, part 2: knowledge-base page, honest confidence, answers as cards in the chat
 
-**Status:** active
+**Status:** completed 2026-11-06
 
 ## Goal
 
@@ -138,6 +138,7 @@ All:
   - **"Add documents"** on the new page can be reached with the keyboard. 1 browser test, failing before.
   - **The signed-out session shape's comment** is true again.
   - Recorded rather than fixed: TD-071.
+- 2026-11-06: the user tested it. Their findings became plan 031: the product prompt mixing shared material into product answers, the chat's Documents drawer, and the Knowledge base page's "Your documents". The paid assistant evaluation was run there.
 
 ## Decision log
 
