@@ -23,6 +23,7 @@ never expires; it is let go when the turn ends, however it ends.
 from __future__ import annotations
 
 import threading
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -35,6 +36,16 @@ logger = get_logger(__name__)
 _LOCK = threading.Lock()
 _RUNNING: dict[str, dict[str, str]] = {}
 """Conversation id -> the turn running in it: `run_id`, `message`, `file`, `at`."""
+
+
+def run_id_for(given: str) -> str:
+    """The run id a turn is held and watched under: the caller's, or one minted here.
+
+    The page names its turns; a script or another client may not. A turn held
+    under "" could not be told from a page's own name for it, and a page that
+    opened the conversation read it as a different turn on every check.
+    """
+    return given or uuid.uuid4().hex[:16]
 
 
 @contextmanager
@@ -73,6 +84,14 @@ def running(conversation_id: str) -> dict[str, str] | None:
     with _LOCK:
         held = _RUNNING.get(conversation_id)
         return dict(held) if held is not None else None
+
+
+def kept_as(conversation_id: str, run_id: str, file: str) -> None:
+    """The name a held turn's file was kept under, once it is known: saving may number it."""
+    with _LOCK:
+        held = _RUNNING.get(conversation_id)
+        if held is not None and held["run_id"] == run_id:
+            held["file"] = file
 
 
 def _refuse(conversation_id: str, held: dict[str, str]) -> None:

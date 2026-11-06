@@ -658,6 +658,10 @@
      is fixed already, and the turn is this screen's (plan 031). */
   let screenRun = "";
   let opening = 0;  // which open() decides what is on screen: the last one asked for
+  /* The conversation the person last asked for ("" for a new chat). A
+     redraw in the background applies only while it is still this one, so
+     it can never undo a click (plan 031's review). */
+  let wanted = "";
   // Which product a new chat is for (plan 029, 2): see "which product" below.
   let teamProducts = [];
   let deletedProducts = [];  // since plan 027: their chats are kept, read-only
@@ -985,13 +989,20 @@
      conversation draws it again; its reply is drawn only where it belongs.
 
      `held` is a turn whose request this page is waiting on. One the server
-     reported (`running`, after a reload or from another tab) is followed by
-     re-reading its conversation until the server says it has ended. */
+     reported (`running`, after a reload, from another tab, or after its
+     request was lost on the way) is over when the history list stops
+     reporting it: one list for all of them, rather than each conversation
+     read whole every few seconds, answers and all (plan 031's review). */
   const turns = new Map();
   const endedRuns = new Set();  // a list read before a turn ended does not bring it back
   const unread = new Set();  // conversations whose reply came while another was on screen
   const REMOTE_POLL = 2400;
 
+  /* The name a running turn is known by. The server names every turn now; a
+     turn it reported without a name is known by its conversation. */
+  function runOf(id, running) {
+    return running.run_id || "conversation:" + id;
+  }
   function onScreen(turn) {
     return turn.conversationId
       ? turn.conversationId === conversationId
@@ -1012,12 +1023,19 @@
     if (turns.get(turn.runId) === turn) turns.delete(turn.runId);
     if (over) endedRuns.add(turn.runId);
   }
+  /* The new chat on screen is a conversation now: the server has named it. */
+  function becomes(id) {
+    conversationId = id;
+    screenRun = "";
+    if (!wanted) wanted = id;
+  }
 
   /* The person's message and the working bubble, at the foot of the thread:
      where the turn is drawn when it is sent, and again whenever its
-     conversation is opened before it ends. */
-  function drawPending(turn) {
-    turn.you = addTurn("you", turn.message, { at: turn.at, file: turn.file });
+     conversation is opened before it ends. The message is left out when the
+     transcript already ends with it (TD-075). */
+  function drawPending(turn, withoutMessage) {
+    turn.you = withoutMessage ? null : addTurn("you", turn.message, { at: turn.at, file: turn.file });
     turn.shown = addTurn("assistant", "");
     turn.shown.classList.add("working");
     workingBubble(turn.shown.querySelector(".bubble"), turn.label, turn.percent);
@@ -1029,14 +1047,11 @@
   /* One loop per turn, for as long as it runs. Short first, then settled: the
      interesting part of a turn is often over in a few seconds, and a first
      poll at 1.5s missed all of it. Progress is asked for only while the turn
-     is on screen; a new chat's id is looked for until the server lists it;
-     and a turn the page is not waiting on is checked on, more slowly. */
+     is on screen, and a new chat's id is looked for until the server lists it. */
   async function follow(turn) {
     let wait = 400;
-    let since = 0;
     while (turns.get(turn.runId) === turn) {
       await new Promise((resolve) => setTimeout(resolve, wait));
-      since += wait;
       wait = 1200;
       if (turns.get(turn.runId) !== turn) return;
       if (shownNow(turn)) {
@@ -1051,64 +1066,126 @@
         } catch (error) { /* a dropped poll; the next one will do */ }
       }
       if (!turn.conversationId) loadHistory();  // learn(), below
-      if (!turn.held && since >= REMOTE_POLL) {
-        since = 0;
-        await checkOn(turn);
-      }
     }
   }
 
-  /* A turn this page is not waiting on: still running, or over. Over, its
-     conversation is drawn again if it is on screen, from the same reply. */
-  async function checkOn(turn) {
-    let data;
+  /* The list, read every few seconds while any turn the page is not waiting
+     on is running: learn() ends the ones it no longer reports. */
+  let watching = false;
+  async function watchRemote() {
+    if (watching) return;
+    watching = true;
     try {
-      data = await request("/api/chat/" + turn.conversationId);
-    } catch (error) {
-      if (error.status === 404) { endTurn(turn, true); loadHistory(); }  // forgotten from another tab
-      return;
+      while ([...turns.values()].some((turn) => !turn.held)) {
+        await new Promise((resolve) => setTimeout(resolve, REMOTE_POLL));
+        await loadHistory();
+      }
+    } finally {
+      watching = false;
     }
-    if (turns.get(turn.runId) !== turn) return;
-    if (data.running && data.running.run_id === turn.runId) return;
-    const here = onScreen(turn);
-    endTurn(turn, true);
-    if (here) draw(data, ++opening);
-    else unread.add(turn.conversationId);
-    loadHistory();
   }
 
-  /* A turn the server says is running and this page did not send. */
+  /* A turn the server says is running and this page did not send. `since`:
+     a list asked for before it was known cannot say it has ended. */
   function remember(id, running) {
     const turn = {
-      runId: running.run_id || "conversation:" + id, conversationId: id, held: false,
-      message: running.message, file: running.file, at: running.at,
-      label: "Working…", percent: null, you: null, shown: null, redraw: false,
+      runId: runOf(id, running), conversationId: id, held: false,
+      message: running.message, file: running.file, at: running.at, serverAt: running.at,
+      label: "Working…", percent: null, you: null, shown: null, redraw: false, since: performance.now(),
     };
     turns.set(turn.runId, turn);
     follow(turn);
+    watchRemote();
     return turn;
   }
 
-  /* What the history list says about turns: a new chat's id, found by the run
-     its first message was sent with, and turns sent from elsewhere. */
-  function learn(rows) {
+  /* A turn the server no longer holds: drawn again if its conversation is on
+     screen -- read once, to draw it -- and marked in the list if it is not. */
+  function ended(turn) {
+    const here = onScreen(turn);
+    endTurn(turn, true);
+    if (here) redraw(turn.conversationId);
+    else unread.add(turn.conversationId);
+  }
+
+  /* A followed turn whose conversation the list does not show (it lists the
+     most recent thirty): its conversation is asked about directly. */
+  async function checkAlone(turn) {
+    if (turn.checking) return;
+    turn.checking = true;
+    try {
+      const data = await request("/api/chat/" + turn.conversationId);
+      if (turns.get(turn.runId) !== turn) return;
+      if (!(data.running && runOf(data.id, data.running) === turn.runId)) {
+        ended(turn);
+        loadHistory();
+      }
+    } catch (error) {
+      if (error.status === 404 && turns.get(turn.runId) === turn) endTurn(turn, true);  // forgotten elsewhere
+    } finally {
+      turn.checking = false;
+    }
+  }
+
+  /* What the history list says about turns: which of the ones the page
+     follows have ended, a new chat's id (found by the run its first message
+     was sent with), and turns sent from elsewhere. `askedAt` is when the list
+     was asked for. */
+  function learn(rows, askedAt) {
+    const listed = new Map(rows.map((c) => [c.id, c]));
+    [...turns.values()].forEach((turn) => {
+      if (turn.held || !turn.conversationId || turn.since > askedAt) return;
+      const row = listed.get(turn.conversationId);
+      if (!row) checkAlone(turn);
+      else if (!(row.running && runOf(row.id, row.running) === turn.runId)) ended(turn);
+    });
     rows.forEach((c) => {
-      if (!c.running || endedRuns.has(c.running.run_id)) return;
-      const turn = turns.get(c.running.run_id);
+      if (!c.running) return;
+      const run = runOf(c.id, c.running);
+      if (endedRuns.has(run)) return;
+      const turn = turns.get(run);
       if (!turn) {
-        if (!runningIn(c.id)) remember(c.id, c.running);
+        if (runningIn(c.id)) return;
+        const found = remember(c.id, c.running);
+        // Running in the conversation on screen and not drawn there -- its
+        // request was lost on the way, say: it is drawn now, so the box that
+        // waits for it says why (plan 031's review).
+        if (onScreen(found)) redraw(c.id);
+        refresh();
         return;
       }
       if (turn.conversationId) return;
       turn.conversationId = c.id;
       if (screenRun === turn.runId) {
         // Still on screen: this is that chat now, and the list shows it as open.
-        conversationId = c.id;
-        screenRun = "";
+        becomes(c.id);
         paintProductChip();
         refresh();
       }
     });
+  }
+
+  /* A request that failed without the server's word on it -- a dropped
+     connection, a proxy's timeout -- may have left its turn running. If the
+     server still holds it, it is followed from here as the server reports
+     it, its bubble kept, rather than said to have failed. */
+  async function carriesOn(turn) {
+    let rows;
+    try {
+      rows = (await request("/api/chat")).conversations || [];
+    } catch (error) {
+      return false;
+    }
+    const row = rows.find((c) => c.running && runOf(c.id, c.running) === turn.runId);
+    if (!row || turns.get(turn.runId) !== turn) return false;
+    turn.held = false;
+    turn.since = performance.now();
+    if (!turn.conversationId) {
+      turn.conversationId = row.id;
+      if (screenRun === turn.runId) becomes(row.id);
+    }
+    watchRemote();
+    return true;
   }
 
   /* Two kinds of stage arrive here. The counted ones are the pipeline's own --
@@ -1193,6 +1270,12 @@
     } catch (error) {
       failure = error;
     }
+    // Not an answer from the app (no code): lost on the way, maybe with the turn still running.
+    if (!data && !(failure && failure.code) && await carriesOn(turn)) {
+      refresh();
+      paintProductChip();
+      return;
+    }
     // Where the turn belongs, decided now and not when it was sent: the person
     // may have opened another conversation meanwhile, or come back to this one.
     const here = onScreen(turn);
@@ -1215,7 +1298,7 @@
       loadHistory();
       return;
     }
-    conversationId = data.conversation_id;
+    becomes(data.conversation_id);
     batchId = data.batch_id || batchId;
     pageLastUsed = Cards.choiceOf(data.product_id);
     showProduct(Cards.choiceOf(data.product_id));
@@ -1225,8 +1308,8 @@
       if (data.answers) showAnswers(data.answers);
       loadHistory();
     } else {
-      // Drawn from a transcript read while the server held no turn: read it again, now it holds the reply.
-      open(conversationId);
+      // Drawn from a transcript that may or may not hold this turn: read again, now it holds the reply.
+      redraw(conversationId);
     }
   }
 
@@ -1847,10 +1930,11 @@
   async function loadHistory() {
     const host = $("historyList");
     const asked = ++historyAsked;
+    const askedAt = performance.now();
     try {
       const data = await request("/api/chat");
       if (asked !== historyAsked) return;
-      learn(data.conversations || []);
+      learn(data.conversations || [], askedAt);
       // "Last used" comes from this person's own chats, most recently used
       // first: nothing new is stored, and it follows them to another computer.
       historyChoices = (data.conversations || []).map((c) => Cards.choiceOf(c.product_id));
@@ -2019,6 +2103,7 @@
   /* Only the last conversation asked for is drawn: two clicks in a row, or a
      click then New conversation, drew whichever answer came back last. */
   async function open(id) {
+    wanted = id;
     const mine = ++opening;
     try {
       const data = await request("/api/chat/" + id);
@@ -2028,7 +2113,26 @@
     }
   }
 
-  async function draw(data, mine) {
+  /* The conversation on screen, read again and drawn, in the background: a
+     turn in it ended, or the reading drawn is older than what the page knows.
+     Only while it is still on screen and still the one the person last asked
+     for, and without taking the place of an open() they started: a redraw in
+     the background used to count as the latest open, and the conversation the
+     person had just clicked was never drawn (plan 031's review). */
+  async function redraw(id, again) {
+    if (wanted !== id || conversationId !== id) return;
+    const mine = opening;
+    let data;
+    try {
+      data = await request("/api/chat/" + id);
+    } catch (error) {
+      return;  // what is on screen stays; the next change reads it again
+    }
+    if (mine !== opening || wanted !== id || conversationId !== id) return;
+    await draw(data, mine, again);
+  }
+
+  async function draw(data, mine, again) {
     // A deleted product's chat is kept to read (plan 027): named, even when
     // the page listed the products before the deletion.
     if (data.read_only && !(Cards.product(data.product_id) || {}).deleted) await loadProducts();
@@ -2045,41 +2149,70 @@
     $("thread").replaceChildren($("empty"));
     // With the steps and sources the turn was drawn with the first time: a
     // reply reopened without its evidence is a claim with nothing behind it.
-    (data.messages || []).forEach((m) => addTurn(m.role === "you" ? "you" : "assistant", m.text, m));
+    const messages = data.messages || [];
+    messages.forEach((m) => addTurn(m.role === "you" ? "you" : "assistant", m.text, m));
     // A turn still running here is not stored until it ends: drawn from what
-    // the page or the server holds of it, still working (plan 031).
+    // the page or the server holds of it, still working (plan 031). Not when
+    // the transcript already holds it, saved a moment before the server let it
+    // go: then only what is not there yet, and it is read again (TD-075).
     const turn = pendingIn(data);
-    if (turn) drawPending(turn);
-    $("empty").hidden = (data.messages || []).length > 0 || Boolean(turn);
+    const kept = turn ? storedAlready(messages, turn) : "";
+    if (turn && kept !== "reply") drawPending(turn, kept === "message");
+    if (turn && kept) turn.redraw = true;
+    $("empty").hidden = messages.length > 0 || Boolean(turn);
     answersPaneClosed = false;  // a different conversation, a fresh default
     if (data.answers) showAnswers(data.answers);
     else noAnswersToShow();
     refresh();
     loadHistory();
+    // Read while a turn that has ended since was still running: the server
+    // said so, but the page has the reply already, and the transcript may not.
+    // Once more, now it does (plan 031's review).
+    if (!again && data.running && endedRuns.has(runOf(data.id, data.running))) redraw(data.id, true);
   }
 
   /* The turn to draw at the foot of an opened conversation, if one is running.
      The page's own, if it sent one; else the one the server reports. A turn
      the page sent that the server does not hold has either not reached it yet
      or ended a moment ago: drawn, and its conversation read again when the
-     reply comes, so it is drawn neither twice nor not at all. */
+     reply comes, so it is drawn neither twice nor not at all. One the page did
+     not send, and this reading does not show: the list decides whether it is
+     over. */
   function pendingIn(data) {
-    const server = data.running && !endedRuns.has(data.running.run_id) ? data.running : null;
-    let held = runningIn(data.id);
-    const same = Boolean(held && server && server.run_id === held.runId);
-    if (held && !held.held && !same) {
-      endTurn(held, true);  // reported by the server, and over now
-      held = null;
+    const server = data.running && !endedRuns.has(runOf(data.id, data.running)) ? data.running : null;
+    const turn = runningIn(data.id);
+    if (!turn) return server ? remember(data.id, server) : null;
+    const same = Boolean(server && runOf(data.id, server) === turn.runId);
+    if (same) {
+      // As the server holds it: the words and the file as the transcript will show them.
+      turn.message = server.message;
+      turn.file = server.file;
+      turn.serverAt = server.at;
     }
-    if (held) {
-      held.redraw = !same;
-      return held;
+    if (turn.held) {
+      turn.redraw = !same;
+      return turn;
     }
-    return server ? remember(data.id, server) : null;
+    return same ? turn : null;
+  }
+
+  /* Whether the transcript already holds this turn: "message" when its words
+     are the last thing in it, "reply" when something follows them, "" when
+     it is not there. The same words said before the turn began are another
+     turn's. */
+  function storedAlready(messages, turn) {
+    let last = -1;
+    messages.forEach((m, index) => { if (m.role === "you") last = index; });
+    if (last < 0) return "";
+    const said = messages[last];
+    if ((said.text || "") !== (turn.message || "")) return "";
+    if (turn.serverAt && said.at && Date.parse(said.at) < Date.parse(turn.serverAt)) return "";
+    return last === messages.length - 1 ? "message" : "reply";
   }
 
   function newConversation() {
     const fromAChat = Boolean(conversationId || screenRun);
+    wanted = "";
     opening++;  // an open on its way no longer decides what is on screen
     conversationId = "";
     screenRun = "";
@@ -2299,7 +2432,7 @@
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !$("gate").hidden) return;
     const gone = await loadProducts();
-    if (conversationId && !readOnly && !turnOnScreen() && (Cards.product(chosenProduct()) || {}).deleted) open(conversationId);
+    if (conversationId && !readOnly && !turnOnScreen() && (Cards.product(chosenProduct()) || {}).deleted) redraw(conversationId);
     else if (gone) noteByTheBox(gone + " has been deleted; choose a product again.");
   });
 
