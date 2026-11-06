@@ -460,3 +460,64 @@ a plan relies on it.
   a one-click "last used"); the defaults by Claude, from plan 029's design.
   Supersedes plan 024's decision log entry of 2026-10-06 ("New conversation
   keeps the chip's choice").
+
+## D-023: the knowledge base has a page of its own
+
+- **Context:** the team's feedback (plan 030): the Workbench opened on
+  knowledge-base tools, and the questionnaire upload was a screen further down.
+  Curating the knowledge base is occasional; questionnaires are daily.
+- **Decision:**
+  - The knowledge-base tools move to a Knowledge base page at `/knowledge`,
+    linked from every page header. They are the same tools, with the same
+    confirmations and the same rights: any member may add, remove and clear.
+  - The Workbench opens on the questionnaire. One line says how many documents
+    its answers draw on and links to the page.
+  - The document viewer that citations open, and Search, stay on the Workbench.
+    The chat's knowledge-base drawer stays, with a link to the page.
+- **Consequences:** the viewer exists in three copies (TD-067). Who may remove
+  shared documents is a later decision.
+- **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (the page,
+  from the team's feedback); Claude (keeping the drawer and the rights as they
+  were, which the user can reverse).
+
+## D-024: confidence agrees with the release decision
+
+- **Context:** what the gate releases contradicted the team in 1% of the held-out
+  answers, and what it held in 17 to 29%. But one held answer in eight showed
+  "High confidence 85%+", and those contradicted the team in 12% of cases (plan 030).
+- **Decision:**
+  - A held answer's score is capped at the review threshold, and at 0.3 when the
+    reviewer found it not grounded. 0.3 is a constant tied to the review prompt's
+    own scale, not a setting.
+  - The drafter's "sources disagree" check goes through the same assessment, and
+    so through the cap.
+  - The explanation of a low score describes the rating before the cap.
+  - Every comparison holds an answer at or under the threshold
+    (`verification.held_by_score`). The pages read the threshold from the server.
+  - The card leads with its status and reasons; the score comes second, and the
+    colour follows the status.
+- **Consequences:**
+  - The same answers are released and held as before. On the recorded
+    evaluation runs, 0 decisions changed and 19 held answers lost a "High" score.
+  - Confidence bands before and after are not comparable (evaluation.md).
+  - Answers stored before the change keep their uncapped scores (TD-068).
+- **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (the round);
+  Claude (the caps, which the user can reverse).
+
+## D-025: a question answered in the chat is shown as its answer card
+
+- **Context:** the chat model rewrote the drafted answer in its own words. In
+  stored chats, 6 of 12 direct answers were paraphrased, and in one Arabic test
+  the rewrite contradicted a correct draft. The chat showed no confidence.
+- **Decision:**
+  - Each drafted answer is shown under the reply as the Workbench's answer card,
+    word for word, with its status, confidence and the clauses it cites. It is
+    read-only, because no questionnaire stands behind it.
+  - The cards are stored with the reply, not in a table of their own.
+  - The model's own reply is one sentence leading into them, and must not
+    restate the answer.
+  - The sources listed under the reply are the cited clauses.
+- **Consequences:** this changes text the model sees, so the paid assistant
+  evaluation should be run again. Whether the model keeps to a lead-in is
+  instructed, not enforced.
+- **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 030).

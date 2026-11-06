@@ -101,9 +101,26 @@ service. Each failure prints a FIX line (`src/diagnostics.py`, plan 010).
 
 ## The browser
 
-`src/static/` holds the workbench (`index.html`), the chat, memory and
-preferences pages, and the shared answer card (`cards.js`, `cards.css`). They
-talk to `src/api.py` over HTTP only.
+`src/static/` holds the workbench (`index.html`), the chat, the Knowledge
+base page (`knowledge.html`, `/knowledge`, plan 030), the memory, preferences and
+products pages, and the shared answer card (`cards.js`, `cards.css`). They talk to
+`src/api.py` over HTTP only.
+
+The Knowledge base page holds the knowledge-base tools that used to be the
+Workbench's first step: adding documents, each knowledge base's list, and the
+document library. It keeps the chosen knowledge base in its address
+(`?product=<id>`), as the Workbench keeps its questionnaire. The Workbench opens
+on the questionnaire, with one line counting the documents its answers draw on
+(`GET /api/knowledge`), linking to the page. It keeps the document viewer that
+citations open, and Search. The chat's knowledge-base drawer stays, with a link
+to the page.
+
+The answer card leads with its status (plan 030): "Will be written" (or "Ready to
+use" for an answer that goes into no file), "Needs review" with its reasons as
+chips, "Done by a person", "Left blank", "Set aside" or "Could not be answered".
+The confidence follows as a number. The threshold comes from the server, in the
+session (`review_threshold`, `GET /api/auth/session`), set with
+`Cards.setReviewThreshold`.
 
 The Workbench keeps the open questionnaire in its own address, `?q=<id>`
 (plan 029), with `history.replaceState` on an address derived from the page's,
@@ -124,6 +141,8 @@ error fails its test. `uv run poe browser` runs them; the gate includes them.
 area are moving into `src/routes/` as they change (plan 019, TD-006):
 `routes/auth.py` holds the dependencies every route uses (`current_user`,
 `current_admin`), and `routes/admin.py` the Access panel's routes.
+`routes/knowledge.py` holds the knowledge-base routes and serves the Knowledge
+base page.
 `routes/forms.py` holds opening, listing, reading and filling a
 questionnaire (plan 029), in two routers: `opening` is included before the
 answering routes and `router` (filling) after approving. A router is
@@ -185,8 +204,13 @@ The product is fixed when the questionnaire is opened or the chat starts
   - `answer_directly` drafts with it;
   - the prompt names the product (`agents/assistant_prompt.py`).
 
+  A question answered in the chat is shown as its answer card, word for word
+  and read-only (`agents/assistant_cards.py`, `Cards.renderReadOnly`, plan 030).
+  The cards travel with the reply as `direct_answers`, and the reply's own text
+  only leads into them.
+
   A turn's searches and their budget are in `agents/assistant_turn.py`. What a
-  stopped turn says is in `agents/assistant_stopped.py`, and the quotation check
+  stopped turn says, and what stopped it, is in `agents/assistant_stopped.py`, and the quotation check
   is in `agents/assistant_quotes.py`.
 - **Deletion** (D-019). Deleting a product, behind a counted warning
   (`GET /api/products/{id}/deletion`), removes:
@@ -260,7 +284,11 @@ again. `busy`, like
 `progress`, is in the memory of the one process that serves the app (plan 029). `POST /api/forms/{id}/fill` writes the ready answers into a copy
 of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
 when `selection.ready_to_write` says so: a person confirmed it, or it is neither
-flagged nor under `REVIEW_CONFIDENCE_THRESHOLD`. The rest are held back and
+flagged nor at or under `REVIEW_CONFIDENCE_THRESHOLD` (`verification.held_by_score`,
+the one rule every comparison uses). A held answer's score is capped at the
+threshold, and at 0.3 when the reviewer found it not grounded
+(`verification.held_confidence`, plan 030), so the number never contradicts the
+decision. The rest are held back and
 listed with their reasons, and written only when the request says
 `include_unreviewed` (the Workbench's "Write them in anyway"). The Workbench
 also names them (`unreviewed_ids`): the held answers the person was shown, so an

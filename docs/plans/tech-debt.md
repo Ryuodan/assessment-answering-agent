@@ -587,3 +587,36 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-05 while designing plan 029's Stage 2, and left by decision (D-022). The pages no longer send a missing product: nothing is chosen until the person chooses, and General is sent only once chosen. The server still reads a missing or empty `product` as General at every entry point: `POST /api/forms` (`src/routes/forms.py`, `product: Form("")`, through `products.chosen`), `POST /api/assessments/answer-questions` and `POST /api/assessments/answer` (`src/api.py`), and a new chat's `POST /api/chat` and `POST /api/chat/upload` (`src/routes/chat.py`). The assistant's `open_questionnaire` opens a file for the chat's own product, fixed when the chat started, so it never picks one. The review of Stage 2 found that the Workbench's own guard had a gap too: the same-file box's "Start fresh" skipped it and sent `""` after Clear all or a deletion, so General was opened under "Product: choose…". The guard is now where every file is read (`readQuestionnaire`); the server would have refused it, had it refused a missing product.
 - **Impact:** scripts, `curl`, the evaluation (`eval/run_eval.py`, `eval/house.py`, `scripts/run_both_evals.py`, `scripts/eval_assistant.py` and the other scripts that open or answer questionnaires) and any other client can still answer a questionnaire or start a chat as General without saying so. The silent General the user ruled out is closed on the pages only.
 - **Fix (needs approval):** the server accepts `general` for General and refuses a missing product with an `AppError` (`code="product_required"`, 422), for new questionnaires, typed lists and new chats. The pages then change one line, `Cards.serverProduct` in `src/static/cards.js`. For whoever builds it: `src/products.py` is at the 400-line limit (`harness/arch.py`), so room is made first, for example by moving `seed()` out; the evaluation and the scripts that answer as General must then send `general`; and the server tests that pin `""` as General (`tests/test_product_questionnaires.py`, `tests/test_product_knowledge.py`) change with it.
+
+## TD-067: The document viewer exists in three copies
+
+- **What:** plan 030 moved the knowledge-base tools to their own page. The
+  document viewer is now drawn by the Workbench (for citations), the Knowledge
+  base page and the chat, each with its own code.
+- **Fix:** move it into `cards.js`, beside the answer card, which all three pages load.
+
+## TD-068: Answers stored before plan 030 keep their uncapped scores
+
+- **What:** plan 030 caps a held answer's score when it is drafted. Answers stored
+  before it keep the score they were drafted with. The card no longer says
+  "High", but can show "Needs review · 90% confidence".
+- **Impact:** a number that says more than the decision, on old questionnaires only.
+- **Fix (needs approval):** re-cap stored answers. That rewrites stored data,
+  which is the user's call.
+
+## TD-069: The Word and PDF exports still band confidence by fixed numbers
+
+- **What:** `export_pdf.confidence_colours` and `export_docx.confidence_words` band
+  by a hard-coded 0.75 and 0.6, with the words High, Moderate and Low.
+- **Impact:** an export of an old held answer can still say "High confidence".
+  New held answers cannot, because their score is capped.
+- **Fix:** export the card's status and reasons rather than a band.
+
+## TD-070: In the chat, the model cannot see a direct answer older than three turns
+
+- **What:** plan 030 shows direct answers as cards, and the model's reply only
+  leads into them. Turns older than the last three reach the model as their reply
+  text alone, which no longer holds the answer.
+- **Impact:** asked about a direct answer from long ago, the model has to search
+  or draft again.
+- **Fix:** put a compact form of the cards into the older turns the model sees.
