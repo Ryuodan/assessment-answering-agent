@@ -31,4 +31,5 @@ Work asked for directly, outside the milestones:
 | [016](completed/016-chat-progress.md) | the chat page's answered count restarted during the preferences pass | done 2026-10-06 |
 | [017](completed/017-user-decisions.md) | the user's decisions on TD-020, TD-033 and TD-034 | done 2026-10-06 |
 | [027](completed/027-pre-deploy-fixes.md) | the pre-deploy tests' findings fixed as the user decided (TD-037 to TD-044) | done 2026-10-20 |
-| [029](active/029-team-feedback-safety-workbench-product.md) | the team's feedback, part 1: safety fixes, Workbench relief, product choice | active |
+| [029](completed/029-team-feedback-safety-workbench-product.md) | the team's feedback, part 1: safety fixes, Workbench relief, product choice | done 2026-11-06 |
+| [030](active/030-knowledge-page-honest-confidence-chat-cards.md) | the team's feedback, part 2: knowledge-base page, honest confidence, answer cards in the chat | active |

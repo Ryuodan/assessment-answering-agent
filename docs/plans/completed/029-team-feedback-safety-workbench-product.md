@@ -1,6 +1,6 @@
 # Plan 029: The team's feedback, part 1: safety fixes, Workbench relief, product choice
 
-**Status:** active
+**Status:** completed
 
 ## Goal
 
@@ -163,6 +163,18 @@ All stages:
   - Each stage was built, reviewed adversarially and fixed before the next started.
   - `uv run poe check` passes: 2,201 tests and 110 browser tests.
   - Handed to the user to test, following "How to test it yourself" below. Their findings go here.
+
+- 2026-11-06: the user tested the round and reported two things, both fixed.
+  - **The chat's product chip was too wide.**
+    - Cause: a dropdown is as wide as its longest option, "General (shared policies only)". It took 223 px of the 700 px box, leaving the message 375 px.
+    - Fix: the chip moves to its own line above the box, with the "Which product…" line and "Last used". It is as wide as what it shows (`field-sizing: content`).
+    - Test: `tests/browser/test_layout.py::test_the_product_chip_leaves_the_message_box_its_room`, which fails on the old page.
+  - **"I ran out of room part way through that, and nothing was changed. Could you try again, one step at a time?"**
+    - The user saw it after their own network dropped. Any error that stops a turn before it has done anything gave that reply, though "room" fits only a turn that ran out of steps.
+    - Fix: `assistant_stopped.cause` reads the error, and the errors it was raised from, by class name: out of steps, lost connection to the model service, service busy (rate limited), or anything else. Each has its own wording in English and Arabic, and "one step at a time" is advised only for running out of steps.
+    - The stop is now logged as the event `assistant.stopped`, with the cause.
+    - Tests: 13 new in `tests/test_assistant.py`. The test that pinned "ran out of room" for a provider error now expects "Something went wrong…".
+  - `uv run poe check` passes (see the commit). Plan complete.
 
 ## Decision log
 
