@@ -10,12 +10,13 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.busy`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.product_prompts`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
+- **Modules:** `src`, `src.busy`, `src.chat_running`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.product_prompts`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
 
 | Module | What it is |
 |---|---|
 | `src/__init__.py` | Agentic assessment answering: ingest guidelines and past answers, fill new assessments. |
 | `src/busy.py` | Which questionnaires are being answered right now: one run at a time on each. |
+| `src/chat_running.py` | Which conversations have a chat turn running right now: one turn at a time in each. |
 | `src/chunking.py` | Structure-aware chunking for policy, standards and regulatory documents. |
 | `src/config.py` | Application settings — the single source of truth for configuration. |
 | `src/credentials.py` | Hashing and generating the secrets people type. |

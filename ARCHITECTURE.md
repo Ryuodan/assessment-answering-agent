@@ -107,13 +107,18 @@ products pages, and the shared answer card (`cards.js`, `cards.css`). They talk 
 `src/api.py` over HTTP only.
 
 The Knowledge base page holds the knowledge-base tools that used to be the
-Workbench's first step: adding documents, each knowledge base's list, and the
-document library. It keeps the chosen knowledge base in its address
-(`?product=<id>`), as the Workbench keeps its questionnaire. The Workbench opens
-on the questionnaire, with one line counting the documents its answers draw on
-(`GET /api/knowledge`), linking to the page. It keeps the document viewer that
-citations open, and Search. The chat's knowledge-base drawer stays, with a link
-to the page.
+Workbench's first step: adding documents, and each knowledge base's list with
+view, remove and clear. It opens with no knowledge base chosen, and nothing is
+added, removed or cleared until one is (plan 031), as answering waits for a
+product. Its address names the choice: `?product=<id>`, or `?product=general`
+for the shared one. The Workbench opens on the questionnaire, with one line
+counting the documents its answers draw on (`GET /api/knowledge`), and a link
+to the page for the knowledge base it chose. The Workbench keeps the document
+viewer that citations open, and Search. Search follows the Workbench's product
+unless "Search in" says otherwise; a product's search shares its `limit` with
+the shared knowledge base (`search._shares`), and its hits carry the product's
+badge. The chat has no knowledge-base drawer since plan 031: the page is where
+documents are managed. No page uses `GET /api/documents` any more.
 
 The answer card leads with its status (plan 030): "Will be written" (or "Ready to
 use" for an answer that goes into no file), "Needs review" with its reasons as
@@ -286,7 +291,14 @@ change to it (an edit, an approval, a rewording), is refused with 409
 how far the run has got and when it started (`running`), and the Workbench
 follows it after a reload or a timed-out request instead of offering Answer
 again. `busy`, like
-`progress`, is in the memory of the one process that serves the app (plan 029). `POST /api/forms/{id}/fill` writes the ready answers into a copy
+`progress`, is in the memory of the one process that serves the app (plan 029).
+A chat turn is held the same way, by its conversation (`chat_running`, plan
+031): a second message, an upload or forgetting the conversation is refused
+with 409 `conversation_busy`, and `GET /api/chat/{id}` and `GET /api/chat` say
+which turn is running, with the message it is answering. The Assistant page
+follows each turn by its run id, so a reply lands in its own conversation
+whichever is on screen, and a running conversation reopened, or reloaded,
+shows its message and progress. `POST /api/forms/{id}/fill` writes the ready answers into a copy
 of the customer's own file (`forms.xlsx` / `forms.docx`). An answer is ready
 when `selection.ready_to_write` says so: a person confirmed it, or it is neither
 flagged nor at or under `REVIEW_CONFIDENCE_THRESHOLD` (`verification.held_by_score`,

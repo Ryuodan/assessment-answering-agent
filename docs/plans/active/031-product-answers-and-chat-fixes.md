@@ -123,6 +123,21 @@ All:
   - Reworded in the prompt and in `answer_directly`'s result: "do not repeat the drafted text in your reply", and `reword_answers` still rewords on request. Then `arabic-compound` passed 3 of 3. The six cases that draft in the chat passed, as did `compound-answer-then-reword`.
   - A test now pins that the rule does not say "reword".
 
+- 2026-11-06: the two builders' branches merged into main.
+  - **The Knowledge base page and search** (`cf07bb2`, `3fcff46`, D-027):
+    - the page opens with no knowledge base chosen; `?product=general` names the shared one;
+    - "Your documents" is removed;
+    - the Workbench's search has "Search in", follows the Workbench's product, reloads its file filter and badges a product's hits.
+    - **A server bug found and fixed (`src/search.py`):** a product's hits came first and were cut at the limit. A product with as many passages as the limit filled the list alone, so a product's search never showed a shared policy, in the Workbench or in the assistant's `search_policies`. The limit is now shared between the two knowledge bases. A test failed before the fix.
+    - Recorded, not fixed: TD-074.
+  - **The chat** (`5825033`, `5c36025`, D-028):
+    - `src/chat_running.py` holds a running turn by its conversation; 409 `conversation_busy`;
+    - `running` is reported on `GET /api/chat/{id}` and `GET /api/chat`;
+    - the page follows turns by run id; the Documents drawer is gone; the conversation list can be resized (`#sideResizer`).
+    - Also: only the last conversation clicked is drawn, which fixes an earlier click race, and the history list ignores late responses.
+    - 12 unit tests and 10 browser tests; 9 of the 10 failed on the old page.
+    - Recorded, not fixed: TD-075.
+
 ## Decision log
 
 - 2026-11-06, by the user:
@@ -145,3 +160,28 @@ On your local copy. Start the app with `uv run python -m uvicorn src.api:app --r
 3. An answer that still states a Msegat detail from shared material shows "Needs review" with "Not backed by our documents", at 30% or less.
 4. Ask the same in a General chat: the answer reads as it always did.
 5. Optional: on the Products page, give Msegat a one-line description ("an SMS gateway for businesses"). The drafter is now told it.
+
+### Adding documents
+
+1. Open the Knowledge base page from any header. Nothing is chosen ("Choose a knowledge base…"): "Index guidelines" is disabled, with a line saying why, and the list asks you to choose.
+2. Choose "Shared, for every product": the shared list appears, and the address ends with `?product=general`. Reload: still shared.
+3. Choose Msegat: its list appears, the address names it, and a document you add goes to Msegat.
+4. Open `/knowledge` with no address part: nothing is chosen again.
+5. On the Workbench, choose General and click "Manage": the page opens on the shared knowledge base. Choose Msegat and click it: Msegat's opens. With nothing chosen, nothing is chosen there either.
+6. "Your documents" is gone. Click "view" beside an indexed source: the document opens, with "Extracted text" beside it.
+
+### The chat
+
+1. The Assistant's header has no "Documents" button. A source chip on an answer card still opens its clause and document.
+2. In a chat, attach a questionnaire and ask it to answer everything. While it works, click another conversation, then come back: your message and the progress bar are there, still moving.
+3. While it works, open another conversation and ask a question there: it answers. The working conversation's row says "Working…", and when it finishes, "New reply". Its reply is not drawn into the conversation on screen, and the answers panel on screen is not replaced.
+4. Reload the page while a turn works and open that conversation: its message and progress are shown, then the reply when it ends.
+5. Try to forget a conversation while it works: it is refused, with the reason.
+6. Drag the right edge of the conversation list to make it wider or narrower (or Tab to it and use the arrow keys). Reload: it keeps the width. Double-click the edge: back to the default. ☰ still hides and shows the list.
+
+### Search
+
+1. On the Workbench, choose Msegat and open Search. "Search in" shows "Msegat and shared policies", and the file filter lists Msegat's files and the shared ones.
+2. Search for something both cover: Msegat's passages carry its badge, and shared policies are listed too. Before this plan, a product with many passages pushed every shared policy out of the list.
+3. Change "Search in" to "Shared policies": the search runs again, without Msegat's passages or files.
+4. Choose General on the Workbench and open Search: it searches the shared policies.

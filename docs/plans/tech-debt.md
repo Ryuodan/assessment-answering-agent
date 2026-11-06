@@ -647,3 +647,19 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - It is the same code path as before; the product block makes the drafter cite inline a little more often.
 - **Impact:** a stray "()" in a customer's file.
 - **Fix (needs approval):** drop brackets left empty, or holding only separators, after the numbers are removed. A characterization test pins today's output first.
+
+## TD-074: Search rarely shows remembered answers, and filters by file after the cut
+
+- **What:** found 2026-11-06 while fixing plan 031's search for a product (`src/search.py`). Not fixed.
+  - **Remembered answers:** a knowledge base's guidelines are listed before its remembered answers, and the list is cut at `limit`. On a real-size corpus, in meaning or both modes, the guidelines alone fill 20 (the Workbench) or 8 (the assistant's `search_policies`). Remembered answers, shared or a product's, almost never appear.
+  - **The file filter:** it is applied after each knowledge base's top `limit`. Filtering to a file whose passages rank lower says "nothing matched" even when the file holds the words.
+  - **Cost:** a product's search embeds the query once per knowledge base and kind (up to four calls), where answering embeds it once.
+- **Impact:** a person checking "what did we say before" in search, or the assistant searching, does not see the answer memory; a filtered search can miss text that is there.
+- **Fix (needs approval, it changes what the assistant reads):** give remembered answers their own share of the limit, as plan 031 gave each knowledge base its share. Filter by file inside `KnowledgeStore.search` and `text_search` (`src/knowledge.py`).
+
+## TD-075: Small things plan 031's chat work left
+
+- **What:** found 2026-11-06 by plan 031's chat builder. Minor; not fixed.
+  - Between `assistant.say` saving a conversation and its turn being released (only `events.record` runs between them), opening that conversation draws the person's message twice, once stored and once pending, until the reply is drawn.
+  - The answers panel's resizer assumes left to right. The page has no right-to-left mode, so nothing shows it today.
+- **Fix:** release the hold before the event is recorded (`src/agents/assistant.py`, at its size ceiling), or have the page skip a pending message the transcript already ends with.

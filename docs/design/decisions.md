@@ -562,3 +562,49 @@ a plan relies on it.
   - A product's description, written on the Products page, now reaches the
     drafter. All five local products have none.
 - **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 031).
+
+## D-027: adding documents waits for a choice of knowledge base; documents are managed on one page
+
+- **Context:** the Knowledge base page started on "Shared, for every product",
+  so documents went into the shared knowledge base unless someone changed it.
+  The user ruled that this choice is made, as a product is for answering
+  (D-022). The chat's Documents drawer duplicated the page. "Your documents"
+  listed files the page already listed, under "What is indexed".
+- **Decision:**
+  - The page opens with no knowledge base chosen. Adding, removing and
+    clearing wait for a choice, and the list asks for one.
+  - The address names the choice: `?product=<id>`, or `?product=general` for
+    the shared one, the value the Workbench already uses for General. The
+    Workbench's "Manage" link names what the Workbench chose.
+  - The chat's drawer and the page's "Your documents" are removed. "view"
+    beside each indexed source opens the document and the text read from it.
+- **Consequences:**
+  - The API still reads a missing `product` as the shared knowledge base
+    (TD-066).
+  - What only "Your documents" showed is gone: the person's own uploaded
+    questionnaires, files that failed to index, and file sizes.
+    `GET /api/documents` stays, and no page calls it.
+- **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 031).
+
+## D-028: a chat turn is held by its conversation, and the page follows turns by their run id
+
+- **Context:** a turn runs inside its request. Opening another conversation
+  while one worked threw its progress away. When the reply came, it set the
+  page's conversation id and answers panel over the conversation then on
+  screen. One page-wide `busy` flag blocked every conversation.
+- **Decision:**
+  - `chat_running` holds a running turn by its conversation: its run id, what
+    was asked, the file and when it started. It is per process, like
+    `progress` and `busy`.
+  - A second message, an upload or forgetting the conversation is refused
+    with 409 `conversation_busy`.
+  - `GET /api/chat/{id}` and `GET /api/chat` say which turn is running.
+  - The page tracks each turn by its run id. A reply changes the screen only
+    if its conversation is the one on screen. A reopened or reloaded running
+    conversation shows the message and its progress. The composer waits only
+    in the conversation that is running.
+- **Consequences:**
+  - Two conversations can work at once.
+  - With more than one server process, a turn is seen only by the process
+    running it, as a questionnaire's run already is.
+- **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 031).

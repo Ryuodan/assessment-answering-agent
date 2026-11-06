@@ -3324,7 +3324,7 @@
     "/api/chat": {
       "get": {
         "summary": "List Conversations",
-        "description": "The caller's own conversations, most recently used first, each with its product.",
+        "description": "The caller's own conversations, most recently used first, each with its product.\n\nAnd with the turn running in it, or null (plan 031): the page marks the row,\nand finds a new chat's id by the run id it sent the first message with.",
         "operationId": "list_conversations_api_chat_get",
         "parameters": [
           {
@@ -3365,7 +3365,7 @@
       },
       "post": {
         "summary": "Say To Assistant",
-        "description": "One exchange with the assistant.\n\nLong: a message can mean \"answer 183 questions\", which is minutes of work.\nThe conversation is saved by the assistant itself before this returns, so a\nrequest that times out at a proxy has still recorded what it did.",
+        "description": "One exchange with the assistant.\n\nLong: a message can mean \"answer 183 questions\", which is minutes of work.\nThe conversation is saved by the assistant itself before this returns, so a\nrequest that times out at a proxy has still recorded what it did. Meanwhile\nit is held (`chat_running`): 409 `conversation_busy` for another message.",
         "operationId": "say_to_assistant_api_chat_post",
         "requestBody": {
           "required": true,
@@ -3487,7 +3487,7 @@
       },
       "delete": {
         "summary": "Forget Conversation",
-        "description": "Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay.",
+        "description": "Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay.\n\nNot while a turn is running in it: 409 `conversation_busy` (plan 031).",
         "operationId": "forget_conversation_api_chat__conversation_id__delete",
         "parameters": [
           {
