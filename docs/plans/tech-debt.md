@@ -672,3 +672,9 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - The answers panel's resizer assumes left to right. The page has no right-to-left mode, so nothing shows it today.
   - Before the server has a turn the page sent, the "already in the transcript" check matches the words only: the same message sent twice in a row, and the conversation reopened in that moment, shows no pending message until the reply arrives.
 - **Fix:** make the answers panel's resizer follow the page's direction, as the conversation list's does.
+
+## TD-076: On a narrow screen the chat's conversation list covers the page and its own toggle
+
+- **What:** found 2026-11-07 by plan 033's chat builder; not caused by plan 033. At 860 px wide and below, the conversation list (`.side`) is an overlay. It opens when the page loads and covers the ☰ toggle that would close it. At 375 px a phone user cannot close it, and it hides the left of the message box, including Attach.
+- **Impact:** the Assistant page is hard to use on a phone.
+- **Fix:** start the overlay closed at 860 px and below, keep the toggle above it, and close it when a conversation is chosen. A browser test at 375 px.
