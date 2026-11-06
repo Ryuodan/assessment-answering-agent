@@ -116,6 +116,12 @@ All:
     - Left: one answer infers from a policy ("Therefore Msegat supports MFA"). "Alibaba Cloud" was held each time it was drafted.
   - A General questionnaire's prompts are unchanged, byte for byte (`tests/test_product_scoped_answers.py`). The house set is General, so its numbers stand.
   - Found and recorded, not fixed: TD-072 and TD-073.
+- 2026-11-06: the assistant's evaluation, all 42 cases once. It ran against a copy of the index (`CHROMA_DIR`) and the script's own scratch database; the hashes of `data/app.db` and `chroma_db/chroma.sqlite3` were the same before and after.
+  - 98% overall. `reword-only-never-re-answers` returned an empty reply once, then passed 3 of 3.
+  - `arabic-compound` passed only 1 of 4 runs. Asked in Arabic to "answer all of it, one short sentence each", the assistant skipped `reword_answers`.
+  - On the code before plan 030 (`2c41f2e`) it passed 3 of 3. The cause was plan 030's "never restate, translate, summarise or reword the answer", a rule about the model's own reply that it applied to the answers.
+  - Reworded in the prompt and in `answer_directly`'s result: "do not repeat the drafted text in your reply", and `reword_answers` still rewords on request. Then `arabic-compound` passed 3 of 3. The six cases that draft in the chat passed, as did `compound-answer-then-reword`.
+  - A test now pins that the rule does not say "reword".
 
 ## Decision log
 
@@ -127,3 +133,15 @@ All:
   - switching conversations mid-turn is fixed;
   - the conversation list is resizable;
   - search works per product.
+
+## How to test it yourself
+
+On your local copy. Start the app with `uv run python -m uvicorn src.api:app --reload` and open http://127.0.0.1:8000.
+
+### Product answers
+
+1. In the Assistant, start a chat for Msegat (or open a Msegat questionnaire on the Workbench) and ask about something only shared material covers, such as "Is data stored by Msegat encrypted at rest?" or "Where is Msegat hosted?".
+2. The answer states our policy as the organisation's ("T2's organisation-wide cryptography policy requires..."), and says when Msegat's own documents do not give the detail. It does not say "Msegat uses AES-256", and does not name another product's hosting.
+3. An answer that still states a Msegat detail from shared material shows "Needs review" with "Not backed by our documents", at 30% or less.
+4. Ask the same in a General chat: the answer reads as it always did.
+5. Optional: on the Products page, give Msegat a one-line description ("an SMS gateway for businesses"). The drafter is now told it.

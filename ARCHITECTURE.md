@@ -192,15 +192,20 @@ The product is fixed when the questionnaire is opened or the chat starts
   product goes through `service.answer_questions`, or the whole-document flow, into the
   graph's state. There `retrieve` asks `scoped_knowledge.store_for` for it.
 - **The drafter.** Evidence from the product's knowledge base carries its
-  `product_id`. When any does, `prompts.format_sources_block` marks it FOR THIS
-  PRODUCT and says it takes precedence over the shared material. A General
-  questionnaire's prompt is unchanged.
+  `product_id`. For a product's questionnaire, `graph/product_scope.py` looks the
+  product up, and the drafter and the reviewer are told its name, its description
+  and the team's other products (`product_prompts.py`, D-026). Every source is
+  marked FOR the product or SHARED, under a line saying which are the product's
+  own. A shared policy is stated as the organisation's; a product fact that only
+  shared material supports is held. A General questionnaire's prompts are
+  unchanged.
 - **Approval.** A hand-written answer is remembered in the questionnaire's
   memory.
 - **The chat.** A chat's product is chosen with its first message:
   - an upload in the chat is opened for it;
   - `search_policies` searches the product's knowledge base beside the shared
-    one and marks the product's own clauses FOR THIS PRODUCT;
+    one and marks the product's own clauses FOR THIS PRODUCT, and the rest
+    SHARED;
   - `answer_directly` drafts with it;
   - the prompt names the product (`agents/assistant_prompt.py`).
 

@@ -161,13 +161,18 @@ async def test_the_model_is_told_the_card_shows_the_answer_and_not_to_restate_it
 
     assert f"on the person's screen as a card exactly as drafted (do not restate it): {ASKED['en'][1]}" in said
     assert "Your reply is one short sentence that leads into the card." in said
-    assert "Do not restate, translate, summarise or reword an answer" in said and "relay" not in said.casefold()
+    assert "Do not repeat an answer in your reply, restated, translated or summarised" in said
+    assert "relay" not in said.casefold()
     described = " ".join(tool["answer_directly"].__doc__.split())
     assert "shown to the person under your reply as an answer card, exactly as drafted" in described
     prompt = " ".join(assistant.SYSTEM.split())
     assert "shown to the person under your reply as an answer card, exactly as drafted" in prompt
-    assert "Never restate, translate, summarise or reword the answer" in prompt
+    assert "Do not repeat the drafted text in your reply, restated, translated or summarised" in prompt
     assert "Relay what it hands back word for word" not in prompt
+    # Not "reword": told never to reword an answer, the model stopped calling reword_answers
+    # for "answer them all, one short sentence each" (plan 031's evaluation: 1 run in 4).
+    assert "reword" not in prompt.split("`answer_directly` is the only way", 1)[1].split("`reword_answers` still")[0]
+    assert "reword" not in said.split("Each answer above", 1)[1]
 
 
 async def test_a_turn_that_stops_after_drafting_keeps_its_cards(drafts, monkeypatch):

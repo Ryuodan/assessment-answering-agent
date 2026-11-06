@@ -32,8 +32,8 @@ ON_SCREEN = "answer, on the person's screen as a card exactly as drafted (do not
 LEAD_IN = (
     "Each answer above is shown to the person under your reply as an answer card: word for word, with its "
     "status, its confidence and the clauses it cites. Your reply is one short sentence that leads into the "
-    "card. Do not restate, translate, summarise or reword an answer, and do not list its sources: the card "
-    "shows them. If one is flagged for review or could not be answered, say so and why."
+    "card. Do not repeat an answer in your reply, restated, translated or summarised, and do not list its "
+    "sources: the card shows them. If one is flagged for review or could not be answered, say so and why."
 )
 """Said in the result, where the model decides what to reply, and not only in the prompt."""
 

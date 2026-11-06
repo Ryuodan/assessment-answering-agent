@@ -362,6 +362,20 @@ They are the escape hatch out of the search/draft boundary, and putting them in
 the suite is the argument against making people learn a command for it: the
 words they would use anyway are guaranteed to work, rather than happening to.
 
+**Forty-two cases, after the answer cards (plan 031).** Plan 030 told the model
+that a question answered in the chat is shown as its card, and to "never
+restate, translate, summarise or reword the answer". The first run since scored
+98%. One miss was a one-off: an empty reply, which passed three times in three
+on a re-run. The other was not. Asked in Arabic to answer a file and "make each
+answer one short sentence", the assistant answered and skipped `reword_answers`
+in three runs of four, saying the answers were short when nothing had made them
+so. It passed three in three on the code before plan 030. "Reword" in a rule
+about its own reply had been read as a rule about the answers. The rule now
+says "do not repeat the drafted text in your reply", and that `reword_answers`
+still rewords a questionnaire's answers on request. Three in three again, and
+the six cases that draft in the chat still pass. The runs read a copy of the
+index, so nothing they wrote reached the real one (TD-072).
+
 A failing case prints the tools it called *and what it said*, neither needing
 `--verbose`. "It did not call X" is not a finding -- what it called instead is
 -- and "replied in ar, got en" does not say whether the assistant was wrong or
