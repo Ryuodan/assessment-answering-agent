@@ -15,7 +15,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src import batches, conversations, events, identity, service, tools
-from src.agents import assistant, assistant_stopped, assistant_turn
+from src.agents import assistant, assistant_cards, assistant_stopped, assistant_turn
 from src.models import AnsweredQuestion, Evidence, SourceType
 from tests import forms_fixtures as shapes
 
@@ -719,6 +719,14 @@ def answers_with_evidence(monkeypatch):
     """The pipeline, standing in, with a clause behind each answer."""
     from src.models import Evidence, SourceType
 
+    clause = Evidence(
+        source_type=SourceType.GUIDELINE,
+        source_name="T2 - Information Security Policy.pdf",
+        snippet="Backups shall be encrypted at rest using AES-256.",
+        doc_id="T2-ISP",
+        clause="9.4.1",
+    )
+
     async def fake(questions, language=None, run_id=None, **extra):
         return [
             AnsweredQuestion(
@@ -726,15 +734,8 @@ def answers_with_evidence(monkeypatch):
                 answer=f"Yes, backups are encrypted. [{question.text[:12]}]",
                 confidence=0.9,
                 needs_review=False,
-                evidence=[
-                    Evidence(
-                        source_type=SourceType.GUIDELINE,
-                        source_name="T2 - Information Security Policy.pdf",
-                        snippet="Backups shall be encrypted at rest using AES-256.",
-                        doc_id="T2-ISP",
-                        clause="9.4.1",
-                    )
-                ],
+                evidence=[clause],
+                citations=[clause.locator],  # the pipeline keeps only what it cites (`graph.nodes.finalize`)
             )
             for question in questions
         ]
@@ -750,7 +751,7 @@ async def test_a_question_can_be_answered_with_no_questionnaire_open(kit, answer
     said = await tool["answer_directly"]("Do we encrypt our backups?")
 
     assert "Yes, backups are encrypted" in said
-    assert "relay word for word" in said, "a drafted answer is not a note to summarise"
+    assert "do not restate it" in said, "a drafted answer is shown as its card, not a note to summarise (plan 030)"
     assert not state["batch_id"], "it answered without opening anything"
 
 
@@ -767,7 +768,7 @@ async def test_answering_directly_puts_its_clauses_under_the_reply(kit, answers_
 async def test_answering_directly_takes_a_few_questions_at_once(kit, answers_with_evidence):
     tool, _state = kit
     said = await tool["answer_directly"]("Do we encrypt backups?\nDo we log access?")
-    assert said.count("relay word for word") == 2
+    assert said.count(assistant_cards.ON_SCREEN) == 2
 
 
 @pytest.mark.asyncio
@@ -800,7 +801,9 @@ async def test_a_product_chats_direct_answer_is_drafted_for_its_product(kit, mon
     async def answer_one_question(question, language, *, run_id="", team_id=None, product_id=""):
         asked_for.append(product_id)
         said = _evidence("Ole5 facts.docx", "Single sign-on is supported through SAML 2.0.", product_id=product_id)
-        return AnsweredQuestion(question=question, answer="Yes, through SAML.", confidence=0.9, evidence=[said])
+        return AnsweredQuestion(
+            question=question, answer="Yes, through SAML.", confidence=0.9, evidence=[said], citations=[said.locator]
+        )
 
     monkeypatch.setattr(service, "answer_one_question", answer_one_question)
     tool, state = kit
@@ -1097,8 +1100,8 @@ async def test_direct_answers_asked_for_at_once_past_the_limit_are_relayed(user,
 
     assert list(left) == [] and not turn.stopped_early and turn.reply == "Here are the three answers."
     results = [m.content for m in conversations.load(conversation.id).messages if isinstance(m, ToolMessage)]
-    assert sorted(result.count("relay word for word") for result in results) == [0, 0, 1, 1, 1]
-    for refused in [result for result in results if "relay word for word" not in result]:
+    assert sorted(result.count(assistant_cards.ON_SCREEN) for result in results) == [0, 0, 1, 1, 1]
+    for refused in [result for result in results if assistant_cards.ON_SCREEN not in result]:
         assert refused.startswith("Not answered: this turn has already looked in the documents 3 times")
         assert "not answered this turn" in refused and "ask it again" in refused
         assert "Do not answer it yourself" in refused and "clauses" not in refused and "quote" not in refused
@@ -1220,7 +1223,10 @@ async def test_a_turns_sources_are_listed_once(kit, searching, monkeypatch):
 
     async def drafted(questions, language=None, run_id=None, **extra):
         cited = _evidence("Ole5 facts.docx", "Penetration tests run every year.", chunk=3)
-        return [AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, evidence=[cited]) for q in questions]
+        return [
+            AnsweredQuestion(question=q, answer="Yes.", confidence=0.9, evidence=[cited], citations=[cited.locator])
+            for q in questions
+        ]
 
     monkeypatch.setattr(tools.service, "answer_questions", drafted)
     await tool["answer_directly"]("Do you run penetration tests?")

@@ -69,7 +69,8 @@ _AGAIN = {
     "the documents found do not state it.",
     "failed": "Already searched for that this turn, and the search failed. Do not try it again: tell the person "
     "the search failed.",
-    "answer": "Already answered that this turn; the answer is above. Relay it word for word.",
+    "answer": "Already answered that this turn; the answer is above. It is on the person's screen as a card: do "
+    "not restate it.",
 }
 _SPENT = {
     "search": "Not searched: this turn has already searched {n} times, which is the limit. Do not search again: "

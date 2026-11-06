@@ -95,6 +95,7 @@ modules = [
     "src.fill_audit",
     "src.tools",
     "src.agents.assistant",
+    "src.agents.assistant_cards",
     "src.agents.assistant_prompt",
     "src.agents.assistant_quotes",
     "src.agents.assistant_stopped",

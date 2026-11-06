@@ -75,6 +75,8 @@ def _turn_response(turn: assistant.Turn, conversation: Conversation, user: User)
         "product_id": conversation.product_id,
         "steps": turn.steps,
         "sources": turn.sources,
+        # Questions answered in the chat, each drawn as its answer card under the reply (plan 030).
+        "direct_answers": turn.direct_answers,
         "refreshed": turn.refreshed,
         "stopped_early": turn.stopped_early,
         "seconds": round(turn.seconds, 1),
@@ -201,6 +203,8 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
                         "text": str(text).strip(),
                         "steps": steps,
                         "sources": drawn.get("sources", []),
+                        # Its answer cards (plan 030); a reply stored before then has none.
+                        "direct_answers": drawn.get("direct_answers", []),
                         "at": drawn.get("at", ""),
                         # Recorded since replies learned to offer the answers; read
                         # off the steps for the ones stored before that.

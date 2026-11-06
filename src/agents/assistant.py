@@ -51,7 +51,7 @@ from src.formatting import without_reasoning
 from src.identity import User
 from src.llm import chat_llm
 from src.models import Question
-from src.agents import assistant_quotes, assistant_stopped, assistant_turn
+from src.agents import assistant_cards, assistant_quotes, assistant_stopped, assistant_turn
 from src.agents.assistant_prompt import FOR_PRODUCT, IN_ARABIC as IN_ARABIC, SYSTEM as SYSTEM
 from src.agents.assistant_turn import CARRY_ON as CARRY_ON, CORRECTION as CORRECTION, UI_KEY as UI_KEY
 from src.agents.assistant_turn import is_correction as _is_correction, tool_correction as _correction
@@ -69,11 +69,6 @@ correction or two and stops a confused turn from running all afternoon.
 
 SOURCES_SHOWN = 6
 """Search hits kept per query -- shown to the model, and drawn under the reply."""
-
-SOURCE_CHARS = 700
-"""How much of each cited clause is read back when somebody asks what an answer
-was based on. Enough to quote the sentence that matters; a whole chunk for every
-source of five answers would crowd out the conversation."""
 
 DOING = {
     "open_questionnaire": "Reading the file…",
@@ -104,8 +99,8 @@ DIRECT_QUESTIONS = 5
 """How many questions `answer_directly` will take at once.
 
 Answering is the expensive operation, and this path has no file behind it: no
-cells, no fill, no answer cards, nothing to come back to. A handful asked in
-passing is what it is for. Anything longer is a questionnaire, and a
+cells, no fill, cards that can only be read, nothing to come back to. A handful
+asked in passing is what it is for. Anything longer is a questionnaire, and a
 questionnaire should be uploaded so the answers are kept."""
 
 UPLOAD_NOTE = "[A file has been uploaded to this conversation:"
@@ -183,6 +178,9 @@ class Turn:
     """Policy clauses looked up during the turn, for the interface to draw
     under the reply. A claim about what the policies say is worth what the
     clause behind it is worth."""
+
+    direct_answers: list[dict[str, object]] = field(default_factory=list)
+    """Questions answered in the conversation, as the cards drawn under the reply (`assistant_cards`)."""
 
 
 def _tools(user: User, state: dict) -> list:
@@ -491,7 +489,7 @@ def _tools(user: User, state: dict) -> list:
                 lines.append(f"    answer, to relay word for word: {text[:1800]}")
                 if not question.get("will_be_written") and question.get("held_back_because"):
                     lines.append(f"    held back from the file because: {question['held_back_because'][:400]}")
-                lines.extend(_sources_of(answered, detailed=with_sources))
+                lines.extend(assistant_cards.sources_of(answered, detailed=with_sources))
             elif question.get("existing"):
                 lines.append(f"    no answer written here; the file arrived saying: {question['existing'][:600]}")
             else:
@@ -499,48 +497,6 @@ def _tools(user: User, state: dict) -> list:
         if len(chosen) > len(shown):
             lines.append(f"... and {len(chosen) - len(shown)} more; ask for them by position or id.")
         return "\n".join(lines)
-
-    def _sources_of(answered: dict, *, detailed: bool) -> list[str]:
-        """What one answer was written from, exactly as its card shows it.
-
-        The citations are the answer's own list and the text beside each is the
-        chunk the drafter was given, so "which sources did you use" is answered
-        from the record rather than re-searched. Searching again returned a
-        similar list, not the same one -- and a person comparing the reply with
-        the card saw sources the answer never cited.
-        """
-        # Only when asked. A plain read-back is the answer and its state: with a
-        # list of sources after it, an answer asked for in Arabic came back
-        # translated rather than quoted more often -- two runs in three against
-        # one in three without.
-        if not detailed:
-            return []
-        cited = [c for c in (answered.get("citations") or []) if c]
-
-        unused = list(answered.get("evidence") or [])  # each citation takes the next of its name, as the card does
-        lines = [] if cited else ["    sources cited: none"]
-        for citation in cited:
-            item = next((e for e in unused if (e.get("locator") or e.get("source_name") or "") == citation), None)
-            if item is not None:  # two remembered answers can share a name; each is listed (plan 027)
-                unused.remove(item)
-            else:
-                lines.append(f"    cited: {citation} -- named in the answer; the text of it was not kept")
-                continue
-            kind = (
-                "a previous answer of ours"
-                if item.get("source_type") == "prior_answer"
-                else "a law or external requirement, not our own policy"
-                if item.get("authority") == "external"
-                else "our own policy"
-            )
-            said = " ".join(str(item.get("snippet") or "").split())
-            if len(said) > SOURCE_CHARS:
-                said = said[:SOURCE_CHARS].rsplit(" ", 1)[0] + " ..."
-            lines.append(f"    cited: {citation} ({kind})")
-            lines.append(f"      it says: {said}")
-        if (answered.get("rationale") or "").strip():  # on one line, which a quotation may not come from
-            lines.append(f"    {assistant_quotes.RATIONALE} {' '.join(answered['rationale'].split())[:800]}")
-        return lines
 
     def put_back_drafts(question_ids: str = "", matching: str = "", position: str = "") -> str:
         """Undo rewording: put answers back as they were first drafted.
@@ -964,9 +920,11 @@ def _tools(user: User, state: dict) -> list:
         review, citations -- over a question somebody typed rather than one
         read out of a spreadsheet. Slow and not free, the same as answering a
         questionnaire row. Nothing is stored against a file and nothing can be
-        filled in; the answer is for the person reading the reply. Each call is
-        one of the turn's three searches; past them it is refused, and asking
-        again after a refusal ends the turn.
+        filled in. Each answer is shown to the person under your reply as an
+        answer card, exactly as drafted, with its status, confidence and cited
+        clauses: lead into it in one sentence, and never restate it. Each call
+        is one of the turn's three searches; past them it is refused, and
+        asking again after a refusal ends the turn.
 
         Args:
             questions: the question, or a few, one per line. At most five.
@@ -1033,29 +991,8 @@ def _tools(user: User, state: dict) -> list:
             )
         else:
             drafted = await tools.in_house_style(user, drafted)
-
-        lines = []
-        for result in drafted:
-            lines.append(result.question.text)
-            if result.error:
-                lines.append(f"    could not be answered: {result.error}")
-                continue
-            # Verbatim, and said so, because this is a drafted answer and not
-            # a note to summarise. The sources go to the interface for the same
-            # reason they do under an answer card: a claim about the policies
-            # is worth what the clause behind it is worth.
-            lines.append(f"    answer, to relay word for word: {result.answer}")
-            assistant_stopped.keep(state, result)  # relayed by a turn that stops before the model can
-            if result.drafted:
-                lines.append("    (reworded to your preferences)")
-            if result.needs_review:
-                lines.append(f"    flagged for review: {result.confidence_reason or 'low confidence'}")
-            # What it cites, in the reply's own history, so "where did that come
-            # from" a few messages later is answered from this and not from a
-            # new search that finds something similar.
-            lines.extend(_sources_of(result.model_dump(), detailed=True))
-            assistant_turn.add_sources(state, (item.model_dump() for item in result.evidence[:SOURCES_SHOWN]))
-        return "\n".join(lines)
+        # Each shown as its card, word for word, and its cited clauses under the reply (plan 030).
+        return assistant_cards.handed_back(state, drafted)
 
     return [
         open_questionnaire,
@@ -1183,6 +1120,7 @@ async def say(
         "refreshed": False,
         "offer_fill": False,
         "sources": turn.sources,
+        "direct_answers": turn.direct_answers,
     }
     # What the person actually typed, kept apart from what the model is told.
     # The note below is plumbing -- it exists so the agent knows a file arrived
@@ -1298,6 +1236,7 @@ def _remember(messages: list[BaseMessage], turn: Turn) -> list[BaseMessage]:
             message.additional_kwargs[UI_KEY] = {
                 "steps": list(turn.steps),
                 "sources": list(turn.sources),
+                "direct_answers": list(turn.direct_answers),  # drawn as cards again when it is reopened
                 "at": store.utcnow(),
                 # Whether the answers changed, so the reply can offer to show
                 # them -- a conversation reopened tomorrow included.
