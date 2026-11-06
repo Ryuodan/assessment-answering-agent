@@ -19,7 +19,7 @@ page gives the vocabulary, the main flows, and where to look next.
 
 ## The main flows
 
-1. **Index policies** in the workbench; they become the team's knowledge base.
+1. **Index policies** on the Knowledge base page; they become the team's knowledge base.
 2. **Open a questionnaire**: the file is read into questions and write targets;
    correct the reading if needed.
 3. **Answer**: each question goes through the pipeline (plan searches,

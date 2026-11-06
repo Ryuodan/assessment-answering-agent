@@ -21,7 +21,7 @@ CODE = "BROWSER-TEST-CODE"
 # A long address without hyphens: the bar's widest likely occupant, and one
 # that cannot break at a hyphen to make room.
 EMAIL = "firstname.lastname.surname@example.test"
-PAGES = ["/", "/workbench", "/memory", "/preferences", "/products"]
+PAGES = ["/", "/workbench", "/knowledge", "/memory", "/preferences", "/products"]
 
 # Every visible control in the bar: its box, and whether its label may wrap.
 MEASURE_THE_BAR = """() => {

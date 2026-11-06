@@ -467,12 +467,13 @@
   <h1>Assistant</h1>
   <button class="ghost" id="newChat">New conversation</button>
   <span class="spacer"></span>
-  <button class="ghost" id="openKb">Knowledge base</button>
+  <button class="ghost" id="openKb" title="Look up or add documents without leaving the conversation">Knowledge base</button>
   <div class="whoami" id="whoami" hidden>
     <b id="whoamiEmail"></b>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
   </div>
   <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
+  <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
   <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
@@ -582,6 +583,9 @@
   <div class="body">
     <p class="status" style="margin-bottom:12px">Every answer is written from these and cites
        them. Managed here rather than through the assistant: this is the corpus, not a task.</p>
+    <!-- The same knowledge base, with the document library and more room
+         (plan 030). Follows the selector below, as the Workbench's link does. -->
+    <p class="status" style="margin:-4px 0 12px"><a id="kbManage" href="knowledge">Manage on the Knowledge base page</a></p>
 
     <!-- Which knowledge base the drawer works on (plan 021): the shared one, or a
          product's, used beside it for that product's questionnaires. -->
@@ -1920,8 +1924,13 @@
       listed.products.forEach((product) => select.append(new Option(product.name, product.id)));
       if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
     } catch (error) { /* no products: the shared knowledge base is all there is */ }
+    paintManageLink();
   }
-  $("kbScope").onchange = () => loadSources();
+  /* The Knowledge base page, opened on the knowledge base the drawer shows (plan 030). */
+  function paintManageLink() {
+    $("kbManage").setAttribute("href", "knowledge" + kbScopeQuery("?"));
+  }
+  $("kbScope").onchange = () => { paintManageLink(); loadSources(); };
 
   async function loadSources() {
     const host = $("sources");

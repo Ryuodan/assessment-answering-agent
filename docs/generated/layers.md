@@ -143,7 +143,7 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/auth.py` | Who is making a request, and whether they may: the dependencies every route uses. |
 | `src/routes/chat.py` | The assistant's routes: conversations, and one exchange at a time. |
 | `src/routes/forms.py` | A questionnaire's routes, moving here from `src/api.py` (plan 029). |
-| `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021). |
+| `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021), and its page (plan 030). |
 | `src/routes/memory.py` | The answer memory's routes: the shared memory, or a product's (plan 022). |
 | `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |
 | `src/routes/products.py` | Products: everyone on a team may list them; its leads and administrators change them (plan 020). |

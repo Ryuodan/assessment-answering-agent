@@ -20,7 +20,7 @@ from src import api
 from src.routes import pages
 from src.api import app
 
-PAGES = ["/", "/workbench", "/memory", "/preferences", "/admin", "/products"]
+PAGES = ["/", "/workbench", "/knowledge", "/memory", "/preferences", "/admin", "/products"]
 
 
 @pytest.fixture
@@ -91,12 +91,14 @@ def test_the_shared_script_names_no_root_path_but_the_api():
     assert not rooted, f"cards.js addresses {rooted} from the domain root"
 
 
-def test_the_workbench_keeps_its_address_inside_the_prefix():
-    """Plan 029, 1.1: the open questionnaire goes into the address. Written
-    from the root, a reload under /assessment/ would leave the app."""
-    page = (api.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+@pytest.mark.parametrize("name", ["index.html", "knowledge.html"])
+def test_a_page_keeps_its_address_inside_the_prefix(name):
+    """Plan 029, 1.1: the open questionnaire goes into the address; plan 030:
+    so does the knowledge base the Knowledge base page shows. Written from the
+    root, a reload under /assessment/ would leave the app."""
+    page = (api.STATIC_DIR / name).read_text(encoding="utf-8")
     calls = re.findall(r"history\.(?:replaceState|pushState)\(([^;]*)\)", page)
-    assert calls, "the workbench writes the open questionnaire into its address"
+    assert calls, f"{name} writes what it shows into its address"
     for arguments in calls:
         assert not re.search(r"""["'`]/""", arguments), f"a rooted address: {arguments}"
 
@@ -111,12 +113,14 @@ def test_the_old_chat_address_redirects_within_the_prefix(client):
 #
 # Five pages each wrote their own header, and they drifted: one had no Sign
 # out, the links came in different orders, two carried arrows, and three drew
-# them as plain blue text. The links are the same five everywhere, in one
-# order, each page leaving out its own.
+# them as plain blue text. The links are the same everywhere, in one order,
+# each page leaving out its own. The Knowledge base joined them in plan 030,
+# when it moved off the Workbench onto a page of its own.
 
 NAV = [
     ("./", "Assistant"),
     ("workbench", "Workbench"),
+    ("knowledge", "Knowledge base"),
     ("memory", "Answer memory"),
     ("preferences", "Preferences"),
     ("products", "Products"),

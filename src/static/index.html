@@ -62,19 +62,8 @@
     padding: 18px;
   }
   .panel + .panel { margin-top: 14px; }
-  .split .panel + .panel { margin-top: 0; }
   .panel h3 { margin: 0 0 3px; font-size: 14px; font-weight: 620; }
   .panel .hint { margin: 0 0 14px; color: var(--ink-faint); font-size: 12.5px; }
-
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: stretch; }
-  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
-  /* Side-by-side panels have to line up row for row. The hint reserves two
-     lines whether or not it needs them, and the drop zone takes the slack, so
-     the two "Index…" buttons sit on the same baseline. */
-  .split .panel { display: flex; flex-direction: column; }
-  .split .panel .hint { min-height: 3.2em; }
-  .split .panel label.file { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-  .split .panel .status { margin-top: auto; padding-top: 11px; }
 
   /* --- controls ---------------------------------------------------------- */
 
@@ -158,21 +147,12 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* --- knowledge base ---------------------------------------------------- */
+  /* --- what the answers draw on ------------------------------------------
+     One line; the knowledge base itself is managed on its own page (plan 030). */
 
-  .kb-summary {
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    font-size: 13.5px; color: var(--ink-soft); margin-bottom: 12px;
-  }
-  .kb-summary a { color: var(--accent-ink); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
-  .kb-summary a:hover { border-bottom-color: var(--accent); }
-  ul.sources { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 300px; overflow: auto; }
-  ul.sources li {
-    display: flex; align-items: center; gap: 9px;
-    padding: 8px 2px; border-bottom: 1px solid var(--line);
-  }
-  ul.sources li:last-child { border-bottom: none; }
-  ul.sources .name { flex: 1; word-break: break-all; color: var(--ink-soft); }
+  .kb-line { margin: 0 0 12px; font-size: 13px; color: var(--ink-soft); }
+  .kb-line a { color: var(--accent-ink); font-weight: 550; text-decoration: none; }
+  .kb-line a:hover { text-decoration: underline; }
 
   .tag {
     font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
@@ -184,35 +164,9 @@
   .tag.warn { background: var(--warn-soft); color: var(--warn); }
   .tag.err { background: var(--err-soft); color: var(--err); }
 
-  /* --- document library -------------------------------------------------- */
-
-  details.library > summary {
-    cursor: pointer; font-size: 14px; font-weight: 620; padding: 4px 0;
-    list-style: none; display: flex; align-items: center; gap: 8px;
-  }
-  details.library > summary::-webkit-details-marker { display: none; }
-  details.library > summary::before {
-    content: "›"; font-size: 17px; color: var(--ink-faint);
-    transition: transform .15s; display: inline-block;
-  }
-  details.library[open] > summary::before { transform: rotate(90deg); }
-
   .library-heading {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 10px;
   }
-  .library-heading h4 { margin: 0; font-size: 13px; font-weight: 620; color: var(--ink-soft); }
-  .document-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 11px; }
-  .document-card {
-    display: flex; flex-direction: column; gap: 7px; min-width: 0;
-    border: 1px solid var(--line); border-radius: var(--radius-sm);
-    padding: 13px; background: var(--surface-sunken);
-  }
-  .document-card .doc-title { font-weight: 600; font-size: 13.5px; word-break: break-word; }
-  .document-card .doc-name { color: var(--ink-faint); font-size: 11.5px; word-break: break-all; }
-  .document-card .doc-meta { color: var(--ink-faint); font-size: 11.5px; }
-  .document-card .doc-meta .tag { margin-inline-start: 4px; }
-  .document-card .row { margin-top: auto; gap: 7px; }
-  .document-card button { padding: 6px 11px; font-size: 12.5px; }
 
   /* --- the question list -------------------------------------------------
      One row per question, editable in place. Deliberately quieter than an
@@ -259,17 +213,6 @@
   .qrow .qactions { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
   .qrow .tag { flex: 0 0 auto; }
 
-  /* Whose document. A fieldset rather than a checkbox, because neither
-     answer is the "off" state and getting it wrong is not symmetric. */
-  .whose {
-    border: 1px solid var(--line); border-radius: var(--radius-sm);
-    padding: 9px 12px 11px; margin: 10px 0 12px;
-  }
-  .whose legend { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); padding: 0 4px; }
-  .whose label { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; font-size: 12.5px; color: var(--ink-soft); cursor: pointer; }
-  .whose input { margin-top: 3px; flex: 0 0 auto; }
-  .whose strong { color: var(--ink); font-weight: 620; }
-
   .qlist-empty {
     padding: 22px; text-align: center; color: var(--ink-faint); font-size: 13.5px;
     border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
@@ -278,7 +221,7 @@
   /* --- the composer ------------------------------------------------------
      A second way into the same list, placed after the last answer so the work
      continues where the reader already is instead of sending them back up the
-     page. It shows only what is still waiting; the full list stays in step 2. */
+     page. It shows only what is still waiting; the full list stays in step 1. */
   .composer { margin-top: 18px; border-style: dashed; }
   .composer h3 { margin-bottom: 2px; }
   .composer textarea {
@@ -557,8 +500,6 @@
   /* How every card below reads: its length, and a skill to reword them with. */
   .pick-row { display: flex; align-items: center; gap: 12px 22px; flex-wrap: wrap; margin-bottom: 14px; }
   .pick-row[hidden] { display: none; }
-  a.ghost-link { color: var(--accent-ink); font-weight: 550; font-size: 14px; text-decoration: none; }
-  a.ghost-link:hover { text-decoration: underline; }
   .auth-card {
     width: min(420px, 100%);
     background: var(--surface-raised); border: 1px solid var(--line);
@@ -625,6 +566,7 @@
        are different shapes, and a control that had to know which mode it was in
        would be a control with a bug waiting in it. -->
   <a class="ghost" href="./" title="Ask for what you need in a conversation">Assistant</a>
+  <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
   <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
@@ -634,90 +576,11 @@
 
 <main>
   <!-- Step 1 ------------------------------------------------------------ -->
+  <!-- The Workbench opens on the questionnaire (plan 030). The knowledge base
+       it answers from is managed on its own page, and is said in one line here. -->
   <section class="step">
     <div class="step-head">
       <span class="step-number">1</span>
-      <h2>Build the knowledge base</h2>
-    </div>
-    <p class="step-hint">Everything the agent answers from: your policies here, and the answers the team has already given in the answer memory.</p>
-
-    <!-- Which knowledge base this step works on (plan 021): the shared one, used
-         for every questionnaire, or one product's, used beside it for that
-         product's questionnaires. Upload, list, remove and clear follow it. -->
-    <div class="row kb-scope">
-      <label for="kbScope"><strong>Knowledge base</strong></label>
-      <select id="kbScope"><option value="">Shared, for every product</option></select>
-      <span class="hint" id="kbScopeHint">Used for every questionnaire.</span>
-    </div>
-
-    <div class="split">
-      <div class="panel">
-        <h3>Guidelines</h3>
-        <p class="hint">Policies, standards and reference material the answers are drawn from.</p>
-        <label class="file" data-drop="guidelines">
-          <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
-          Drop PDF or DOCX files here, or click to choose
-          <span class="chosen" id="guidelinesChosen"></span>
-        </label>
-        <!-- Asked rather than guessed. A file name is not evidence: the
-             "DataClassificationPolicy.pdf" in this corpus is the regulator's,
-             not ours, and reads exactly like one of ours. Answering from the
-             second as though it were the first claims a control we may not
-             have. -->
-        <fieldset class="whose">
-          <legend>Whose document is this?</legend>
-          <label><input type="radio" name="guidelineAuthority" value="ours" checked />
-            <span><strong>Ours.</strong> Something we wrote and are bound by — it says what we do.</span></label>
-          <label><input type="radio" name="guidelineAuthority" value="external" />
-            <span><strong>A requirement we are subject to.</strong> A law, regulation or
-              someone else&rsquo;s framework — PDPL, NCA ECC, SDAIA. It says what we must do,
-              which is not evidence that we do it.</span></label>
-        </fieldset>
-        <div class="row">
-          <button id="guidelinesBtn" disabled>Index guidelines</button>
-        </div>
-        <div class="status" id="guidelinesStatus"></div>
-      </div>
-
-      <div class="panel">
-        <h3>The team&rsquo;s own answers</h3>
-        <p class="hint">Kept in the answer memory, not here, and added one at a time: written
-          on that page, or edited and approved on an answer card.</p>
-        <div class="row">
-          <a class="ghost-link" href="memory">Open the answer memory →</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-top:14px">
-      <h3>What is indexed</h3>
-      <div class="kb-summary" id="kbSummary">Loading…</div>
-      <ul class="sources" id="kbSources"></ul>
-      <div class="row">
-        <button class="ghost" id="kbRefresh">Refresh</button>
-        <button class="ghost" id="kbClear" title="The answer memory is not affected">Remove every policy document</button>
-      </div>
-      <div class="status" id="kbStatus"></div>
-    </div>
-
-    <div class="panel" style="margin-top:14px">
-      <details class="library">
-        <summary>Your documents</summary>
-        <p class="hint" style="margin-top:10px">Open an original PDF, or inspect the exact text the agent read out of it.</p>
-
-        <div class="library-heading">
-          <h4>Uploaded documents</h4>
-          <span class="status" id="uploadedDocumentsSummary" style="margin:0"></span>
-        </div>
-        <div class="document-list" id="uploadedDocuments"></div>
-      </details>
-    </div>
-  </section>
-
-  <!-- Step 3 ------------------------------------------------------------ -->
-  <section class="step">
-    <div class="step-head">
-      <span class="step-number">2</span>
       <h2>Load a questionnaire</h2>
     </div>
     <p class="step-hint">
@@ -749,6 +612,11 @@
         <button class="quiet" id="closeForm" hidden
                 title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
       </div>
+      <!-- What the answers draw on, counted, following the product chosen
+           (plan 030). The documents are managed on the Knowledge base page. -->
+      <p class="kb-line" id="kbLine"><span id="kbLineText">Counting the documents answers are drawn from…</span>
+        · <a id="kbManage" href="knowledge"
+             title="Add, open and remove the documents answers are drawn from">Manage</a></p>
       <!-- A deleted product's questionnaire (plan 027): read, filled and downloaded, never changed. -->
       <div class="status" id="formReadOnly" role="status" hidden></div>
       <label class="file" data-drop="assessment">
@@ -813,10 +681,10 @@
     </div>
   </section>
 
-  <!-- Step 3 ------------------------------------------------------------ -->
+  <!-- Step 2 ------------------------------------------------------------ -->
   <section class="step" id="resultsCard" hidden>
     <div class="step-head">
-      <span class="step-number">3</span>
+      <span class="step-number">2</span>
       <h2>Review and export</h2>
       <!-- The product the answers were written for, and approvals are filed
            under, in sight of whoever is approving (plan 029, 2). -->
@@ -1413,7 +1281,6 @@
 
   const $ = (id) => document.getElementById(id);
   let result = null;
-  let documents = [];
   let currentDocument = null;
 
   // --- theme ---------------------------------------------------------------
@@ -1746,209 +1613,6 @@
 
     return input;
   }
-
-  // --- ingestion -----------------------------------------------------------
-
-  function ingestHandler(input, endpoint, button, status, noun) {
-    return async function () {
-      const files = Array.from(input.files);
-      if (!files.length) return;
-
-      button.disabled = true;
-      setStatus(status, "Indexing " + files.length + " " + noun + ". Large documents take a minute each.", "busy");
-
-      const form = new FormData();
-      files.forEach((file) => form.append("files", file));
-      // Only the guidelines upload asks: a previous answer is ours by definition.
-      const whose = document.querySelector('input[name="guidelineAuthority"]:checked');
-      if (whose && endpoint.endsWith("/guidelines")) form.append("authority", whose.value);
-      if (endpoint.endsWith("/guidelines") && kbScope()) form.append("product", kbScope());
-
-      try {
-        const results = await request(endpoint, { method: "POST", body: form });
-        const failed = results.filter((r) => r.error);
-        const duplicates = results.filter((r) => !r.error && r.duplicate_of);
-        const chunks = results.reduce((total, r) => total + r.chunks_indexed, 0);
-        const pairs = results.reduce((total, r) => total + (r.qa_pairs_found || 0), 0);
-        const indexed = results.length - failed.length - duplicates.length;
-
-        let message = "Indexed " + indexed + "/" + results.length +
-                      " file(s) — " + chunks + " chunks" + (pairs ? ", " + pairs + " Q/A pairs" : "") + ".";
-        if (duplicates.length) {
-          message += "\n" + duplicates.map((r) => "– " + r.source_name +
-                     ": skipped, identical to " + r.duplicate_of).join("\n");
-        }
-        if (failed.length) {
-          message += "\n" + failed.map((r) => "✗ " + r.source_name + ": " + r.error).join("\n");
-        }
-        setStatus(status, message, failed.length ? "error" : "ok");
-
-        input.value = "";
-        input.dispatchEvent(new Event("change"));
-        loadKnowledge();
-        loadDocuments();
-      } catch (error) {
-        setStatus(status, error.message, "error");
-      } finally {
-        button.disabled = false;
-      }
-    };
-  }
-
-  // --- knowledge base ------------------------------------------------------
-
-  let guidelineCount = null;  // what "Remove every policy document" counts in its question
-  async function loadKnowledge() {
-    const scope = kbScope();
-    // Not known until this scope's list arrives: the last count belonged to the
-    // knowledge base the selector has left (plan 029's review).
-    guidelineCount = null;
-    try {
-      const stats = await request("/api/knowledge" + kbScopeQuery("?"));
-      // An answer for the knowledge base the selector has since left is dropped: arriving
-      // late, it replaced the list, and the count "Remove every policy document" names.
-      if (scope !== kbScope()) return;
-      guidelineCount = stats.sources.filter((s) => s.source_type === "guideline").length;
-      $("kbSummary").innerHTML = stats.total_chunks
-        ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
-          "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
-          // The previous answers are the one part of the corpus with a page of
-          // its own: they are managed one answer at a time rather than one file
-          // at a time, which is why the count links there.
-          '<span><a href="memory" title="Manage the answer memory">' +
-            stats.prior_answer_chunks.toLocaleString() + " previous answers</a></span>"
-        : "Nothing indexed yet. Upload your policies above.";
-
-      $("kbSources").innerHTML = "";
-      stats.sources.forEach((source) => {
-        const item = document.createElement("li");
-
-        const tag = document.createElement("span");
-        tag.className = "tag " + source.source_type;
-        tag.textContent = source.source_type === "prior_answer" ? "answers" : "guideline";
-
-        const name = document.createElement("span");
-        name.className = "name";
-        name.textContent = source.name + " (" + source.chunks + ")";
-        // Whether this is ours or a law we follow. The knowledge panel is where
-        // somebody checks that the corpus is labelled correctly, and it was the
-        // one place that could not show them.
-        const whose = Cards.authorityBadge(source.authority);
-        if (whose) name.append(document.createTextNode(" "), whose);
-
-        const view = document.createElement("button");
-        view.className = "quiet";
-        view.textContent = "view";
-        view.onclick = () => openDocument({
-          name: source.name,
-          title: source.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
-          origin: "uploaded",
-          category: "uploaded",
-          label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
-          extension: source.name.split(".").pop().toLowerCase(),
-          size_bytes: 0,
-        });
-
-        const remove = document.createElement("button");
-        remove.className = "quiet danger";
-        remove.textContent = "remove";
-        remove.onclick = async () => {
-          // Both ask first (plan 029): a shared document is used by every product, and a
-          // product's goes with its file (TD-039) unless something else uses it (plan 027).
-          if (!confirm(Cards.removalQuestion(source.name, kbScope() ? kbScopeName() : ""))) return;
-          await removeFromKnowledge(
-            "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
-            "Removed " + source.name + ".");
-        };
-
-        item.append(tag, name, view, remove);
-        $("kbSources").append(item);
-      });
-    } catch (error) {
-      if (scope !== kbScope()) return;
-      guidelineCount = null;  // not known: the question says "every policy document"
-      $("kbSummary").textContent = "Could not load the knowledge base: " + error.message;
-    }
-  }
-
-  // --- document library ---------------------------------------------------
-
-  function emptyLibraryMessage(container, message) {
-    container.innerHTML = "";
-    const note = document.createElement("div");
-    note.className = "status";
-    note.style.margin = "0";
-    note.textContent = message;
-    container.append(note);
-  }
-
-  function documentCard(doc) {
-    const card = document.createElement("div");
-    card.className = "document-card";
-
-    const title = document.createElement("div");
-    title.className = "doc-title";
-    title.textContent = doc.title;
-
-    const name = document.createElement("div");
-    name.className = "doc-name";
-    name.textContent = doc.name;
-
-    const meta = document.createElement("div");
-    meta.className = "doc-meta";
-    meta.textContent = doc.label + " · " + doc.extension.toUpperCase() +
-      (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
-    const product = productOfDocument(doc);
-    if (product) meta.append(product);
-
-    const actions = document.createElement("div");
-    actions.className = "row";
-
-    const view = document.createElement("button");
-    view.className = "ghost";
-    view.textContent = "View document";
-    view.onclick = () => openDocument(doc);
-    actions.append(view);
-
-    card.append(title, name, meta, actions);
-    return card;
-  }
-
-  /* A product's file is its knowledge base, badged like its sources and
-     questionnaires (plan 027). Until the team's products have loaded, the name
-     the library gave is shown without the product's colour. */
-  function productOfDocument(doc) {
-    if (!doc.product_id) return null;
-    const title = "In " + doc.product_name + "'s knowledge base. It goes if the product is deleted.";
-    const badge = Cards.productBadge(doc.product_id, title);
-    if (badge) return badge;
-    const tag = document.createElement("span");
-    tag.className = "tag product";
-    tag.textContent = doc.product_name;
-    tag.title = title;
-    return tag;
-  }
-
-  function renderDocuments() {
-    const container = $("uploadedDocuments");
-    container.innerHTML = "";
-    documents.forEach((doc) => container.append(documentCard(doc)));
-    if (!documents.length) {
-      emptyLibraryMessage(container, "No uploaded documents yet.");
-    }
-    $("uploadedDocumentsSummary").textContent = documents.length + " file(s)";
-  }
-
-  async function loadDocuments() {
-    try {
-      const data = await request("/api/documents");
-      documents = data.documents;
-      renderDocuments();
-    } catch (error) {
-      emptyLibraryMessage($("uploadedDocuments"), "Could not load documents: " + error.message);
-    }
-  }
-
 
   // --- document viewer -----------------------------------------------------
 
@@ -2448,15 +2112,14 @@
     });
     document.querySelectorAll("[data-mutates]").forEach((node) => { node.disabled = locked; });
 
-    // These have enable rules of their own -- "Index guidelines" is disabled
-    // until a file is chosen. Overwrite the flag while locked, then put back
-    // exactly what was there, or unlocking would enable a button whose own
-    // logic wanted it off. Close has its own rule: `paintClose`; so has Read,
-    // `paintRead`, worked out each time: a flag put back restored a state from
-    // before the product was chosen (plan 029, 2).
+    // These have enable rules of their own. Overwrite the flag while locked,
+    // then put back exactly what was there, or unlocking would enable a button
+    // whose own logic wanted it off. Close has its own rule: `paintClose`; so
+    // has Read, `paintRead`, worked out each time: a flag put back restored a
+    // state from before the product was chosen (plan 029, 2). The knowledge
+    // base's controls were here too, until they moved to their own page (plan 030).
     ["addQuestionBtn", "clearQuestions", "languageSelect", "composerLanguage",
-     "composerAdd", "composerInput", "assessmentInput",
-     "guidelinesBtn", "kbClear", "retryFailed",
+     "composerAdd", "composerInput", "assessmentInput", "retryFailed",
      "reviseBtn", "reviseInstruction"].forEach((id) => {
       const element = $(id);
       if (!element) return;
@@ -2900,7 +2563,6 @@
     } finally {
       reading = false;
       paintRead();
-      loadDocuments();
     }
   }
 
@@ -4149,14 +3811,10 @@
 
 
 
-  const guidelinesInput = fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
   fileField("assessmentInput", "assessmentChosen", "extractBtn", paintRead);  // a file and a product (plan 029, 2)
   // Another file chosen: the offer was about the last one.
   $("assessmentInput").addEventListener("change", hideAlreadyOpen);
   $("assessmentInput").closest("label.file").addEventListener("drop", hideAlreadyOpen);
-
-  $("guidelinesBtn").onclick = ingestHandler(
-    guidelinesInput, "/api/knowledge/guidelines", $("guidelinesBtn"), $("guidelinesStatus"), "guideline(s)");
 
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
@@ -4217,50 +3875,52 @@
     }
     renderQuestions();
   };
-  $("kbRefresh").onclick = loadKnowledge;
-  $("kbClear").onclick = async () => {
-    const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
-    if (!confirm(Cards.clearQuestion(guidelineCount, kbScope() ? kbScopeName() : ""))) return;
-    await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), "Removed every policy document from " + which + ".");
-  };
+  // --- what the answers draw on (plan 030) ----------------------------------
+  /* The knowledge base is managed on a page of its own. Here one line says what
+     the answers are drawn from: the shared documents, and the chosen product's
+     beside them, counted by the route that page lists them with. "Manage" opens
+     that page on the same knowledge base. A product's documents are counted when
+     it is first chosen; General draws on the shared documents alone, and so does
+     a deleted product's questionnaire, which nothing answers any more. */
+  let sharedDocuments = null;   // null while counting; an Error when it could not be counted
+  const productDocuments = {};  // a product's id: its count, null while counting, or an Error
 
-  /* Removing a product's document, or all of them, takes their files: the
-     library drops them too, and a file that could not be removed is said. */
-  async function removeFromKnowledge(url, done) {
+  async function countDocuments(product) {
     try {
-      const removed = await request(url, { method: "DELETE" });
-      const left = (removed && removed.files_left) || [];
-      setStatus($("kbStatus"), left.length
-        ? done + " " + left.length + " file(s) could not be removed from the server (" + left.join(", ") +
-          "); see the log."
-        : done, left.length ? "error" : "ok");
+      const stats = await request("/api/knowledge" + (product ? "?product=" + encodeURIComponent(product) : ""));
+      return stats.sources.length;
     } catch (error) {
-      setStatus($("kbStatus"), error.message, "error");
+      return error;
     }
-    loadKnowledge();
-    loadDocuments();
   }
 
-  // --- which knowledge base: shared, or a product's (plan 021) -------------
+  function documentsSaid(count, what) {
+    return count === 0 ? "no " + what + "s" : count + " " + what + (count === 1 ? "" : "s");
+  }
 
-  function kbScope() { return $("kbScope").value; }
-  function kbScopeName() {
-    const option = $("kbScope").selectedOptions[0];
-    return option ? option.textContent : "";
+  function paintKnowledgeLine() {
+    const product = teamProducts.find((p) => p.id === formProduct());
+    if (product && !(product.id in productDocuments)) {
+      productDocuments[product.id] = null;
+      countDocuments(product.id).then((count) => {
+        productDocuments[product.id] = count;
+        paintKnowledgeLine();
+      });
+    }
+    const own = product ? productDocuments[product.id] : null;
+    let said;
+    if (sharedDocuments === null) said = "Counting the documents answers are drawn from…";
+    else if (sharedDocuments instanceof Error) {
+      said = "Could not count the documents answers are drawn from: " + sharedDocuments.message;
+    } else {
+      said = "Answers from " + documentsSaid(sharedDocuments, "shared document");
+      if (typeof own === "number") said += " and " + (own || "none") + " for " + product.name;
+      else if (own instanceof Error) said += "; " + product.name + "'s could not be counted";
+    }
+    $("kbLineText").textContent = said;
+    $("kbManage").setAttribute("href", "knowledge" + (product ? "?product=" + encodeURIComponent(product.id) : ""));
   }
-  function kbScopeQuery(prefix) {
-    return kbScope() ? prefix + "product=" + encodeURIComponent(kbScope()) : "";
-  }
-  async function loadKbScopes() {
-    try {
-      const listed = await request("/api/products");
-      const select = $("kbScope");
-      const chosen = select.value;
-      select.replaceChildren(new Option("Shared, for every product", ""));
-      listed.products.forEach((product) => select.append(new Option(product.name, product.id)));
-      if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
-    } catch (error) { /* no products: the shared knowledge base is all there is */ }
-  }
+
   // --- which product a questionnaire is for (plan 024, plan 029) ------------
 
   let teamProducts = [];
@@ -4317,6 +3977,7 @@
     $("resultsProduct").replaceChildren(...(label ? [label] : []));
     paintRead();
     paintLastUsed();
+    paintKnowledgeLine();  // the chosen product's documents beside the shared ones (plan 030)
   }
   /* A deleted product cannot be chosen, so it is offered only to show the
      product of a questionnaire kept from it: disabled, and named as deleted,
@@ -4381,7 +4042,6 @@
     const chosen = formProduct();
     const was = before.find((p) => p.id === chosen);
     Cards.setProducts(teamProducts, deletedProducts);
-    if (documents.length) renderDocuments();  // the library's product badges, in their colours
     const select = $("formProduct");
     select.replaceChildren(
       new Option("Product: choose…", "", true, true),
@@ -4592,14 +4252,6 @@
   // Awaited before a questionnaire named in the address is opened (plan 029, 2).
   const productsListed = loadFormProducts().catch(() => {});
 
-  $("kbScope").onchange = () => {
-    $("kbScopeHint").textContent = kbScope()
-      ? "Used only for " + kbScopeName() + "'s questionnaires, beside the shared one."
-      : "Used for every questionnaire.";
-    loadKnowledge();
-  };
-  loadKbScopes();
-
   $("exportJson").onclick = () =>
     download(result.source_name + ".answers.json", JSON.stringify(result, null, 2), "application/json");
   $("exportCsv").onclick = exportCsv;
@@ -4668,8 +4320,7 @@
   });
 
   loadSkills();
-  loadKnowledge();
-  loadDocuments();
+  countDocuments("").then((count) => { sharedDocuments = count; paintKnowledgeLine(); });
   listRecentForms();
   renderQuestions();
   openFromAddress();
