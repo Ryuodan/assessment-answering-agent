@@ -939,6 +939,21 @@ async def test_a_search_marks_the_products_own_clauses(kit, searching):
 
 
 @pytest.mark.asyncio
+async def test_in_a_products_conversation_a_search_marks_the_shared_clauses_too(kit, searching):
+    """Plan 031: the organisation's clause is marked SHARED, as the drafter's sources are,
+    so the model can say it is our policy rather than a fact about the product."""
+    _queries, found = searching
+    found.append(_hit("Ole5 facts.docx", "Single sign-on is supported through SAML 2.0.", product_id="p-ole5"))
+    found.append(_hit("Access Control Policy.pdf", "Single sign-on is required for every system."))
+    tool, state = kit
+    state["product_id"] = "p-ole5"
+
+    own, shared = (await tool["search_policies"]("single sign-on")).split("\n\n")
+    assert own == "[Ole5 facts.docx, FOR THIS PRODUCT] Single sign-on is supported through SAML 2.0."
+    assert shared == "[Access Control Policy.pdf, SHARED] Single sign-on is required for every system."
+
+
+@pytest.mark.asyncio
 async def test_a_turn_searches_at_most_three_times(kit, searching):
     queries, found = searching
     found.append(_hit("Ole5 facts.docx", "Penetration tests run every year."))

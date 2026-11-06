@@ -526,3 +526,39 @@ a plan relies on it.
   evaluation should be run again. Whether the model keeps to a lead-in is
   instructed, not enforced.
 - **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 030).
+
+## D-026: a product's questionnaire names its product, and every source says whose it is
+
+- **Context:** the user found that product answers "mix unrelated information
+  from the shared knowledge base, and it sounds like it is information related
+  to the product". Measured on 24 product questions, 6 released answers stated
+  a product fact, such as its hosting or its encryption, that only shared
+  material supported. Some of it came from an earlier answer about another
+  product. The drafter had been told that some sources were "FOR THIS PRODUCT",
+  but never which product, and nothing about the rest.
+- **Decision:**
+  - The drafter and the reviewer are told the product's name, its description
+    if it has one, and the team's other products. The question block says
+    "About: <product>".
+  - Every source is marked FOR <product> or SHARED, and a line above the
+    sources says which are the product's own, or that none is.
+  - The drafter states a shared policy as the organisation's policy, covering
+    every product. It takes no product-specific fact from shared material, and
+    says when the product's own documentation does not give the detail.
+  - The reviewer sets `grounded` to false for a product-specific fact that only
+    shared sources support. Saying that the organisation's policy applies to
+    the product is grounded.
+  - The assistant's own searches in a product's conversation mark shared
+    clauses SHARED.
+- **Consequences:**
+  - A General questionnaire's prompts are unchanged, byte for byte, so the
+    house evaluation's numbers still stand.
+  - More product answers are held for review: on the 24 questions, 7 were held
+    before, and 11 to 13 after, over three runs. Some of those holds are
+    correct and some over-cautious.
+  - A held answer is read by a person, which is the safe side. An answer with
+    no product source of its own can still infer from an organisation-wide
+    policy ("Therefore Msegat supports MFA").
+  - A product's description, written on the Products page, now reaches the
+    drafter. All five local products have none.
+- **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 031).

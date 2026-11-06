@@ -10,7 +10,7 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.busy`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
+- **Modules:** `src`, `src.busy`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.product_prompts`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
 
 | Module | What it is |
 |---|---|
@@ -23,6 +23,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 | `src/formatting.py` | The small slice of Markdown the drafter actually writes. |
 | `src/logs.py` | Structured logs: an event name, named fields, and the request they belong to. |
 | `src/models.py` | Domain models shared by ingestion, retrieval, the graph and the API. |
+| `src/product_prompts.py` | What a product's questionnaire tells the drafter and the reviewer (plan 031, D-026). |
 | `src/progress.py` | How far along a run is, for anything watching it. |
 | `src/prompts.py` | All prompts, in one place. |
 | `src/roles.py` | The roles a person can have, and what each may do beyond answering. |
@@ -101,6 +102,7 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 | `src/forms/reading.py` | The five ways a questionnaire can be read, behind one call. |
 | `src/graph/__init__.py` | LangGraph workflow for answering assessments. |
 | `src/graph/nodes.py` | Graph nodes. |
+| `src/graph/product_scope.py` | What the drafter and the reviewer are told about a product's questionnaire's product (plan 031, D-026). |
 | `src/graph/state.py` | Graph state schemas. |
 | `src/graph/workflow.py` | Graph wiring. |
 | `src/relevance.py` | LLM relevance grading of retrieved chunks. |

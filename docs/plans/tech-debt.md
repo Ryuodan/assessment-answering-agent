@@ -628,3 +628,21 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - The Workbench sets the review threshold in a fetch it does not wait for. This is harmless today: every pipeline answer at or under the threshold is also flagged, and the cards use the server's `will_be_written`.
   - The assistant's paid evaluation (`scripts/eval_assistant.py`) has not been run since the chat's prompt changed. Plan 030 tells the model to lead into the card and not to restate it; whether it does is instructed, not measured.
 - **Fix:** the colour and the wait are small page changes. The evaluation needs the user's approval to spend.
+
+## TD-072: The assistant's evaluation writes the real index when a case writes an answer
+
+- **What:** found 2026-11-06 while preparing plan 031's run of `scripts/eval_assistant.py`.
+  - The script records into a scratch database, but it reads and writes the deployment's own Chroma index.
+  - A case that has the assistant write an answer by hand (`write_one_answer`) records that answer in the answer memory (`tools.set_answer`, `answer_memory.record`), which indexes it (`index_entry`) into the real index.
+  - The memory's adoption step (`answer_memory.ensure_synced`) would then bring it into the real database the next time the app reads the memory.
+- **Checked:** none had: no memory entry and no index row in the local data names the eval's fixture file.
+- **Impact:** a run against a live installation could put test answers into the shared answer memory.
+- **Fix (needs approval):** point the script at a scratch copy of the index too, as plan 031's run did by hand (`CHROMA_DIR` set to a copy).
+
+## TD-073: Removing a leaked source number can leave empty brackets
+
+- **What:** found 2026-11-06 in plan 031's product measurement. When the drafter writes "(see [3])" or "([2], [4])", `formatting.strip_source_markers` removes the numbers and leaves "()" or "(,,,)" in the answer.
+  - It happened in 1 answer of 24 in each run after the product change, and in none before.
+  - It is the same code path as before; the product block makes the drafter cite inline a little more often.
+- **Impact:** a stray "()" in a customer's file.
+- **Fix (needs approval):** drop brackets left empty, or holding only separators, after the numbers are removed. A characterization test pins today's output first.

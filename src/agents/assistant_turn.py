@@ -38,7 +38,10 @@ CLAUSE_CHARS = 1500
 """How much of each clause a search shows the model: all of one, at the chunk size of 1,200."""
 
 FOR_THIS_PRODUCT = "FOR THIS PRODUCT"
-"""The mark on a product's own clauses, as the drafter's sources carry it (TD-040)."""
+"""The mark on a product's own clauses, in a product's conversation (TD-040)."""
+
+SHARED = "SHARED"
+"""The mark on the other clauses in a product's conversation (plan 031): the organisation's shared material."""
 
 CORRECTION = "correction"
 """Marks a note to the model about its last step. It is sent, never stored or shown."""
@@ -121,7 +124,7 @@ def searched(state: dict[str, Any], query: str, hits: list[dict[str, Any]] | Non
     if not hits:
         return "Nothing in the indexed policies matched that search."
     add_sources(state, hits)
-    return clauses(hits)
+    return clauses(hits, for_a_product=bool(state.get("product_id")))
 
 
 def spent(messages: Iterable[BaseMessage]) -> bool:
@@ -158,15 +161,20 @@ def ends_when_spent() -> Any:
     return refused_twice
 
 
-def clauses(hits: list[dict[str, Any]]) -> str:
-    """Search hits as the model reads them: each clause whole, the product's own marked."""
+def clauses(hits: list[dict[str, Any]], for_a_product: bool = False) -> str:
+    """Search hits as the model reads them: each clause whole, the product's own marked.
+
+    In a product's conversation the others are marked SHARED too (plan 031), as
+    the drafter's sources are: the organisation's, not a fact about the product.
+    """
     shown = []
     for hit in hits:
         where = str(hit.get("locator") or hit.get("source_name") or "")
         text = str(hit.get("snippet") or "").strip()
         if len(text) > CLAUSE_CHARS:
             text = text[:CLAUSE_CHARS].rsplit(" ", 1)[0] + " ..."
-        shown.append(f"[{where}, {FOR_THIS_PRODUCT}] {text}" if hit.get("product_id") else f"[{where}] {text}")
+        mark = FOR_THIS_PRODUCT if hit.get("product_id") else SHARED if for_a_product else ""
+        shown.append(f"[{where}, {mark}] {text}" if mark else f"[{where}] {text}")
     return "\n\n".join(shown)
 
 

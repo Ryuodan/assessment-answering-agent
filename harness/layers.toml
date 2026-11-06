@@ -20,6 +20,7 @@ modules = [
     "src.schemas",
     "src.formatting",
     "src.prompts",
+    "src.product_prompts",
     "src.credentials",
     "src.roles",
     "src.verification",

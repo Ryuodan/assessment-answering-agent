@@ -264,7 +264,10 @@ FOR_PRODUCT = """
 THIS CONVERSATION is for the product {name}. Its questionnaire is answered
 from {name}'s own knowledge base and answer memory as well as the shared ones,
 and search_policies searches both, marking {name}'s own clauses FOR THIS
-PRODUCT. Where they differ, {name}'s material applies. The product was chosen
+PRODUCT and the rest SHARED. Where they differ, {name}'s material applies. A
+SHARED clause is the organisation's, for every product: say it is our policy,
+never that it describes how {name} itself is hosted, built or tested, and do not
+present it as {name}'s own. The product was chosen
 when this conversation started and is fixed; to work on another product the
 person starts a new chat with it chosen. You cannot change it, so say so if
 asked."""

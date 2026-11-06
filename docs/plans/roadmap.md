@@ -33,3 +33,4 @@ Work asked for directly, outside the milestones:
 | [027](completed/027-pre-deploy-fixes.md) | the pre-deploy tests' findings fixed as the user decided (TD-037 to TD-044) | done 2026-10-20 |
 | [029](completed/029-team-feedback-safety-workbench-product.md) | the team's feedback, part 1: safety fixes, Workbench relief, product choice | done 2026-11-06 |
 | [030](active/030-knowledge-page-honest-confidence-chat-cards.md) | the team's feedback, part 2: knowledge-base page, honest confidence, answer cards in the chat | active |
+| [031](active/031-product-answers-and-chat-fixes.md) | product answers keep shared material apart; ingest asks which knowledge base; the chat's drawer goes; switching conversations mid-turn; search per product | active |

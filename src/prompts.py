@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.product_prompts import SHARED, product_sources_line
+
 if TYPE_CHECKING:
     from src.models import Evidence
 
@@ -181,9 +183,16 @@ def format_question_block(
     section: str | None = None,
     question_type: str = "free_text",
     options: list[str] | None = None,
+    product: str = "",
 ) -> str:
-    """Render a question and its constraints for the answering and review prompts."""
+    """Render a question and its constraints for the answering and review prompts.
+
+    `product` is the name of the product a product's questionnaire is about
+    (plan 031); a General questionnaire's block is as it was.
+    """
     lines = [f"Question: {text}", f"Type: {question_type}"]
+    if product:
+        lines.append(f"About: {product}")
     if section:
         lines.append(f"Section: {section}")
     if options:
@@ -196,14 +205,20 @@ PRODUCT_SOURCES_NOTE = (
     "the others are the organisation's shared material. Where the two disagree, the product's "
     "source applies: it is how this product differs, not a contradiction to report."
 )
-"""Put above the sources when some are a product's own (plan 018, decision 2; plan 023).
+"""Put above the sources when some are a product's own and the product is not named (plan 023).
 
-Never shown otherwise, so a General questionnaire's prompt is exactly what it was.
+The pipeline names it since plan 031, and `PRODUCT_ANSWERING` says this in the
+system prompt; kept for a caller that does not. Never shown for General.
 """
 
 
-def format_sources_block(sources: list["Evidence"]) -> str:
-    """Render retrieved evidence as a numbered, locator-labelled block."""
+def format_sources_block(sources: list["Evidence"], product: str = "") -> str:
+    """Render retrieved evidence as a numbered, locator-labelled block.
+
+    `product` is the name of the product a product's questionnaire is about:
+    each source is then marked FOR it or SHARED (plan 031). Without it, a
+    product's own source is marked FOR THIS PRODUCT under a note, as before.
+    """
     if not sources:
         return "(no relevant sources were found in the knowledge base)"
 
@@ -218,7 +233,9 @@ def format_sources_block(sources: list["Evidence"]) -> str:
             label = "EXTERNAL REQUIREMENT (not our document)"
         else:
             label = "OUR POLICY"
-        if getattr(item, "product_id", ""):
+        if product:
+            label += f", FOR {product}" if getattr(item, "product_id", "") else f", {SHARED}"
+        elif getattr(item, "product_id", ""):
             label += ", FOR THIS PRODUCT"
         header = f"[{index}] {label} \u2014 {item.locator}"
         if item.heading:
@@ -226,7 +243,9 @@ def format_sources_block(sources: list["Evidence"]) -> str:
         if item.is_fragment:
             header += f"  [part {item.part} of {item.parts}]"
         blocks.append(f"{header}\n{item.snippet}")
-    if any(getattr(item, "product_id", "") for item in sources):
+    if product:
+        blocks.insert(0, product_sources_line(sources, product))
+    elif any(getattr(item, "product_id", "") for item in sources):
         blocks.insert(0, PRODUCT_SOURCES_NOTE)
     return "\n\n".join(blocks)
 

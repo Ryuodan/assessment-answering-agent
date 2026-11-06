@@ -14,6 +14,7 @@ from collections import Counter
 from src import organisation
 from src.config import settings
 from src.extraction import extract_questions
+from src.graph import product_scope
 from src.graph.state import AssessmentState, QuestionState, select_evidence
 from src.llm import chat_llm, structured_llm
 from src.rerank import rerank
@@ -44,6 +45,7 @@ def _question_block(state: QuestionState) -> str:
         section=question.section,
         question_type=question.question_type.value,
         options=question.options,
+        product=product_scope.about(state)[0],
     )
 
 
@@ -62,8 +64,8 @@ def _sources(state: QuestionState) -> list[Evidence]:
     )
 
 
-def _sources_block(evidence: list[Evidence]) -> str:
-    return format_sources_block(evidence)
+def _sources_block(evidence: list[Evidence], product: str = "") -> str:
+    return format_sources_block(evidence, product)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +268,8 @@ async def draft(state: QuestionState) -> dict:
     # file somebody edits, and a correction to it should reach the next answer
     # rather than the next restart.
     profile = organisation.load()
+    # A product's questionnaire names its product, and what each source's mark supports (plan 031).
+    product, told = product_scope.for_the_drafter(state, profile.short_name)
     messages = [
         (
             "system",
@@ -273,13 +277,14 @@ async def draft(state: QuestionState) -> dict:
                 language_name=language_name,
                 organisation=profile.describe(),
                 addressed_as=organisation.ADDRESSED_AS,
-            ),
+            )
+            + told,
         ),
         (
             "user",
             ANSWER_USER.format(
                 question_block=_question_block(state),
-                sources_block=_sources_block(_sources(state)),
+                sources_block=_sources_block(_sources(state), product),
                 language_name=language_name,
             ),
         ),
@@ -292,14 +297,15 @@ async def draft(state: QuestionState) -> dict:
 
 async def review(state: QuestionState) -> dict:
     """Check the draft is grounded, and propose a better query when it is not."""
+    product, told = product_scope.for_the_reviewer(state)
     messages = [
-        ("system", REVIEW_SYSTEM.format(language_name=LANGUAGE_NAMES[state["language"]])),
+        ("system", REVIEW_SYSTEM.format(language_name=LANGUAGE_NAMES[state["language"]]) + told),
         (
             "user",
             REVIEW_USER.format(
                 question_block=_question_block(state),
                 answer=state["draft"].answer,
-                sources_block=_sources_block(_sources(state)),
+                sources_block=_sources_block(_sources(state), product),
             ),
         ),
     ]
