@@ -98,14 +98,29 @@
      content unless told it may be, and a conversation's title is one unbroken
      line: a 70-character title took the column to 500px, and its ellipsis
      never showed. `width` holds the same on a narrow window, where the column
-     floats over the conversation instead of sitting beside it. */
+     floats over the conversation instead of sitting beside it. The person can
+     make it wider or narrower by its edge (plan 031); the titles never do. */
   .side {
-    flex: 0 0 250px; width: 250px; min-width: 0; overflow: hidden;
+    flex: 0 0 var(--side-width, 250px); width: var(--side-width, 250px); min-width: 0; overflow: hidden;
     background: var(--surface-sunken);
     border-inline-end: 1px solid var(--line);
     display: flex; flex-direction: column; min-height: 0;
   }
   .side[hidden] { display: none !important; }
+  /* Its edge, as the answers panel's: outside the column, which clips what
+     overflows it, and over the line between the list and the conversation. */
+  .side-resizer {
+    position: absolute; inset-block: 0; inset-inline-start: calc(var(--side-width, 250px) - 5px);
+    width: 10px; z-index: 7; cursor: col-resize; touch-action: none;
+  }
+  .side-resizer::after {
+    content: ""; position: absolute; inset-block: 0; inset-inline-start: 4px; width: 2px;
+    background: transparent; transition: background .15s;
+  }
+  .side-resizer:hover::after, .side-resizer:focus-visible::after,
+  body.resizing-side .side-resizer::after { background: var(--accent); }
+  .side-resizer:focus-visible { outline: none; }
+  .side[hidden] + .side-resizer { display: none; }
   .side-head {
     display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px;
     font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint);
@@ -138,6 +153,16 @@
   }
   .convo.on .file { background: var(--surface); }
   .convo .file .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A conversation still working on a message, and one whose reply came while
+     another was on screen (plan 031): the two things worth going back for. */
+  .convo .working-now, .convo .new-reply {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-size: 11.5px; font-weight: 550; color: var(--accent-ink);
+  }
+  .convo .new-reply::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none;
+  }
+  .convo-row.unread .label { color: var(--ink); font-weight: 620; }
   /* Shown on hover, and whenever the row has the keyboard's focus; always on a
      touch screen, which is safe now that it asks first. The keyboard's focus,
      not any focus: a rebuilt list puts focus back on the conversation just
@@ -182,7 +207,7 @@
   .pane-resizer:hover::after, .pane-resizer:focus-visible::after,
   body.resizing .pane-resizer::after { background: var(--accent); }
   .pane-resizer:focus-visible { outline: none; }
-  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing, body.resizing-side { cursor: col-resize; user-select: none; }
   .pane-head {
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
     padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--surface);
@@ -199,14 +224,6 @@
   .pane-status.err { color: var(--err); background: var(--err-soft); }
   .pick-row { display: flex; align-items: center; gap: 10px 20px; flex-wrap: wrap; margin-bottom: 12px; }
   #answers .summary { margin-bottom: 14px; }
-  /* Whose document. Sits under the drop target it applies to, because the
-     panel is a column and a control that far from its subject is a control
-     people answer wrongly. */
-  .whose { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 11px 10px; margin: -4px 0 12px; }
-  .whose legend { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); padding: 0 4px; }
-  .whose label { display: flex; gap: 7px; align-items: flex-start; margin-top: 5px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
-  .whose input { margin-top: 3px; flex: 0 0 auto; }
-  .whose strong { color: var(--ink); font-weight: 620; }
 
   .nothing { color: var(--ink-faint); text-align: center; margin-top: 18vh; padding: 0 28px; font-size: 13.5px; }
 
@@ -365,43 +382,6 @@
   .attached .name { color: var(--ink); font-weight: 550; }
   .foot { max-width: 700px; margin: 7px auto 0; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
 
-  /* --- drawer: the knowledge base ---------------------------------------- */
-  .scrim {
-    position: fixed; inset: 0; background: rgba(10, 12, 16, .4); z-index: 30;
-    opacity: 0; pointer-events: none; transition: opacity .16s;
-  }
-  .scrim.open { opacity: 1; pointer-events: auto; }
-  .drawer {
-    position: fixed; inset-block: 0; inset-inline-end: 0; width: min(640px, 96vw); z-index: 31;
-    background: var(--surface); border-inline-start: 1px solid var(--line);
-    transform: translateX(100%); transition: transform .2s ease;
-    display: flex; flex-direction: column; box-shadow: var(--shadow-lg);
-  }
-  .drawer.open { transform: none; }
-  .drawer .body { flex: 1; overflow-y: auto; padding: 16px; }
-  .drop {
-    display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
-    padding: 15px; text-align: center; color: var(--ink-faint); cursor: pointer; margin-bottom: 10px;
-    font-size: 13px;
-  }
-  .drop:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
-  .drop input { display: none; }
-  .drop strong { color: var(--ink); display: block; margin-bottom: 2px; }
-  .source {
-    display: flex; align-items: center; gap: 8px; padding: 9px 0;
-    border-bottom: 1px solid var(--line); font-size: 13px;
-  }
-  /* The name may be cut short -- some are a hundred characters with no space in
-     them -- but what kind of document it is may not. The label used to sit at
-     the end of the name, inside the part that gets cut, so exactly the long
-     regulator file names lost their "law / external". */
-  .source .what { flex: 1; min-width: 0; }
-  .source .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .source .facts {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 3px;
-  }
-  .source .count { color: var(--ink-faint); font-size: 12px; }
-
   /* --- set aside, at the foot of the answers ------------------------------ */
   .aside-head {
     margin: 22px 0 10px; font-size: 12px; font-weight: 650; letter-spacing: .04em;
@@ -416,7 +396,6 @@
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .aside-row button { flex: none; }
-  .source button { flex: none; }
 
   /* --- the document viewer ------------------------------------------------
      In the page rather than in a tab. The document is same-origin and already
@@ -440,16 +419,17 @@
     padding: 28px; width: min(390px, 100%); display: flex; flex-direction: column; gap: 10px;
     box-shadow: var(--shadow-md);
   }
-  .gate input, .drawer input[type="text"] {
+  .gate input {
     padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm);
     background: var(--surface-sunken); color: inherit;
   }
 
   @media (max-width: 1100px) { .answers-pane { flex-basis: var(--pane-width, 46vw); } }
   @media (max-width: 860px) {
-    .side { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 25; box-shadow: var(--shadow-lg); }
+    /* Over the conversation, at its own width: a width chosen beside it would cover a phone. */
+    .side { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 25; box-shadow: var(--shadow-lg); width: 250px; }
     .answers-pane { position: fixed; inset: 0; z-index: 24; flex-basis: auto; }
-    .pane-resizer { display: none; }
+    .pane-resizer, .side-resizer { display: none; }
   }
 </style>
 </head>
@@ -471,7 +451,6 @@
   <h1>Assistant</h1>
   <button class="ghost" id="newChat">New conversation</button>
   <span class="spacer"></span>
-  <button class="ghost" id="openKb" title="Look up or add documents without leaving the conversation">Documents</button>
   <div class="whoami" id="whoami" hidden>
     <b id="whoamiEmail"></b>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
@@ -497,6 +476,11 @@
     <div class="side-list" id="historyList"></div>
     <div class="status error history-status" id="historyStatus" role="status"></div>
   </aside>
+  <!-- Right after the list: hidden with it (`.side[hidden] + .side-resizer`). -->
+  <div class="side-resizer" id="sideResizer" role="separator" aria-orientation="vertical"
+       aria-label="Resize the conversation list" aria-controls="history" tabindex="0"
+       aria-valuemin="200" aria-valuemax="480" aria-valuenow="250"
+       title="Drag to resize. Double-click to reset."></div>
 
   <section class="middle">
     <div id="thread">
@@ -578,52 +562,9 @@
   </div>
 </dialog>
 
-<div class="scrim" id="scrim"></div>
-<aside class="drawer" id="kb" aria-hidden="true">
-  <div class="pane-head">
-    <h2>Knowledge base</h2>
-    <button class="ghost" id="closeKb">✕</button>
-  </div>
-  <div class="body">
-    <p class="status" style="margin-bottom:12px">Every answer is written from these and cites
-       them. Managed here rather than through the assistant: this is the corpus, not a task.</p>
-    <!-- The same knowledge base, with the document library and more room
-         (plan 030). Follows the selector below, as the Workbench's link does. -->
-    <p class="status" style="margin:-4px 0 12px"><a id="kbManage" href="knowledge">Manage on the Knowledge base page</a></p>
-
-    <!-- Which knowledge base the drawer works on (plan 021): the shared one, or a
-         product's, used beside it for that product's questionnaires. -->
-    <label class="kb-scope" for="kbScope" style="display:block;margin-bottom:10px">
-      <strong>Knowledge base</strong>
-      <select id="kbScope" style="display:block;width:100%;margin-top:4px">
-        <option value="">Shared, for every product</option>
-      </select>
-    </label>
-    <label class="drop">
-      <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
-      <strong>Policies and standards</strong>Drop PDF or DOCX here, or click to choose
-    </label>
-    <!-- Asked rather than inferred, and asked before the file is chosen so the
-         answer is already set when the upload fires. A file name is not
-         evidence: the DataClassificationPolicy.pdf in this corpus is the
-         regulator's and reads exactly like one of ours. -->
-    <fieldset class="whose">
-      <legend>Whose document?</legend>
-      <label><input type="radio" name="kbAuthority" value="ours" checked />
-        <span><strong>Ours</strong> — we wrote it and are bound by it. It says what we do.</span></label>
-      <label><input type="radio" name="kbAuthority" value="external" />
-        <span><strong>A law we follow</strong> — PDPL, NCA ECC, SDAIA. It says what we
-          must do, which is not evidence that we do it.</span></label>
-    </fieldset>
-    <p class="status" style="margin:4px 0 0">The team&rsquo;s own answers are not documents and
-       are not kept here: they are in the <a href="memory">answer memory</a>.</p>
-    <div class="status" id="kbStatus"></div>
-
-    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin:20px 0 4px">
-      What is indexed</h3>
-    <div id="sources"></div>
-  </div>
-</aside>
+<!-- The documents themselves -- adding, opening, removing -- are on the
+     Knowledge base page, linked in the bar. The drawer that did the same here
+     was a second, smaller copy of it (plan 031). -->
 
 <script>
 (function () {
@@ -710,10 +651,13 @@
   /* --- state --------------------------------------------------------------- */
   let conversationId = "";
   let batchId = "";
-  let busy = false;
   let attached = null;
-  let startingChat = false;  // the first message is on its way: the chip is fixed already
   let readOnly = false;  // a deleted product's chat: kept to read, never added to (plan 027)
+  /* A new chat on screen whose first message is on its way, by the run id it
+     was sent with, until the server has listed the chat it started: the chip
+     is fixed already, and the turn is this screen's (plan 031). */
+  let screenRun = "";
+  let opening = 0;  // which open() decides what is on screen: the last one asked for
   // Which product a new chat is for (plan 029, 2): see "which product" below.
   let teamProducts = [];
   let deletedProducts = [];  // since plan 027: their chats are kept, read-only
@@ -1033,26 +977,138 @@
     bubble.replaceChildren(dots, text);
   }
 
-  function watchProgress(runId, bubble) {
-    let stopped = false;
-    (async function () {
-      // Short first, then settled: the interesting part of a turn is often
-      // over in a few seconds, and a first poll at 1.5s missed all of it.
-      let wait = 400;
-      while (!stopped) {
-        await new Promise((resolve) => setTimeout(resolve, wait));
-        wait = 1200;
-        if (stopped) return;
+  /* --- turns under way (plan 031) ------------------------------------------
+     A turn runs inside the request that sent it, for minutes on a long
+     questionnaire, and the person may open another conversation meanwhile, or
+     start one. So each turn is kept here, by its run id, apart from whatever
+     is on screen: what was sent, where, and how far it has got. Opening its
+     conversation draws it again; its reply is drawn only where it belongs.
+
+     `held` is a turn whose request this page is waiting on. One the server
+     reported (`running`, after a reload or from another tab) is followed by
+     re-reading its conversation until the server says it has ended. */
+  const turns = new Map();
+  const endedRuns = new Set();  // a list read before a turn ended does not bring it back
+  const unread = new Set();  // conversations whose reply came while another was on screen
+  const REMOTE_POLL = 2400;
+
+  function onScreen(turn) {
+    return turn.conversationId
+      ? turn.conversationId === conversationId
+      : !conversationId && screenRun === turn.runId;
+  }
+  function turnOnScreen() {
+    for (const turn of turns.values()) if (onScreen(turn)) return turn;
+    return null;
+  }
+  function runningIn(id) {
+    for (const turn of turns.values()) if (turn.conversationId === id) return turn;
+    return null;
+  }
+  /* `over` when the server is known to have finished it. A request that
+     failed may have failed at a proxy, with the turn still running: the list
+     will report it again, and it is followed from there. */
+  function endTurn(turn, over) {
+    if (turns.get(turn.runId) === turn) turns.delete(turn.runId);
+    if (over) endedRuns.add(turn.runId);
+  }
+
+  /* The person's message and the working bubble, at the foot of the thread:
+     where the turn is drawn when it is sent, and again whenever its
+     conversation is opened before it ends. */
+  function drawPending(turn) {
+    turn.you = addTurn("you", turn.message, { at: turn.at, file: turn.file });
+    turn.shown = addTurn("assistant", "");
+    turn.shown.classList.add("working");
+    workingBubble(turn.shown.querySelector(".bubble"), turn.label, turn.percent);
+  }
+  function shownNow(turn) {
+    return turns.get(turn.runId) === turn && turn.shown && turn.shown.isConnected;
+  }
+
+  /* One loop per turn, for as long as it runs. Short first, then settled: the
+     interesting part of a turn is often over in a few seconds, and a first
+     poll at 1.5s missed all of it. Progress is asked for only while the turn
+     is on screen; a new chat's id is looked for until the server lists it;
+     and a turn the page is not waiting on is checked on, more slowly. */
+  async function follow(turn) {
+    let wait = 400;
+    let since = 0;
+    while (turns.get(turn.runId) === turn) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      since += wait;
+      wait = 1200;
+      if (turns.get(turn.runId) !== turn) return;
+      if (shownNow(turn)) {
         try {
-          const response = await fetch("/api/assessments/progress/" + runId);
-          if (!response.ok) continue;
-          const state = await response.json();
-          if (stopped) return;
-          workingBubble(bubble, progressText(state), state.total ? state.percent : null);
+          const response = await fetch("/api/assessments/progress/" + turn.runId);
+          if (response.ok) {
+            const state = await response.json();
+            turn.label = progressText(state);
+            turn.percent = state.total ? state.percent : null;
+            if (shownNow(turn)) workingBubble(turn.shown.querySelector(".bubble"), turn.label, turn.percent);
+          }
         } catch (error) { /* a dropped poll; the next one will do */ }
       }
-    })();
-    return () => { stopped = true; };
+      if (!turn.conversationId) loadHistory();  // learn(), below
+      if (!turn.held && since >= REMOTE_POLL) {
+        since = 0;
+        await checkOn(turn);
+      }
+    }
+  }
+
+  /* A turn this page is not waiting on: still running, or over. Over, its
+     conversation is drawn again if it is on screen, from the same reply. */
+  async function checkOn(turn) {
+    let data;
+    try {
+      data = await request("/api/chat/" + turn.conversationId);
+    } catch (error) {
+      if (error.status === 404) { endTurn(turn, true); loadHistory(); }  // forgotten from another tab
+      return;
+    }
+    if (turns.get(turn.runId) !== turn) return;
+    if (data.running && data.running.run_id === turn.runId) return;
+    const here = onScreen(turn);
+    endTurn(turn, true);
+    if (here) draw(data, ++opening);
+    else unread.add(turn.conversationId);
+    loadHistory();
+  }
+
+  /* A turn the server says is running and this page did not send. */
+  function remember(id, running) {
+    const turn = {
+      runId: running.run_id || "conversation:" + id, conversationId: id, held: false,
+      message: running.message, file: running.file, at: running.at,
+      label: "Working…", percent: null, you: null, shown: null, redraw: false,
+    };
+    turns.set(turn.runId, turn);
+    follow(turn);
+    return turn;
+  }
+
+  /* What the history list says about turns: a new chat's id, found by the run
+     its first message was sent with, and turns sent from elsewhere. */
+  function learn(rows) {
+    rows.forEach((c) => {
+      if (!c.running || endedRuns.has(c.running.run_id)) return;
+      const turn = turns.get(c.running.run_id);
+      if (!turn) {
+        if (!runningIn(c.id)) remember(c.id, c.running);
+        return;
+      }
+      if (turn.conversationId) return;
+      turn.conversationId = c.id;
+      if (screenRun === turn.runId) {
+        // Still on screen: this is that chat now, and the list shows it as open.
+        conversationId = c.id;
+        screenRun = "";
+        paintProductChip();
+        refresh();
+      }
+    });
   }
 
   /* Two kinds of stage arrive here. The counted ones are the pipeline's own --
@@ -1079,7 +1135,7 @@
   async function send() {
     const field = $("prompt");
     const message = field.value.trim();
-    if ((!message && !attached) || busy || readOnly) return;
+    if ((!message && !attached) || turnOnScreen() || readOnly) return;
     // A new chat waits for a product, Enter included: the words and the file
     // stay where they are (plan 029, 2).
     if (!conversationId && !productChosen()) { paintProductNeeded(true); return; }
@@ -1087,101 +1143,144 @@
     // The product this message starts a chat for, if it starts one. The chip
     // is fixed from here on, so it cannot change under the first turn.
     const startingFor = conversationId ? "" : chosenProduct();
-    startingChat = !conversationId;
-    noteByTheBox("");
-    busy = true;
-    refresh();
-    paintProductChip();
-    const you = addTurn("you", message || ("Read " + attached.name), {
-      at: new Date().toISOString(), file: attached ? attached.name : "",
-    });
-    field.value = "";
-    grow();
-
-    const placeholder = addTurn("assistant", "");
-    placeholder.classList.add("working");
-    const bubble = placeholder.querySelector(".bubble");
-    workingBubble(bubble, "Thinking…");
+    const product = wireProduct();  // read only when this starts the chat
+    const file = attached;
     /* The turn names itself, and the server reports under that name. It used
        to be watched under the batch id, which does not exist on the turn that
        uploads a file -- so the one turn long enough to need a progress bar was
        the one turn that never had one. */
     const runId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
       .replace(/-/g, "").slice(0, 16);
-    const stop = watchProgress(runId, bubble);
+    const turn = {
+      runId: runId, conversationId: conversationId, held: true,
+      message: message || ("Read " + file.name), file: file ? file.name : "", at: new Date().toISOString(),
+      label: "Thinking…", percent: null, you: null, shown: null, redraw: false,
+    };
+    turns.set(runId, turn);
+    if (!conversationId) {
+      screenRun = runId;
+      pageLastUsed = startingFor;  // the chat started here, offered as "Last used" if the person moves on
+    }
+    noteByTheBox("");
+    field.value = "";
+    grow();
+    // In the request now: the box is free, and another conversation's to use.
+    if (file) detach();
+    drawPending(turn);
+    refresh();
+    paintProductChip();
+    follow(turn);
 
+    let data = null;
+    let failure = null;
     try {
-      let data;
-      if (attached) {
+      if (file) {
         const body = new FormData();
-        body.append("file", attached);
+        body.append("file", file);
         body.append("message", message);
-        body.append("conversation_id", conversationId);
+        body.append("conversation_id", turn.conversationId);
         body.append("run_id", runId);
-        body.append("product", wireProduct());  // read only when this starts the chat
+        body.append("product", product);
         data = await request("/api/chat/upload", { method: "POST", body });
-        detach();
       } else {
         data = await request("/api/chat", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: message, conversation_id: conversationId, run_id: runId,
-            product: wireProduct(),  // read only when this starts the chat
+            message: message, conversation_id: turn.conversationId, run_id: runId, product: product,
           }),
         });
       }
-      stop();
-      conversationId = data.conversation_id;
-      batchId = data.batch_id || batchId;
-      pageLastUsed = Cards.choiceOf(data.product_id);
-      showProduct(Cards.choiceOf(data.product_id));
-      placeholder.replaceWith(turnElement("assistant", data.reply, data));
+    } catch (error) {
+      failure = error;
+    }
+    // Where the turn belongs, decided now and not when it was sent: the person
+    // may have opened another conversation meanwhile, or come back to this one.
+    const here = onScreen(turn);
+    endTurn(turn, Boolean(data));
+    if (here) screenRun = "";
+    if (data) replied(turn, data, here);
+    else await failed(turn, failure, here, { message: message, file: file, startingFor: startingFor });
+    refresh();
+    paintProductChip();
+    if (here) $("prompt").focus();
+  }
+
+  /* The reply, drawn in place of the working bubble when its conversation is
+     on screen. Anywhere else nothing on screen changes -- not the conversation
+     open, not its answers -- and the list marks the conversation instead. */
+  function replied(turn, data, here) {
+    turn.conversationId = data.conversation_id;
+    if (!here) {
+      unread.add(data.conversation_id);
+      loadHistory();
+      return;
+    }
+    conversationId = data.conversation_id;
+    batchId = data.batch_id || batchId;
+    pageLastUsed = Cards.choiceOf(data.product_id);
+    showProduct(Cards.choiceOf(data.product_id));
+    if (turn.shown && turn.shown.isConnected && !turn.redraw) {
+      turn.shown.replaceWith(turnElement("assistant", data.reply, data));
       $("thread").scrollTop = $("thread").scrollHeight;
       if (data.answers) showAnswers(data.answers);
       loadHistory();
-    } catch (error) {
-      stop();
-      const refusedProduct = (error.code === "product_not_found" && startingFor) || error.code === "product_deleted";
-      if (refusedProduct) {
-        // The product was deleted after this page listed it. The server
-        // refused before saving anything -- no message, no file -- so the two
-        // turns come off the page and the words go back in the box, said
-        // beside the box rather than as a reply. An attachment stays attached.
-        you.remove();
-        placeholder.remove();
-        $("empty").hidden = Boolean($("thread").querySelector(".turn"));
-        $("prompt").value = message;
-        grow();
-      }
-      if (error.code === "product_not_found" && startingFor) {
-        // A new chat: the chip goes back to nothing chosen, not to General,
-        // whether or not the list of products can be read again (plan 029, 2).
-        const name = (teamProducts.find((p) => p.id === startingFor) || {}).name || "That product";
-        teamProducts = teamProducts.filter((p) => p.id !== startingFor);
-        await loadProducts();
-        if (chosenProduct() === startingFor) showProduct("");
-        noteByTheBox(name + " has been deleted, so the chat could not start for it. Nothing was sent. " +
-          "Choose another product, or General.");
-        return;
-      }
-      if (error.code === "product_deleted") {
-        // An open chat whose product was deleted since: read-only from here on,
-        // its answers drawn again without their controls.
-        await loadProducts();
-        setReadOnly(true, chosenProduct());
-        if (batchId && answersAvailable) reloadAnswers();
-        return;
-      }
-      placeholder.classList.remove("working");
-      placeholder.querySelector(".bubble").textContent = "That did not work: " + error.message;
-    } finally {
-      stop();
-      busy = false;
-      startingChat = false;
-      refresh();
-      paintProductChip();
-      $("prompt").focus();
+    } else {
+      // Drawn from a transcript read while the server held no turn: read it again, now it holds the reply.
+      open(conversationId);
     }
+  }
+
+  let failedIn = null;  // the conversation the note under the list is about
+  async function failed(turn, error, here, sent) {
+    const refusedProduct = (error.code === "product_not_found" && sent.startingFor) || error.code === "product_deleted";
+    if (!here) {
+      // Somewhere else: said under the list, until that conversation is opened.
+      if (refusedProduct) await loadProducts();
+      const what = sent.message.length > 60 ? sent.message.slice(0, 57) + "…" : sent.message;
+      $("historyStatus").textContent = "“" + what + "” could not be answered: " + error.message;
+      failedIn = turn.conversationId;
+      loadHistory();
+      return;
+    }
+    if (refusedProduct) {
+      // The product was deleted after this page listed it. The server
+      // refused before saving anything -- no message, no file -- so the two
+      // turns come off the page and the words go back in the box, said
+      // beside the box rather than as a reply. An attachment stays attached.
+      if (turn.you) turn.you.remove();
+      if (turn.shown) turn.shown.remove();
+      $("empty").hidden = Boolean($("thread").querySelector(".turn"));
+      $("prompt").value = sent.message;
+      grow();
+    }
+    // As it was before the turn took it out of the box.
+    if (sent.file && !attached) attach(sent.file);
+    if (error.code === "product_not_found" && sent.startingFor) {
+      // A new chat: the chip goes back to nothing chosen, not to General,
+      // whether or not the list of products can be read again (plan 029, 2).
+      const name = (teamProducts.find((p) => p.id === sent.startingFor) || {}).name || "That product";
+      teamProducts = teamProducts.filter((p) => p.id !== sent.startingFor);
+      await loadProducts();
+      if (chosenProduct() === sent.startingFor) showProduct("");
+      noteByTheBox(name + " has been deleted, so the chat could not start for it. Nothing was sent. " +
+        "Choose another product, or General.");
+      return;
+    }
+    if (error.code === "product_deleted") {
+      // An open chat whose product was deleted since: read-only from here on,
+      // its answers drawn again without their controls.
+      await loadProducts();
+      setReadOnly(true, chosenProduct());
+      if (batchId && answersAvailable) reloadAnswers();
+      return;
+    }
+    if (turn.shown && turn.shown.isConnected) {
+      turn.shown.classList.remove("working");
+      turn.shown.querySelector(".bubble").textContent = "That did not work: " + error.message;
+    } else {
+      addTurn("assistant", "That did not work: " + error.message);
+    }
+    loadHistory();
   }
 
   /* `calm` for something that is so, rather than something that went wrong. */
@@ -1343,6 +1442,8 @@
 
   function refreshAnswersToggle() {
     $("toggleAnswers").hidden = !answersAvailable || !$("answersPane").hidden;
+    // Called whenever the panel opens or closes: the list makes room for it, or takes its width back.
+    reclampSide();
   }
   /* --- the answers panel's width -------------------------------------------- */
 
@@ -1407,6 +1508,83 @@
     event.preventDefault();
     const now = $("answersPane").getBoundingClientRect().width;
     setPaneWidth(now + (event.key === "ArrowLeft" ? 40 : -40), true);
+  });
+
+  /* --- the conversation list's width (plan 031) -----------------------------
+     The same handle as the answers panel's, on the list's other edge. Its
+     edge is the inline end, so in right-to-left it is dragged leftwards to
+     widen. Bounded so the conversation keeps the room its box needs beside
+     the answers; when the answers open and that room goes, the list gives way
+     for now and takes its width back when they close. */
+  const SIDE_KEY = "assessment-history-width";
+  const SIDE_DEFAULT = 250;
+  const SIDE_MIN = 200;
+  const SIDE_MAX = 480;
+  let sideWanted = 0;  // the width the person chose, or 0 for the default
+
+  function sideBounds() {
+    const pane = $("answersPane");
+    const docked = !pane.hidden && getComputedStyle(pane).position !== "fixed";
+    const room = layout.getBoundingClientRect().width - (docked ? pane.getBoundingClientRect().width : 0) - THREAD_MIN;
+    return { min: SIDE_MIN, max: Math.max(SIDE_MIN, Math.min(SIDE_MAX, room)) };
+  }
+
+  function setSideWidth(width, remember) {
+    const { min, max } = sideBounds();
+    const clamped = Math.round(Math.min(max, Math.max(min, width)));
+    layout.style.setProperty("--side-width", clamped + "px");
+    $("sideResizer").setAttribute("aria-valuenow", String(clamped));
+    if (remember) { try { localStorage.setItem(SIDE_KEY, String(clamped)); } catch (e) { /* private mode */ } }
+    return clamped;
+  }
+
+  function resetSide() {
+    sideWanted = 0;
+    layout.style.removeProperty("--side-width");
+    $("sideResizer").setAttribute("aria-valuenow", String(SIDE_DEFAULT));
+    try { localStorage.removeItem(SIDE_KEY); } catch (e) { /* private mode */ }
+  }
+
+  function reclampSide() {
+    if (sideWanted) setSideWidth(sideWanted, false);
+  }
+  window.addEventListener("resize", reclampSide);
+
+  (function rememberedSideWidth() {
+    let stored = 0;
+    try { stored = Number(localStorage.getItem(SIDE_KEY)) || 0; } catch (e) { /* private mode */ }
+    if (stored) { sideWanted = stored; setSideWidth(stored, false); }
+  })();
+
+  const rightToLeft = () => getComputedStyle(layout).direction === "rtl";
+
+  $("sideResizer").addEventListener("pointerdown", (event) => {
+    const handle = $("sideResizer");
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    document.body.classList.add("resizing-side");
+    const box = $("history").getBoundingClientRect();
+    const rtl = rightToLeft();
+    const widthAt = (x) => (rtl ? box.right - x : x - box.left);
+    const move = (e) => { sideWanted = setSideWidth(widthAt(e.clientX), false); };
+    const up = (e) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      document.body.classList.remove("resizing-side");
+      sideWanted = setSideWidth(widthAt(e.clientX), true);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  });
+  $("sideResizer").addEventListener("dblclick", resetSide);
+  $("sideResizer").addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const wider = event.key === (rightToLeft() ? "ArrowLeft" : "ArrowRight");
+    const now = $("history").getBoundingClientRect().width;
+    sideWanted = setSideWidth(now + (wider ? 20 : -20), true);
   });
 
   function showAnswersPane(show) {
@@ -1663,10 +1841,16 @@
 
   /* --- history, as a panel -------------------------------------------------- */
 
+  /* Drawn from the last list asked for: it is asked for often while a turn
+     runs, and an earlier answer arriving late showed a finished turn as working. */
+  let historyAsked = 0;
   async function loadHistory() {
     const host = $("historyList");
+    const asked = ++historyAsked;
     try {
       const data = await request("/api/chat");
+      if (asked !== historyAsked) return;
+      learn(data.conversations || []);
       // "Last used" comes from this person's own chats, most recently used
       // first: nothing new is stored, and it follows them to another computer.
       historyChoices = (data.conversations || []).map((c) => Cards.choiceOf(c.product_id));
@@ -1724,6 +1908,24 @@
         }
         const product = Cards.productBadge(c.product_id);
         if (product) what.append(product);
+        // Still working on a message, or answered while another was on screen (plan 031).
+        if (runningIn(c.id)) {
+          item.classList.add("running");
+          const working = document.createElement("span");
+          working.className = "working-now";
+          const dots = document.createElement("span");
+          dots.className = "dots";
+          dots.setAttribute("aria-hidden", "true");
+          dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+          working.append(dots, "Working…");
+          what.append(working);
+        } else if (unread.has(c.id)) {
+          item.classList.add("unread");
+          const fresh = document.createElement("span");
+          fresh.className = "new-reply";
+          fresh.textContent = "New reply";
+          what.append(fresh);
+        }
         row.append(what);
         row.onclick = () => open(c.id);
 
@@ -1759,7 +1961,7 @@
       });
       if (back) putKeyboardBack(host, back);
     } catch (error) {
-      host.textContent = error.message;
+      if (asked === historyAsked) host.textContent = error.message;
     }
   }
 
@@ -1814,36 +2016,73 @@
     return !stamp || isNaN(at) ? "" : "Last used " + at.toLocaleString();
   }
 
+  /* Only the last conversation asked for is drawn: two clicks in a row, or a
+     click then New conversation, drew whichever answer came back last. */
   async function open(id) {
+    const mine = ++opening;
     try {
       const data = await request("/api/chat/" + id);
-      conversationId = data.id;
-      batchId = data.batch_id || "";
-      // A deleted product's chat is kept to read (plan 027): named, even when
-      // the page listed the products before the deletion.
-      if (data.read_only && !(Cards.product(data.product_id) || {}).deleted) await loadProducts();
-      setReadOnly(Boolean(data.read_only), data.product_id);
-      // Offered as "Last used" for the next new chat, never chosen for it (plan 029, 2).
-      if (!data.read_only) pageLastUsed = Cards.choiceOf(data.product_id);
-      showProduct(Cards.choiceOf(data.product_id));
-      refresh();
-      $("thread").replaceChildren($("empty"));
-      $("empty").hidden = (data.messages || []).length > 0;
-      // With the steps and sources the turn was drawn with the first time: a
-      // reply reopened without its evidence is a claim with nothing behind it.
-      (data.messages || []).forEach((m) => addTurn(m.role === "you" ? "you" : "assistant", m.text, m));
-      answersPaneClosed = false;  // a different conversation, a fresh default
-      if (data.answers) showAnswers(data.answers);
-      else noAnswersToShow();
-      loadHistory();
+      if (mine === opening) await draw(data, mine);
     } catch (error) {
-      addTurn("assistant", "That conversation could not be opened: " + error.message);
+      if (mine === opening) addTurn("assistant", "That conversation could not be opened: " + error.message);
     }
   }
 
+  async function draw(data, mine) {
+    // A deleted product's chat is kept to read (plan 027): named, even when
+    // the page listed the products before the deletion.
+    if (data.read_only && !(Cards.product(data.product_id) || {}).deleted) await loadProducts();
+    if (mine !== opening) return;
+    conversationId = data.id;
+    screenRun = "";
+    unread.delete(data.id);
+    if (failedIn === data.id) { $("historyStatus").textContent = ""; failedIn = null; }
+    batchId = data.batch_id || "";
+    setReadOnly(Boolean(data.read_only), data.product_id);
+    // Offered as "Last used" for the next new chat, never chosen for it (plan 029, 2).
+    if (!data.read_only) pageLastUsed = Cards.choiceOf(data.product_id);
+    showProduct(Cards.choiceOf(data.product_id));
+    $("thread").replaceChildren($("empty"));
+    // With the steps and sources the turn was drawn with the first time: a
+    // reply reopened without its evidence is a claim with nothing behind it.
+    (data.messages || []).forEach((m) => addTurn(m.role === "you" ? "you" : "assistant", m.text, m));
+    // A turn still running here is not stored until it ends: drawn from what
+    // the page or the server holds of it, still working (plan 031).
+    const turn = pendingIn(data);
+    if (turn) drawPending(turn);
+    $("empty").hidden = (data.messages || []).length > 0 || Boolean(turn);
+    answersPaneClosed = false;  // a different conversation, a fresh default
+    if (data.answers) showAnswers(data.answers);
+    else noAnswersToShow();
+    refresh();
+    loadHistory();
+  }
+
+  /* The turn to draw at the foot of an opened conversation, if one is running.
+     The page's own, if it sent one; else the one the server reports. A turn
+     the page sent that the server does not hold has either not reached it yet
+     or ended a moment ago: drawn, and its conversation read again when the
+     reply comes, so it is drawn neither twice nor not at all. */
+  function pendingIn(data) {
+    const server = data.running && !endedRuns.has(data.running.run_id) ? data.running : null;
+    let held = runningIn(data.id);
+    const same = Boolean(held && server && server.run_id === held.runId);
+    if (held && !held.held && !same) {
+      endTurn(held, true);  // reported by the server, and over now
+      held = null;
+    }
+    if (held) {
+      held.redraw = !same;
+      return held;
+    }
+    return server ? remember(data.id, server) : null;
+  }
+
   function newConversation() {
-    const fromAChat = Boolean(conversationId);
+    const fromAChat = Boolean(conversationId || screenRun);
+    opening++;  // an open on its way no longer decides what is on screen
     conversationId = "";
+    screenRun = "";
     batchId = "";
     setReadOnly(false);
     /* The chip can be changed again, and chooses nothing: the chat that was
@@ -1867,6 +2106,7 @@
     const side = $("history");
     side.hidden = !side.hidden;
     $("toggleHistory").classList.toggle("on", !side.hidden);
+    if (!side.hidden) reclampSide();
     reclampPane();
   };
 
@@ -1883,9 +2123,12 @@
   function refresh() {
     // A new chat's first message waits for a product (plan 029, 2); a file can
     // be attached before, because nothing reaches the server until Send.
-    $("send").disabled = busy || readOnly || !($("prompt").value.trim() || attached) ||
+    // Waiting only while the conversation on screen is working: another one
+    // can be used meanwhile, and a new one started (plan 031).
+    const working = Boolean(turnOnScreen());
+    $("send").disabled = working || readOnly || !($("prompt").value.trim() || attached) ||
       (!conversationId && !productChosen());
-    $("prompt").disabled = busy || readOnly;
+    $("prompt").disabled = working || readOnly;
     paintProductNeeded();
   }
   function detach() {
@@ -1920,143 +2163,6 @@
     });
   });
 
-  /* --- the knowledge base, behind a drawer ---------------------------------- */
-
-  function openDrawer(open) {
-    $("kb").classList.toggle("open", open);
-    $("scrim").classList.toggle("open", open);
-    $("kb").setAttribute("aria-hidden", String(!open));
-    if (open) { loadKbScopes(); loadSources(); }
-  }
-  $("openKb").onclick = () => openDrawer(true);
-  $("closeKb").onclick = () => openDrawer(false);
-  $("scrim").onclick = () => openDrawer(false);
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") openDrawer(false);
-  });
-
-  // --- which knowledge base: shared, or a product's (plan 021) ---------------
-  function kbScope() { return $("kbScope").value; }
-  function kbScopeQuery(prefix) {
-    return kbScope() ? prefix + "product=" + encodeURIComponent(kbScope()) : "";
-  }
-  async function loadKbScopes() {
-    try {
-      const listed = await request("/api/products");
-      const select = $("kbScope");
-      const chosen = select.value;
-      select.replaceChildren(new Option("Shared, for every product", ""));
-      listed.products.forEach((product) => select.append(new Option(product.name, product.id)));
-      if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
-    } catch (error) { /* no products: the shared knowledge base is all there is */ }
-    paintManageLink();
-  }
-  /* The Knowledge base page, opened on the knowledge base the drawer shows (plan 030). */
-  function paintManageLink() {
-    $("kbManage").setAttribute("href", "knowledge" + kbScopeQuery("?"));
-  }
-  $("kbScope").onchange = () => { paintManageLink(); loadSources(); };
-
-  async function loadSources() {
-    const host = $("sources");
-    try {
-      const data = await request("/api/knowledge" + kbScopeQuery("?"));
-      host.replaceChildren();
-      if (!data.sources.length) {
-        host.className = "status";
-        host.textContent = "Nothing indexed yet.";
-        return;
-      }
-      host.className = "";
-      data.sources.forEach((source) => {
-        const row = document.createElement("div");
-        row.className = "source";
-        const name = document.createElement("span");
-        name.className = "name";
-        name.textContent = source.name;
-        name.title = source.name;
-        const count = document.createElement("span");
-        count.className = "count";
-        count.textContent = source.chunks + " chunk(s)";
-        const facts = document.createElement("div");
-        facts.className = "facts";
-        const mark = Cards.authorityBadge(source.authority);
-        if (mark) facts.append(mark);
-        facts.append(count);
-        const what = document.createElement("div");
-        what.className = "what";
-        what.append(name, facts);
-        // Beside remove, as it is in the workbench: a document is checked
-        // before it is taken out of the corpus, not after.
-        const view = document.createElement("button");
-        view.className = "ghost";
-        view.textContent = "view";
-        view.onclick = () => showDocument(source.name);
-        const remove = document.createElement("button");
-        remove.className = "ghost";
-        remove.textContent = "remove";
-        remove.onclick = async () => {
-          // The Workbench's question, word for word (plan 029): a shared document is used by
-          // every product; a product's goes with its file (TD-039) unless something else uses it.
-          const scope = $("kbScope").selectedOptions[0];
-          if (!confirm(Cards.removalQuestion(source.name, kbScope() && scope ? scope.textContent : ""))) return;
-          try {
-            const removed = await request(
-              "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"), { method: "DELETE" });
-            const left = (removed && removed.files_left) || [];
-            $("kbStatus").textContent = "Removed " + source.name + "." + (left.length
-              ? " " + left.length + " file(s) could not be removed from the server (" + left.join(", ") + "); see the log."
-              : "");
-            $("kbStatus").className = "status " + (left.length ? "error" : "ok");
-          } catch (error) {
-            $("kbStatus").textContent = error.message;
-            $("kbStatus").className = "status error";
-          }
-          loadSources();
-        };
-        row.append(what, view, remove);
-        host.append(row);
-      });
-    } catch (error) {
-      host.textContent = error.message;
-    }
-  }
-
-  [["guidelinesInput", "/api/knowledge/guidelines"]].forEach(([id, url]) => {
-    $(id).addEventListener("change", async (event) => {
-      const files = [...event.target.files];
-      if (!files.length) return;
-      const status = $("kbStatus");
-      status.textContent = "Indexing " + files.length + " file(s)…";
-      status.className = "status busy";
-      const body = new FormData();
-      files.forEach((file) => body.append("files", file));
-      // Only the guidelines upload asks: a previously answered assessment is
-      // ours by definition.
-      const whose = document.querySelector('input[name="kbAuthority"]:checked');
-      if (whose && url.endsWith("/guidelines")) body.append("authority", whose.value);
-      if (url.endsWith("/guidelines") && kbScope()) body.append("product", kbScope());
-      try {
-        const data = await request(url, { method: "POST", body });
-        // The route returns the list itself. Reading `.results` off it found
-        // nothing, so every upload reported "Indexed 0 of 1" however it went.
-        const results = Array.isArray(data) ? data : (data.results || []);
-        const added = results.filter((r) => !r.error && !r.duplicate_of).length;
-        const problems = results.filter((r) => r.error || r.warning || r.duplicate_of)
-          .map((r) => r.source_name + ": " + (r.error || r.warning || "identical to " + r.duplicate_of));
-        status.textContent = "Indexed " + added + " of " + files.length + "." +
-          (problems.length ? " " + problems.join(" ") : "");
-        status.className = "status " + (results.some((r) => r.error) ? "error" : "ok");
-        loadSources();
-      } catch (error) {
-        status.textContent = error.message;
-        status.className = "status error";
-      } finally {
-        event.target.value = "";
-      }
-    });
-  });
-
   /* --- which product: General, or one of the team's (plan 024, plan 029) --- */
 
   /* The chip holds a choice (plan 029, 2): "" is nothing chosen yet, and the
@@ -2074,7 +2180,7 @@
     const product = teamProducts.find((p) => p.id === choice);
     const gone = !product && choice !== Cards.GENERAL && Cards.product(choice);
     const chip = $("productChip");
-    const fixed = Boolean(conversationId) || startingChat;
+    const fixed = Boolean(conversationId || screenRun);
     $("productPick").disabled = fixed;
     chip.classList.toggle("unchosen", !choice);
     if (product && product.color) chip.style.setProperty("--product", product.color);
@@ -2111,7 +2217,7 @@
      a live region read out again on each key would drown the typing. */
   function paintProductNeeded(attempted) {
     const row = $("productNeeded");
-    const show = !conversationId && !readOnly && !startingChat && !productChosen();
+    const show = !conversationId && !readOnly && !screenRun && !productChosen();
     row.hidden = !show;
     /* The chip is described by the line only while it shows: a hidden element
        named by aria-describedby is still read, and the chip said "Choose a
@@ -2193,7 +2299,7 @@
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !$("gate").hidden) return;
     const gone = await loadProducts();
-    if (conversationId && !readOnly && !busy && (Cards.product(chosenProduct()) || {}).deleted) open(conversationId);
+    if (conversationId && !readOnly && !turnOnScreen() && (Cards.product(chosenProduct()) || {}).deleted) open(conversationId);
     else if (gone) noteByTheBox(gone + " has been deleted; choose a product again.");
   });
 

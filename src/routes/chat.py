@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
-from src import conversations, forms, products, service, store
+from src import chat_running, conversations, forms, products, service, store
 from src.agents import assistant
 from src.conversations import Conversation
 from src.errors import NotFound, Unavailable
@@ -89,14 +89,13 @@ def _turn_response(turn: assistant.Turn, conversation: Conversation, user: User)
 
 @router.get("/api/chat")
 def list_conversations(user: User = Depends(current_user), limit: int = 30) -> dict[str, Any]:
-    """The caller's own conversations, most recently used first, each with its product."""
-    return {
-        "conversations": conversations.recent(
-            user.team_id,
-            actor_email=user.email,
-            limit=limit,
-        )
-    }
+    """The caller's own conversations, most recently used first, each with its product.
+
+    And with the turn running in it, or null (plan 031): the page marks the row,
+    and finds a new chat's id by the run id it sent the first message with.
+    """
+    listed = conversations.recent(user.team_id, actor_email=user.email, limit=limit)
+    return {"conversations": [{**row, "running": chat_running.running(row["id"])} for row in listed]}
 
 
 @router.post("/api/chat")
@@ -105,7 +104,8 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
 
     Long: a message can mean "answer 183 questions", which is minutes of work.
     The conversation is saved by the assistant itself before this returns, so a
-    request that times out at a proxy has still recorded what it did.
+    request that times out at a proxy has still recorded what it did. Meanwhile
+    it is held (`chat_running`): 409 `conversation_busy` for another message.
     """
     if not assistant.configured():
         raise Unavailable("No model is configured for the assistant.", code="assistant_unconfigured")
@@ -114,12 +114,13 @@ async def say_to_assistant(request: SayRequest, user: User = Depends(current_use
         if request.conversation_id
         else assistant.start(user, request.message, request.product)
     )
-    turn = await assistant.say(
-        user,
-        conversation,
-        request.message,
-        run_id=request.run_id,
-    )
+    with chat_running.hold(conversation.id, run_id=request.run_id, message=assistant.spoken(request.message)):
+        turn = await assistant.say(
+            user,
+            conversation,
+            request.message,
+            run_id=request.run_id,
+        )
     return _turn_response(turn, conversation, user)
 
 
@@ -147,19 +148,19 @@ async def say_with_a_file(
             f"{Path(name).suffix or 'That file'} is not a questionnaire this can read. "
             f"Supported: {', '.join(forms.SUPPORTED)}."
         )
-    # Checked before the file is kept: the conversation's, or a new one's product.
+    # Checked before the file is kept: the conversation's, or a new one's product,
+    # and that no turn is running in it (plan 031).
     existing = _open(_conversation(conversation_id, user), user) if conversation_id else None
     if existing is None:
         products.chosen(user.team_id, product)
+    else:
+        chat_running.refuse(existing.id)
     path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
     conversation = existing or assistant.start(user, message or f"Read {name}", product)
-    turn = await assistant.say(
-        user,
-        conversation,
-        message or f"Read {name} and tell me what is in it.",
-        upload=path,
-        run_id=run_id,
-    )
+    said = message or f"Read {name} and tell me what is in it."
+    # What the transcript will show once the turn is saved: the words, and the file as it was kept.
+    with chat_running.hold(conversation.id, run_id=run_id, message=assistant.spoken(said), file=path.name):
+        turn = await assistant.say(user, conversation, said, upload=path, run_id=run_id)
     return _turn_response(turn, conversation, user)
 
 
@@ -222,6 +223,8 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
         "read_only": conversation.product_id in products.deleted(user.team_id),
         "messages": transcript,
         "answers": assistant.answers_for(user, conversation),
+        # The turn still running in it, or null: its message is not in the transcript until it ends (plan 031).
+        "running": chat_running.running(conversation.id),
     }
 
 
@@ -242,7 +245,11 @@ def choose_chat_product(
 
 @router.delete("/api/chat/{conversation_id}")
 def forget_conversation(conversation_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
-    """Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay."""
+    """Delete one of the caller's conversations, a deleted product's too. Its questionnaire and answers stay.
+
+    Not while a turn is running in it: 409 `conversation_busy` (plan 031).
+    """
     _conversation(conversation_id, user)
+    chat_running.refuse(conversation_id)
     conversations.delete(conversation_id, actor_email=user.email)
     return {"deleted": conversation_id}
