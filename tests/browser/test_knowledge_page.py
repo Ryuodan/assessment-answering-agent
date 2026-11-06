@@ -7,7 +7,8 @@ them (`test_knowledge_scope.py`). These hold what the move added: the
 Workbench opens on the questionnaire and says in one line what the answers
 are drawn from, every header links the page, the page works for a lead and a
 member as before, and reading -- a citation's document, the Search drawer --
-still works on the Workbench.
+still works on the Workbench. Since plan 031 the page chooses no knowledge
+base for the person, and the document library is gone ("view" opens what it did).
 """
 
 from __future__ import annotations
@@ -120,9 +121,10 @@ def test_the_workbench_says_what_the_answers_draw_on_and_links_the_page(page: Pa
     page.select_option("#formProduct", beta.id)
     expect(said).to_have_text("Answers from 3 shared documents and none for Beta")
 
+    # General is the shared knowledge base, named: the page chooses nothing for the person (plan 031).
     choose_general(page)
     expect(said).to_have_text("Answers from 3 shared documents")
-    expect(manage).to_have_attribute("href", "knowledge")
+    expect(manage).to_have_attribute("href", "knowledge?product=general")
 
     # "Manage" opens the page on the knowledge base the line counted.
     page.select_option("#formProduct", availo.id)
@@ -132,6 +134,29 @@ def test_the_workbench_says_what_the_answers_draw_on_and_links_the_page(page: Pa
     expect(page.locator("#kbScope")).to_have_value(availo.id)
     expect(page.locator("#kbSources")).to_contain_text("Availo standard.pdf")
     expect(page.locator("#kbSources")).not_to_contain_text("Access.pdf")
+
+
+def test_manage_opens_the_knowledge_base_chosen_on_the_workbench_and_none_when_none_is(page: Page, stores) -> None:
+    """Plan 031: "Manage" with nothing chosen opened the page on the shared knowledge base,
+    the one the page then added documents to; with General it could not say "shared"."""
+    holding("", chunk("Access.pdf"))
+    manage, scope, sources = page.locator("#kbManage"), page.locator("#kbScope"), page.locator("#kbSources")
+
+    page.goto("/workbench")
+    expect(page.locator("#kbLineText")).to_have_text("Answers from 1 shared document")
+    expect(manage).to_have_attribute("href", "knowledge")
+    manage.click()
+    page.wait_for_url("**/knowledge")
+    expect(scope).to_have_value("")
+    expect(page.locator("#kbSummary")).to_contain_text("Choose a knowledge base")
+    expect(sources.locator("li")).to_have_count(0)
+
+    page.goto("/workbench")
+    choose_general(page)
+    manage.click()
+    page.wait_for_url("**/knowledge?product=general")
+    expect(scope).to_have_value("general")
+    expect(sources).to_contain_text("Access.pdf")
 
 
 def test_one_shared_document_and_an_empty_knowledge_base_read_as_such(page: Page, stores) -> None:
@@ -172,6 +197,7 @@ def test_a_lead_and_a_member_each_add_and_remove_documents(page: Page, stores, t
 
     sign_in(page, who, "/knowledge")
     expect(page.locator("#whoamiEmail")).to_have_text(who)
+    page.select_option("#kbScope", "general")  # chosen, never assumed (plan 031)
     page.check('input[name="guidelineAuthority"][value="external"]')
     page.set_input_files(
         "#guidelinesInput", files=[{"name": "PDPL.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4"}]
@@ -210,9 +236,10 @@ def test_the_address_names_the_knowledge_base_the_page_shows(page: Page, stores)
     expect(sources).to_contain_text("Availo policy.pdf")
     expect(sources).not_to_contain_text("Shared policy.pdf")
 
-    page.select_option("#kbScope", "")
+    # The shared knowledge base, chosen, is in the address too (plan 031).
+    page.select_option("#kbScope", "general")
     expect(sources).to_contain_text("Shared policy.pdf")
-    assert page.url.endswith("/knowledge"), page.url
+    assert page.url.endswith("/knowledge?product=general"), page.url
 
     page.select_option("#kbScope", availo.id)
     expect(sources).to_contain_text("Availo policy.pdf")
@@ -221,14 +248,25 @@ def test_the_address_names_the_knowledge_base_the_page_shows(page: Page, stores)
     expect(page.locator("#kbScope")).to_have_value(availo.id)
     expect(sources).to_contain_text("Availo policy.pdf")
 
-    # A product that is not the team's (deleted, or a link from elsewhere): the shared one.
-    page.goto("/knowledge?product=not-a-product")
-    expect(page.locator("#kbScope")).to_have_value("")
+    page.goto("/knowledge?product=general")
+    expect(page.locator("#kbScope")).to_have_value("general")
+    expect(page.locator("#kbScopeHint")).to_have_text("Used for every questionnaire.")
     expect(sources).to_contain_text("Shared policy.pdf")
-    assert page.url.endswith("/knowledge"), page.url
+    expect(sources).not_to_contain_text("Availo policy.pdf")
+
+    # No choice in the address, or a product that is not the team's (deleted, or a link
+    # from elsewhere): nothing chosen, nothing listed, and the address says no choice.
+    for address in ("/knowledge", "/knowledge?product=not-a-product"):
+        page.goto(address)
+        expect(page.locator("#kbScope")).to_have_value("")
+        expect(page.locator("#kbSummary")).to_contain_text("Choose a knowledge base")
+        expect(sources.locator("li")).to_have_count(0)
+        assert page.url.endswith("/knowledge"), page.url
 
 
 def test_the_page_opens_a_document_and_the_text_read_from_it(page: Page, stores, monkeypatch) -> None:
+    """ "Your documents", the library of uploaded files, is gone (plan 031: the user found it
+    of no use). What it offered, the original and the text read out of it, "view" opens."""
     service.save_upload("Access policy.pdf", b"%PDF-1.4 access", TEAM)
     holding("", chunk("Access policy.pdf"))
 
@@ -237,21 +275,34 @@ def test_the_page_opens_a_document_and_the_text_read_from_it(page: Page, stores,
 
     monkeypatch.setattr("src.service.extracted_document_text", extracted)
 
-    page.goto("/knowledge")
+    page.goto("/knowledge?product=general")
+    for gone in ("details.library", "#uploadedDocuments", "#uploadedDocumentsSummary"):
+        expect(page.locator(gone), f"{gone} is still on the page").to_have_count(0)
+    expect(page.get_by_text("Your documents")).to_have_count(0)
+
     page.locator("#kbSources li", has_text="Access policy.pdf").get_by_role("button", name="view").click()
     viewer = page.locator("#documentViewer")
     expect(viewer).to_be_visible()
     expect(page.locator("#viewerTitle")).to_have_text("Access policy")
+    expect(page.locator("#viewerMeta")).to_contain_text("Access policy.pdf")
+
+    # The original: previewed, and offered to download.
+    original = "/api/documents/uploaded/uploaded/Access%20policy.pdf/"
+    expect(page.locator("#originalTab")).to_have_text("Document preview")
+    expect(page.locator("#originalPanel")).to_be_visible()
+    expect(page.locator("#documentFrame")).to_have_attribute("src", original + "preview")
+    expect(page.locator("#documentDownload")).to_have_attribute("href", original + "file")
+    assert page.request.get(original + "file").body() == b"%PDF-1.4 access"
+
+    # The text the agent read out of it.
     page.click("#textTab")
+    expect(page.locator("#textPanel")).to_be_visible()
+    expect(page.locator("#originalPanel")).to_be_hidden()
     expect(page.locator("#extractedText")).to_have_text(POLICY_TEXT)
+    page.click("#originalTab")
+    expect(page.locator("#originalPanel")).to_be_visible()
     page.click("#viewerClose")
     expect(viewer).to_be_hidden()
-
-    page.locator("details.library > summary").click()
-    card = page.locator("#uploadedDocuments .document-card", has_text="Access policy.pdf")
-    card.get_by_role("button", name="View document").click()
-    expect(viewer).to_be_visible()
-    expect(page.locator("#viewerMeta")).to_contain_text("Access policy.pdf")
 
 
 # --- reading stays on the Workbench ---------------------------------------------
@@ -323,34 +374,6 @@ def test_the_workbench_still_searches_the_knowledge_base(page: Page, stores, mon
     hit.get_by_role("button", name="open document").click()
     expect(page.locator("#documentViewer")).to_be_visible()
     expect(page.locator("#viewerTitle")).to_have_text("Access policy")
-
-
-# --- the chat's drawer stays, and points at the page ---------------------------------
-
-
-def test_the_chats_drawer_links_the_page_for_the_knowledge_base_it_shows(page: Page, stores) -> None:
-    availo = products.add(None, TEAM, "Availo")
-    holding(availo.id, chunk("Availo policy.pdf"))
-
-    page.goto("/")
-    # The chat's bar had two controls both named "Knowledge base", the drawer and the page,
-    # side by side (the review of plan 030). The drawer is "Documents" now.
-    drawer_button = page.locator("#openKb")
-    page_link = page.locator(".topbar a.ghost", has_text="Knowledge base")
-    expect(drawer_button).to_have_text("Documents")
-    assert drawer_button.get_attribute("title") != page_link.get_attribute("title")
-
-    drawer_button.click()
-    link = page.locator("#kb").get_by_role("link", name="Manage on the Knowledge base page")
-    expect(link).to_have_attribute("href", "knowledge")
-    expect(page.locator("#kbScope option", has_text="Availo")).to_have_count(1)
-    page.select_option("#kbScope", availo.id)
-    expect(link).to_have_attribute("href", f"knowledge?product={availo.id}")
-
-    link.click()
-    page.wait_for_url(f"**/knowledge?product={availo.id}")
-    expect(page.locator("#kbScope")).to_have_value(availo.id)
-    expect(page.locator("#kbSources")).to_contain_text("Availo policy.pdf")
 
 
 def test_documents_can_be_added_from_the_keyboard(page: Page) -> None:

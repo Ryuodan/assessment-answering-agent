@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src import knowledge
+from src import knowledge, search
 from src.api import app
 from src.models import Evidence, SourceType
 
@@ -190,3 +190,61 @@ def test_a_slow_embedding_host_falls_back_to_text(monkeypatch):
 
 def test_a_healthy_search_is_not_marked_degraded(store):
     assert get(q="retention", mode="hybrid").json()["degraded"] is False
+
+
+# --- a product's documents and the shared policies (plan 031) -------------------------
+
+
+class Passages(FakeStore):
+    """A knowledge base whose one file the vectors find `n` times, best first, `k` at most.
+
+    As Chroma does: the nearest `k` come back however far they are, so a
+    knowledge base with `k` passages fills its whole list for any query.
+    """
+
+    def __init__(self, name: str, n: int):
+        super().__init__(dense=[hit(name, chunk, 0.9 - chunk / 100) for chunk in range(n)])
+        self.name = name
+
+    async def search(self, query, source_type, k, *, expand=True):
+        return (self.dense if source_type is SourceType.GUIDELINE else [])[:k]
+
+    def documents_indexed(self):
+        return [self.name]
+
+
+def knowledge_bases(monkeypatch, shared: int, own: int) -> None:
+    stores = {"": Passages("Shared policy.pdf", shared), "availo": Passages("Availo policy.pdf", own)}
+    monkeypatch.setattr(knowledge, "get_store", lambda team_id=None, *, product_id="": stores[product_id])
+
+
+async def found(limit: int, **scope) -> list[str]:
+    body = await search.search_knowledge("backups", mode="semantic", limit=limit, **scope)
+    return [r["source_name"] for r in body["results"]]
+
+
+@pytest.mark.asyncio
+async def test_a_products_search_keeps_the_shared_policies_in_it(monkeypatch):
+    """The product's hits came first and the list was cut at the limit after them, so a
+    product with as many passages as the limit filled it alone: searching "Availo and
+    shared policies" never showed a shared policy, and nor did the assistant's search in
+    an Availo chat. The limit is shared between the two now, the product's first."""
+    knowledge_bases(monkeypatch, shared=30, own=30)
+
+    assert await found(20, product_id="availo") == ["Availo policy.pdf"] * 10 + ["Shared policy.pdf"] * 10
+    assert await found(8, product_id="availo") == ["Availo policy.pdf"] * 4 + ["Shared policy.pdf"] * 4
+
+
+@pytest.mark.asyncio
+async def test_what_one_knowledge_base_leaves_the_other_takes(monkeypatch):
+    knowledge_bases(monkeypatch, shared=30, own=3)
+    assert await found(20, product_id="availo") == ["Availo policy.pdf"] * 3 + ["Shared policy.pdf"] * 17
+
+    knowledge_bases(monkeypatch, shared=2, own=30)
+    assert await found(20, product_id="availo") == ["Availo policy.pdf"] * 18 + ["Shared policy.pdf"] * 2
+
+
+@pytest.mark.asyncio
+async def test_the_shared_policies_alone_are_searched_as_before(monkeypatch):
+    knowledge_bases(monkeypatch, shared=30, own=30)
+    assert await found(20) == ["Shared policy.pdf"] * 20

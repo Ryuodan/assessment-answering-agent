@@ -1,7 +1,9 @@
 """The knowledge-base selector in a real browser (plan 021).
 
 On the Workbench's first step until plan 030 moved it, unchanged, to the
-Knowledge base page; these tests moved with it.
+Knowledge base page; these tests moved with it. Since plan 031 it starts with
+nothing chosen, as answering does (D-022): a document is added to the shared
+knowledge base, or a product's, only once the person has said which.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from tests.conftest import FakeVectorStore, bare_store
 pytestmark = pytest.mark.browser
 
 TEAM = settings.default_team
+PDF = {"name": "standard.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4"}
 
 
 @pytest.fixture
@@ -40,20 +43,67 @@ def stores(monkeypatch):
     return made
 
 
-def test_the_selector_decides_which_knowledge_base_is_listed_and_uploaded_to(
-    page: Page, stores, monkeypatch, tmp_path
-) -> None:
-    availo = products.add(None, TEAM, "Availo")
-    uploads: list[dict] = []
+@pytest.fixture
+def uploads(monkeypatch) -> list[dict]:
+    """The scope each upload was indexed into: {} for the shared knowledge base."""
+    scopes: list[dict] = []
 
     async def indexed(path, source_type, authority="ours", team_id=None, **scope):
-        uploads.append(scope)
+        scopes.append(scope)
         return IngestResult(source_name=path.name, source_type=source_type, chunks_indexed=2)
 
     monkeypatch.setattr("src.routes.knowledge.service.ingest", indexed)
+    return scopes
+
+
+def test_the_page_opens_with_no_knowledge_base_chosen_and_adds_nothing_until_one_is(
+    page: Page, stores, uploads, monkeypatch
+) -> None:
+    """Plan 031, the user's rule: "choosing which product it belongs to should be
+    mandatorily selected just as answering and not assumed to be general". The page
+    opened on "Shared, for every product", so a document added without touching the
+    selector went into every product's answers."""
+    listed: list[str] = []
+    real = service.knowledge_stats
+
+    def counted(team_id=None, *, product_id=""):
+        listed.append(product_id)
+        return real(team_id, product_id=product_id)
+
+    monkeypatch.setattr(service, "knowledge_stats", counted)
+    scope, button, why = page.locator("#kbScope"), page.locator("#guidelinesBtn"), page.locator("#guidelinesNeedsScope")
 
     page.goto("/knowledge")
+    expect(scope).to_have_value("")
+    prompt = scope.locator("option").first
+    expect(prompt).to_have_text("Choose a knowledge base…")
+    expect(prompt).to_be_disabled()
+    expect(page.locator("#kbSummary")).to_contain_text("Choose a knowledge base")
+    expect(page.locator("#kbSources li")).to_have_count(0)
+    expect(page.locator("#kbClear")).to_be_hidden()
+
+    page.set_input_files("#guidelinesInput", files=[PDF])
+    expect(page.locator("#guidelinesChosen")).to_have_text("standard.pdf")
+    expect(button).to_be_disabled()
+    expect(why).to_be_visible()
+    expect(why).to_contain_text("Choose the knowledge base")
+    assert listed == [], "the shared list was read with nothing chosen"
+
+    page.select_option("#kbScope", "general")
+    expect(button).to_be_enabled()
+    expect(why).to_be_hidden()
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+    expect(page.locator("#kbClear")).to_be_visible()
+    page.click("#guidelinesBtn")
+    expect(page.locator("#guidelinesStatus")).to_contain_text("Indexed 1/1")
+    assert uploads == [{}], "the shared knowledge base is sent as no product, as the server expects"
+    expect(button).to_be_disabled()  # its files went: nothing to index again
+
+
+def test_the_selector_decides_which_knowledge_base_is_listed_and_uploaded_to(page: Page, stores, uploads) -> None:
+    availo = products.add(None, TEAM, "Availo")
+
+    page.goto("/knowledge")
     expect(page.locator("#kbScope option", has_text="Availo")).to_have_count(1)
 
     page.select_option("#kbScope", availo.id)
@@ -61,24 +111,22 @@ def test_the_selector_decides_which_knowledge_base_is_listed_and_uploaded_to(
     expect(page.locator("#kbSources")).to_contain_text("Availo policy.pdf")
     expect(page.locator("#kbSources")).not_to_contain_text("Shared policy.pdf")
 
-    page.set_input_files(
-        "#guidelinesInput", files=[{"name": "standard.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4"}]
-    )
+    page.set_input_files("#guidelinesInput", files=[PDF])
     page.click("#guidelinesBtn")
     expect(page.locator("#guidelinesStatus")).to_contain_text("Indexed 1/1")
     assert uploads == [{"product_id": availo.id}]
-    # Kept in Availo's own folder, and badged with it in the document library (plan 027).
+    # Kept in Availo's own folder (plan 027).
     assert (settings.product_upload_dir(TEAM, availo.id) / "standard.pdf").is_file()
-    card = page.locator("#uploadedDocuments .document-card", has_text="standard.pdf")
-    expect(card.locator(".tag.product")).to_have_text("Availo")
 
-    page.select_option("#kbScope", "")
+    page.select_option("#kbScope", "general")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
+    page.set_input_files("#guidelinesInput", files=[PDF])
+    page.click("#guidelinesBtn")
+    expect(page.locator("#guidelinesStatus")).to_contain_text("Indexed 1/1")
+    assert uploads == [{"product_id": availo.id}, {}]
 
 
-def test_removing_and_clearing_a_products_documents_takes_their_files_and_their_library_cards(
-    page: Page, stores
-) -> None:
+def test_removing_and_clearing_a_products_documents_takes_their_files(page: Page, stores) -> None:
     """Through the confirm each asks first (plan 027), including a file from
     before products had folders of their own, which used to stay for good."""
     availo = products.add(None, TEAM, "Availo")
@@ -95,22 +143,20 @@ def test_removing_and_clearing_a_products_documents_takes_their_files_and_their_
 
     page.goto("/knowledge")
     page.select_option("#kbScope", availo.id)
-    sources, library = page.locator("#kbSources"), page.locator("#uploadedDocuments .document-card")
+    sources = page.locator("#kbSources")
     expect(sources).to_contain_text("Old policy.pdf")
-    expect(library.filter(has_text="Old policy.pdf")).to_have_count(1)
 
     page.once("dialog", accept)
     sources.locator("li", has_text="Old policy.pdf").get_by_role("button", name="remove").click()
     expect(page.locator("#kbStatus")).to_have_text("Removed Old policy.pdf.")
     assert "Its file is deleted too" in asked[0] and "unless the shared knowledge base" in asked[0]
     expect(sources).not_to_contain_text("Old policy.pdf")
-    expect(library.filter(has_text="Old policy.pdf")).to_have_count(0)  # the library was read again
     assert not old.exists()
 
     page.once("dialog", accept)
     page.click("#kbClear")
     expect(page.locator("#kbStatus")).to_have_text("Removed every policy document from Availo's knowledge base.")
-    expect(library.filter(has_text="Availo policy.pdf")).to_have_count(0)
+    expect(sources).not_to_contain_text("Availo policy.pdf")
     assert not own.exists()
 
 
@@ -130,6 +176,7 @@ def test_removing_a_shared_document_asks_first_and_names_the_impact(page: Page, 
     """It went on one click, nine pixels from "view", out of every product's answers (plan 029)."""
     asked: list[str] = []
     page.goto("/knowledge")
+    page.select_option("#kbScope", "general")
     sources = page.locator("#kbSources")
     row = sources.locator("li", has_text="Shared policy.pdf")
     expect(row).to_have_count(1)
@@ -151,7 +198,7 @@ def test_removing_a_shared_document_asks_first_and_names_the_impact(page: Page, 
 
 def test_clearing_the_shared_knowledge_base_says_how_many(page: Page, stores) -> None:
     asked: list[str] = []
-    page.goto("/knowledge")
+    page.goto("/knowledge?product=general")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
 
     page.once("dialog", answering(asked, accept=False))
@@ -159,25 +206,6 @@ def test_clearing_the_shared_knowledge_base_says_how_many(page: Page, stores) ->
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
     assert asked and "Remove the 1 policy document from the shared knowledge base?" in asked[0]
     assert "every product" in asked[0] and "The answer memory is not affected." in asked[0]
-    assert shared_names(stores) == ["Shared policy.pdf"]
-
-
-def test_the_assistants_drawer_names_the_same_impact(page: Page, stores) -> None:
-    on_the_page: list[str] = []
-    page.goto("/knowledge")
-    page.once("dialog", answering(on_the_page, accept=False))
-    page.locator("#kbSources li", has_text="Shared policy.pdf").get_by_role("button", name="remove").click()
-    expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
-
-    in_the_chat: list[str] = []
-    page.goto("/")
-    page.click("#openKb")
-    row = page.locator("#sources .source", has_text="Shared policy.pdf")
-    page.once("dialog", answering(in_the_chat, accept=False))
-    row.get_by_role("button", name="remove").click()
-    expect(row).to_have_count(1)
-
-    assert in_the_chat and in_the_chat == on_the_page
     assert shared_names(stores) == ["Shared policy.pdf"]
 
 
@@ -197,7 +225,7 @@ def test_a_late_answer_for_the_shared_list_does_not_replace_a_products(page: Pag
     sources = page.locator("#kbSources")
 
     with page.expect_response(lambda response: response.url.endswith("/api/knowledge")):
-        page.goto("/knowledge")
+        page.goto("/knowledge?product=general")
         page.select_option("#kbScope", availo.id)
         expect(sources).to_contain_text("Availo policy.pdf")
     page.wait_for_timeout(500)  # time for the late answer to be drawn, were it drawn
@@ -221,7 +249,7 @@ def test_clearing_while_a_products_list_loads_does_not_count_another(page: Page,
 
     monkeypatch.setattr(service, "knowledge_stats", slow_for_a_product)
     asked: list[str] = []
-    page.goto("/knowledge")
+    page.goto("/knowledge?product=general")
     expect(page.locator("#kbSources")).to_contain_text("Shared policy.pdf")
 
     page.select_option("#kbScope", availo.id)
@@ -233,13 +261,3 @@ def test_clearing_while_a_products_list_loads_does_not_count_another(page: Page,
     page.once("dialog", answering(asked, accept=False))
     page.click("#kbClear")
     assert asked[1].startswith("Remove all 2 policy documents from Availo's knowledge base?")
-
-
-def test_the_assistants_drawer_has_the_same_selector(page: Page, stores) -> None:
-    availo = products.add(None, TEAM, "Availo")
-    page.goto("/")
-    page.click("#openKb")
-    expect(page.locator("#sources")).to_contain_text("Shared policy.pdf")
-    page.select_option("#kbScope", availo.id)
-    expect(page.locator("#sources")).to_contain_text("Availo policy.pdf")
-    expect(page.locator("#sources")).not_to_contain_text("Shared policy.pdf")

@@ -102,6 +102,8 @@
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 13px; }
   .kb-scope { margin: 0 0 14px; }
   .kb-scope .hint { color: var(--ink-faint); font-size: 12.5px; }
+  /* Why "Index guidelines" waits: no knowledge base is chosen yet (plan 031). */
+  .needs-scope { color: var(--warn); font-size: 12.5px; }
 
   label.file {
     display: block; border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
@@ -165,36 +167,6 @@
   }
   .tag.guideline { background: var(--surface-sunken); color: var(--ink-faint); border: 1px solid var(--line); }
   .tag.prior_answer { background: var(--ok-soft); color: var(--ok); }
-
-  /* --- document library -------------------------------------------------- */
-
-  details.library > summary {
-    cursor: pointer; font-size: 14px; font-weight: 620; padding: 4px 0;
-    list-style: none; display: flex; align-items: center; gap: 8px;
-  }
-  details.library > summary::-webkit-details-marker { display: none; }
-  details.library > summary::before {
-    content: "›"; font-size: 17px; color: var(--ink-faint);
-    transition: transform .15s; display: inline-block;
-  }
-  details.library[open] > summary::before { transform: rotate(90deg); }
-
-  .library-heading {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 10px;
-  }
-  .library-heading h4 { margin: 0; font-size: 13px; font-weight: 620; color: var(--ink-soft); }
-  .document-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 11px; }
-  .document-card {
-    display: flex; flex-direction: column; gap: 7px; min-width: 0;
-    border: 1px solid var(--line); border-radius: var(--radius-sm);
-    padding: 13px; background: var(--surface-sunken);
-  }
-  .document-card .doc-title { font-weight: 600; font-size: 13.5px; word-break: break-word; }
-  .document-card .doc-name { color: var(--ink-faint); font-size: 11.5px; word-break: break-all; }
-  .document-card .doc-meta { color: var(--ink-faint); font-size: 11.5px; }
-  .document-card .doc-meta .tag { margin-inline-start: 4px; }
-  .document-card .row { margin-top: auto; gap: 7px; }
-  .document-card button { padding: 6px 11px; font-size: 12.5px; }
 
   /* --- viewer dialog, as the Workbench draws it -------------------------- */
 
@@ -308,13 +280,20 @@
 
   <!-- Which knowledge base this page works on (plan 021): the shared one, used
        for every questionnaire, or one product's, used beside it for that
-       product's questionnaires. Upload, list, remove and clear follow it. The
-       address carries a product's (`?product=`), so the Workbench's "Manage"
-       opens the one its questionnaire is answered from. -->
+       product's questionnaires. Upload, list, remove and clear follow it.
+       Chosen, never assumed (plan 031, as answering is since D-022): until the
+       person chooses, nothing is listed and nothing can be added, removed or
+       cleared. The address carries the choice (`?product=general` for the
+       shared one, `?product=<id>` for a product's, nothing for no choice), so
+       the Workbench's "Manage" opens the one its questionnaire is answered from. -->
   <div class="row kb-scope">
     <label for="kbScope"><strong>Knowledge base</strong></label>
-    <select id="kbScope"><option value="">Shared, for every product</option></select>
-    <span class="hint" id="kbScopeHint">Used for every questionnaire.</span>
+    <select id="kbScope" aria-describedby="kbScopeHint">
+      <option value="" disabled selected>Choose a knowledge base…</option>
+      <option value="general">Shared, for every product</option>
+    </select>
+    <span class="hint" id="kbScopeHint">Choose which knowledge base to work on: the shared one, used for every
+      product, or one product&rsquo;s own.</span>
   </div>
 
   <div class="split">
@@ -341,7 +320,8 @@
             which is not evidence that we do it.</span></label>
       </fieldset>
       <div class="row">
-        <button id="guidelinesBtn" disabled>Index guidelines</button>
+        <button id="guidelinesBtn" disabled aria-describedby="guidelinesNeedsScope">Index guidelines</button>
+        <span class="needs-scope" id="guidelinesNeedsScope">Choose the knowledge base they go to, above, first.</span>
       </div>
       <div class="status" id="guidelinesStatus"></div>
     </div>
@@ -361,24 +341,14 @@
     <div class="kb-summary" id="kbSummary">Loading…</div>
     <ul class="sources" id="kbSources"></ul>
     <div class="row">
-      <button class="ghost" id="kbRefresh">Refresh</button>
-      <button class="ghost" id="kbClear" title="The answer memory is not affected">Remove every policy document</button>
+      <button class="ghost" id="kbRefresh" hidden>Refresh</button>
+      <button class="ghost" id="kbClear" hidden title="The answer memory is not affected">Remove every policy document</button>
     </div>
     <div class="status" id="kbStatus"></div>
   </div>
-
-  <div class="panel" style="margin-top:14px">
-    <details class="library">
-      <summary>Your documents</summary>
-      <p class="hint" style="margin-top:10px">Open an original PDF, or inspect the exact text the agent read out of it.</p>
-
-      <div class="library-heading">
-        <h4>Uploaded documents</h4>
-        <span class="status" id="uploadedDocumentsSummary" style="margin:0"></span>
-      </div>
-      <div class="document-list" id="uploadedDocuments"></div>
-    </details>
-  </div>
+  <!-- "Your documents", the library of uploaded files, was removed in plan 031
+       (the user: not useful). Each source above opens the same viewer, with
+       the original and the text read out of it. -->
 </main>
 
 <dialog id="documentViewer">
@@ -472,7 +442,6 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  let documents = [];
   let currentDocument = null;
 
   // --- theme (same key as the other pages, so the choice follows you) -------
@@ -527,21 +496,15 @@
       encodeURIComponent(doc.category) + "/" + encodeURIComponent(doc.name) + "/" + action;
   }
 
-  function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-  }
-
-  // Wire a file input to its drop zone, chosen-file label and submit button.
-  function fileField(inputId, chosenId, buttonId) {
-    const input = $(inputId), chosen = $(chosenId), button = $(buttonId);
+  // Wire a file input to its drop zone and chosen-file label; `changed` paints
+  // what depends on the files chosen.
+  function fileField(inputId, chosenId, changed) {
+    const input = $(inputId), chosen = $(chosenId);
     const zone = input.closest("label.file");
 
     function refresh() {
-      const names = Array.from(input.files).map((f) => f.name);
-      chosen.textContent = names.join(", ");
-      button.disabled = names.length === 0;
+      chosen.textContent = Array.from(input.files).map((f) => f.name).join(", ");
+      changed();
     }
 
     input.addEventListener("change", refresh);
@@ -559,19 +522,30 @@
 
   // --- adding documents ----------------------------------------------------
 
-  async function indexGuidelines() {
-    const input = $("guidelinesInput"), button = $("guidelinesBtn"), status = $("guidelinesStatus");
-    const files = Array.from(input.files);
-    if (!files.length) return;
+  /* "Index guidelines" waits for files and for a knowledge base chosen on
+     purpose (plan 031): the shared one is never assumed, and the line beside
+     the button says what it waits for. */
+  let indexing = false;
+  function paintGuidelines() {
+    $("guidelinesBtn").disabled = indexing || !$("guidelinesInput").files.length || !kbChosen();
+    $("guidelinesNeedsScope").hidden = kbChosen();
+  }
 
-    button.disabled = true;
+  async function indexGuidelines() {
+    const input = $("guidelinesInput"), status = $("guidelinesStatus");
+    const files = Array.from(input.files);
+    if (!files.length || !kbChosen()) return;
+
+    indexing = true;
+    paintGuidelines();
     setStatus(status, "Indexing " + files.length + " guideline(s). Large documents take a minute each.", "busy");
 
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
     const whose = document.querySelector('input[name="guidelineAuthority"]:checked');
     if (whose) form.append("authority", whose.value);
-    if (kbScope()) form.append("product", kbScope());
+    // The server still reads no product as the shared knowledge base (TD-066).
+    if (kbProduct()) form.append("product", kbProduct());
 
     try {
       const results = await request("/api/knowledge/guidelines", { method: "POST", body: form });
@@ -595,11 +569,11 @@
       input.value = "";
       input.dispatchEvent(new Event("change"));
       loadKnowledge();
-      loadDocuments();
     } catch (error) {
       setStatus(status, error.message, "error");
     } finally {
-      button.disabled = false;
+      indexing = false;
+      paintGuidelines();
     }
   }
 
@@ -611,6 +585,14 @@
     // Not known until this scope's list arrives: the last count belonged to the
     // knowledge base the selector has left (plan 029's review).
     guidelineCount = null;
+    // Nothing chosen, nothing listed (plan 031): the shared list under "choose"
+    // read as the knowledge base the page works on. Nothing to remove or clear.
+    $("kbRefresh").hidden = $("kbClear").hidden = !kbChosen();
+    if (!kbChosen()) {
+      $("kbSummary").textContent = "Choose a knowledge base above to see what is indexed in it.";
+      $("kbSources").replaceChildren();
+      return;
+    }
     try {
       const stats = await request("/api/knowledge" + kbScopeQuery("?"));
       // An answer for the knowledge base the selector has since left is dropped: arriving
@@ -643,17 +625,18 @@
         const whose = Cards.authorityBadge(source.authority);
         if (whose) name.append(document.createTextNode(" "), whose);
 
+        // The original and the text read out of it, in the viewer's two tabs: what
+        // the library of uploaded files offered before plan 031 removed it.
         const view = document.createElement("button");
         view.className = "quiet";
         view.textContent = "view";
+        view.title = "Open the document, and the text the agent read out of it";
         view.onclick = () => openDocument({
           name: source.name,
           title: source.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
           origin: "uploaded",
           category: "uploaded",
           label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
-          extension: source.name.split(".").pop().toLowerCase(),
-          size_bytes: 0,
         });
 
         const remove = document.createElement("button");
@@ -662,7 +645,7 @@
         remove.onclick = async () => {
           // Both ask first (plan 029): a shared document is used by every product, and a
           // product's goes with its file (TD-039) unless something else uses it (plan 027).
-          if (!confirm(Cards.removalQuestion(source.name, kbScope() ? kbScopeName() : ""))) return;
+          if (!confirm(Cards.removalQuestion(source.name, kbProduct() ? kbScopeName() : ""))) return;
           await removeFromKnowledge(
             "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
             "Removed " + source.name + ".");
@@ -678,8 +661,8 @@
     }
   }
 
-  /* Removing a product's document, or all of them, takes their files: the
-     library drops them too, and a file that could not be removed is said. */
+  /* Removing a product's document, or all of them, takes their files, and a
+     file that could not be removed is said. */
   async function removeFromKnowledge(url, done) {
     try {
       const removed = await request(url, { method: "DELETE" });
@@ -692,119 +675,50 @@
       setStatus($("kbStatus"), error.message, "error");
     }
     loadKnowledge();
-    loadDocuments();
   }
 
   // --- which knowledge base: shared, or a product's (plan 021) -------------
+  /* The selector holds a choice (plan 031, as the Workbench's product does
+     since plan 029): "" is nothing chosen yet, Cards.GENERAL the shared
+     knowledge base chosen on purpose, anything else a product's id. The
+     server still reads a missing product as the shared one (TD-066), so what
+     a request carries is kbProduct(). */
 
   function kbScope() { return $("kbScope").value; }
+  function kbChosen() { return kbScope() !== ""; }
+  function kbProduct() { return Cards.serverProduct(kbScope()); }
   function kbScopeName() {
     const option = $("kbScope").selectedOptions[0];
     return option ? option.textContent : "";
   }
   function kbScopeQuery(prefix) {
-    return kbScope() ? prefix + "product=" + encodeURIComponent(kbScope()) : "";
+    return kbProduct() ? prefix + "product=" + encodeURIComponent(kbProduct()) : "";
   }
   function describeScope() {
-    $("kbScopeHint").textContent = kbScope()
-      ? "Used only for " + kbScopeName() + "'s questionnaires, beside the shared one."
-      : "Used for every questionnaire.";
+    $("kbScopeHint").textContent = !kbChosen()
+      ? "Choose which knowledge base to work on: the shared one, used for every product, or one product's own."
+      : kbProduct()
+        ? "Used only for " + kbScopeName() + "'s questionnaires, beside the shared one."
+        : "Used for every questionnaire.";
+    paintGuidelines();
   }
-  /* The product in the address, so a reload or a copied link opens the same
-     knowledge base. Relative, so it stays under the deployment's prefix. */
+  /* The choice in the address, so a reload or a copied link opens the same
+     knowledge base, the shared one included; no choice, no parameter.
+     Relative, so it stays under the deployment's prefix. */
   function keepScopeInAddress() {
-    history.replaceState(null, "", "knowledge" + kbScopeQuery("?"));
+    history.replaceState(null, "", "knowledge" + (kbChosen() ? "?product=" + encodeURIComponent(kbScope()) : ""));
   }
   async function loadKbScopes() {
     try {
       const listed = await request("/api/products");
-      // The library's badges, in the products' colours.
-      Cards.setProducts(listed.products || [], listed.deleted || []);
-      if (documents.length) renderDocuments();
       const select = $("kbScope");
       const chosen = select.value;
-      select.replaceChildren(new Option("Shared, for every product", ""));
+      const prompt = new Option("Choose a knowledge base…", "", true, true);
+      prompt.disabled = true;  // a prompt, never a choice
+      select.replaceChildren(prompt, new Option("Shared, for every product", Cards.GENERAL));
       (listed.products || []).forEach((product) => select.append(new Option(product.name, product.id)));
       if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
     } catch (error) { /* no products: the shared knowledge base is all there is */ }
-  }
-
-  // --- document library ---------------------------------------------------
-
-  function emptyLibraryMessage(container, message) {
-    container.innerHTML = "";
-    const note = document.createElement("div");
-    note.className = "status";
-    note.style.margin = "0";
-    note.textContent = message;
-    container.append(note);
-  }
-
-  function documentCard(doc) {
-    const card = document.createElement("div");
-    card.className = "document-card";
-
-    const title = document.createElement("div");
-    title.className = "doc-title";
-    title.textContent = doc.title;
-
-    const name = document.createElement("div");
-    name.className = "doc-name";
-    name.textContent = doc.name;
-
-    const meta = document.createElement("div");
-    meta.className = "doc-meta";
-    meta.textContent = doc.label + " · " + doc.extension.toUpperCase() +
-      (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
-    const product = productOfDocument(doc);
-    if (product) meta.append(product);
-
-    const actions = document.createElement("div");
-    actions.className = "row";
-
-    const view = document.createElement("button");
-    view.className = "ghost";
-    view.textContent = "View document";
-    view.onclick = () => openDocument(doc);
-    actions.append(view);
-
-    card.append(title, name, meta, actions);
-    return card;
-  }
-
-  /* A product's file is its knowledge base, badged like its sources and
-     questionnaires (plan 027). Until the team's products have loaded, the name
-     the library gave is shown without the product's colour. */
-  function productOfDocument(doc) {
-    if (!doc.product_id) return null;
-    const title = "In " + doc.product_name + "'s knowledge base. It goes if the product is deleted.";
-    const badge = Cards.productBadge(doc.product_id, title);
-    if (badge) return badge;
-    const tag = document.createElement("span");
-    tag.className = "tag product";
-    tag.textContent = doc.product_name;
-    tag.title = title;
-    return tag;
-  }
-
-  function renderDocuments() {
-    const container = $("uploadedDocuments");
-    container.innerHTML = "";
-    documents.forEach((doc) => container.append(documentCard(doc)));
-    if (!documents.length) {
-      emptyLibraryMessage(container, "No uploaded documents yet.");
-    }
-    $("uploadedDocumentsSummary").textContent = documents.length + " file(s)";
-  }
-
-  async function loadDocuments() {
-    try {
-      const data = await request("/api/documents");
-      documents = data.documents;
-      renderDocuments();
-    } catch (error) {
-      emptyLibraryMessage($("uploadedDocuments"), "Could not load documents: " + error.message);
-    }
   }
 
   // --- document viewer -----------------------------------------------------
@@ -820,8 +734,7 @@
   async function openDocument(doc) {
     currentDocument = doc;
     $("viewerTitle").textContent = doc.title || doc.name;
-    $("viewerMeta").textContent = doc.label + " · " + doc.name +
-      (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
+    $("viewerMeta").textContent = doc.label + " · " + doc.name;
     $("documentDownload").href = documentUrl(doc, "file");
     $("documentDownload").download = doc.name;
     $("extractedText").textContent = "";
@@ -853,13 +766,14 @@
 
   // --- wiring --------------------------------------------------------------
 
-  fileField("guidelinesInput", "guidelinesChosen", "guidelinesBtn");
+  fileField("guidelinesInput", "guidelinesChosen", paintGuidelines);
   $("guidelinesBtn").onclick = indexGuidelines;
 
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
-    const which = kbScope() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
-    if (!confirm(Cards.clearQuestion(guidelineCount, kbScope() ? kbScopeName() : ""))) return;
+    if (!kbChosen()) return;
+    const which = kbProduct() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
+    if (!confirm(Cards.clearQuestion(guidelineCount, kbProduct() ? kbScopeName() : ""))) return;
     await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), "Removed every policy document from " + which + ".");
   };
 
@@ -880,22 +794,22 @@
     $("documentFrame").src = "about:blank";
   });
 
-  /* The shared knowledge base at once, as the Workbench listed it. A product
-     named in the address waits for the team's products, so its list is the
-     first one drawn; one that is not the team's any more opens the shared one. */
+  /* Nothing chosen, unless the address chose (plan 031): the shared knowledge
+     base at once, as `?product=general`; a product waits for the team's
+     products, so its list is the first one drawn. One that is not the team's
+     any more chooses nothing, and the address says so. */
   (async function start() {
     const wanted = new URLSearchParams(window.location.search).get("product") || "";
-    loadDocuments();
-    if (!wanted) {
-      loadKnowledge();
-      loadKbScopes();
-      return;
-    }
-    await loadKbScopes();
     const select = $("kbScope");
-    select.value = [...select.options].some((option) => option.value === wanted) ? wanted : "";
+    if (wanted === Cards.GENERAL) select.value = Cards.GENERAL;
+    const listing = loadKbScopes();
+    if (wanted && wanted !== Cards.GENERAL) {
+      await listing;
+      // Unless the person chose while the products were on their way.
+      if (!kbChosen() && [...select.options].some((option) => option.value === wanted)) select.value = wanted;
+    }
     describeScope();
-    if (!kbScope()) keepScopeInAddress();
+    keepScopeInAddress();
     loadKnowledge();
   })();
 })();

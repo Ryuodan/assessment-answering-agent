@@ -285,6 +285,7 @@
   .drawer-head h3 { margin: 0; font-size: 14px; flex: 1; }
   .drawer-controls { display: flex; gap: 8px; margin-top: 11px; flex-wrap: wrap; align-items: center; }
   .drawer-controls input[type="search"] { flex: 1 1 210px; min-width: 0; }
+  .drawer-controls .search-scope { font-size: 12.5px; color: var(--ink-faint); }
   .drawer-body { flex: 1; overflow: auto; padding: 12px 16px 24px; }
   .search-hit { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 11px; background: var(--surface); }
   .search-hit .hit-head {
@@ -845,7 +846,14 @@
       </div>
       <button class="ghost" id="searchClose" title="Close">Close</button>
     </div>
+    <!-- "Search in" (plan 031): the shared policies, or a product's documents
+         with them. It follows the product chosen on the Workbench when the
+         drawer opens, and can be changed here; searching changes nothing. -->
     <div class="drawer-controls">
+      <label class="search-scope" for="searchScope">Search in</label>
+      <select id="searchScope" title="The shared policies, or a product's own documents and the shared policies">
+        <option value="">Shared policies</option>
+      </select>
       <input type="search" id="searchInput" placeholder='Search the policies —  "exact phrase"  -exclude' title='Type words to match anywhere in the text. Use "quotes" for an exact phrase and a leading minus to exclude.' />
       <select id="searchMode" title="How to match">
         <option value="hybrid">Both</option>
@@ -1466,21 +1474,69 @@
 
 
   // --- search drawer -------------------------------------------------------
+  /* Which knowledge base it searches (plan 031): "" is the shared policies, a
+     product's id that product's documents and the shared policies, as the
+     server searches them. It searched the shared ones alone, whatever the
+     Workbench was answering for. Opening the drawer follows the product chosen
+     on the Workbench -- General, or nothing chosen, is the shared policies --
+     unless that choice is the one it followed last time, so a scope the person
+     picked here stays. Searching changes nothing, so following is safe. An
+     answer for an earlier search, or for the scope the drawer has left, is
+     dropped. */
+  let searchFollowed = null;  // the Workbench's choice the drawer last followed
+  let searchAsked = 0;        // the latest search; a scope chosen since counts as a later one
 
-  let searchLoaded = false;
+  function searchScope() { return $("searchScope").value; }
+  function searchScopeName() {
+    const product = teamProducts.find((p) => p.id === searchScope());
+    return product ? product.name : "";
+  }
+  function workbenchSearchScope() {
+    const product = teamProducts.find((p) => p.id === formProduct());
+    return product ? product.id : "";
+  }
+
+  /* The team's products as scopes. Returns whether the scope changed: the
+     product it was on has gone, and the shared policies are searched. */
+  function fillSearchScopes() {
+    const select = $("searchScope");
+    const was = select.value;
+    select.replaceChildren(new Option("Shared policies", ""));
+    teamProducts.forEach((product) => select.append(new Option(product.name + " and shared policies", product.id)));
+    select.value = [...select.options].some((option) => option.value === was) ? was : "";
+    return select.value !== was;
+  }
+
+  function searchIsOpen() { return $("searchDrawer").classList.contains("open"); }
 
   function openSearch() {
     $("searchDrawer").classList.add("open");
     $("searchDrawer").setAttribute("aria-hidden", "false");
     $("searchScrim").classList.add("open");
     $("searchInput").focus();
-    if (!searchLoaded) { searchLoaded = true; loadSearchSources(); }
+    const wanted = workbenchSearchScope();
+    if (wanted === searchFollowed) return;
+    searchFollowed = wanted;
+    fillSearchScopes();
+    $("searchScope").value = wanted;
+    searchScopeChanged();
   }
 
   function closeSearch() {
     $("searchDrawer").classList.remove("open");
     $("searchDrawer").setAttribute("aria-hidden", "true");
     $("searchScrim").classList.remove("open");
+  }
+
+  /* Another scope: a search on its way for the last one is not drawn, the
+     scope's files fill the filter, and the search runs again for it -- also
+     after one typed meanwhile, which may have used a file the filter has let go. */
+  async function searchScopeChanged() {
+    const scope = searchScope();
+    ++searchAsked;
+    if ($("searchInput").value.trim()) setStatus($("searchStatus"), "Searching…", "busy");
+    await loadSearchSources();
+    if ($("searchInput").value.trim() && scope === searchScope()) runSearch();
   }
 
   /* Fill the file filter, tolerating either shape the API can hand back: the
@@ -1494,15 +1550,27 @@
     });
   }
 
+  /* The files of the scope, the product's first, then the shared ones. A file
+     of a scope the drawer has left is dropped, and with it a filter set to it;
+     a list for a scope it has left is not drawn. */
   async function loadSearchSources() {
+    const scope = searchScope();
+    let names = [];
     try {
-      const stats = await request("/api/knowledge");
-      fillSearchSources((stats.sources || []).map(
+      const lists = await Promise.all([scope ? request("/api/knowledge?product=" + encodeURIComponent(scope)) : null,
+        request("/api/knowledge")]);
+      names = lists.filter(Boolean).flatMap((stats) => (stats.sources || []).map(
         (source) => (typeof source === "string" ? source : source.name || source.source_name)));
-    } catch (error) { /* the filter is optional */ }
+    } catch (error) { /* the filter is optional: all files, and a search's own list fills it */ }
+    if (scope !== searchScope()) return;
+    const select = $("searchSource");
+    const was = select.value;
+    select.replaceChildren(new Option("All files", ""));
+    fillSearchSources(names);
+    select.value = [...select.options].some((option) => option.value === was) ? was : "";
   }
 
-  function renderSearchResults(body) {
+  function renderSearchResults(body, productName) {
     const box = $("searchResults");
     box.replaceChildren();
     if (!body.results.length) {
@@ -1510,7 +1578,9 @@
       empty.className = "search-empty";
       empty.textContent = body.degraded
         ? "Meaning-based search is not responding, and no exact text matched."
-        : "Nothing in the indexed policies matched that.";
+        : productName
+          ? "Nothing in " + productName + "'s documents or the shared policies matched that."
+          : "Nothing in the indexed policies matched that.";
       box.append(empty);
       return;
     }
@@ -1544,7 +1614,12 @@
         ? "Found by keyword search: the score is its rank, not a similarity"
         : "Cosine similarity to your query";
       const authority = Cards.authorityBadge(item.authority);
-      head.append(who, badge);
+      head.append(who);
+      // From the product's own knowledge base, not the shared policies (plan 031).
+      const ownName = (Cards.product(item.product_id) || {}).name || "this product";
+      const own = Cards.productBadge(item.product_id, "From " + ownName + "'s own documents, not the shared policies");
+      if (own) head.append(own);
+      head.append(badge);
       if (authority) head.append(authority);
       const openIt = Cards.openDocumentButton(item.source_name, item.source_type);
       if (openIt) head.append(openIt);
@@ -1555,6 +1630,7 @@
   }
 
   async function runSearch() {
+    const asked = ++searchAsked;
     const query = $("searchInput").value.trim();
     if (!query) {
       $("searchResults").replaceChildren();
@@ -1563,15 +1639,20 @@
     }
 
     setStatus($("searchStatus"), "Searching…", "busy");
+    const scope = searchScope(), productName = searchScopeName();
     try {
       const params = new URLSearchParams({
         q: query, mode: $("searchMode").value, limit: "20", source: $("searchSource").value,
       });
+      // The shared policies are asked for with no product: "general" is not one (404).
+      if (scope) params.set("product", scope);
       const body = await request("/api/search?" + params.toString());
+      if (asked !== searchAsked) return;  // a later search, or another scope, was asked for since
       fillSearchSources(body.documents || []);
-      renderSearchResults(body);
+      renderSearchResults(body, productName);
       setStatus($("searchStatus"), body.results.length ? body.results.length + " passage(s)" : "", "");
     } catch (error) {
+      if (asked !== searchAsked) return;
       setStatus($("searchStatus"), error.message, "error");
     }
   }
@@ -3802,6 +3883,7 @@
   $("searchInput").onkeydown = (event) => { if (event.key === "Enter") runSearch(); };
   $("searchMode").onchange = () => { if ($("searchInput").value.trim()) runSearch(); };
   $("searchSource").onchange = () => { if ($("searchInput").value.trim()) runSearch(); };
+  $("searchScope").onchange = searchScopeChanged;
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeSearch();
   });
@@ -3919,7 +4001,11 @@
       else if (own instanceof Error) said += "; " + product.name + "'s could not be counted";
     }
     $("kbLineText").textContent = said;
-    $("kbManage").setAttribute("href", "knowledge" + (product ? "?product=" + encodeURIComponent(product.id) : ""));
+    /* The page chooses nothing for the person (plan 031), so "Manage" names the
+       choice made here: a product's knowledge base, the shared one for General,
+       and nothing while nothing is chosen. */
+    const manage = product ? product.id : formProduct() === Cards.GENERAL ? Cards.GENERAL : "";
+    $("kbManage").setAttribute("href", "knowledge" + (manage ? "?product=" + encodeURIComponent(manage) : ""));
   }
 
   // --- which product a questionnaire is for (plan 024, plan 029) ------------
@@ -4043,6 +4129,9 @@
     const chosen = formProduct();
     const was = before.find((p) => p.id === chosen);
     Cards.setProducts(teamProducts, deletedProducts);
+    // The search drawer's scopes are the same products (plan 031): one deleted
+    // under it searches the shared policies, and an open drawer searches again.
+    if (fillSearchScopes() && searchIsOpen()) searchScopeChanged();
     const select = $("formProduct");
     select.replaceChildren(
       new Option("Product: choose…", "", true, true),
