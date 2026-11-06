@@ -211,9 +211,10 @@ def test_a_withdrawn_answer_the_review_would_not_flag_is_not_listed(user, flagge
     assert fill_audit.released_by_withdrawal(TEAM) == []
 
 
-def test_a_withdrawn_answer_at_the_threshold_is_held_by_the_gate_and_not_listed(user, flagged):
-    """Plan 030: the gate holds a score at the threshold, as the review does, so it is not released.
-    It compared "under" until then, and the audit listed this answer as written as if confident."""
+def test_a_withdrawn_answer_at_the_threshold_is_listed_though_the_gate_now_holds_it(user, flagged):
+    """Until plan 030 the gate held only a score under the threshold, so every fill wrote this
+    answer into the customer's file. The gate holds it now, and the audit still lists it: its
+    job is to say which files may hold unreviewed answers (the review of plan 030)."""
     question_id = flagged.form.questions[0].id
     answer = batches.answers(flagged.id)[question_id].model_copy(deep=True)
     answer.needs_review, answer.review_reasons = False, []
@@ -221,7 +222,7 @@ def test_a_withdrawn_answer_at_the_threshold_is_held_by_the_gate_and_not_listed(
     batches.save_answers(flagged.id, [answer])
     withdrawn(user, flagged, question_id)
 
-    assert fill_audit.released_by_withdrawal(TEAM) == []
+    assert [released.question_id for released in fill_audit.released_by_withdrawal(TEAM)] == [question_id]
     assert tools.ready_to_write(batches.answers(flagged.id)[question_id])[0] is False
 
 

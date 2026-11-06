@@ -333,10 +333,11 @@ def test_the_chats_drawer_links_the_page_for_the_knowledge_base_it_shows(page: P
     holding(availo.id, chunk("Availo policy.pdf"))
 
     page.goto("/")
-    # Two controls named "Knowledge base" in the chat's bar: the drawer, and the page. Their
-    # descriptions tell them apart.
+    # The chat's bar had two controls both named "Knowledge base", the drawer and the page,
+    # side by side (the review of plan 030). The drawer is "Documents" now.
     drawer_button = page.locator("#openKb")
     page_link = page.locator(".topbar a.ghost", has_text="Knowledge base")
+    expect(drawer_button).to_have_text("Documents")
     assert drawer_button.get_attribute("title") != page_link.get_attribute("title")
 
     drawer_button.click()
@@ -350,3 +351,15 @@ def test_the_chats_drawer_links_the_page_for_the_knowledge_base_it_shows(page: P
     page.wait_for_url(f"**/knowledge?product={availo.id}")
     expect(page.locator("#kbScope")).to_have_value(availo.id)
     expect(page.locator("#kbSources")).to_contain_text("Availo policy.pdf")
+
+
+def test_documents_can_be_added_from_the_keyboard(page: Page) -> None:
+    """The file picker was `display: none`, so Tab never reached "Add documents" (the review of plan 030)."""
+    page.goto("/knowledge")
+    picker = page.locator("#guidelinesInput")
+    expect(picker).to_have_count(1)
+    for _ in range(60):
+        if page.evaluate("document.activeElement && document.activeElement.id") == "guidelinesInput":
+            break
+        page.keyboard.press("Tab")
+    assert page.evaluate("document.activeElement && document.activeElement.id") == "guidelinesInput"

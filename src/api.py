@@ -162,8 +162,8 @@ def whoami(request: Request) -> dict:
     if user is None and not identity.sign_in_required():
         user = identity.local_user()
     if user is None:
-        # Same keys as the signed-in shape. A caller reading `is_admin` should
-        # not have to know that the signed-out response omits it.
+        # The signed-in shape's keys but `review_threshold`, which only a page
+        # signed in uses: reading `is_admin` should not need to know it is out.
         return {
             "email": None,
             "team": None,

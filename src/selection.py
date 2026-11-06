@@ -202,8 +202,10 @@ def ready_to_write(
 
     A score is judged by the review's own rule (`verification.held_by_score`,
     plan 030): at or under the threshold is held. This compared "under" until
-    then, which differed only for a score exactly at the threshold that the
-    review had not flagged, and the review flags every such score.
+    then, which differed only for an unflagged score exactly at the threshold.
+    The pipeline never produces one, since the review flags every such score;
+    an answer left unflagged by a withdrawn approval (TD-053) or by a threshold
+    changed since it was drafted could be one, and it is held now.
     """
     if answered is None or not answered.answer.strip():
         return False, ""

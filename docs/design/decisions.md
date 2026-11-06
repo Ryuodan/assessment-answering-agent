@@ -497,8 +497,13 @@ a plan relies on it.
   - The card leads with its status and reasons; the score comes second, and the
     colour follows the status.
 - **Consequences:**
-  - The same answers are released and held as before. On the recorded
-    evaluation runs, 0 decisions changed and 19 held answers lost a "High" score.
+  - The same answers are released and held as before, with one exception on the
+    safe side. An unflagged answer at exactly the threshold is now held; the gate
+    used to hold only scores under it. The pipeline never produces such an answer.
+    A withdrawn approval (TD-053) or a threshold changed since drafting can leave
+    one, and `inspect fills` still lists those that past fills wrote.
+  - On the recorded evaluation runs, 0 decisions changed and 19 held answers lost
+    a "High" score.
   - Confidence bands before and after are not comparable (evaluation.md).
   - Answers stored before the change keep their uncapped scores (TD-068).
 - **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (the round);

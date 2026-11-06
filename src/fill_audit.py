@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 
 from src import batches, events
 from src.config import settings
+from src.models import AnsweredQuestion
 from src.selection import _has_answer, confirmed_by_a_person, held_by_the_review, ready_to_write
 
 
@@ -135,6 +136,11 @@ def _removed_at(team_id: str) -> dict[tuple[str, str], str]:
     return removed
 
 
+def _released_before_plan_030(result: AnsweredQuestion, floor: float) -> bool:
+    """Whether the gate as it stood until plan 030 let an answer through: unflagged, no error, not under the floor."""
+    return not result.needs_review and not result.error and result.confidence >= floor
+
+
 def released_by_withdrawal(team_id: str, *, threshold: float | None = None) -> list[Released]:
     """Answers left released by a withdrawn approval, which the review's own rule would hold."""
     floor = settings.review_confidence_threshold if threshold is None else threshold
@@ -154,8 +160,10 @@ def released_by_withdrawal(team_id: str, *, threshold: float | None = None) -> l
             continue
         if confirmed_by_a_person(result, batches.edited_by(batch.id).get(question_id, "")):
             continue
-        # The gate lets it through, and the review's own rule would hold it: both by the one threshold rule (plan 030).
-        if ready_to_write(result, threshold=floor)[0] and held_by_the_review(result, floor):
+        # Written by past fills, and held by the review's own rule. Until plan 030 the gate held a score only
+        # *under* the threshold, so an unflagged answer at exactly the threshold went in; it is held now.
+        written = ready_to_write(result, threshold=floor)[0] or _released_before_plan_030(result, floor)
+        if written and held_by_the_review(result, floor):
             found.append(
                 Released(
                     batch_id=batch.id,

@@ -620,3 +620,11 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Impact:** asked about a direct answer from long ago, the model has to search
   or draft again.
 - **Fix:** put a compact form of the cards into the older turns the model sees.
+
+## TD-071: Small things the review of plan 030 left
+
+- **What:** found 2026-11-06 by plan 030's review; minor, not fixed.
+  - A failed answer's card has a warning-coloured head under an error-coloured strip (`cards.js`, `cards.css`).
+  - The Workbench sets the review threshold in a fetch it does not wait for. This is harmless today: every pipeline answer at or under the threshold is also flagged, and the cards use the server's `will_be_written`.
+  - The assistant's paid evaluation (`scripts/eval_assistant.py`) has not been run since the chat's prompt changed. Plan 030 tells the model to lead into the card and not to restate it; whether it does is instructed, not measured.
+- **Fix:** the colour and the wait are small page changes. The evaluation needs the user's approval to spend.

@@ -171,7 +171,7 @@ async def test_the_model_is_told_the_card_shows_the_answer_and_not_to_restate_it
 
 
 async def test_a_turn_that_stops_after_drafting_keeps_its_cards(drafts, monkeypatch):
-    """The stopped reply still relays what was drafted, and the cards are drawn under it."""
+    """The stopped reply counts what was drafted, and the cards under it show it (the review of plan 030)."""
     user = identity.local_user()
     question, answer = ASKED["en"]
     monkeypatch.setattr(assistant, "_agent", _stops_after([("answer_directly", {"questions": question})]))
@@ -179,7 +179,7 @@ async def test_a_turn_that_stops_after_drafting_keeps_its_cards(drafts, monkeypa
 
     turn = await assistant.say(user, conversation, question)
 
-    assert turn.stopped_early and f"**{question}**\n{answer}" in turn.reply
+    assert turn.stopped_early and answer not in turn.reply and "shown below" in turn.reply
     assert [card["answer"] for card in turn.direct_answers] == [answer]
     saved = conversations.load(conversation.id)
     reply = [m for m in saved.messages if assistant._said(m)][-1]
@@ -203,3 +203,26 @@ async def test_a_question_that_could_not_be_answered_is_a_card_saying_so(monkeyp
     [card] = state["direct_answers"]
     assert card["error"] == "rate limited" and card["answer"] == "" and card["evidence"] == []
     assert not state.get("sources") and not state.get("drafted"), "nothing to relay, and nothing cited"
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "nothing in our documents backs this — it rests only on what we told somebody before",
+        "we are not consistent about this: the memory says otherwise",
+    ],
+    ids=["only-previous-answers", "sources-disagree"],
+)
+def test_a_held_answer_is_said_to_be_held_for_the_reason_its_card_shows(reason):
+    """A well-rated answer held by a check has no "why the score is low" sentence since
+    plan 030, and the model was told it was held for "low confidence" while its card
+    said "Sources disagree" (the review of plan 030)."""
+    from src.agents import assistant_cards, assistant_stopped
+    from src.models import Question
+
+    held = AnsweredQuestion(question=Question(id="q1", text="Do we encrypt backups?"), answer="Yes.", confidence=0.6,
+                            needs_review=True, review_reasons=[reason], confidence_reason="")  # fmt: skip
+
+    assert assistant_stopped.held_because(held) == reason
+    assert f"flagged for review: {reason}" in assistant_cards.handed_back({}, [held])
+    assert "low confidence" not in assistant_cards.handed_back({}, [held])

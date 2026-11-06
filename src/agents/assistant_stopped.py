@@ -42,7 +42,7 @@ _STOPPED = {
         "failed": "I tried to search the documents {times}, but the search failed.",
         "advice": "Asking about one point at a time usually works better.",
         "nothing": "{lead}, and nothing was changed. {retry}",
-        "drafted": "Before it stopped, I drafted {answers}:",
+        "drafted": "Before it stopped, I drafted {answers}, shown below.",
         "flagged": "Flagged for review: {reason}",
     },
     "ar": {
@@ -57,7 +57,7 @@ _STOPPED = {
         "failed": "حاولت البحث في المستندات {times}، لكن البحث تعذّر.",
         "advice": "السؤال عن نقطة واحدة في كل مرة يعطي عادةً نتيجة أفضل.",
         "nothing": "{lead}، ولم يتغير شيء. {retry}",
-        "drafted": "قبل أن أتوقف، صغت {answers}:",
+        "drafted": "قبل أن أتوقف، صغت {answers}، معروضة أدناه.",
         "flagged": "بحاجة إلى مراجعة: {reason}",
     },
 }
@@ -127,9 +127,19 @@ def cause(failed: BaseException) -> str:
     return found
 
 
+def held_because(result: AnsweredQuestion) -> str:
+    """Why a held answer is held, as its card's chips say it: the review's reasons, else why its score is low.
+
+    Not `confidence_reason` alone: since plan 030 it explains the score before
+    the cap, and is empty for a well-rated answer held by "sources disagree" or
+    "only previous answers", which the model was then told was "low confidence".
+    """
+    return "; ".join(result.review_reasons) or result.confidence_reason or "low confidence"
+
+
 def keep(state: dict[str, Any], result: AnsweredQuestion) -> None:
     """Keep a direct answer as it was handed to the model, for a turn that stops before relaying it."""
-    flagged = (result.confidence_reason or "low confidence") if result.needs_review else ""
+    flagged = held_because(result) if result.needs_review else ""
     state.setdefault("drafted", []).append(
         {"question": result.question.text, "answer": result.answer, "flagged": flagged}
     )
@@ -142,14 +152,14 @@ def _counted(n: int, forms: tuple[str, ...]) -> str:
 
 
 def _relayed(drafted: list[dict[str, str]], said: dict[str, str], language: str) -> str:
-    """The direct answers drafted, word for word, after what the reply says; "" when there are none."""
+    """How many direct answers were drafted; "" when there are none.
+
+    Not the answers themselves: each is drawn under the reply as its card, word
+    for word, with its status (plan 030), and the reply does not restate them.
+    """
     if not drafted:
         return ""
-    lines = [said["drafted"].format(answers=_counted(len(drafted), _ANSWERS[language]))]
-    for answer in drafted:
-        flagged = f"\n{said['flagged'].format(reason=answer['flagged'])}" if answer["flagged"] else ""
-        lines.append(f"**{answer['question']}**\n{answer['answer']}{flagged}")
-    return "\n\n" + "\n\n".join(lines)
+    return "\n\n" + said["drafted"].format(answers=_counted(len(drafted), _ANSWERS[language]))
 
 
 def stopped_reply(state: dict[str, Any], language: str) -> str:

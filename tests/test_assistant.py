@@ -1171,7 +1171,9 @@ async def test_direct_answers_asked_for_at_once_past_the_limit_are_relayed(user,
 @pytest.mark.asyncio
 async def test_a_turn_stopped_after_drafting_relays_what_it_drafted(user, monkeypatch, answers_with_evidence):
     """It said "nothing was answered" and "I searched the documents 3 times" after
-    three direct answers and no search, and the answers were lost."""
+    three direct answers and no search, and the answers were lost. Since plan 030
+    each is drawn under the reply as its card, and the reply counts them rather
+    than restating them (the review of plan 030)."""
     asked = [f"Do we encrypt backups of system {n}?" for n in range(5)]
     _scripted_model(monkeypatch, _answers(*asked), _answers("Do we encrypt laptops?"), AIMessage("Unreached."))
 
@@ -1180,10 +1182,11 @@ async def test_a_turn_stopped_after_drafting_relays_what_it_drafted(user, monkey
     assert turn.stopped_early
     head, relayed = turn.reply.split("\n\n", 1)
     assert head == "I ran out of room part way through that. Asking about one point at a time usually works better."
-    assert relayed.startswith("Before it stopped, I drafted answers to 3 questions:\n\n")
-    relayed_whole = [f"**{q}**\nYes, backups are encrypted. [{q[:12]}]" in relayed for q in asked]
-    assert sum(relayed_whole) == 3, "each drafted answer word for word"
-    assert sum(q in relayed for q in asked) == 3, "a question refused is not said to be answered"
+    assert relayed == "Before it stopped, I drafted answers to 3 questions, shown below."
+    assert [card["answer"] for card in turn.direct_answers] == [
+        f"Yes, backups are encrypted. [{q[:12]}]" for q in asked[:3]
+    ], "each drafted answer word for word"
+    assert not any(q in turn.reply for q in asked), "the reply does not restate what the cards show"
 
 
 @pytest.mark.asyncio
@@ -1201,10 +1204,8 @@ async def test_a_stopped_turn_counts_its_searches_apart_from_its_direct_answers(
         "I ran out of room part way through that. I searched the documents once without settling it."
     )
     assert "nothing was answered" not in turn.reply
-    assert turn.reply.endswith(
-        "\n\nBefore it stopped, I drafted an answer to one question:\n\n"
-        "**Do we encrypt backups?**\nYes, backups are encrypted. [Do we encryp]"
-    )
+    assert turn.reply.endswith("\n\nBefore it stopped, I drafted an answer to one question, shown below.")
+    assert [card["answer"] for card in turn.direct_answers] == ["Yes, backups are encrypted. [Do we encryp]"]
 
 
 @pytest.mark.asyncio
@@ -1214,7 +1215,8 @@ async def test_a_stopped_turn_in_arabic_relays_its_answers_in_arabic(user, monke
     turn = await assistant.say(user, assistant.start(user, ""), "هل نشفر النسخ الاحتياطية؟")
 
     assert turn.reply.startswith("نفدت المساحة المتاحة لي قبل أن أُكمل ذلك.")
-    assert "قبل أن أتوقف، صغت إجابة عن سؤال واحد:" in turn.reply and "Yes, backups are encrypted." in turn.reply
+    assert turn.reply.endswith("قبل أن أتوقف، صغت إجابة عن سؤال واحد، معروضة أدناه.")
+    assert "Yes, backups are encrypted." not in turn.reply and len(turn.direct_answers) == 1
 
 
 @pytest.mark.parametrize(
@@ -1235,10 +1237,8 @@ def test_the_answers_a_stopped_turn_relays_are_counted_in_its_language(n, langua
 
     said = assistant_stopped.stopped_reply({"drafted": drafted}, language)
 
-    assert f" {counted}:\n\n" in said
-    assert (
-        "\nFlagged for review: low confidence\n" if language == "en" else "\nبحاجة إلى مراجعة: low confidence\n"
-    ) in said
+    assert said.endswith(f" {counted}, shown below." if language == "en" else f" {counted}، معروضة أدناه.")
+    assert "A0." not in said, "the cards show the answers and their status; the reply only counts them"
 
 
 def test_the_model_is_told_the_budget_where_it_decides():

@@ -63,7 +63,7 @@ def handed_back(state: dict[str, Any], drafted: list[AnsweredQuestion]) -> str:
         if result.drafted:
             lines.append("    (reworded to your preferences)")
         if result.needs_review:
-            lines.append(f"    flagged for review: {result.confidence_reason or 'low confidence'}")
+            lines.append(f"    flagged for review: {assistant_stopped.held_because(result)}")
         # What it cites, in the reply's own history, so "where did that come
         # from" a few messages later is answered from this and not from a new
         # search that finds something similar.
