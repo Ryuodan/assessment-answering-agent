@@ -143,52 +143,52 @@ def clean(**kwargs):
 
 def test_a_clean_answer_passes_untouched():
     cited = [ev(clause_start="7.2", clause_end="7.4", unit_id="u1", part=1, parts=1)]
-    confidence, review, reasons = assess("Per \u00a77.3.", cited, 0.9, **clean())
+    confidence, review, reasons, _ = assess("Per \u00a77.3.", cited, 0.9, **clean())
     assert (confidence, review, reasons) == (0.9, False, [])
 
 
 def test_unsupported_citation_caps_confidence_and_forces_review():
     """The dangerous case: a wrong answer wearing a precise citation."""
     cited = [ev(clause_start="5.1", clause_end="5.4")]
-    confidence, review, reasons = assess("Per \u00a75.5.", cited, 0.85, **clean())
+    confidence, review, reasons, _ = assess("Per \u00a75.5.", cited, 0.85, **clean())
     assert confidence == 0.5 and review is True
     assert "5.5" in reasons[0]
 
 
 def test_partial_series_caps_confidence_and_forces_review():
     cited = [ev(unit_id="u1", part=1, parts=4, clause_start="7.2", clause_end="7.2.3")]
-    confidence, review, reasons = assess("The conditions are three.", cited, 0.85, **clean())
+    confidence, review, reasons, _ = assess("The conditions are three.", cited, 0.85, **clean())
     assert confidence == 0.5 and review is True
     assert "incomplete" in reasons[0]
 
 
 def test_ungrounded_always_needs_review():
-    _, review, reasons = assess("text", [ev(clause_start="1")], 0.95, **clean(grounded=False))
+    _, review, reasons, _ = assess("text", [ev(clause_start="1")], 0.95, **clean(grounded=False))
     assert review is True and reasons
 
 
 def test_threshold_is_inclusive():
     """An answer at exactly 0.60 was shipping unflagged on a strict comparison."""
     cited = [ev(clause_start="7.2", clause_end="7.2")]
-    _, review, _ = assess("no clause claims", cited, 0.60, **clean())
+    _, review, _, _ = assess("no clause claims", cited, 0.60, **clean())
     assert review is True
 
 
 def test_just_above_threshold_passes():
     cited = [ev(clause_start="7.2", clause_end="7.2")]
-    _, review, _ = assess("no clause claims", cited, 0.61, **clean())
+    _, review, _, _ = assess("no clause claims", cited, 0.61, **clean())
     assert review is False
 
 
 def test_confidence_is_never_raised():
     cited = [ev(clause_start="5.1", clause_end="5.6")]
-    confidence, _, _ = assess("Per \u00a75.2.", cited, 0.3, **clean())
+    confidence, _, _, _ = assess("Per \u00a75.2.", cited, 0.3, **clean())
     assert confidence == 0.3
 
 
 def test_reasons_accumulate():
     cited = [ev(clause_start="5.1", clause_end="5.4", unit_id="u1", part=1, parts=3)]
-    _, _, reasons = assess("Per \u00a75.9.", cited, 0.9, **clean(grounded=False))
+    _, _, reasons, _ = assess("Per \u00a75.9.", cited, 0.9, **clean(grounded=False))
     assert len(reasons) == 3
 
 
@@ -240,7 +240,7 @@ def test_assess_does_not_cap_confidence_for_an_unused_partial_unit():
     used = _part("u1", 1, 1, chunk=1)
     unused_partial = _part("u2", 3, 5, chunk=9)
 
-    confidence, needs_review, reasons = assess(
+    confidence, needs_review, reasons, _ = assess(
         "A grounded answer with no clause citations.",
         [used],
         0.9,
@@ -325,7 +325,7 @@ def test_two_remembered_answers_are_two_pieces_of_evidence():
 
 
 def test_the_q4_case_end_to_end_is_no_longer_flagged():
-    confidence, needs_review, reasons = assess(
+    confidence, needs_review, reasons, _ = assess(
         ANSWER,
         evidence_for(ANSWER, [PART_ONE], [PART_ONE, PART_TWO]),
         0.85,
@@ -438,7 +438,7 @@ def test_without_the_limit_the_old_behaviour_is_unchanged():
 
 def test_assess_passes_the_limit_through():
     cited = [_unit(part=7, parts=113)]
-    confidence, review, reasons = assess(
+    confidence, review, reasons, _ = assess(
         "text",
         cited,
         0.9,
@@ -466,7 +466,7 @@ def prior(**overrides):
 
 def test_an_answer_citing_only_previous_answers_is_flagged():
     cited = [prior(), prior(snippet="another")]
-    confidence, review, reasons = assess(
+    confidence, review, reasons, scored = assess(
         "All personal data is stored within the Kingdom.",
         cited,
         0.9,
@@ -478,14 +478,15 @@ def test_an_answer_citing_only_previous_answers_is_flagged():
 
     assert review is True
     assert any("rests only on what we told somebody before" in reason for reason in reasons)
-    assert confidence == 0.9, "provenance is not a scoring problem"
+    assert scored == 0.9, "provenance is not a scoring problem: the rating is kept"
+    assert confidence == 0.6, "but a held answer shows no more than the threshold (plan 030)"
 
 
 def test_one_policy_among_them_is_enough():
     """The common case, and it must not be flagged: measured over nineteen real
     questions, eighteen cited at least one policy."""
     cited = [prior(), ev()]
-    _, review, reasons = assess(
+    _, review, reasons, _ = assess(
         "text",
         cited,
         0.9,

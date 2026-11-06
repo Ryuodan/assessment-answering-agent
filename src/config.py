@@ -274,7 +274,7 @@ class Settings(BaseSettings):
     storage_limit_per_user_mb: int = Field(default=2048, ge=0)
     # Nothing used this recently is removed, even over the limit.
     storage_keep_days: int = Field(default=30, ge=1)
-    # Below this, an answer is flagged for review.
+    # At or below this, an answer is held for review, and a held answer never shows a higher score.
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # 1200, not the 1800 this carried while Markdown tables still held Docling's

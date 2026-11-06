@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from src.config import settings
 from src.forms.model import DetectedForm, FormQuestion
 from src.models import AnsweredQuestion, BeforeApproval
+from src.verification import held_by_score
 
 # ---------------------------------------------------------------------------
 # Choosing which questions to act on
@@ -143,7 +144,9 @@ def held_by_the_review(answered: AnsweredQuestion, threshold: float | None = Non
     Never for words a person wrote: those were not the model's to review.
     """
     floor = settings.review_confidence_threshold if threshold is None else threshold
-    return not written_by_a_person(answered) and (bool(answered.review_reasons) or answered.confidence <= floor)
+    return not written_by_a_person(answered) and (
+        bool(answered.review_reasons) or held_by_score(answered.confidence, floor)
+    )
 
 
 def approve(answered: AnsweredQuestion, *, threshold: float | None = None) -> AnsweredQuestion:
@@ -196,6 +199,11 @@ def ready_to_write(
     The reason is returned rather than logged because it is what the interface
     shows the person: "held back" with no cause is a wall, and the whole point
     of holding an answer back is that somebody should look at it.
+
+    A score is judged by the review's own rule (`verification.held_by_score`,
+    plan 030): at or under the threshold is held. This compared "under" until
+    then, which differed only for a score exactly at the threshold that the
+    review had not flagged, and the review flags every such score.
     """
     if answered is None or not answered.answer.strip():
         return False, ""
@@ -208,9 +216,9 @@ def ready_to_write(
     if answered.needs_review:
         reasons = "; ".join(answered.review_reasons) or (answered.confidence_reason or "the reviewer flagged it")
         return False, f"flagged for review -- {reasons}"
-    if answered.confidence < floor:
+    if held_by_score(answered.confidence, floor):
         return False, (
-            f"confidence {answered.confidence:.0%}, below the {floor:.0%} needed to write without a person looking"
+            f"confidence {answered.confidence:.0%}, at or under the {floor:.0%} threshold for writing without a person looking"
         )
     return True, ""
 

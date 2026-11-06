@@ -692,3 +692,33 @@ are below the 4.9 that one run each needs (above), so this shows no harm and a
 consistent direction, not a proven gain. The tests prove the mechanism
 (`tests/test_previous_answers.py`). The live index and database were hashed
 before and after and are unchanged.
+
+## Confidence shown for held answers (plan 030)
+
+From plan 030, an answer a check holds for review shows a capped score: no more
+than the review threshold (`REVIEW_CONFIDENCE_THRESHOLD`, 0.6), and no more than
+0.3 when the reviewer found it not grounded, the top of the reviewer's own scale
+for that (`verification.held_confidence`). Before, only an unsupported clause
+or a partial source lowered the score. An answer held for resting on previous
+answers alone, for sources that disagree, or for failing the review kept the
+rating the models gave it, and one held answer in eight showed "High".
+
+What this does to comparisons across the change:
+
+- **Confidence figures before and after are not comparable.** The spread of
+  confidence, its correlation with the judge's score (the calibration numbers in
+  the report), and any count by confidence band all move, because held answers
+  that scored high now show at most 0.6. Compare runs on the same side of the
+  change, or apply the cap to the earlier run's held answers first.
+- **Agreement and the release decision are comparable.** The cap only lowers
+  the score of an answer that is already held, so the same answers are written
+  and held as before. `tests/characterization/test_answer_pipeline.py` and
+  `tests/test_honest_confidence.py` pin that.
+
+Applied to the runs on file, with no new model calls: of 134 answered held-out
+questions, 19 held answers showed more than 0.6 and now show at most 0.6. On
+the two dev-split runs of plan 027 it is 7 and 11 of 82. No answer's decision
+changes. Up to 15, 13 and 12 more, held between 0.3 and 0.6, drop to 0.3 if the
+reviewer found them not grounded. The files do not record which check held an
+answer, so that count is an upper bound. The "why the confidence is low"
+sentence still explains the models' rating, so it is unchanged.

@@ -19,8 +19,10 @@ our policy, answer as we answered where they agree — and where they conflict, 
 follow the policy and report the disagreement.
 
 That report is a **flag, never prose**. `DraftedAnswer.contradicts_memory` is a
-field of its own, and `finalize` turns it into a review reason, which holds the
-answer back and shows it on the card beside the answer. It cannot reach the
+field of its own, and `finalize` hands it to `verification.assess`, which turns
+it into a review reason: that holds the answer back, caps the score it shows at
+the review threshold (plan 030), and shows on the card as "Sources disagree"
+beside the answer. It cannot reach the
 spreadsheet, because the only string this system writes into a cell is `answer`
 — and a note about our own inconsistency is not something to send a customer.
 

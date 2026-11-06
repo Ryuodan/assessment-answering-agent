@@ -61,8 +61,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from eval.vault import require
-from src.config import PROJECT_ROOT
+from src.config import PROJECT_ROOT, settings
 from src.models import Question, QuestionType
+from src.verification import held_by_score
 
 logger = logging.getLogger(__name__)
 
@@ -620,8 +621,13 @@ def summarise(results: list[HouseResult]) -> dict:
         # a reviewer has to read before the file can be filled. It was reported
         # under the opposite name -- "would be written into the file
         # unreviewed" -- which inverts the one number in here that says how
-        # much human work a run leaves behind.
-        "held_back": sum(1 for r in graded if r.answer.strip() and (r.needs_review or r.confidence < 0.6)),
+        # much human work a run leaves behind. By the gate's own threshold rule (plan 030).
+        "held_back": sum(
+            1
+            for r in graded
+            if r.answer.strip()
+            and (r.needs_review or held_by_score(r.confidence, settings.review_confidence_threshold))
+        ),
         "found_own_answer": round(100 * sum(1 for r in graded if r.found_own_answer) / len(graded), 1)
         if graded
         else 0.0,

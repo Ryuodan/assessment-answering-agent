@@ -135,6 +135,11 @@ QUERY_PLAN_USER = """QUESTION
 {question_block}"""
 
 
+# The top of the reviewer's scale for an answer whose sources do not cover it
+# ("0.0 to 0.3" below). A held answer the reviewer found not grounded shows no
+# more than this (`verification.held_confidence`, plan 030); change both together.
+REVIEW_UNGROUNDED_CEILING = 0.3
+
 REVIEW_SYSTEM = """You review a drafted assessment answer for grounding before it reaches a human.
 
 Read every sentence of the answer against the sources. A sentence that sounds like something an organisation of this kind would say, but that no source states, is the failure this review exists to catch — it is the one a reader is least likely to question.

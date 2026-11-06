@@ -211,6 +211,20 @@ def test_a_withdrawn_answer_the_review_would_not_flag_is_not_listed(user, flagge
     assert fill_audit.released_by_withdrawal(TEAM) == []
 
 
+def test_a_withdrawn_answer_at_the_threshold_is_held_by_the_gate_and_not_listed(user, flagged):
+    """Plan 030: the gate holds a score at the threshold, as the review does, so it is not released.
+    It compared "under" until then, and the audit listed this answer as written as if confident."""
+    question_id = flagged.form.questions[0].id
+    answer = batches.answers(flagged.id)[question_id].model_copy(deep=True)
+    answer.needs_review, answer.review_reasons = False, []
+    answer.confidence = settings.review_confidence_threshold
+    batches.save_answers(flagged.id, [answer])
+    withdrawn(user, flagged, question_id)
+
+    assert fill_audit.released_by_withdrawal(TEAM) == []
+    assert tools.ready_to_write(batches.answers(flagged.id)[question_id])[0] is False
+
+
 def _everything():
     conn = store.connect()
     return (
