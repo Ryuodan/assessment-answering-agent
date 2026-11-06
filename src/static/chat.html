@@ -338,12 +338,18 @@
   .icon:hover { background: var(--surface-sunken); color: var(--ink); }
   .icon.send { background: var(--accent); color: var(--on-accent); }
   .icon.send:disabled { background: var(--line); color: var(--ink-faint); cursor: not-allowed; }
-  /* Which product the chat is for, beside the box: the chip is in cards.css,
-     shared with the Workbench (plan 029). Above the box, the line that asks
-     for one before a new chat's first message. */
-  .composer .product-needed { display: flex; max-width: 700px; margin: 0 auto 7px; }
-  /* On a phone the chip's longest label left the box a word wide. */
-  @media (max-width: 560px) { .composer .product-chip select { max-width: 104px; } }
+  /* Which product the chat is for, on its own line above the box: the chip
+     (in cards.css, shared with the Workbench, plan 029) and, before a new
+     chat's first message, the line that asks for one. In the box it took a
+     third of the room from the message (the user's test of plan 029). */
+  .composer-product {
+    max-width: 700px; margin: 0 auto 7px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  }
+  .composer .product-needed { display: flex; min-width: 0; }
+  /* As wide as what it shows, not as its longest option ("General (shared
+     policies only)"). A long name is cut with "…"; the list shows it whole. */
+  .composer .product-chip select { field-sizing: content; max-width: 240px; }
+  @media (max-width: 560px) { .composer .product-chip select { max-width: 180px; } }
   .convo .tag.product { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .attached {
     max-width: 700px; margin: 0 auto 7px; font-size: 13px; color: var(--ink-faint);
@@ -504,15 +510,7 @@
         <button class="ghost" id="detach">remove</button>
       </div>
       <div class="status error composer-note" id="composerNote" role="alert" hidden></div>
-      <!-- A new chat waits for a product (plan 029, 2): nothing is chosen for
-           the person, General included. "Last used" fills it in one click. -->
-      <div class="product-needed" id="productNeeded" role="status" hidden>
-        <span id="productNeededText"></span><span id="chatLastUsed"></span>
-      </div>
-      <div class="composer-inner">
-        <label class="icon" for="fileInput" title="Attach a questionnaire">
-          <input type="file" id="fileInput" accept=".xlsx,.xlsm,.docx" hidden />＋
-        </label>
+      <div class="composer-product">
         <!-- Which product this chat is for (plan 024). A new chat starts for it
              with its first message, and from then on it is fixed (TD-040): to
              work on another product, start a new chat. -->
@@ -523,6 +521,16 @@
             <option value="" disabled selected>Product: choose…</option>
             <option value="general">General (shared policies only)</option>
           </select>
+        </label>
+        <!-- A new chat waits for a product (plan 029, 2): nothing is chosen for
+             the person, General included. "Last used" fills it in one click. -->
+        <div class="product-needed" id="productNeeded" role="status" hidden>
+          <span id="productNeededText"></span><span id="chatLastUsed"></span>
+        </div>
+      </div>
+      <div class="composer-inner">
+        <label class="icon" for="fileInput" title="Attach a questionnaire">
+          <input type="file" id="fileInput" accept=".xlsx,.xlsm,.docx" hidden />＋
         </label>
         <textarea id="prompt" rows="1"
           placeholder="Ask for something, ex: “answer the governance questions briefly”"></textarea>
@@ -2084,7 +2092,7 @@
         "this chat is about the whole company."
       : wanting
         ? "Choose a product to send this."
-        : "Which product is this chat for? Choose on the chip. General uses the shared policies only.";
+        : "Which product is this chat for? General uses the shared policies only.";
     if ($("productNeededText").textContent !== text) $("productNeededText").textContent = text;
     const suggestion = lastUsedChoice();
     const host = $("chatLastUsed");

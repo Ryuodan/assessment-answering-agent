@@ -95,3 +95,20 @@ def test_a_long_conversation_title_does_not_widen_the_history(page: Page) -> Non
         if width > 860:  # side by side, not floating over the conversation
             middle = page.locator(".middle").bounding_box()
             assert middle and middle["width"] >= width - 251, f"at {width}px the conversation is {middle}"
+
+
+def test_the_product_chip_leaves_the_message_box_its_room(page: Page) -> None:
+    """The chip sat in the box and was as wide as its longest option, "General (shared
+    policies only)": a third of the box went to it, not to the message (the user's
+    test of plan 029). It is on its own line above the box now."""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto("/")
+    expect(page.locator("#productPick option[value='general']")).to_have_count(1)
+    chip, box, inner = page.locator("#productChip"), page.locator("#prompt"), page.locator(".composer-inner")
+
+    for choice in ("", "general"):
+        if choice:
+            page.select_option("#productPick", choice)
+        assert chip.bounding_box()["y"] + chip.bounding_box()["height"] <= inner.bounding_box()["y"], "above the box"
+        assert box.bounding_box()["width"] >= inner.bounding_box()["width"] - 100, "the message has the box"
+        assert chip.bounding_box()["width"] <= 280, f"the chip is {chip.bounding_box()['width']}px wide"

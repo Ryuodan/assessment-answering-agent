@@ -1233,7 +1233,7 @@ async def say(
                 logger.info("The model called a tool that does not exist; carrying on")
                 sending = _resume_from(history, final) + [_correction(failed)]
                 continue
-            logger.warning("The assistant stopped early: %s", failed)
+            state["stopped_by"] = assistant_stopped.cause(failed)  # logged there, as an event
             turn.stopped_early = not draft  # asked again and failed: the first reply stands, marked
             break
         if assistant_turn.spent(final.get("messages", [])) and not reply_now():

@@ -471,9 +471,70 @@ async def test_a_turn_that_fails_still_records_what_it_did(user, tmp_path, monke
     turn = await assistant.say(user, conversation, "Answer everything")
 
     assert turn.stopped_early
-    assert "ran out of room" in turn.reply
+    # Said as what happened: it did not run out of room (the user's test of plan 029).
+    assert turn.reply == "Something went wrong part way through that, and nothing was changed. Please try again."
     saved = conversations.load(conversation.id, team_id=user.team_id)
     assert [m.content for m in saved.messages if isinstance(m, HumanMessage)] == ["Answer everything"]
+
+
+class APIConnectionError(Exception):
+    """Named as the model provider's client names it; the cause is read by class name."""
+
+
+class RateLimitError(Exception):
+    status_code = 429
+
+
+@pytest.mark.parametrize(
+    ("failed", "cause"),
+    [
+        (RuntimeError("Recursion limit of 40 reached without hitting a stop condition."), "room"),
+        (APIConnectionError("Connection error."), "connection"),
+        (ConnectionResetError("reset by peer"), "connection"),
+        (RateLimitError("Rate limit reached"), "busy"),
+        (RuntimeError("the provider is down"), "error"),
+    ],
+    ids=["recursion", "provider-connection", "socket", "rate-limit", "other"],
+)
+def test_what_stopped_a_turn_is_read_from_its_error(failed, cause):
+    assert assistant_stopped.cause(failed) == cause
+
+
+def test_an_error_raised_from_a_lost_connection_is_a_lost_connection():
+    try:
+        try:
+            raise APIConnectionError("Connection error.")
+        except APIConnectionError as lost:
+            raise RuntimeError("the graph failed") from lost
+    except RuntimeError as failed:
+        assert assistant_stopped.cause(failed) == "connection"
+
+
+@pytest.mark.parametrize(
+    ("stopped_by", "language", "said"),
+    [
+        ("connection", "en", "I lost the connection to the answering service part way through that, and nothing "
+         "was changed. Please check the connection and try again."),
+        ("busy", "en", "The answering service was too busy to finish that, and nothing was changed. "
+         "Please try again in a minute."),
+        ("room", "en", "I ran out of room part way through that, and nothing was changed. "
+         "Could you try again, one step at a time?"),
+        ("connection", "ar", "انقطع الاتصال بخدمة الإجابة قبل أن أُكمل ذلك، ولم يتغير شيء. "
+         "يرجى التحقق من الاتصال والمحاولة مرة أخرى."),
+    ],
+)  # fmt: skip
+def test_a_stopped_turn_says_what_stopped_it(stopped_by, language, said):
+    assert assistant_stopped.stopped_reply({"stopped_by": stopped_by}, language) == said
+
+
+def test_only_a_turn_that_ran_out_of_room_is_told_to_go_one_step_at_a_time():
+    searched = {"searches": [{"kind": "search", "query": "backups", "outcome": "found"}],
+                "sources": [{"source_name": "Backup policy.pdf"}]}  # fmt: skip
+
+    lost = assistant_stopped.stopped_reply({**searched, "stopped_by": "connection"}, "en")
+
+    assert "one point at a time" not in lost and lost.endswith("Please check the connection and try again.")
+    assert assistant_stopped.stopped_reply(searched, "en").endswith("one point at a time usually works better.")
 
 
 @pytest.mark.asyncio
