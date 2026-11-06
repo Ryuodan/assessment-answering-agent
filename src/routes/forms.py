@@ -1,7 +1,7 @@
 """A questionnaire's routes, moving here from `src/api.py` (plan 029).
 
 Filling came first, to make room in `src/api.py`; opening, listing and reading
-one followed with plan 029's Stage 1. Two routers, each included in
+one followed with plan 029's Stage 1, and downloading the filled copy with plan 033. Two routers, each included in
 `src/api.py` where its routes were, so the order the routes are matched in, and
 the OpenAPI document, stay the same: `opening` before answering, `router`
 (filling) after approving.
@@ -13,13 +13,16 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from src import batches, forms, products, service, tools
+from src import batches, forms, products, questionnaire, service, tools
+from src.errors import NotFound
 from src.identity import User
 from src.logs import get_logger
 from src.routes.auth import current_user
+from src.web import attachment_headers
 
 logger = get_logger(__name__)
 
@@ -126,3 +129,28 @@ def fill_questionnaire(
         "written_anyway": len(filled.written_anyway),
         "because": filled.because,
     }
+
+
+OOXML_TYPES = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+@router.get("/api/forms/{batch_id}/file")
+def download_filled_questionnaire(batch_id: str, user: User = Depends(current_user)) -> FileResponse:
+    """The filled copy. Produced by `/fill`, which must have run first."""
+    batch = questionnaire.require(user, batch_id, reading=True)  # a deleted product's too (plan 027)
+    filled = tools._filled_path(batch)
+    if not filled.exists():
+        raise NotFound("Fill the questionnaire first.", code="filled_file_missing")
+    # The real type, so a browser hands it to Excel or Word rather than to
+    # whatever it does with an unknown blob; `attachment_headers` still forces
+    # the download and carries the Arabic file name.
+    return FileResponse(
+        filled,
+        filename=filled.name,
+        headers=attachment_headers(filled.name),
+        media_type=OOXML_TYPES.get(filled.suffix.lower(), "application/octet-stream"),
+    )

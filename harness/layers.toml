@@ -96,6 +96,7 @@ modules = [
     "src.selection",
     "src.styling",
     "src.fill_audit",
+    "src.questionnaire",
     "src.tools",
     "src.agents.assistant",
     "src.agents.assistant_cards",

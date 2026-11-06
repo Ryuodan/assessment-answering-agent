@@ -14,14 +14,18 @@
   every error: the application's own (`src/errors.py`, D-013), FastAPI's
   refusals, validation failures, and anything unexpected, whose detail goes to
   the log and never to the response.
+* **Downloads.** `attachment_headers(name)`, safe for an Arabic file name
+  (moved from `src/api.py`, plan 033).
 """
 
 from __future__ import annotations
 
 import re
 import time
+import unicodedata
 import uuid
 from typing import Any, cast
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -145,3 +149,19 @@ async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
     with logs.request_context(request_id_of(request)):
         log.exception("http.unhandled_error", method=request.method, route=_route(request.scope))
     return _error(request, 500, "Something went wrong on the server. The details are in its log.", "internal_error")
+
+
+def attachment_headers(filename: str) -> dict[str, str]:
+    """`Content-Disposition` for a download, safe for a non-ASCII file name.
+
+    HTTP header values are latin-1, so an Arabic assessment name raised
+    UnicodeEncodeError inside Starlette and the download failed with a 500 —
+    on precisely the corpus this system exists to serve. RFC 6266 answers it
+    with two parameters: a transliterated `filename` that any client can read,
+    and a percent-encoded `filename*` that modern browsers prefer.
+    """
+    stripped = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
+    fallback = stripped.replace('"', "").strip() or "assessment"
+    if fallback.startswith("."):
+        fallback = f"assessment{fallback}"
+    return {"Content-Disposition": f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename, safe='')}"}
