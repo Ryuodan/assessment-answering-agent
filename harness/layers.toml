@@ -25,6 +25,7 @@ modules = [
     "src.verification",
     "src.progress",
     "src.busy",
+    "src.chat_running",
     "src.chunking",
 ]
 
