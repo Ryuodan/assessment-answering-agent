@@ -232,7 +232,9 @@ def unflagged(confidence: float) -> AnsweredQuestion:
 def test_the_gate_holds_a_score_at_the_threshold_as_the_review_does():
     """The gate compared "under" and the review "at or under": at exactly 0.6 they disagreed."""
     ready, why = ready_to_write(unflagged(THRESHOLD))
-    assert ready is False and why == "confidence 60%, not above the 60% needed to write without a person looking"
+    assert (
+        ready is False and why == "confidence 60%, at or under the 60% threshold for writing without a person looking"
+    )
     assert held_by_the_review(unflagged(THRESHOLD)) is True
     assert ready_to_write(unflagged(0.61)) == (True, "")
 

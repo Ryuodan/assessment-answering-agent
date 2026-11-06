@@ -218,7 +218,7 @@ def ready_to_write(
         return False, f"flagged for review -- {reasons}"
     if held_by_score(answered.confidence, floor):
         return False, (
-            f"confidence {answered.confidence:.0%}, not above the {floor:.0%} needed to write without a person looking"
+            f"confidence {answered.confidence:.0%}, at or under the {floor:.0%} threshold for writing without a person looking"
         )
     return True, ""
 
