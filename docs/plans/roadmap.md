@@ -35,3 +35,4 @@ Work asked for directly, outside the milestones:
 | [030](completed/030-knowledge-page-honest-confidence-chat-cards.md) | the team's feedback, part 2: knowledge-base page, honest confidence, answer cards in the chat | done 2026-11-06 |
 | [031](active/031-product-answers-and-chat-fixes.md) | product answers keep shared material apart; ingest asks which knowledge base; the chat's drawer goes; switching conversations mid-turn; search per product | active |
 | [032](active/032-tech-debt-eval-index-brackets-search.md) | TD-072 to TD-074: the evaluation's own index, no empty brackets, earlier answers in search | active |
+| [033](active/033-workbench-steps-lists-retention.md) | the team's feedback, part 3: a step-by-step Workbench, faster review on the cards, saved lists, retention, the chat's upload | active |
