@@ -1,0 +1,66 @@
+{
+  "answered": {
+    "answer": "Access is revoked promptly.",
+    "attempts": 1,
+    "before_approval": null,
+    "brief": "",
+    "by_hand": false,
+    "citations": [
+      "Access Control Policy.pdf §3.4–3.5.2"
+    ],
+    "confidence": 0.8,
+    "confidence_reason": "A second model read the answer against the sources and could not trace every statement in it back to them. The reviewer's note:\n 'Promptly' is not in the sources. \nVerify each claim against the 1 cited source before submitting.",
+    "drafted": "",
+    "error": "",
+    "evidence": [
+      {
+        "answered_date": "",
+        "authority": "ours",
+        "chunk": 0,
+        "clause": "3.4",
+        "clause_end": "3.5.2",
+        "clause_start": "3.4",
+        "doc_id": "",
+        "entry_id": "",
+        "heading": "Access Control Policy > 3.4 Access revocation > 3.5 Access reviews",
+        "is_lexical": false,
+        "item_count": 5,
+        "kind": "series",
+        "locator": "Access Control Policy.pdf §3.4–3.5.2",
+        "page": -1,
+        "page_end": -1,
+        "part": 1,
+        "parts": 1,
+        "product_id": "",
+        "query_hits": 2,
+        "questionnaire": "",
+        "raw_score": 0.71,
+        "score": 0.7949,
+        "section_clause": "",
+        "snippet": "# Access Control Policy\n\n## 3.4 Access revocation\n\n3.4.1 Line managers notify the IT service desk of every leaver before the leaver's last working day.\n\n3.4.2 All logical access of a leaver is revoked within 24 hours of the end of employment.\n\n3.4.3 Privileged accounts of a leaver are disabled immediately on the last working day.\n\n## 3.5 Access reviews\n\n3.5.1 User access rights are reviewed every quarter by the system owner.\n\n3.5.2 Privileged access rights are reviewed every month.",
+        "source_name": "Access Control Policy.pdf",
+        "source_type": "guideline",
+        "unit_id": "Access Control Policy.pdf:u0"
+      }
+    ],
+    "needs_review": true,
+    "prefer": "",
+    "question": {
+      "id": "Q7",
+      "language": "en",
+      "options": [],
+      "question_type": "free_text",
+      "section": null,
+      "text": "How quickly is a leaver's access revoked, and who is notified?"
+    },
+    "rationale": "'Promptly' is not in the sources.",
+    "review_reasons": [
+      "the reviewer did not find the answer grounded"
+    ]
+  },
+  "steps": [
+    "plan",
+    "DraftedAnswer",
+    "AnswerReview"
+  ]
+}

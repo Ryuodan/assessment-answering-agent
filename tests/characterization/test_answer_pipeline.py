@@ -155,3 +155,62 @@ def test_a_rejected_draft_goes_round_again(pipeline, snapshot):
         "AnswerReview",
     ]
     snapshot("pipeline/rejected-draft-retried", result)
+
+
+# --- answers a check holds (plan 030) ------------------------------------------
+#
+# Each is held for review by a different check, at a score the models rated
+# well. Pinned: the answer that comes out, and the steps the model was asked
+# for. The prompts are pinned by the two paths above.
+
+HELD = {
+    "held-sources-disagree": dict(
+        plans=["leaver access revocation"],
+        drafts=[
+            DraftedAnswer(
+                answer="All logical access is revoked within 24 hours of the end of employment [1].",
+                rationale="3.4.2.",
+                confidence=0.95,
+                used_source_ids=[1],
+                contradicts_memory="A 2023 answer said access is revoked within a week; the policy says 24 hours.",
+            )
+        ],
+        reviews=[AnswerReview(grounded=True, verdict_reason="Matches 3.4.2.", confidence=0.9)],
+    ),
+    "held-not-grounded": dict(
+        plans=["leaver access revocation"],
+        drafts=[DraftedAnswer(answer="Access is revoked promptly.", confidence=0.85, used_source_ids=[1])],
+        reviews=[
+            AnswerReview(
+                grounded=False, verdict_reason="'Promptly' is not in the sources.", confidence=0.8, refined_query=""
+            )
+        ],
+    ),
+    "held-unsupported-clause": dict(
+        plans=["leaver access revocation"],
+        drafts=[
+            DraftedAnswer(
+                answer="All logical access is revoked within 24 hours, as §9.9 requires [1].",
+                rationale="3.4.2.",
+                confidence=0.9,
+                used_source_ids=[1],
+            )
+        ],
+        reviews=[AnswerReview(grounded=True, verdict_reason="Matches 3.4.2.", confidence=0.9)],
+    ),
+}
+
+
+def held_answer(run, fake, name: str) -> dict[str, Any]:
+    script = HELD[name]
+    model = ScriptedModel(plans=list(script["plans"]), drafts=list(script["drafts"]), reviews=list(script["reviews"]))
+    result = run(model, staged=[record["metadata"]["chunk"] for record in fake.records][:1])
+    return {"steps": [call["step"] for call in result["calls"]], "answered": result["answered"]}
+
+
+@pytest.mark.parametrize("name", sorted(HELD))
+def test_an_answer_a_check_holds(pipeline, snapshot, name):
+    run, fake = pipeline
+    result = held_answer(run, fake, name)
+    assert result["answered"]["needs_review"] is True
+    snapshot(f"pipeline/{name}", result)
