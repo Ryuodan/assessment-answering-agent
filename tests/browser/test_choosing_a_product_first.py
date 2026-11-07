@@ -88,7 +88,19 @@ def chat(title: str, product_id: str = "") -> None:
 def test_the_workbench_starts_with_no_product_and_reading_waits_for_one(
     page: Page, tmp_path: Path, availo: products.Product
 ) -> None:
-    """The selector started on General, and Read opened the file for it as soon as one was chosen."""
+    """The selector started on General, and Read opened the file for it as soon as one was chosen.
+
+    Changed on purpose by plan 033: there is no Read button. The file waits in the page, and says
+    so, until a product is chosen; choosing one reads it, with no second click."""
+    posted: list[str] = []
+    page.on(
+        "request",
+        lambda request: (
+            posted.append(request.url)
+            if request.method == "POST" and ("/api/forms" in request.url or "/api/assessments" in request.url)
+            else None
+        ),
+    )
     page.goto("/workbench")
     selector = page.locator("#formProduct")
     expect(selector).to_have_value("")
@@ -98,18 +110,17 @@ def test_the_workbench_starts_with_no_product_and_reading_waits_for_one(
     expect(page.locator("#formProductHint")).to_contain_text("Choose the product this questionnaire is for")
 
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    read = page.locator("#extractBtn")
-    expect(read).to_be_disabled()
-    expect(read).to_have_text("Read questions from file")
-    expect(page.locator("#readNeedsProduct")).to_be_visible()
-    expect(page.locator("#readNeedsProduct")).to_have_text("Choose a product first.")
+    waiting = page.locator("#readNeedsProduct")
+    expect(waiting).to_be_visible()
+    expect(waiting).to_have_text(
+        "vendor.xlsx is waiting for the product: choose one above, and it is read straight away."
+    )
+    page.wait_for_timeout(300)
+    assert posted == [], "nothing is sent before a product is chosen"
 
     page.select_option("#formProduct", "general")
-    expect(read).to_be_enabled()
-    expect(read).to_have_text("Read questions for General")
-    expect(page.locator("#readNeedsProduct")).to_be_hidden()
+    expect(waiting).to_be_hidden()
     expect(page.locator("#formProductChip")).not_to_have_class(UNCHOSEN)
-    read.click()
 
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     [opened] = batches.recent(TEAM)
@@ -157,7 +168,6 @@ def test_closing_a_questionnaire_goes_back_to_choose(
     page.goto("/workbench")
     page.select_option("#formProduct", availo.id)
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
 
     page.click("#closeForm")
@@ -165,7 +175,10 @@ def test_closing_a_questionnaire_goes_back_to_choose(
     expect(selector).to_be_enabled()
     expect(selector).to_have_value("")
     expect(page.locator("#formProductChip")).to_have_class(UNCHOSEN)
-    expect(page.locator("#extractBtn")).to_be_disabled()  # the same file, still chosen, waits again
+    # Changed on purpose by plan 033: a file is read once and not held again, so nothing waits
+    # for the next choice; it said "the same file, still chosen, waits again" of the Read button.
+    expect(page.locator("#readNeedsProduct")).to_be_hidden()
+    expect(page.locator("#assessmentChosen")).to_have_text("")
 
     page.click("#addQuestionBtn")
     page.get_by_role("textbox", name="Type a question").last.fill("Do you encrypt backups?")
@@ -176,17 +189,22 @@ def test_closing_a_questionnaire_goes_back_to_choose(
 def test_a_new_spreadsheet_read_while_one_is_open_says_whose_product_it_takes(
     page: Page, tmp_path: Path, availo: products.Product
 ) -> None:
-    """While a questionnaire is open, another file is opened for its product, and nothing said so."""
+    """While a questionnaire is open, another file is opened for its product, and nothing said so.
+
+    Changed on purpose by plan 033: the Read button said "Read questions for Availo"; with no
+    Read button, the drop zone says it before the file is given, and the file is read for Availo."""
     page.goto("/workbench")
     page.select_option("#formProduct", availo.id)
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
 
+    page.click("#step1Toggle")  # step 1 folded once the file was open
+    expect(page.locator("#dropFor")).to_have_text(
+        "Another file opens as a new questionnaire for Availo; vendor.xlsx stays in “Or pick up”."
+    )
     page.set_input_files("#assessmentInput", str(shapes.status_and_comment(tmp_path / "other.xlsx")))
-    read = page.locator("#extractBtn")
-    expect(read).to_have_text("Read questions for Availo")
-    expect(read).to_be_enabled()
+    expect(page.locator("#stepTitle")).to_have_text("other.xlsx")
+    assert [form["product_id"] for form in batches.recent(TEAM)] == [availo.id, availo.id]
 
 
 def test_a_reload_chooses_nothing(page: Page, availo: products.Product) -> None:
@@ -218,7 +236,6 @@ def test_start_fresh_follows_the_product_box_after_clear_all(
     expect(page.locator("#formProduct")).to_be_disabled()  # the list's answers fix its product
 
     page.set_input_files("#assessmentInput", str(workbook))
-    page.click("#extractBtn")
     offer = page.locator("#alreadyOpen")
     fresh = offer.get_by_role("button", name=re.compile(r"^Start fresh"))
     expect(fresh).to_have_text("Start fresh (for Availo)")
@@ -249,7 +266,6 @@ def test_start_fresh_waits_for_a_product_after_the_one_chosen_is_deleted(
     page.goto("/workbench")
     page.select_option("#formProduct", msegat.id)
     page.set_input_files("#assessmentInput", str(workbook))
-    page.click("#extractBtn")
     offer = page.locator("#alreadyOpen")
     fresh = offer.get_by_role("button", name=re.compile(r"^Start fresh"))
     expect(fresh).to_have_text("Start fresh (for Msegat)")

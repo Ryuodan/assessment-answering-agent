@@ -77,7 +77,6 @@ def test_each_cited_remembered_answer_has_a_chip_that_opens_it(
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
     page.click("#answerBtn")
     card = page.locator("#results .answer").first
     expect(card).to_contain_text(ANSWER, timeout=15_000)
@@ -118,7 +117,6 @@ def answered_on_the_workbench(page: Page, tmp_path: Path) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
     page.click("#answerBtn")
     expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
 

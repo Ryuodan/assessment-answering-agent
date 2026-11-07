@@ -75,7 +75,6 @@ def answered(page: Page, workbook: Path, count: int) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(workbook))
     choose_general(page)
-    page.click("#extractBtn")
     expect(page.locator("#questionList .qrow")).to_have_count(count)
     page.click("#answerBtn")
     expect(page.locator("#reviewBar")).to_be_visible(timeout=15_000)
@@ -212,6 +211,7 @@ def test_a_question_asked_beside_an_answered_questionnaire_stays_in_view(
     tab(page, "All").click()
     expect(page.locator("#results .answer")).to_have_count(4)
 
+    page.locator("#moreActions > summary").click()  # plan 033: "Ask another question" is under More
     page.fill("#composerInput", "Do you run penetration tests every year?")
     page.click("#composerAdd")
     page.click("#composerAnswer")
@@ -235,7 +235,6 @@ def test_a_run_of_the_file_and_a_typed_question_says_where_the_typed_answer_is(
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
     expect(page.locator("#questionList .qrow")).to_have_count(4)
     page.click("#addQuestionBtn")
     page.locator("#questionList textarea").last.press_sequentially("Do you run penetration tests every year?")
@@ -337,8 +336,8 @@ def test_fill_waits_while_the_run_is_reworded(page: Page, tmp_path: Path, one_he
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
     expect(page.locator("#questionList .qrow")).to_have_count(4)
+    page.locator("#answerOptions > summary").click()  # plan 033: the wording is under "More options"
     page.fill("#answerStyle", "Shorter.")
     page.click("#answerBtn")
 
@@ -391,7 +390,6 @@ def test_answers_the_file_arrived_with_leave_the_list_open(page: Page, tmp_path:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.already_answered(tmp_path / "last year.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
 
     rows = page.locator("#questionList .qrow")
     expect(rows.first).to_be_visible()

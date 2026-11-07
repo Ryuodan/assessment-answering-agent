@@ -90,10 +90,12 @@ def accept(dialog) -> None:
 def test_the_workbench_opens_on_the_questionnaire(page: Page, stores) -> None:
     page.goto("/workbench")
 
+    # Changed on purpose by plan 033: the Workbench is five steps, the first "Choose and load"
+    # ("Load a questionnaire"), and the review is step 4 (it was step 2, "Review and export").
     steps = page.locator("main .step .step-head")
-    expect(steps.first.locator("h2")).to_have_text("Load a questionnaire")
+    expect(steps.first.locator("h2")).to_have_text("Choose and load")
     expect(steps.first.locator(".step-number")).to_have_text("1")
-    expect(page.locator("#resultsCard .step-number")).to_have_text("2")
+    expect(page.locator("#resultsCard .step-number")).to_have_text("4")
     expect(page.locator("#formProduct")).to_be_visible()
     for moved in ("#kbScope", "#guidelinesInput", "#guidelinesBtn", "#kbSources", "#kbClear", "#uploadedDocuments"):
         expect(page.locator(moved), f"{moved} is still on the Workbench").to_have_count(0)
@@ -333,7 +335,6 @@ def test_a_citation_on_the_workbench_still_opens_its_clause_and_its_document(
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
     page.click("#answerBtn")
     card = page.locator("#results .answer").first
     expect(card).to_contain_text("Yes.", timeout=15_000)

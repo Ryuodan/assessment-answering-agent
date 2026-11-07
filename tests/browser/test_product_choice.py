@@ -147,7 +147,6 @@ def test_a_questionnaire_is_opened_for_the_product_chosen_and_fixed_until_closed
     expect(hint).to_contain_text("Availo's knowledge base and answer memory")
     expect(close).to_be_hidden()
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
     questions = page.get_by_role("textbox", name="Type a question")
     expect(questions).to_have_count(4)
     [opened] = batches.recent(TEAM)
@@ -303,7 +302,6 @@ def test_a_product_deleted_after_the_workbench_listed_it_is_said_when_a_file_is_
     products.delete(identity.local_user(), TEAM, gone.id, "confirm")
 
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
 
     status = page.locator("#extractStatus")
     expect(status).to_contain_text("Msegat has been deleted, so the file was not opened for it")
@@ -312,11 +310,11 @@ def test_a_product_deleted_after_the_workbench_listed_it_is_said_when_a_file_is_
     selector = page.locator("#formProduct")
     expect(selector).to_have_value("")  # nothing chosen (plan 029, D-022: it went back on General)
     expect(selector.locator("option", has_text="Msegat")).to_have_count(0)
-    expect(page.locator("#extractBtn")).to_be_disabled()  # waits for a product again
+    # Changed on purpose by plan 033: no Read button. The refused file waits for another product.
+    expect(page.locator("#readNeedsProduct")).to_contain_text("vendor.xlsx is waiting for the product")
     assert batches.recent(TEAM) == []
 
-    page.select_option("#formProduct", "general")  # chosen on purpose now: it is no longer the default
-    page.click("#extractBtn")  # as General, now
+    page.select_option("#formProduct", "general")  # chosen on purpose now, and the file is read as General
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     assert batches.recent(TEAM)[0]["product_id"] == ""
 
@@ -327,7 +325,6 @@ def test_closing_a_questionnaire_asks_about_typed_answers_and_forgets_the_fill(
     page.goto("/workbench")
     page.select_option("#formProduct", "general")  # plan 029 (D-022): reading waits for a choice
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
     questions = page.get_by_role("textbox", name="Type a question")
     expect(questions).to_have_count(4)
     page.click("#addQuestionBtn")
@@ -376,7 +373,6 @@ def test_close_waits_for_a_request_about_the_questionnaire(
     page.goto("/workbench")
     page.select_option("#formProduct", "general")  # plan 029 (D-022): reading waits for a choice
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
     page.click("#answerBtn")
     expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
     held = []
@@ -401,7 +397,6 @@ def test_closing_while_typed_questions_are_reworded_drops_what_comes_back(
     page.goto("/workbench")
     page.select_option("#formProduct", "general")  # plan 029 (D-022): reading waits for a choice
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
-    page.click("#extractBtn")
     expect(page.get_by_role("textbox", name="Type a question")).to_have_count(4)
     page.click("#addQuestionBtn")
     page.get_by_role("textbox", name="Type a question").last.fill("Do you test your backups?")
@@ -411,6 +406,7 @@ def test_closing_while_typed_questions_are_reworded_drops_what_comes_back(
     page.route("**/api/assessments/revise", lambda route: held.append(route))
     page.on("request", lambda request: asked.append(request.url) if request.url.endswith("/revise") else None)
 
+    page.locator("#moreActions > summary").click()  # plan 033: rewording every answer is under More
     page.fill("#reviseInstruction", "Shorter, please.")
     page.click("#reviseBtn")
     page.wait_for_function("() => document.querySelector('#reviseBtn').disabled")
