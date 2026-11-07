@@ -313,6 +313,11 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
     laid_out(page, "approved, blank and being edited")
     editing.get_by_role("button", name="إنهاء التعديل").click()
 
+    tab(page, "#reviewTabs", "فارغة أو مستبعدة من الملف").click()
+    expect(page.locator("#results > .answer")).to_have_count(1)
+    cards_in_arabic(page, "left blank")
+    tab(page, "#reviewTabs", "الكل").click()
+
     # Brief, for the whole questionnaire.
     expect_arabic(page, "in the length and skill pickers", within="#detailPick", besides=())
     page.locator("#detailPick").get_by_role("button", name="مختصرة").click()
@@ -375,6 +380,11 @@ def test_the_chats_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path, mon
     expect_arabic(page, "with one set aside", within="#answersPane", besides=CHATS_OWN + (tabs,))
     cards_in_arabic(page, "with one set aside", cards="#answers > .answer")
     laid_out(page, "with one set aside", cards="#answers > .answer")
+
+    tab(page, tabs, "فارغة أو مستبعدة من الملف").click()
+    expect(page.locator("#answers > .answer")).to_have_count(1)
+    expect_arabic(page, "in Blank or set aside", within="#answersPane", besides=CHATS_OWN + (tabs,))
+    cards_in_arabic(page, "in Blank or set aside", cards="#answers > .answer")
 
     tab(page, tabs, "أنجزها شخص").click()
     expect(page.locator("#answers .tab-empty")).to_have_text(
@@ -509,6 +519,32 @@ def test_a_reasons_own_words_are_content_on_the_card(page: Page) -> None:
     expect(carried).to_have_attribute("dir", "auto")
     expect(page.locator("#drawn .held [data-no-translate]")).to_have_text("a 2023 answer said otherwise")
     assert english_on_screen(page, within="#drawn .answer-body", besides=()) == []
+
+
+def test_a_lists_tabs_say_ready_to_use(page: Page) -> None:
+    """A list of questions has no file (plan 033): its confident answers are "Ready to use", in Arabic too."""
+    in_arabic(page)
+    page.goto("/workbench")
+    drawn = page.evaluate(
+        """() => {
+             const tabs = document.createElement("div");
+             const counted = { review: 1, written: 2, person: 1, blank: 0, all: 4 };
+             Cards.fileless = true;
+             try {
+               Cards.reviewTabs(tabs, counted, "review", () => {});
+               return [[...tabs.children].map((tab) => [tab.textContent, tab.title]),
+                       Cards.emptyTab("review", counted), Cards.emptyTab("blank", counted)];
+             } finally {
+               Cards.fileless = false;
+             }
+           }"""
+    )
+    names, review, blank = drawn
+    assert names[1] == ["جاهزة للاستخدام (2)", "إجابات واثقة لم يراجعها أحد: جاهزة للاستخدام كما صيغت في المسودة"]
+    assert review == "لا توجد إجابات تحتاج إلى مراجعة. 3 إجابات جاهزة للاستخدام."
+    assert blank == "لا توجد إجابات هنا. تحتاج إلى مراجعة: 1، وجاهزة للاستخدام: 3."
+    for name, title in names:
+        assert not LATIN_WORD.search(name + title), (name, title)
 
 
 # --- the errors ------------------------------------------------------------------

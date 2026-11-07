@@ -488,9 +488,9 @@ button.last-used .tag { text-transform: none; }
   font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); max-height: 340px; overflow: auto;
 }
 
-/* Right-aligned, by the text's own direction rather than the right edge: what
-   it holds in another direction -- an English answer in an Arabic page, which
-   has `dir` of its own -- starts at its own side (plan 038). */
+/* Right to left starts at the right. Said as "start" rather than "right", so
+   what it holds in the other direction -- an English answer in an Arabic page,
+   with a `dir` of its own -- starts at its own side, the left (plan 038). */
 [dir="rtl"] { text-align: start; }
 
 /* Arabic is joined up: spacing its letters apart breaks the joins, and it has
