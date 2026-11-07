@@ -29,6 +29,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `UnsupportedFile` | 415 | `unsupported_file` | A file of a type this cannot take. |
 | `Unprocessable` | 422 | `unprocessable` | Understood, but cannot be used: an unreadable file, nothing to export. |
 | `FormatError` | 422 | `questionnaire_unreadable` | The file is not a workbook this can read. The message is safe to show. |
+| `NothingToFill` | 422 | `nothing_to_fill` | A list of questions has no file to write the answers into: they are downloaded instead. |
 | `UnsupportedDocumentError` | 422 | `document_unreadable` | Raised for a file type the app cannot read. |
 | `AppError` | 500 | `internal_error` | An error the application raised on purpose, with a message safe to show. |
 | `Unavailable` | 503 | `unavailable` | Something this depends on -- a model, a converter -- is not there. |
@@ -48,11 +49,12 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `document_path_invalid` | 400 | `Invalid` | `src.api._resolve_document` |
 | `document_type_unsupported` | 415 | `UnsupportedFile` | `src.routes.knowledge.check_suffix` |
 | `extraction_failed` | 422 | `Unprocessable` | `src.api.view_extracted_text` |
-| `filled_file_missing` | 404 | `NotFound` | `src.api.download_filled_questionnaire` |
+| `filled_file_missing` | 404 | `NotFound` | `src.routes.forms.download_filled_questionnaire` |
 | `last_administrator` | 400 | `Invalid` | `src.routes.admin._refuse_last_admin` |
 | `memory_entry_not_found` | 404 | `NotFound` | `src.routes.memory.edit_memory_entry`, `src.routes.memory.move_memory_entry`, `src.routes.memory.remove_memory_entry`, `src.routes.memory.resolve_memory_conflict`, `src.routes.memory.restore_memory_entry` |
 | `no_files` | 400 | `Invalid` | `src.routes.knowledge._ingest_files` |
-| `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment` |
+| `no_questions_found` | 422 | `Unprocessable` | `src.api.answer_assessment`, `src.api.extract_assessment`, `src.lists.read_list` |
+| `no_questions_given` | 400 | `Invalid` | `src.lists.open_list` |
 | `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |
 | `other_team` | 403 | `Forbidden` | `src.routes.products._team` |
 | `password_from_environment` | 400 | `Invalid` | `src.routes.admin.admin_set_password` |
@@ -61,12 +63,14 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `product_description_too_long` | 400 | `Invalid` | `src.products._description` |
 | `product_manager_required` | 403 | `Forbidden` | `src.routes.products._manager` |
 | `product_name_invalid` | 400 | `Invalid` | `src.products._name` |
+| `question_too_long` | 400 | `Invalid` | `src.lists.typed` |
 | `run_not_found` | 404 | `NotFound` | `src.api.get_run` |
 | `run_not_in_progress` | 404 | `NotFound` | `src.api.assessment_progress` |
 | `search_mode_unknown` | 422 | `Unprocessable` | `src.api.search_knowledge` |
 | `skill_not_found` | 404 | `NotFound` | `src.api.copy_skill`, `src.api.edit_skill`, `src.api.remove_skill` |
 | `source_not_found` | 404 | `NotFound` | `src.routes.knowledge.remove_source` |
 | `team_not_found` | 404 | `NotFound` | `src.routes.admin.admin_rotate_code`, `src.routes.products._team` |
+| `too_many_questions` | 400 | `Invalid` | `src.lists.open_list` |
 | `user_not_found` | 404 | `NotFound` | `src.routes.admin.admin_set_password` |
 
 ## From the framework

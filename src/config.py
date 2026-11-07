@@ -232,6 +232,10 @@ class Settings(BaseSettings):
     # for a question needing five different policies, which is most of what
     # multi-document recall was losing.
     max_search_queries: int = Field(default=6, ge=1, le=8)
+    # Search a question the way it was searched before: the first plan that worked is
+    # kept per question, product and language and used again (plan 034). Off plans
+    # every time, as before; the model words a plan differently on each run.
+    reuse_search_plans: bool = True
 
     # Fuse a BM25 pass with the dense search, to catch the exact figures
     # embeddings blur — "72 hours", "90 days", "12 characters". Off by default

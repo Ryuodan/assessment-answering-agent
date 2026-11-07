@@ -152,7 +152,6 @@ src/forms/xlsx_package.py: [type-arg] Missing type arguments for generic type "l
 src/graph/nodes.py: [assignment] Incompatible types in assignment (expression has type "AnswerReview | None", variable has type "AnswerReview")
 src/graph/nodes.py: [assignment] Incompatible types in assignment (expression has type "AnswerReview | None", variable has type "AnswerReview")
 src/graph/nodes.py: [assignment] Incompatible types in assignment (expression has type "DraftedAnswer | None", variable has type "DraftedAnswer")
-src/graph/nodes.py: [no-untyped-def] Function is missing a type annotation for one or more parameters
 src/graph/nodes.py: [type-arg] Missing type arguments for generic type "Counter"
 src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"
 src/graph/nodes.py: [type-arg] Missing type arguments for generic type "dict"

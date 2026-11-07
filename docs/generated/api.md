@@ -49,8 +49,10 @@ Errors: [errors.md](errors.md).
 | Method | Path | What it does |
 |---|---|---|
 | `POST` | `/api/forms` | Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it. |
-| `GET` | `/api/forms` | One person's questionnaires, last changed first. |
-| `GET` | `/api/forms/{batch_id}` | Get Questionnaire |
+| `GET` | `/api/forms` | One person's questionnaires, most recently used first, each with the day it is kept until (plan 033). |
+| `POST` | `/api/forms/list` | Keep typed questions, or a PDF's or a Word file's, as a questionnaire with no file to write into (plan 033). |
+| `GET` | `/api/forms/{batch_id}` | One questionnaire. Opening it is using it: its `kept_until` starts again from now (plan 033). |
+| `DELETE` | `/api/forms/{batch_id}` | Delete one of the caller's questionnaires, a list's or a deleted product's too, with its answers and files. |
 | `POST` | `/api/forms/{batch_id}/answer` | Answer a selection. Long: a large questionnaire is minutes of work. |
 | `POST` | `/api/forms/{batch_id}/revise` | Revise Questionnaire |
 | `POST` | `/api/forms/{batch_id}/answers` | Write Answer By Hand |

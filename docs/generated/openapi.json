@@ -775,7 +775,7 @@
       },
       "get": {
         "summary": "List Questionnaires",
-        "description": "One person's questionnaires, last changed first.",
+        "description": "One person's questionnaires, most recently used first, each with the day it is kept until (plan 033).",
         "operationId": "list_questionnaires_api_forms_get",
         "parameters": [
           {
@@ -815,9 +815,50 @@
         }
       }
     },
+    "/api/forms/list": {
+      "post": {
+        "summary": "Open Question List",
+        "description": "Keep typed questions, or a PDF's or a Word file's, as a questionnaire with no file to write into (plan 033).\n\nMultipart: one `questions` field per typed question, in order, and/or a\n`file` (PDF or Word) whose questions are read first. `product` as for a\nfile, checked before anything is kept; `name` is what it is listed as (the\nfile's name, or \"Typed questions\", when left out). Nothing is answered:\nthe answer is the questionnaire as `GET /api/forms/{id}` returns it, with\n`format` \"list\". 400 `no_questions_given` when there is nothing to keep;\n422 `no_questions_found` when the file has no questions.",
+        "operationId": "open_question_list_api_forms_list_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_open_question_list_api_forms_list_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Open Question List Api Forms List Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/forms/{batch_id}": {
       "get": {
         "summary": "Get Questionnaire",
+        "description": "One questionnaire. Opening it is using it: its `kept_until` starts again from now (plan 033).",
         "operationId": "get_questionnaire_api_forms__batch_id__get",
         "parameters": [
           {
@@ -839,6 +880,46 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Get Questionnaire Api Forms  Batch Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Questionnaire",
+        "description": "Delete one of the caller's questionnaires, a list's or a deleted product's too, with its answers and files.\n\n409 `questionnaire_busy` while it is being answered, or while a chat turn\nruns in a conversation about it. A conversation about it still opens,\nwithout its answers.",
+        "operationId": "delete_questionnaire_api_forms__batch_id__delete",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Delete Questionnaire Api Forms  Batch Id  Delete"
                 }
               }
             }
@@ -3324,7 +3405,7 @@
     "/api/chat": {
       "get": {
         "summary": "List Conversations",
-        "description": "The caller's own conversations, most recently used first, each with its product.\n\nAnd with the turn running in it, or null (plan 031): the page marks the row,\nand finds a new chat's id by the run id it sent the first message with.",
+        "description": "The caller's own conversations, most recently used first, each with its product.\n\nAnd with the turn running in it, or null (plan 031): the page marks the row,\nand finds a new chat's id by the run id it sent the first message with. And\nwith the day it is kept until, or null when nothing is deleted (plan 033).",
         "operationId": "list_conversations_api_chat_get",
         "parameters": [
           {
@@ -3447,7 +3528,7 @@
     "/api/chat/{conversation_id}": {
       "get": {
         "summary": "Get Conversation",
-        "description": "One conversation, as a transcript plus whatever answers it has produced.\n\nThe stored messages are LangChain's, tool calls included, because the agent\nresumes from them. What comes back here is the readable half of that -- who\nsaid what -- because a person scrolling their own conversation has no use\nfor a serialised tool call.\n\n`running` is read before the conversation is loaded (plan 031): a turn\nthat ends in between comes back saved and still reported, which the\npage's next check corrects. Read after, a slow `answers_for` let a turn\nend unseen, and the page drew a transcript without it, and no turn.",
+        "description": "One conversation, as a transcript plus whatever answers it has produced.\n\nThe stored messages are LangChain's, tool calls included, because the agent\nresumes from them. What comes back here is the readable half of that -- who\nsaid what -- because a person scrolling their own conversation has no use\nfor a serialised tool call.\n\n`running` is read before the conversation is loaded (plan 031): a turn\nthat ends in between comes back saved and still reported, which the\npage's next check corrects. Read after, a slow `answers_for` let a turn\nend unseen, and the page drew a transcript without it, and no turn.\n\nOpening it is using it: its `kept_until` starts again from now (plan 033).\nA conversation whose questionnaire was deleted opens with `answers` null.",
         "operationId": "get_conversation_api_chat__conversation_id__get",
         "parameters": [
           {
@@ -4137,6 +4218,43 @@
           "file"
         ],
         "title": "Body_extract_assessment_api_assessments_extract_post"
+      },
+      "Body_open_question_list_api_forms_list_post": {
+        "properties": {
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          },
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "default": ""
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Body_open_question_list_api_forms_list_post"
       },
       "Body_open_questionnaire_api_forms_post": {
         "properties": {

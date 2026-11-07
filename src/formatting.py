@@ -217,10 +217,11 @@ def same_wording(asked: str, question: str) -> bool:
     drafting prompt warns about, and a looser match would put one's answer first
     for the other.
     """
-    return bool(asked.strip()) and _wording(asked) == _wording(question)
+    return bool(asked.strip()) and wording_key(asked) == wording_key(question)
 
 
-def _wording(text: str) -> str:
+def wording_key(text: str) -> str:
+    """A question's words with case, punctuation, spacing and the digits' script folded away (plan 034)."""
     from src.chunking import fold_digits
 
     folded = re.sub(r"[ً-ْـ]", "", fold_digits(text).casefold())  # harakat and tatweel

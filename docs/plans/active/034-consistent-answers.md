@@ -63,6 +63,26 @@ Each is measured: 12 questions, three runs each, before and after, and then the 
   - NAC no longer flips between held and released. One of three English runs still writes "Network Access Control (NAC)"; the other two write "network access controls", as the sources do.
   - The sources are as varied as before. That is the searches, which step 3 holds still.
   - 36 runs a side is a small sample: some of the gain may be noise.
+- 2026-11-07: step 3, the same searches.
+  - What was built:
+    - `src/search_plans.py` (records) keeps a plan per team, product, language and folded wording, in migration 16's `search_plans`.
+    - `src/graph/kept_searches.py` is how `nodes.plan` uses it: a kept plan is used again, and a plan is kept only when the planner returned queries.
+    - `REUSE_SEARCH_PLANS` (default true) switches it off.
+    - Retention deletes plans unused for `RETENTION_DAYS`, since they hold the question's words.
+  - For room, `_parse_queries` moved unchanged to `src/graph/query_text.py`; `nodes` imports it under its old name.
+  - 6 new tests. The one that pins reuse fails on the old `plan`; the others pin the store and what must not change.
+  - The measurement ran in rounds, every question's first run before its second, as a question asked again comes after the first time:
+
+    | | baseline | step 2 | step 3 |
+    |---|---|---|---|
+    | same decision | 9 of 12 | 11 of 12 | 11 of 12 |
+    | same verdict | 11 of 12 | 12 of 12 | 12 of 12 |
+    | cited sources in common | 0.72 | 0.71 | **0.88** |
+    | wording in common | 0.41 | 0.45 | **0.57** |
+    | confidence spread | 0.13 | 0.03 | 0.05 |
+
+  - The incident-response question now cites the same sources run after run (0.42 to 0.93), and NAC's Arabic run cites identical ones.
+  - What still varies is the drafter's wording (temperature 0.2) and the reviewer's judgement. One question, about leavers, was held once at 0.6.
 
 ## Decision log
 

@@ -332,4 +332,19 @@ MIGRATIONS: list[str] = [
     ALTER TABLE form_batches ADD COLUMN used_at TEXT NOT NULL DEFAULT '';
     ALTER TABLE conversations ADD COLUMN used_at TEXT NOT NULL DEFAULT '';
     """,
+    # 16 -- the searches a question was answered with, so it is searched the same way again
+    # (plan 034, `search_plans`). Keyed by the question's folded wording; deleted when unused
+    # for RETENTION_DAYS, since it holds the question's words.
+    """
+    CREATE TABLE IF NOT EXISTS search_plans (
+        team_id    TEXT NOT NULL,
+        product_id TEXT NOT NULL DEFAULT '',
+        language   TEXT NOT NULL,
+        wording    TEXT NOT NULL,
+        queries    TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        used_at    TEXT NOT NULL,
+        PRIMARY KEY (team_id, product_id, language, wording)
+    );
+    """,
 ]

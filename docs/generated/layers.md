@@ -35,7 +35,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 
 Everything that talks to something outside the process: model providers, the embedding host, Docling, SQLite, Chroma, and the PDF, Word and Excel files read and written.
 
-- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.docx_preview`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.uploads`, `src.vector_names`, `src.forms.*`
+- **Modules:** `src.diagnostics`, `src.docling_client`, `src.documents`, `src.docx_preview`, `src.embeddings`, `src.export_docx`, `src.export_pdf`, `src.knowledge`, `src.lexical`, `src.llm`, `src.migration_steps`, `src.migrations`, `src.organisation`, `src.rerank`, `src.scoped_knowledge`, `src.store`, `src.uploads`, `src.vector_names`, `src.forms.*`
 - **Owns:** `arabic_reshaper`, `bidi`, `chromadb`, `docx`, `groq`, `httpx`, `langchain_chroma`, `langchain_groq`, `langchain_openai`, `openinference`, `pdfplumber`, `phoenix`, `rank_bm25`, `reportlab`, `sentence_transformers`, `sqlite3`
 
 | Module | What it is |
@@ -58,6 +58,7 @@ Everything that talks to something outside the process: model providers, the emb
 | `src/knowledge.py` | The knowledge base: guidelines and previously answered assessments. |
 | `src/lexical.py` | Lexical (BM25) retrieval, fused with the dense search. |
 | `src/llm.py` | Groq chat-model factory. |
+| `src/migration_steps.py` | Migrations written in Python, because they need a setting. Listed by name in `src.migrations`. |
 | `src/migrations.py` | The SQLite schema, as an ordered list of migrations. Applied by `src.store`. |
 | `src/organisation.py` | Who this system is answering on behalf of. |
 | `src/rerank.py` | Cross-encoder reranking of retrieved evidence. |
@@ -70,7 +71,7 @@ Everything that talks to something outside the process: model providers, the emb
 
 What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits.
 
-- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.memory_sweep`, `src.preferences`, `src.products`, `src.runs`, `src.storage`
+- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.memory_sweep`, `src.preferences`, `src.products`, `src.retention`, `src.runs`, `src.search_plans`, `src.storage`
 
 | Module | What it is |
 |---|---|
@@ -84,7 +85,9 @@ What the system remembers about people and their work: identity, events, runs, q
 | `src/memory_sweep.py` | The disagreement sweep: what the arrival of a remembered answer means for the others. |
 | `src/preferences.py` | How one person wants answers worded: preferences, and skills. |
 | `src/products.py` | A team's products: each will have a knowledge base and an answer memory of its own. |
+| `src/retention.py` | Saved work is not kept for ever: what nobody has used for `RETENTION_DAYS` is deleted (plan 033). |
 | `src/runs.py` | Answered runs, kept so they can be looked at again. |
+| `src/search_plans.py` | The searches a question was answered with, kept so that it is searched the same way again (plan 034). |
 | `src/storage.py` | Keeping each person's stored files within a limit, oldest work first. |
 
 ## 4. answering
@@ -102,8 +105,10 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 | `src/extraction.py` | Turn raw document text into structured questions or question/answer pairs. |
 | `src/forms/reading.py` | The five ways a questionnaire can be read, behind one call. |
 | `src/graph/__init__.py` | LangGraph workflow for answering assessments. |
+| `src/graph/kept_searches.py` | The searches `nodes.plan` uses again for a question it planned before (plan 034, `search_plans`). |
 | `src/graph/nodes.py` | Graph nodes. |
 | `src/graph/product_scope.py` | What the drafter and the reviewer are told about a product's questionnaire's product (plan 031, D-026). |
+| `src/graph/query_text.py` | The searches a query plan holds, read out of the planner's plain text. |
 | `src/graph/state.py` | Graph state schemas. |
 | `src/graph/workflow.py` | Graph wiring. |
 | `src/relevance.py` | LLM relevance grading of retrieved chunks. |
@@ -113,7 +118,7 @@ Turning a question into a grounded answer: the LangGraph pipeline, question extr
 
 The use cases the web interface, the command line and the chat assistant share.
 
-- **Modules:** `src.agents.assistant`, `src.agents.assistant_cards`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.fill_audit`, `src.search`, `src.selection`, `src.service`, `src.styling`, `src.tools`
+- **Modules:** `src.agents.assistant`, `src.agents.assistant_cards`, `src.agents.assistant_prompt`, `src.agents.assistant_quotes`, `src.agents.assistant_stopped`, `src.agents.assistant_turn`, `src.fill_audit`, `src.lists`, `src.questionnaire`, `src.search`, `src.selection`, `src.service`, `src.styling`, `src.tools`
 - **Owns:** `langchain`
 
 | Module | What it is |
@@ -125,6 +130,8 @@ The use cases the web interface, the command line and the chat assistant share.
 | `src/agents/assistant_stopped.py` | What an assistant turn that stopped part way says (plan 027, TD-043). |
 | `src/agents/assistant_turn.py` | What one assistant turn may do (plan 027, TD-043). |
 | `src/fill_audit.py` | Which filled files may hold answers the review gate holds back (plan 029, TD-052, TD-053). |
+| `src/lists.py` | A list of questions, kept as a questionnaire with no file to write into (plan 033). |
+| `src/questionnaire.py` | One questionnaire as its owner sees it: the gate every operation passes, what the pages draw, and deleting it. |
 | `src/search.py` | Looking something up in a team's knowledge base, without touching a questionnaire. |
 | `src/selection.py` | Which questions an operation applies to, when an answer counts as settled, and what is written. |
 | `src/service.py` | Application service — the one orchestration layer the API and CLI share. |

@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections import Counter
 
 from src import organisation
 from src.config import settings
 from src.extraction import extract_questions
-from src.graph import product_scope
+from src.graph import kept_searches, product_scope
+from src.graph.query_text import parse_queries as _parse_queries
 from src.graph.state import AssessmentState, QuestionState, select_evidence
 from src.llm import chat_llm, structured_llm
 from src.rerank import rerank
@@ -89,26 +89,6 @@ async def extract(state: AssessmentState) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _parse_queries(content) -> list[str]:
-    """Pull search queries out of a plain-text plan, one per line.
-
-    Tolerant of the shapes a model reaches for unprompted: numbered lists,
-    bullets, quotes, and a reasoning model's `<think>` preamble.
-    """
-    if isinstance(content, list):  # some providers return content blocks
-        content = " ".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in content)
-
-    text = re.sub(r"<think>.*?</think>", " ", str(content), flags=re.DOTALL | re.IGNORECASE)
-
-    queries = []
-    for line in text.splitlines():
-        line = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip().strip('"“”')
-        # A plan is a list of short search strings; anything long is commentary.
-        if 3 <= len(line) <= 160 and not line.endswith(":"):
-            queries.append(line)
-    return queries
-
-
 async def plan(state: QuestionState) -> dict:
     """Widen one question into the several searches it actually needs.
 
@@ -121,7 +101,10 @@ async def plan(state: QuestionState) -> dict:
     """
     question = state["question"]
     queries = [question.text]
+    if kept := kept_searches.recall(state):  # searched as it was before (plan 034)
+        return {"search_queries": kept}
 
+    planned = False
     if settings.query_expansion:
         try:
             # Plain text, one query per line, rather than a structured call.
@@ -136,7 +119,9 @@ async def plan(state: QuestionState) -> dict:
                     ("user", QUERY_PLAN_USER.format(question_block=_question_block(state))),
                 ]
             )
-            queries.extend(_parse_queries(response.content))
+            parsed = _parse_queries(response.content)
+            queries.extend(parsed)
+            planned = bool(parsed)
         except Exception:  # noqa: BLE001 - retrieval must survive a bad plan
             logger.exception("Query planning failed for question %s; using the question alone", question.id)
 
@@ -144,6 +129,8 @@ async def plan(state: QuestionState) -> dict:
     # extra searches return what the earlier ones already found.
     unique = list(dict.fromkeys(queries))[: settings.max_search_queries]
     logger.debug("Question %s: searching %d queries", question.id, len(unique))
+    if planned:
+        kept_searches.keep(state, unique)
     return {"search_queries": unique}
 
 

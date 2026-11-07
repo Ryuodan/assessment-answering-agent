@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from src import batches, busy, chat_running, conversations, events, store, uploads
+from src import batches, busy, chat_running, conversations, events, search_plans, store, uploads
 from src.batches import Batch
 from src.config import settings
 from src.errors import QuestionnaireBusy
@@ -228,10 +228,13 @@ def sweep(*, now: datetime | None = None) -> dict[str, Counter[str]]:
             **{f"{kind}s": tally[f"{kind}s"] for kind in KINDS},
             files=tally["files"],
         )
+    # The searches kept for questions hold their words: they go as the work does (plan 034).
+    cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=days)).isoformat(timespec="seconds")
     total: Counter[str] = sum(counts.values(), Counter())
     logger.info(
         "retention.swept",
         days=days,
+        search_plans=search_plans.forget_unused(cutoff),
         **{f"{kind}s": total[f"{kind}s"] for kind in KINDS},
         files=total["files"],
         skipped_in_use=skipped,
