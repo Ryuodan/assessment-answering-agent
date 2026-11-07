@@ -138,28 +138,34 @@ class Markup(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.stack: list[tuple[str, bool]] = []  # (tag, left alone)
+        # (tag, its text left alone, its attributes left alone), as `I18n.translate` reads them:
+        # a <textarea>'s or a <kbd>'s own text stays, its placeholder or title is translated.
+        self.stack: list[tuple[str, bool, bool]] = []
         self.texts: list[str] = []
         self.html_keys: list[str] = []
         self.scripts: list[str] = []
         self._script: list[str] | None = None
 
     def _skipping(self) -> bool:
-        return any(skip for _, skip in self.stack)
+        return any(text for _, text, _ in self.stack)
+
+    def _content(self) -> bool:
+        return any(attributes for _, _, attributes in self.stack)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         named = dict(attrs)
-        skip = tag in self.LEFT_ALONE or "data-no-translate" in named or "data-i18n-html" in named
+        content = "data-no-translate" in named or self._content()
+        skip = tag in self.LEFT_ALONE or content or "data-i18n-html" in named
         if "data-i18n-html" in named and not self._skipping():
             self.html_keys.append(" ".join((named["data-i18n-html"] or "").split()))
-        if not self._skipping() and not skip:
+        if not content:
             for name in self.ATTRIBUTES:
                 if named.get(name):
                     self.texts.append(" ".join(named[name].split()))
         if tag == "script" and "src" not in named:
             self._script = []
         if tag not in self.VOID:
-            self.stack.append((tag, skip))
+            self.stack.append((tag, skip, content))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -171,7 +177,7 @@ class Markup(HTMLParser):
             self.scripts.append("".join(self._script))
             self._script = None
         while self.stack:
-            open_tag, _ = self.stack.pop()
+            open_tag, _, _ = self.stack.pop()
             if open_tag == tag:
                 break
 
@@ -237,7 +243,7 @@ def test_the_catalogs_are_json_and_arabic() -> None:
             for form in forms.values():
                 assert isinstance(form, str) and form.strip(), f"{name}: {english!r} is empty"
                 assert re.search(r"[؀-ۿ]", form), f"{name}: {english!r} has no Arabic: {form!r}"
-                spare = PLACEHOLDER.sub("", form)
+                spare = re.sub(r"<[^>]*>", "", PLACEHOLDER.sub("", form))  # data-i18n-html's tags are not words
                 english_words = [w for w in LATIN_WORD.findall(spare) if w not in NAMES]
                 assert not english_words, f"{name}: {english!r} keeps English words {english_words}: {form!r}"
                 assert set(PLACEHOLDER.findall(form)) <= set(PLACEHOLDER.findall(english)), (
@@ -310,8 +316,10 @@ def test_the_reading_finds_what_it_should() -> None:
     parser.feed(
         '<h1 title="Hint">Needs review</h1><kbd>J</kbd><p data-no-translate>Our answer</p>'
         '<p data-i18n-html="Keys: <kbd>J</kbd>">Keys: <kbd>J</kbd></p><input placeholder="Type it">'
+        '<textarea placeholder="Ask">typed</textarea><kbd title="Next">J</kbd>'
+        '<div data-no-translate><span title="A name">Name</span></div>'
         '<script>const a = t(\'It’s {n}\', { n: 1 }); I18n.t("Two"); format(x); b.t("No");</script>'
     )
-    assert parser.texts == ["Hint", "Needs review", "Type it"]
+    assert parser.texts == ["Hint", "Needs review", "Type it", "Ask", "Next"]
     assert parser.html_keys == ["Keys: <kbd>J</kbd>"]
     assert t_literals(parser.scripts[0]) == ["It’s {n}", "Two"]

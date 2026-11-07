@@ -29,8 +29,10 @@ NOT_YET: tuple[str, ...] = (".answer", ".review-tabs", ".tab-empty")
 # What a page draws, read by the page itself: each visible text node, and the
 # placeholder, title and aria-label of each visible element.
 _ON_SCREEN = """({ within, besides }) => {
-  const LEFT_ALONE = "[data-no-translate], script, style, textarea, code, pre, kbd, noscript" +
-    (besides ? ", " + besides : "");
+  const besidesThem = besides ? ", " + besides : "";
+  const LEFT_ALONE = "[data-no-translate], script, style, textarea, code, pre, kbd, noscript" + besidesThem;
+  // A <textarea>'s or a <kbd>'s own text stays as it is; its placeholder or title is translated.
+  const CONTENT = "[data-no-translate]" + besidesThem;
   const root = document.querySelector(within);
   if (!root) return [];
   const shown = (element) => {
@@ -48,7 +50,7 @@ _ON_SCREEN = """({ within, besides }) => {
     found.push(text);
   }
   root.querySelectorAll("[placeholder], [title], [aria-label]").forEach((element) => {
-    if (element.closest(LEFT_ALONE) || !shown(element)) return;
+    if (element.closest(CONTENT) || !shown(element)) return;
     ["placeholder", "title", "aria-label"].forEach((name) => {
       const value = (element.getAttribute(name) || "").replace(/\\s+/g, " ").trim();
       if (/[A-Za-z]/.test(value)) found.push(name + ": " + value);
