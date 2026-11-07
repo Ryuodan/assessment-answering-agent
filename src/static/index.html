@@ -79,7 +79,7 @@
   .step-list button {
     display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
     background: var(--surface); color: var(--ink-faint); border: 1px solid var(--line);
-    border-radius: var(--radius-pill); padding: 3px 11px 3px 4px; font-size: 12.5px; font-weight: 550;
+    border-radius: var(--radius-pill); padding-block: 3px; padding-inline: 4px 11px; font-size: 12.5px; font-weight: 550;
   }
   .step-list button:hover:not(:disabled) { filter: none; color: var(--ink); border-color: var(--line-strong); }
   .step-list .n {
@@ -126,7 +126,7 @@
   .step.folded > .step-head h2 { font-size: 14.5px; }
   .step.folded .step-number { background: var(--ok-soft); color: var(--ok); }
   #step1:not(.folded) #step1Held { display: none; }
-  .step-hint { margin: 0 0 15px 36px; color: var(--ink-soft); font-size: 13.5px; }
+  .step-hint { margin: 0 0 15px; margin-inline-start: 36px; color: var(--ink-soft); font-size: 13.5px; }
   /* The other way in, before anything is loaded: typing the questions, under
      step 1 rather than as a step of its own with nothing in it. */
   .step.way-in { margin-top: -12px; }
@@ -262,6 +262,10 @@
     display: block; height: 100%; border-radius: var(--radius-pill);
     background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #9b6bff));
     transition: width .45s ease;
+  }
+  /* Right to left, it fills from the right, and its light end is the one moving (plan 038). */
+  [dir="rtl"] .progress-fill {
+    background: linear-gradient(270deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #9b6bff));
   }
   .spinner {
     display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-inline-end: 7px;
@@ -405,7 +409,7 @@
     transform: translateX(100%); transition: transform .2s ease;
     box-shadow: -18px 0 46px rgba(0,0,0,.14);
   }
-  [dir="rtl"] .drawer { transform: translateX(-100%); }
+  [dir="rtl"] .drawer { transform: translateX(-100%); box-shadow: 18px 0 46px rgba(0,0,0,.14); }
   .drawer.open { transform: none; }
   .drawer-head { padding: 14px 16px; border-bottom: 1px solid var(--line); }
   .drawer-head .row { display: flex; align-items: center; gap: 10px; }
@@ -680,7 +684,7 @@
 
 <div class="topbar">
   <div class="brand">
-    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-mark" aria-hidden="true" data-no-translate>A</div>
     <div class="brand-text">
       <h1>Assessment Answering Agent</h1>
       <p>Answers security questionnaires from your own policies — English and Arabic</p>
@@ -688,7 +692,7 @@
   </div>
   <div class="spacer"></div>
   <div class="whoami" id="whoami" hidden>
-    <b id="whoamiEmail"></b>
+    <b id="whoamiEmail" data-no-translate dir="auto"></b>
     <button class="ghost" id="adminLink" title="Manage who can use this" hidden>Access</button>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
   </div>
@@ -809,11 +813,9 @@
 
         <div id="formColumns"></div>
 
-        <p class="hint" style="margin:10px 0 0">
-          Anything marked <em>worth checking</em> was read from the shape of the sheet
-          rather than from its headings. If a column was taken for the wrong thing, the
-          answers land in the wrong place — change it here before answering.
-        </p>
+        <!-- "Anything marked worth checking...": written by the script, its words
+             in the interface's language and the marked words in <em> (plan 038). -->
+        <p class="hint" id="worthCheckingHint" style="margin:10px 0 0"></p>
       </div>
     </div>
   </section>
@@ -904,10 +906,9 @@
       </div>
       <div class="status review-status" id="reviewStatus" role="status"></div>
     </div>
-    <!-- Said once, in a line: the keys act only while nobody is typing (plan 033). -->
-    <p class="keys-hint" id="reviewKeys" hidden>Keys: <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>J</kbd> <kbd>K</kbd>
-      move between answers, <kbd>A</kbd> accepts, <kbd>E</kbd> edits, <kbd>Esc</kbd> closes the editor
-      and keeps what you typed.</p>
+    <!-- Said once, in a line: the keys act only while nobody is typing (plan 033).
+         Written by the script, the keys in <kbd> (plan 038). -->
+    <p class="keys-hint" id="reviewKeys" hidden></p>
 
     <div id="results"></div>
   </section>
@@ -977,7 +978,7 @@
   <div class="drawer-head">
     <div class="row">
       <h3>Access</h3>
-      <span class="adm-note" id="adminWho"></span>
+      <span class="adm-note" id="adminWho" data-no-translate dir="auto"></span>
       <button class="ghost" id="adminClose" title="Close">Close</button>
     </div>
   </div>
@@ -999,8 +1000,8 @@
         </table>
       </div>
       <div class="adm-code" id="adminCode" hidden>
-        <div style="font-size:12px;font-weight:650">New access code for <span id="adminCodeTeam"></span></div>
-        <div class="adm-value" id="adminCodeValue"></div>
+        <div style="font-size:12px;font-weight:650">New access code for <span id="adminCodeTeam" data-no-translate dir="auto"></span></div>
+        <div class="adm-value" id="adminCodeValue" data-no-translate dir="ltr"></div>
         <div class="adm-note">
           Copy it now and give it to the team. Only a hash is stored, so this is the one
           time it can be shown.
@@ -1115,6 +1116,7 @@
 (function () {
   "use strict";
 
+  const t = I18n.t;  // the interface's language (plan 038)
   const gate = document.getElementById("authGate");
   const form = document.getElementById("authForm");
   const email = document.getElementById("authEmail");
@@ -1167,14 +1169,16 @@
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        fail(body.detail || "That did not work. Check the address and try again.");
+        // The server's sentence, in the interface's language when the catalogs have it (plan 038).
+        fail(!body.detail ? t("That did not work. Check the address and try again.")
+          : typeof body.detail === "string" ? I18n.error({ message: body.detail, code: body.code }) : body.detail);
         return;
       }
       // Reload rather than just hiding the gate: the rest of the page loaded
       // its data while signed out, so some of it is empty or stale.
       window.location.reload();
     } catch (e) {
-      fail("Could not reach the server.");
+      fail(t("Could not reach the server."));
     } finally {
       submit.disabled = false;
     }
@@ -1199,16 +1203,36 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;  // the interface's language (plan 038)
   let state = { users: [], teams: [], you: null, break_glass: null };
 
   const drawer = $("adminDrawer");
   const scrim = $("adminScrim");
 
-  function escapeText(value) {
-    const node = document.createElement("span");
-    node.textContent = value == null ? "" : String(value);
-    return node.innerHTML;
+  /* A name, an address or a code: content, never translated, in its own
+     direction inside an Arabic sentence (plan 038). */
+  function named(tag, text, className) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    node.setAttribute("data-no-translate", "");
+    node.dir = "auto";
+    node.textContent = text == null ? "" : String(text);
+    return node;
   }
+
+  /* A translated sentence with names in it: each {name} in `names` becomes
+     its own element; read as text, it is the sentence as it always was. */
+  function sentence(template, names) {
+    return template.split(/(\{\w+\})/).filter(Boolean).map((piece) => {
+      const name = /^\{(\w+)\}$/.exec(piece);
+      if (!name || !names || !(name[1] in names)) return piece;
+      const value = names[name[1]];
+      return value instanceof Node ? value : named("span", value);
+    });
+  }
+
+  // The roles as a sentence names them: the server's word in English, as it always was.
+  const ROLE_WORDS = { member: t("member"), lead: t("lead"), admin: t("admin") };
 
   async function api(path, options) {
     const response = await fetch(path, Object.assign({
@@ -1217,7 +1241,9 @@
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       const said = Array.isArray(body.detail) ? body.detail.map((d) => d.msg || String(d)).join("; ") : body.detail;
-      throw new Error(said || `Request failed (${response.status})`);
+      const failure = new Error(said || t("Request failed ({status})", { status: response.status }));
+      failure.code = body.code;  // for its Arabic, by the code (plan 038)
+      throw failure;
     }
     return response.json();
   }
@@ -1236,7 +1262,7 @@
       if (success) flash($("adminDone"), success);
       await refresh();
     } catch (error) {
-      flash($("adminError"), error.message);
+      flash($("adminError"), I18n.error(error));
     }
   }
 
@@ -1246,25 +1272,24 @@
     const tr = document.createElement("tr");
 
     const name = document.createElement("td");
-    name.innerHTML = `<b>${escapeText(team.name)}</b>`;
-    if (team.name !== team.id) name.innerHTML += `<div class="adm-note">${escapeText(team.id)}</div>`;
+    name.append(named("b", team.name));
+    if (team.name !== team.id) name.append(named("div", team.id, "adm-note"));
 
     const members = document.createElement("td");
     members.textContent = team.members;
 
     const code = document.createElement("td");
     code.innerHTML = team.has_code
-      ? `<span class="adm-tag on">set</span> <span class="adm-note">${escapeText(team.code_set_at.slice(0, 10))}</span>`
-      : `<span class="adm-tag off">not set</span>`;
+      ? `<span class="adm-tag on">${escapeText(t("set"))}</span> <span class="adm-note">${escapeText(team.code_set_at.slice(0, 10))}</span>`
+      : `<span class="adm-tag off">${escapeText(t("not set"))}</span>`;
     if (team.generated_code) {
       // Generated at startup and never logged (TD-029): shown here until a new code is issued.
       const waiting = document.createElement("div");
       waiting.className = "adm-note";
-      waiting.textContent = "Generated at startup: ";
-      const value = document.createElement("b");
-      value.className = "adm-generated";
-      value.textContent = team.generated_code;
-      waiting.append(value, " - give it to the team, or issue a new code.");
+      const value = named("b", team.generated_code, "adm-generated");
+      value.dir = "ltr";
+      waiting.append(...sentence(t("Generated at startup: {code} - give it to the team, or issue a new code."),
+        { code: value }));
       code.append(waiting);
     }
 
@@ -1273,12 +1298,12 @@
 
     const rotate = document.createElement("button");
     rotate.className = "quiet";
-    rotate.textContent = team.has_code ? "New code" : "Set code";
+    rotate.textContent = team.has_code ? t("New code") : t("Set code");
     rotate.addEventListener("click", () => {
-      if (team.has_code && !confirm(
-        `Replace the access code for ${team.name}?\n\n` +
-        `Everyone on the team needs the new one before they can sign in again.`
-      )) return;
+      if (team.has_code && !confirm(t(
+        "Replace the access code for {team}?\n\nEveryone on the team needs the new one before they can sign in again.",
+        { team: team.name }
+      ))) return;
       act(async () => {
         const result = await api(`/api/admin/teams/${encodeURIComponent(team.id)}/access-code`,
                                  { method: "POST" });
@@ -1292,10 +1317,10 @@
     if (!team.members) {
       const remove = document.createElement("button");
       remove.className = "quiet";
-      remove.textContent = "Remove";
+      remove.textContent = t("Remove");
       remove.addEventListener("click", () => act(
         () => api(`/api/admin/teams/${encodeURIComponent(team.id)}`, { method: "DELETE" }),
-        `Removed ${team.name}.`
+        t("Removed {name}.", { name: team.name })
       ));
       actions.append(remove);
     }
@@ -1304,13 +1329,15 @@
     return tr;
   }
 
-  function picker(options, selected, onChange) {
+  /* `names`: the options are names (the teams), content rather than interface (plan 038). */
+  function picker(options, selected, onChange, names) {
     const select = document.createElement("select");
     options.forEach(([value, label]) => {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = label;
       option.selected = value === selected;
+      if (names) { option.setAttribute("data-no-translate", ""); option.dir = "auto"; }
       select.append(option);
     });
     select.addEventListener("change", () => onChange(select.value));
@@ -1322,34 +1349,40 @@
     const fromEnvironment = user.email === state.break_glass;
 
     const email = document.createElement("td");
-    email.innerHTML = `<b>${escapeText(user.email)}</b>`;
+    email.append(named("b", user.email));
     const notes = [];
-    if (state.you && user.email === state.you.email) notes.push("you");
-    if (fromEnvironment) notes.push("from the environment");
-    else if (user.added_by) notes.push(`added by ${escapeText(user.added_by)}`);
-    if (notes.length) email.innerHTML += `<div class="adm-note">${notes.join(" · ")}</div>`;
+    if (state.you && user.email === state.you.email) notes.push([t("you")]);
+    if (fromEnvironment) notes.push([t("from the environment")]);
+    else if (user.added_by) notes.push(sentence(t("added by {who}"), { who: user.added_by }));
+    if (notes.length) {
+      const note = document.createElement("div");
+      note.className = "adm-note";
+      notes.forEach((parts, index) => note.append(...(index ? [" · "] : []), ...parts));
+      email.append(note);
+    }
 
     const team = document.createElement("td");
     team.append(picker(
-      state.teams.map((t) => [t.id, t.name]),
+      state.teams.map((each) => [each.id, each.name]),
       user.team,
       (value) => act(
         () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {
           method: "PATCH", body: JSON.stringify({ team: value }),
         }),
-        `Moved ${user.email}.`
-      )
+        t("Moved {email}.", { email: user.email })
+      ),
+      true
     ));
 
     const role = document.createElement("td");
     const rolePicker = picker(
-      [["member", "Member"], ["lead", "Team lead"], ["admin", "Administrator"]],
+      [["member", t("Member")], ["lead", t("Team lead")], ["admin", t("Administrator")]],
       user.role,
       (value) => act(
         () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {
           method: "PATCH", body: JSON.stringify({ role: value }),
         }),
-        `${user.email} is now a ${value}.`
+        t("{email} is now a {role}.", { email: user.email, role: ROLE_WORDS[value] || value })
       )
     );
     rolePicker.disabled = fromEnvironment;
@@ -1357,9 +1390,9 @@
 
     const status = document.createElement("td");
     status.innerHTML = user.disabled
-      ? `<span class="adm-tag off">suspended</span>`
-      : `<span class="adm-tag ${user.role === "admin" ? "on" : "none"}">active</span>`;
-    if (user.has_password) status.innerHTML += ` <span class="adm-note">password</span>`;
+      ? `<span class="adm-tag off">${escapeText(t("suspended"))}</span>`
+      : `<span class="adm-tag ${user.role === "admin" ? "on" : "none"}">${escapeText(t("active"))}</span>`;
+    if (user.has_password) status.innerHTML += ` <span class="adm-note">${escapeText(t("password"))}</span>`;
 
     const seen = document.createElement("td");
     seen.className = "adm-note";
@@ -1371,43 +1404,46 @@
     if (!fromEnvironment) {
       const password = document.createElement("button");
       password.className = "quiet";
-      password.textContent = user.has_password ? "Clear password" : "Set password";
+      password.textContent = user.has_password ? t("Clear password") : t("Set password");
       password.addEventListener("click", () => {
         let value = null;
         if (!user.has_password) {
-          value = prompt(`New password for ${user.email}`);
+          value = prompt(t("New password for {email}", { email: user.email }));
           if (!value) return;
-        } else if (!confirm(
-          `Clear the password for ${user.email}?\n\nThey will sign in with their team's access code instead.`
-        )) return;
+        } else if (!confirm(t(
+          "Clear the password for {email}?\n\nThey will sign in with their team's access code instead.",
+          { email: user.email }
+        ))) return;
         act(
           () => api(`/api/admin/users/${encodeURIComponent(user.email)}/password`, {
             method: "POST", body: JSON.stringify({ password: value }),
           }),
-          value ? `Password set for ${user.email}.` : `Password cleared for ${user.email}.`
+          value ? t("Password set for {email}.", { email: user.email })
+            : t("Password cleared for {email}.", { email: user.email })
         );
       });
 
       const suspend = document.createElement("button");
       suspend.className = "quiet";
-      suspend.textContent = user.disabled ? "Restore" : "Suspend";
+      suspend.textContent = user.disabled ? t("Restore") : t("Suspend");
       suspend.addEventListener("click", () => act(
         () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, {
           method: "PATCH", body: JSON.stringify({ disabled: !user.disabled }),
         }),
-        user.disabled ? `Restored ${user.email}.` : `Suspended ${user.email}.`
+        user.disabled ? t("Restored {email}.", { email: user.email }) : t("Suspended {email}.", { email: user.email })
       ));
 
       const remove = document.createElement("button");
       remove.className = "quiet";
-      remove.textContent = "Remove";
+      remove.textContent = t("Remove");
       remove.addEventListener("click", () => {
-        if (!confirm(
-          `Remove ${user.email}?\n\nTheir sessions end immediately. Their answers and history stay.`
-        )) return;
+        if (!confirm(t(
+          "Remove {email}?\n\nTheir sessions end immediately. Their answers and history stay.",
+          { email: user.email }
+        ))) return;
         act(
           () => api(`/api/admin/users/${encodeURIComponent(user.email)}`, { method: "DELETE" }),
-          `Removed ${user.email}.`
+          t("Removed {name}.", { name: user.email })
         );
       });
 
@@ -1425,6 +1461,8 @@
       const option = document.createElement("option");
       option.value = team.id;
       option.textContent = team.name;
+      option.setAttribute("data-no-translate", "");  // a name (plan 038)
+      option.dir = "auto";
       return option;
     }));
     $("adminWho").textContent = state.you ? state.you.email : "";
@@ -1449,7 +1487,7 @@
     try {
       await refresh();
     } catch (error) {
-      flash($("adminError"), error.message);
+      flash($("adminError"), I18n.error(error));
     }
   };
 
@@ -1461,7 +1499,7 @@
 
   $("adminAddUser").addEventListener("click", () => {
     const email = $("adminNewEmail").value.trim();
-    if (!email) return flash($("adminError"), "Enter an email address.");
+    if (!email) return flash($("adminError"), t("Enter an email address."));
     act(
       () => api("/api/admin/users", {
         method: "POST",
@@ -1469,19 +1507,19 @@
           email, team: $("adminNewTeam").value, role: $("adminNewRole").value,
         }),
       }),
-      `Added ${email}.`
+      t("Added {name}.", { name: email })
     ).then(() => { $("adminNewEmail").value = ""; });
   });
 
   $("adminAddTeam").addEventListener("click", () => {
     const id = $("adminNewTeamId").value.trim().toLowerCase();
-    if (!id) return flash($("adminError"), "Enter a team id.");
+    if (!id) return flash($("adminError"), t("Enter a team id."));
     act(
       () => api("/api/admin/teams", {
         method: "POST",
         body: JSON.stringify({ id, name: $("adminNewTeamName").value.trim() || id }),
       }),
-      `Added ${id}.`
+      t("Added {name}.", { name: id })
     ).then(() => { $("adminNewTeamId").value = ""; $("adminNewTeamName").value = ""; });
   });
 
@@ -1497,8 +1535,39 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;  // the interface's language (plan 038)
   let result = null;
   let currentDocument = null;
+
+  /* --- the interface's language (plan 038) -----------------------------------
+     Content is not interface: a file's, a product's or a sheet's name, a
+     question, what the server or the file itself said. Each is its own
+     element, never translated, in its own direction, so an English name reads
+     left to right inside an Arabic sentence, and the reverse. */
+  function content(text, tag = "span") {
+    const node = document.createElement(tag);
+    node.setAttribute("data-no-translate", "");
+    node.dir = "auto";
+    node.textContent = text == null ? "" : String(text);
+    return node;
+  }
+
+  /* A translated sentence with content in it: `template` is t()'s, with its
+     {name}s still in it, and each name in `names` becomes content(), or the
+     element given. Read as text, it is the sentence as it always was. */
+  function sentence(template, names) {
+    return template.split(/(\{\w+\})/).filter(Boolean).map((piece) => {
+      const name = /^\{(\w+)\}$/.exec(piece);
+      if (!name || !names || !(name[1] in names)) return piece;
+      const value = names[name[1]];
+      return value instanceof Node ? value : content(value);
+    });
+  }
+  const textElement = (tag, text) => Object.assign(document.createElement(tag), { textContent: text });
+
+  /* Several counts in a line, "4 answers · 2 need review": a list, each item
+     a phrase of its own. */
+  const joined = (items) => items.filter(Boolean).join(" · ");
 
   // --- theme ---------------------------------------------------------------
 
@@ -1546,7 +1615,11 @@
       spinner.className = "spinner";
       el.append(spinner);
     }
-    el.append(document.createTextNode(message == null ? "" : String(message)));
+    // A sentence with names in it comes as its parts, from sentence() (plan 038);
+    // copied, because the same message is painted in two places.
+    if (Array.isArray(message)) {
+      el.append(...message.map((part) => (part instanceof Node ? part.cloneNode(true) : String(part))));
+    } else el.append(document.createTextNode(message == null ? "" : String(message)));
   }
 
   /* Requests about one questionnaire still on their way. Close waits for them:
@@ -1567,7 +1640,8 @@
         // With the server's code, so a caller can tell a refusal it can do
         // something about -- a product deleted since the page loaded -- from
         // one it can only report.
-        const failure = new Error(typeof said === "string" && said ? said : "Request failed (" + response.status + ")");
+        const failure = new Error(typeof said === "string" && said ? said
+          : t("Request failed ({status})", { status: response.status }));
         failure.code = body && body.code;
         failure.status = response.status;
         if (failure.code === "product_deleted") nowReadOnly();
@@ -1709,8 +1783,13 @@
   function fillSearchScopes() {
     const select = $("searchScope");
     const was = select.value;
-    select.replaceChildren(new Option("Shared policies", ""));
-    teamProducts.forEach((product) => select.append(new Option(product.name + " and shared policies", product.id)));
+    select.replaceChildren(new Option(t("Shared policies"), ""));
+    teamProducts.forEach((product) => {
+      const option = new Option(t("{product} and shared policies", { product: product.name }), product.id);
+      option.setAttribute("data-no-translate", "");  // it holds a product's name (plan 038)
+      option.dir = "auto";
+      select.append(option);
+    });
     select.value = [...select.options].some((option) => option.value === was) ? was : "";
     return select.value !== was;
   }
@@ -1742,7 +1821,7 @@
   async function searchScopeChanged() {
     const scope = searchScope();
     ++searchAsked;
-    if ($("searchInput").value.trim()) setStatus($("searchStatus"), "Searching…", "busy");
+    if ($("searchInput").value.trim()) setStatus($("searchStatus"), t("Searching…"), "busy");
     await loadSearchSources();
     // Again only if what is asked now differs from the search last sent: one typed while the
     // files loaded was sent for this scope already, and searching twice drew it twice.
@@ -1763,7 +1842,11 @@
     const select = $("searchSource");
     const already = new Set([...select.options].map((option) => option.value));
     names.filter(Boolean).forEach((name) => {
-      if (!already.has(name)) select.append(new Option(name, name));
+      if (already.has(name)) return;
+      const option = new Option(name, name);
+      option.setAttribute("data-no-translate", "");  // a file's name (plan 038)
+      option.dir = "auto";
+      select.append(option);
     });
   }
 
@@ -1782,7 +1865,7 @@
     if (scope !== searchScope()) return;
     const select = $("searchSource");
     const was = select.value;
-    select.replaceChildren(new Option("All files", ""));
+    select.replaceChildren(new Option(t("All files"), ""));
     fillSearchSources(names);
     select.value = [...select.options].some((option) => option.value === was) ? was : "";
   }
@@ -1793,11 +1876,11 @@
     if (!body.results.length) {
       const empty = document.createElement("div");
       empty.className = "search-empty";
-      empty.textContent = body.degraded
-        ? "Meaning-based search is not responding, and no exact text matched."
+      empty.append(...(body.degraded
+        ? [t("Meaning-based search is not responding, and no exact text matched.")]
         : productName
-          ? "Nothing in " + productName + "'s documents or the shared policies matched that."
-          : "Nothing in the indexed policies matched that.";
+          ? sentence(t("Nothing in {product}'s documents or the shared policies matched that."), { product: productName })
+          : [t("Nothing in the indexed policies matched that.")]));
       box.append(empty);
       return;
     }
@@ -1807,7 +1890,7 @@
       // reads as "the corpus does not mention this", which would be a lie.
       const note = document.createElement("div");
       note.className = "search-note";
-      note.textContent = "Meaning-based search is not responding — showing exact-text matches only.";
+      note.textContent = t("Meaning-based search is not responding — showing exact-text matches only.");
       box.append(note);
     }
 
@@ -1817,31 +1900,31 @@
 
       const head = document.createElement("div");
       head.className = "hit-head";
-      const who = document.createElement("span");
+      const who = content(item.locator || item.source_name);  // where in which file: the file's own words
       who.className = "who";
-      who.textContent = item.locator || item.source_name;
       const badge = document.createElement("span");
       badge.className = "badge" + (item.is_lexical ? " bm25" : "");
       // A BM25 rank normalised to the best hit and a cosine similarity are
       // different things; saying which one this is keeps them apart.
       badge.textContent = item.is_lexical
-        ? "exact match"
-        : "similarity " + Number(item.score).toFixed(2);
+        ? t("exact match")
+        : t("similarity {score}", { score: Number(item.score).toFixed(2) });
       badge.title = item.is_lexical
-        ? "Found by keyword search: the score is its rank, not a similarity"
-        : "Cosine similarity to your query";
+        ? t("Found by keyword search: the score is its rank, not a similarity")
+        : t("Cosine similarity to your query");
       const authority = Cards.authorityBadge(item.authority);
       head.append(who);
       // From the product's own knowledge base, not the shared policies (plan 031).
-      const ownName = (Cards.product(item.product_id) || {}).name || "this product";
-      const own = Cards.productBadge(item.product_id, "From " + ownName + "'s own documents, not the shared policies");
+      const ownName = (Cards.product(item.product_id) || {}).name || t("this product");
+      const own = Cards.productBadge(item.product_id,
+        t("From {product}'s own documents, not the shared policies", { product: ownName }));
       if (own) head.append(own);
       // What the team said before, told apart from a policy now that search shows them (TD-074).
       if (item.source_type === "prior_answer") {
         const earlier = document.createElement("span");
         earlier.className = "tag prior_answer";
-        earlier.textContent = "previous answer";
-        earlier.title = "What the team answered before, from the answer memory";
+        earlier.textContent = t("previous answer");
+        earlier.title = t("What the team answered before, from the answer memory");
         head.append(earlier);
       }
       head.append(badge);
@@ -1863,7 +1946,7 @@
       return;
     }
 
-    setStatus($("searchStatus"), "Searching…", "busy");
+    setStatus($("searchStatus"), t("Searching…"), "busy");
     const scope = searchScope(), productName = searchScopeName();
     lastSearched = searchAskedNow();
     try {
@@ -1876,10 +1959,10 @@
       if (asked !== searchAsked) return;  // a later search, or another scope, was asked for since
       fillSearchSources(body.documents || []);
       renderSearchResults(body, productName);
-      setStatus($("searchStatus"), body.results.length ? body.results.length + " passage(s)" : "", "");
+      setStatus($("searchStatus"), body.results.length ? t("{n} passage(s)", { n: body.results.length }) : "", "");
     } catch (error) {
       if (asked !== searchAsked) return;
-      setStatus($("searchStatus"), error.message, "error");
+      setStatus($("searchStatus"), I18n.error(error), "error");
     }
   }
 
@@ -1890,9 +1973,9 @@
   }
 
   function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    if (bytes < 1024) return t("{n} B", { n: bytes });
+    if (bytes < 1024 * 1024) return t("{n} KB", { n: Math.round(bytes / 1024) });
+    return t("{n} MB", { n: (bytes / (1024 * 1024)).toFixed(1) });
   }
 
   /* The questionnaire's drop zone (plan 033). A file given here is read as
@@ -1940,13 +2023,16 @@
 
   async function openDocument(doc) {
     currentDocument = doc;
-    $("viewerTitle").textContent = doc.title || doc.name;
-    $("viewerMeta").textContent = doc.label + " · " + doc.name +
-      (doc.size_bytes ? " · " + formatBytes(doc.size_bytes) : "");
+    $("viewerTitle").replaceChildren(content(doc.title || doc.name));
+    // What kind of document it is (the card's word for it), its file, and its size.
+    const kind = textElement("span", doc.label);
+    kind.className = "doc-label";
+    $("viewerMeta").replaceChildren(kind, " · ", content(doc.name),
+      ...(doc.size_bytes ? [" · " + formatBytes(doc.size_bytes)] : []));
     $("documentDownload").href = documentUrl(doc, "file");
     $("documentDownload").download = doc.name;
     $("extractedText").textContent = "";
-    setStatus($("extractedStatus"), "Extracting text… the first view may take a minute.", "busy");
+    setStatus($("extractedStatus"), t("Extracting text… the first view may take a minute."), "busy");
 
     $("documentFrame").src = documentUrl(doc, "preview");
     showViewerTab("original");
@@ -1958,11 +2044,12 @@
       if (currentDocument !== doc) return;
       $("extractedText").textContent = data.text;
       if (Cards.isArabic(data.text)) $("extractedText").dir = "rtl";
+      else if (I18n.rtl) $("extractedText").dir = "ltr";  // an English document, in an Arabic page (plan 038)
       else $("extractedText").removeAttribute("dir");
-      setStatus($("extractedStatus"), data.characters.toLocaleString() + " extracted characters.", "ok");
+      setStatus($("extractedStatus"), t("{count} extracted characters.", { count: I18n.number(data.characters) }), "ok");
     } catch (error) {
       if (currentDocument !== doc) return;
-      setStatus($("extractedStatus"), error.message, "error");
+      setStatus($("extractedStatus"), I18n.error(error), "error");
     }
   }
 
@@ -2075,7 +2162,11 @@
     if (scroll && section && !section.hidden) section.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const plural = (count, word) => count + " " + word + (count === 1 ? "" : "s");
+  /* A count and its noun, "1 question", "4 questions": the English chosen by
+     the count, as it always was, and the Arabic by its own plural forms (plan 038). */
+  const questionsSaid = (n) => (n === 1 ? t("{n} question", { n }) : t("{n} questions", { n }));
+  const answersSaid = (n) => (n === 1 ? t("{n} answer", { n }) : t("{n} answers", { n }));
+  const typedSaid = (n) => (n === 1 ? t("{n} typed question", { n }) : t("{n} typed questions", { n }));
   const answeredCount = () => (result ? result.answers.length : 0);
 
   /* A product, and questions to answer. A file waiting, the offer of one
@@ -2112,52 +2203,68 @@
 
   function partsWord(batch) { return /\.xls[xm]$/i.test(batch.source_name || "") ? "sheet" : "part"; }
   function partsUsed(batch) { return (batch.parts || []).filter((part) => part.used).length; }
+  /* "in 3 sheets": said only after "in", so the Arabic is in that case. */
+  function partsSaid(batch, n) {
+    if (partsWord(batch) === "sheet") return n === 1 ? t("{n} sheet", { n }) : t("{n} sheets", { n });
+    return n === 1 ? t("{n} part", { n }) : t("{n} parts", { n });
+  }
+  const listed = (items) => items.flatMap((item, index) => (index ? [" · ", item] : [item]));
 
   /* "Msegat · vendor.xlsx · 120 questions in 3 sheets": the product, the file and what it holds. */
   function loadSummary() {
     const choice = formBatch ? Cards.choiceOf(formBatch.product_id) : formProduct();
-    const product = choice ? choiceName(choice) : "No product chosen";
+    const product = choice ? choiceNamed(choice) : t("No product chosen");
     if (formBatch) {
       const count = formBatch.counts.questions;
-      if (isList()) return [product, formBatch.source_name, plural(count, "question")].join(" · ");
-      return [product, formBatch.source_name, count
-        ? plural(count, "question") + " in " + plural(partsUsed(formBatch), partsWord(formBatch))
-        : "no questions were read"].join(" · ");
+      if (isList()) return listed([product, content(formBatch.source_name), questionsSaid(count)]);
+      return listed([product, content(formBatch.source_name), count
+        ? t("{questions} in {parts}", { questions: questionsSaid(count), parts: partsSaid(formBatch, partsUsed(formBatch)) })
+        : t("no questions were read")]);
     }
-    if (!questions.length) return product;
-    return [product, plural(questions.length, "typed question")].join(" · ");
+    if (!questions.length) return [product];
+    return listed([product, typedSaid(questions.length)]);
   }
 
   /* "Found 120 questions in 3 sheets", and how many readings are worth checking. */
   function foundSummary(batch) {
-    if (!batch.counts.questions) return "No questions were read from " + batch.source_name;
+    if (!batch.counts.questions) return sentence(t("No questions were read from {file}"), { file: batch.source_name });
     const unsure = (batch.parts || []).reduce((total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
-    return "Found " + plural(batch.counts.questions, "question") + " in " + plural(partsUsed(batch), partsWord(batch)) +
-      (unsure ? " · " + plural(unsure, "reading") + " worth checking" : "");
+    const n = batch.counts.questions, parts = partsSaid(batch, partsUsed(batch));
+    return [joined([
+      n === 1 ? t("Found {n} question in {parts}", { n, parts }) : t("Found {n} questions in {parts}", { n, parts }),
+      unsure ? (unsure === 1 ? t("{n} reading worth checking", { n: unsure })
+        : t("{n} readings worth checking", { n: unsure })) : "",
+    ])];
   }
 
   function answerSummary() {
     const counted = questions.filter((q) => !q.skip);
     if (!counted.length) return "";
-    if (answering) return "Answering…";
-    if (running()) return "Being answered on the server";
+    if (answering) return t("Answering…");
+    if (running()) return t("Being answered on the server");
     const answered = counted.filter((q) => q.status === "answered").length;
     const pending = pendingQuestions().length;
-    return answered + " of " + counted.length + " answered" + (pending ? " · " + pending + " waiting" : "");
+    return joined([t("{done} of {all} answered", { done: answered, all: counted.length }),
+      pending ? t("{n} waiting", { n: pending }) : ""]);
   }
 
   function reviewSummary() {
     const answers = answeredCount();
     if (!answers) return "";
     const needs = needingReview();
-    return plural(answers, "answer") + (needs ? " · " + needs + " need review" : " · nothing needs review");
+    return joined([answersSaid(answers), needs ? t("{n} need review", { n: needs }) : t("nothing needs review")]);
   }
 
   function fillSummary() {
-    if (!fillable()) return "No file to write into: the answers are downloaded";
-    if (!lastFill) return "Not filled yet";
-    return lastFill.because || ("Wrote " + plural(lastFill.written, "value") + " into " + lastFill.file +
-      (lastFill.held ? " · " + lastFill.held + " held back" : ""));
+    if (!fillable()) return [t("No file to write into: the answers are downloaded")];
+    if (!lastFill) return [t("Not filled yet")];
+    if (lastFill.because) return [I18n.server(lastFill.because)];
+    const n = lastFill.written;
+    return [
+      ...sentence(n === 1 ? t("Wrote {n} value into {file}", { n }) : t("Wrote {n} values into {file}", { n }),
+        { file: lastFill.file }),
+      ...(lastFill.held ? [" · " + t("{n} held back", { n: lastFill.held })] : []),
+    ];
   }
 
   function paintStepFold(step, open, forced) {
@@ -2166,8 +2273,8 @@
     body.hidden = !open;
     toggle.hidden = forced;  // a step not yet done does not fold
     toggle.setAttribute("aria-expanded", String(open));
-    toggle.textContent = open ? "Fold" : "Open";
-    toggle.title = open ? "Fold this step to one line" : "Open this step";
+    toggle.textContent = open ? t("Fold") : t("Open");
+    toggle.title = open ? t("Fold this step to one line") : t("Open this step");
   }
 
   function paintSteps() {
@@ -2179,12 +2286,12 @@
 
     const forced1 = !loadDone() || step1Busy();
     paintStepFold(1, forced1 || (choices[1] !== undefined ? choices[1] : false), forced1);
-    $("step1Held").textContent = loadSummary();
+    $("step1Held").replaceChildren(...loadSummary());
 
     $("step2").hidden = !fillable();
     if (fillable()) {
       paintStepFold(2, choices[2] !== undefined ? choices[2] : worthChecking(formBatch) || !formBatch.counts.questions, false);
-      $("step2Held").textContent = foundSummary(formBatch);
+      $("step2Held").replaceChildren(...foundSummary(formBatch));
     }
 
     $("step3").classList.toggle("way-in", !questions.length && !formBatch && !answers);
@@ -2192,13 +2299,14 @@
     $("step4Held").textContent = reviewSummary();
 
     $("step5").hidden = !answers;
-    $("step5Held").textContent = answers ? fillSummary() : "";
+    $("step5Held").replaceChildren(...(answers ? fillSummary() : []));
     const hint = !fillable()
-      ? "These questions have no file to write into, so the answers are downloaded instead: PDF, Word, CSV or JSON, under More."
-      : lastFill ? ""
-      : "Fill and download, in the bar above the answers, writes them into " + formBatch.source_name +
-        " and downloads it. Answers nobody has confirmed are held back, and the report here says which and why.";
-    if ($("fillHint").textContent !== hint) $("fillHint").textContent = hint;
+      ? [t("These questions have no file to write into, so the answers are downloaded instead: PDF, Word, CSV or JSON, under More.")]
+      : lastFill ? []
+      : sentence(t("Fill and download, in the bar above the answers, writes them into {file} and downloads it. Answers nobody has confirmed are held back, and the report here says which and why."),
+        { file: formBatch.source_name });
+    const hintText = hint.map((part) => (part instanceof Node ? part.textContent : part)).join("");
+    if ($("fillHint").textContent !== hintText) $("fillHint").replaceChildren(...hint);
     // A list has nothing to fill: its downloads are the way out, so they are open.
     const more = $("moreActions");
     if (more.dataset.paintedFor !== stepChoice.for) {
@@ -2214,13 +2322,13 @@
       button.classList.toggle("skipped", step === 2 && !fillable() && questions.length > 0);
       if (step === current) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
-      button.title = step === current ? "The step in front of you"
-        : !available ? (step === 2 ? "Only a file read as a questionnaire has anything to check" : "Not yet")
-        : done[step] ? "Done: open it again" : "";
+      button.title = step === current ? t("The step in front of you")
+        : !available ? (step === 2 ? t("Only a file read as a questionnaire has anything to check") : t("Not yet"))
+        : done[step] ? t("Done: open it again") : "";
     });
 
-    $("stepTitle").textContent = formBatch ? formBatch.source_name
-      : questions.length ? "Typed questions" : "New questionnaire";
+    $("stepTitle").replaceChildren(formBatch ? content(formBatch.source_name)
+      : questions.length ? t("Typed questions") : t("New questionnaire"));
     paintKeptUntil();
     const choice = formBatch ? Cards.choiceOf(formBatch.product_id) : formProduct();
     const known = Cards.product(choice);
@@ -2228,7 +2336,7 @@
     const shown = $("stepProduct");
     if (shown.dataset.said !== said) {  // drawn again when the products arrive, or one is deleted
       shown.dataset.said = said;
-      const tag = choice ? Cards.choiceTag(choice, "Answered for " + choiceName(choice)) : null;
+      const tag = choice ? Cards.choiceTag(choice, t("Answered for {product}", { product: choiceName(choice) })) : null;
       shown.replaceChildren(...(tag ? [tag] : []));
     }
   }
@@ -2249,12 +2357,15 @@
       reviewTab = key;
       renderResult(result, { keepQuestions: true });
     });
-    $("reviewCounts").textContent = (counted.written + counted.person) + (isList() ? " ready to use · " : " will be written · ") +
-      counted.review + " need review";
+    const going = counted.written + counted.person;
+    $("reviewCounts").textContent = joined([
+      isList() ? t("{n} ready to use", { n: going }) : t("{n} will be written", { n: going }),
+      t("{n} need review", { n: counted.review }),
+    ]);
     /* How far the review has got (plan 033): the answers a person has done,
        of those that needed one or have had one. An accept moves one across. */
     const reviewable = counted.review + counted.person;
-    $("reviewDone").textContent = reviewable ? counted.person + " of " + reviewable + " reviewed" : "";
+    $("reviewDone").textContent = reviewable ? t("{done} of {all} reviewed", { done: counted.person, all: reviewable }) : "";
   }
 
   /* Each answer's tab, and how many each tab holds. The tabs are a
@@ -2275,10 +2386,10 @@
     const summary = $("resultsSummary");
     summary.innerHTML = "";
     summary.append(
-      Cards.stat(data.questions_found, "questions found"),
-      Cards.stat(data.answers.length, "answered"),
-      Cards.stat(reviewCount, "need review", reviewCount ? "review" : ""),
-      Cards.stat(data.language === "ar" ? "العربية" : "English", "output language")
+      Cards.stat(data.questions_found, t("questions found")),
+      Cards.stat(data.answers.length, t("answered")),
+      Cards.stat(reviewCount, t("need review"), reviewCount ? "review" : ""),
+      Cards.stat(data.language === "ar" ? "العربية" : t("English"), t("output language"))
     );
     $("reviewBar").hidden = !queue;
     if (queue) renderReviewBar(counted, tab);
@@ -2308,8 +2419,10 @@
       card.dataset.bucket = buckets[index] || "";
       card.tabIndex = container.childElementCount ? -1 : 0;
       card.setAttribute("role", "article");
-      card.setAttribute("aria-label", "Answer to question " + (item.question.id || index + 1) +
-        (buckets[index] === "review" ? ", needs review" : ""));
+      const number = item.question.id || index + 1;
+      card.setAttribute("aria-label", buckets[index] === "review"
+        ? t("Answer to question {number}, needs review", { number })
+        : t("Answer to question {number}", { number }));
       container.append(card);
     });
     // A row set aside has no card; its own row, with "Include", is how it comes back.
@@ -2354,21 +2467,34 @@
     return () => { stopped = true; };
   }
 
+  /* The line's parts, painted with paintProgress: the counts in <strong>, then the bar. */
   function progressMessage(state) {
-    if (state.stage === "extracting") return "Reading the document and extracting questions…";
+    if (state.stage === "extracting") return [t("Reading the document and extracting questions…")];
+    if (!state.total) {
+      return [state.stage === "styling" ? t("Applying your preferences…")
+        : state.stage === "rewriting" ? t("Rewording…") : t("Answering…")];
+    }
     // Rewording runs through the same counter, and "Answered 4 of 12" during a
     // rewrite describes work nobody asked for.
-    const done = state.stage === "rewriting" ? "Reworded"
-      : state.stage === "styling" ? "Applied your preferences to"
-      : state.stage === "shortening" ? "Shortened" : "Answered";
-    if (!state.total) {
-      return state.stage === "styling" ? "Applying your preferences…"
-        : done === "Reworded" ? "Rewording…" : "Answering…";
-    }
-    const bar =
-      '<span class="progress"><span class="progress-fill" style="width:' + state.percent + '%"></span></span>';
-    return done + " <strong>" + state.completed + "</strong> of <strong>" + state.total +
-           "</strong> — " + state.remaining + " to go" + bar;
+    const left = { remaining: state.remaining };
+    const said = state.stage === "rewriting" ? t("Reworded {completed} of {total} — {remaining} to go", left)
+      : state.stage === "styling" ? t("Applied your preferences to {completed} of {total} — {remaining} to go", left)
+      : state.stage === "shortening" ? t("Shortened {completed} of {total} — {remaining} to go", left)
+      : t("Answered {completed} of {total} — {remaining} to go", left);
+    const bar = document.createElement("span");
+    bar.className = "progress";
+    const fill = document.createElement("span");
+    fill.className = "progress-fill";
+    fill.style.width = state.percent + "%";
+    bar.append(fill);
+    return [...sentence(said, {
+      completed: textElement("strong", String(state.completed)),
+      total: textElement("strong", String(state.total)),
+    }), bar];
+  }
+  function paintProgress(status, state) {
+    status.replaceChildren(...progressMessage(state));
+    status.className = "status busy";
   }
 
   /* --- the question list ---------------------------------------------------
@@ -2421,6 +2547,11 @@
   const pendingQuestions = () =>
     questions.filter((q) => q.status === "pending" && q.text.trim() && !q.skip);
 
+  /* A question's own direction: Arabic right to left, anything else left to
+     right. An empty box in an Arabic page reads as the page does, for its
+     placeholder (plan 038). */
+  const questionDir = (value) => (Cards.isArabic(value) || (I18n.rtl && !value.trim()) ? "rtl" : "ltr");
+
   /* The one row builder. The panel above the answers and the composer below
      them are two views of the same list, and they drifted apart while each had
      its own copy of this: editing in one left the other showing the old words,
@@ -2437,29 +2568,30 @@
     const number = document.createElement("div");
     number.className = "index";
     number.textContent = entry.status === "answered" ? "✓" : String(index + 1);
-    number.title = entry.blanked ? "Left blank on purpose"
-      : fromFile ? "Already answered in the file"
-      : entry.status === "answered" ? "Answered" : "Not yet answered";
+    number.title = entry.blanked ? t("Left blank on purpose")
+      : fromFile ? t("Already answered in the file")
+      : entry.status === "answered" ? t("Answered") : t("Not yet answered");
 
     const text = document.createElement("textarea");
     text.rows = 1;
     text.value = entry.text;
-    text.placeholder = "Type a question…";
+    text.placeholder = t("Type a question…");
     text.spellcheck = false;
     text.dataset.qkey = entry.key;
     if (Cards.isArabic(entry.text)) text.dir = "rtl";
+    else if (I18n.rtl) text.dir = questionDir(entry.text);  // an English question in an Arabic page (plan 038)
     // An answered question is kept visible for context but cannot be edited:
     // changing the words under an existing answer would make the pair a lie.
     text.dataset.answered = String(entry.status === "answered");
     text.disabled = entry.status === "answered" || answering || readOnly();
     text.title = entry.status === "answered"
-      ? "Already answered — delete it to ask something else"
-      : answering ? "Answering — wait for the run to finish" : "";
+      ? t("Already answered — delete it to ask something else")
+      : answering ? t("Answering — wait for the run to finish") : "";
 
     const grow = () => { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; };
     text.addEventListener("input", () => {
       entry.text = text.value;
-      text.dir = Cards.isArabic(text.value) ? "rtl" : "ltr";
+      text.dir = questionDir(text.value);
       grow();
       // Mirror into the other view rather than re-rendering it: a re-render
       // here would throw away the caret in whichever box is being typed in.
@@ -2485,8 +2617,8 @@
     if (fromFile && changeable) {
       const again = document.createElement("button");
       again.className = "quiet";
-      again.textContent = "Answer it again";
-      again.title = "Replace what the file already says for this question";
+      again.textContent = t("Answer it again");
+      again.title = t("Replace what the file already says for this question");
       again.dataset.mutates = "true";
       again.disabled = answering;
       again.onclick = () => answerAnyway(entry);
@@ -2496,11 +2628,11 @@
     if (entry.formId && changeable) {
       const aside = document.createElement("button");
       aside.className = "quiet";
-      aside.textContent = entry.skip ? "Include" : "Set aside";
+      aside.textContent = entry.skip ? t("Include") : t("Set aside");
       aside.title = entry.skip
-        ? "Answer this one after all"
-        : isList() ? "Leave this one out: unanswered, and not in the downloads"
-        : "Leave this one unanswered and write nothing into the file";
+        ? t("Answer this one after all")
+        : isList() ? t("Leave this one out: unanswered, and not in the downloads")
+        : t("Leave this one unanswered and write nothing into the file");
       aside.dataset.mutates = "true";
       aside.disabled = answering;
       aside.onclick = () => setAside(entry, !entry.skip);
@@ -2512,7 +2644,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "✕";
-      remove.title = "Remove this question";
+      remove.title = t("Remove this question");
       remove.dataset.mutates = "true";
       remove.disabled = answering;
       remove.onclick = () => discardQuestion(entry.key);
@@ -2526,8 +2658,9 @@
     if (entry.existing) {
       const already = document.createElement("div");
       already.className = "qmeta existing";
-      already.textContent = "Already in the file: " + entry.existing.slice(0, 220) +
-        (entry.existing.length > 220 ? "…" : "");
+      // The file's own words are content (plan 038): in their own element and direction.
+      already.append(...sentence(t("Already in the file: {existing}"),
+        { existing: entry.existing.slice(0, 220) + (entry.existing.length > 220 ? "…" : "") }));
       if (Cards.isArabic(entry.existing)) already.dir = "rtl";
       row.append(already);
     }
@@ -2539,21 +2672,25 @@
     if (formBatch && !entry.formId) {
       const loose = document.createElement("div");
       loose.className = "qmeta";
-      loose.textContent = isList()
-        ? "Not one of " + formBatch.source_name + "'s questions — answered here, and not kept with it."
-        : "Not a row in " + (formBatch.source_name || "the file") +
-          " — answered, but exported rather than written into it.";
+      loose.append(...(isList()
+        ? sentence(t("Not one of {file}'s questions — answered here, and not kept with it."), { file: formBatch.source_name })
+        : formBatch.source_name
+          ? sentence(t("Not a row in {file} — answered, but exported rather than written into it."), { file: formBatch.source_name })
+          : [t("Not a row in the file — answered, but exported rather than written into it.")]));
       row.append(loose);
     }
 
-    // Where it came from, so a reading can be checked against the file itself.
+    // Where it came from, so a reading can be checked against the file itself:
+    // the file's own sheet and row, as the reader wrote them (plan 038).
     if (entry.origin) {
       const origin = document.createElement("div");
       origin.className = "qmeta";
-      origin.textContent = entry.origin + (entry.skip ? " · set aside" : "");
+      origin.append(content(I18n.server(entry.origin)));
+      if (entry.skip) origin.append(" · " + t("set aside"));
       const status = (entry.targets || []).filter((target) => target.role === "status");
       if (status.length && status[0].vocabulary.length) {
-        origin.textContent += " · status from: " + status[0].vocabulary.join(" / ");
+        // The dropdown's own words, from the file.
+        origin.append(" · ", ...sentence(t("status from: {choices}"), { choices: status[0].vocabulary.join(" / ") }));
       }
       row.append(origin);
     }
@@ -2576,11 +2713,11 @@
       // back returns the card with the answer it already had.
       await adoptBatch(updated, { quiet: true });
       setStatus($("answerStatus"), skip
-        ? "Set aside. Nothing will be written into that row."
-        : isList() ? "Back in." : "Back in. Its answer will be written into the file.", "ok");
+        ? t("Set aside. Nothing will be written into that row.")
+        : isList() ? t("Back in.") : t("Back in. Its answer will be written into the file."), "ok");
       return true;
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
       return false;
     }
   }
@@ -2591,7 +2728,7 @@
     document.querySelectorAll('textarea[data-qkey="' + key + '"]').forEach((other) => {
       if (other === source) return;
       other.value = source.value;
-      other.dir = Cards.isArabic(source.value) ? "rtl" : "ltr";
+      other.dir = questionDir(source.value);
       other.style.height = "auto";
       other.style.height = other.scrollHeight + "px";
     });
@@ -2605,7 +2742,7 @@
     document.querySelectorAll("[data-qkey]").forEach((node) => {
       if (node.tagName !== "TEXTAREA") return;
       node.disabled = locked || readOnly() || node.dataset.answered === "true";
-      if (locked) node.title = "Answering — wait for the run to finish";
+      if (locked) node.title = t("Answering — wait for the run to finish");
     });
     document.querySelectorAll("[data-mutates]").forEach((node) => { node.disabled = locked; });
 
@@ -2861,11 +2998,11 @@
       if (!text.trim() || !typingInACard()) await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       else recountWith(updated, index);
       setStatus(status, text.trim()
-        ? (isList() ? "Your edit is saved, and is what the downloads carry."
-          : "Your edit is saved, and is what will be written into the file.")
-        : "Cleared. Nothing is written for it: the file keeps whatever that cell already held.", "ok");
+        ? (isList() ? t("Your edit is saved, and is what the downloads carry.")
+          : t("Your edit is saved, and is what will be written into the file."))
+        : t("Cleared. Nothing is written for it: the file keeps whatever that cell already held."), "ok");
     } catch (error) {
-      setStatus(status, "That edit could not be saved: " + error.message, "error");
+      setStatus(status, t("That edit could not be saved: {why}", { why: I18n.error(error) }), "error");
     }
   }
 
@@ -2887,10 +3024,10 @@
       });
       await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       setStatus($("answerStatus"), blank
-        ? (isList() ? "That answer is left blank on purpose." : "That row will be written empty when you fill the file.")
-        : "Back to unanswered. Answer it whenever you like.", "ok");
+        ? (isList() ? t("That answer is left blank on purpose.") : t("That row will be written empty when you fill the file."))
+        : t("Back to unanswered. Answer it whenever you like."), "ok");
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
     }
   }
 
@@ -2900,16 +3037,18 @@
     const entry = questions.find((q) => q.key === item.__key);
     if (!formBatch || !entry || !entry.formId) return;
     setStatus($("answerStatus"), prefer === "brief"
-      ? "Shortening that answer…" : "Switching that answer back to full…", "busy");
+      ? t("Shortening that answer…") : t("Switching that answer back to full…"), "busy");
     try {
       const updated = await request("/api/forms/" + formBatch.id + "/answers/length", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: entry.formId, prefer: prefer }),
       });
       await adoptBatch(updated, { quiet: true });
-      setStatus($("answerStatus"), "That answer will be written in " + prefer + ".", "ok");
+      setStatus($("answerStatus"), prefer === "brief" ? t("That answer will be written in brief.")
+        : prefer === "full" ? t("That answer will be written in full.")
+        : t("That answer will be written in {length}.", { length: prefer }), "ok");
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
     }
   }
 
@@ -2939,13 +3078,14 @@
       // the model wrote and a reviewer agreed with.
       setStatus($("answerStatus"), approved
         ? (updated.remembered
-            ? "Approved." + (isList() ? "" : " It will be written into the file,") +
-              (isList() ? " Your" : " and your") + " wording is now in the answer memory."
-            : "Approved." + (isList() ? "" : " It will be written into the file.") +
-              " It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
+            ? (isList() ? t("Approved. Your wording is now in the answer memory.")
+              : t("Approved. It will be written into the file, and your wording is now in the answer memory."))
+            : (isList()
+              ? t("Approved. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
+              : t("Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")))
         : withdrawnMessage(updated, entry.formId), "ok");
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
     }
   }
 
@@ -2989,7 +3129,7 @@
     if (!questions.length) {
       const empty = document.createElement("div");
       empty.className = "qlist-empty";
-      empty.textContent = "No questions yet. Read them from a file above, or add one.";
+      empty.textContent = t("No questions yet. Read them from a file above, or add one.");
       list.append(empty);
     } else {
       questions.forEach((entry, index) => list.append(questionRow(entry, index)));
@@ -3005,18 +3145,18 @@
     // Before anything is loaded this panel is the other way in, under step 1 (plan 033).
     const wayIn = !questions.length && !formBatch;
     $("questionListTitle").textContent = questions.length
-      ? "Questions (" + questions.length + ")" : wayIn ? "Or type the questions yourself" : "Questions";
+      ? t("Questions ({n})", { n: questions.length }) : wayIn ? t("Or type the questions yourself") : t("Questions");
     paintFold();
     $("questionListHint").textContent = wayIn ? ""
       : !questions.length
-      ? "Read them from a file above, or write your own — you do not need a file to ask a question."
+      ? t("Read them from a file above, or write your own — you do not need a file to ask a question.")
       : running()
-        ? answered + " answered so far. Being answered on the server: editing opens when it finishes."
+        ? t("{n} answered so far. Being answered on the server: editing opens when it finishes.", { n: answered })
       : readOnly()
-        ? answered + " answered. Kept to read: nothing here can be answered or changed."
+        ? t("{n} answered. Kept to read: nothing here can be answered or changed.", { n: answered })
       : answered
-        ? answered + " answered · " + pending + " waiting. Edit or add below, then answer the rest."
-        : "Edit anything that came out wrong, delete what is not a question, then answer.";
+        ? t("{answered} answered · {waiting} waiting. Edit or add below, then answer the rest.", { answered, waiting: pending })
+        : t("Edit anything that came out wrong, delete what is not a question, then answer.");
     refreshAnswerButton();
     if (!options.skipComposer) renderComposer();
   }
@@ -3039,9 +3179,12 @@
     const answered = questions.filter((q) => q.status === "answered").length;
     const summary = $("questionListSummary");
     summary.hidden = !questions.length;
-    summary.textContent = (fold.open ? "Hide the " : "Show the ") + questions.length +
-      " question" + (questions.length === 1 ? "" : "s") + " (" + answered + " answered, " +
-      pendingQuestions().length + " waiting)";
+    const counts = { n: questions.length, answered, waiting: pendingQuestions().length };
+    summary.textContent = fold.open
+      ? (counts.n === 1 ? t("Hide the {n} question ({answered} answered, {waiting} waiting)", counts)
+        : t("Hide the {n} questions ({answered} answered, {waiting} waiting)", counts))
+      : (counts.n === 1 ? t("Show the {n} question ({answered} answered, {waiting} waiting)", counts)
+        : t("Show the {n} questions ({answered} answered, {waiting} waiting)", counts));
   }
 
   /* The composer is a second view of the same list, not a second list. It
@@ -3060,10 +3203,14 @@
 
     const button = $("composerAnswer");
     button.disabled = pending.length === 0 || answering || needsProduct();
-    button.textContent = pending.length === 0
-      ? "Nothing to answer"
-      : "Answer " + pending.length + " question" + (pending.length === 1 ? "" : "s");
+    button.textContent = answerSaid(pending.length);
     paintAnswerNeedsProduct();
+  }
+
+  /* "Answer 4 questions", or nothing to answer. */
+  function answerSaid(n) {
+    return n === 0 ? t("Nothing to answer")
+      : n === 1 ? t("Answer {n} question", { n }) : t("Answer {n} questions", { n });
   }
 
   function refreshAnswerButton() {
@@ -3072,9 +3219,7 @@
     // A list of typed questions, or one read from a PDF, waits for a product;
     // a questionnaire's was fixed when it was opened (plan 029, 2).
     button.disabled = pending === 0 || answering || running() || needsProduct();
-    button.textContent = pending === 0
-      ? "Nothing to answer"
-      : "Answer " + pending + " question" + (pending === 1 ? "" : "s");
+    button.textContent = answerSaid(pending);
     $("composerAnswer").disabled = button.disabled;
     $("composerAnswer").textContent = button.textContent;
     paintAnswerNeedsProduct();
@@ -3093,13 +3238,13 @@
       hint.dataset.painted = show ? "on:" + suggestion : "off";
       hint.replaceChildren();
       if (!show) return;
-      hint.append("Choose a product first.");
+      hint.append(t("Choose a product first."));
       if (suggestion) hint.append(Cards.lastUsedButton(suggestion, pickLastUsed));
       const choose = document.createElement("button");
       choose.type = "button";
       choose.className = "choose";
-      choose.textContent = "Choose…";
-      choose.title = "Go to the Product box";
+      choose.textContent = t("Choose…");
+      choose.title = t("Go to the Product box");
       choose.onclick = () => {
         openStep(1);
         $("formProduct").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3142,19 +3287,21 @@
     const input = $("assessmentInput");
     input.closest("label.file").classList.toggle("disabled", input.disabled);
     const showing = readingFile || heldFile;
-    $("assessmentChosen").textContent = showing ? showing.name : "";
-    $("dropFor").textContent = reading ? ""
+    $("assessmentChosen").replaceChildren(...(showing ? [content(showing.name)] : []));
+    $("dropFor").replaceChildren(...(reading ? []
       : formBatch
-        ? "Another file opens as a new questionnaire for " + choiceName(formProduct()) +
-          "; " + formBatch.source_name + " stays in “Or pick up”."
+        ? sentence(t("Another file opens as a new questionnaire for {product}; {file} stays in “Or pick up”."),
+          { product: choiceNamed(formProduct()), file: formBatch.source_name })
         : chosen
-          ? "Read for " + choiceName(formProduct()) + " as soon as it is here."
-          : "Choose the product first; a file given now waits for it.";
+          ? sentence(t("Read for {product} as soon as it is here."), { product: choiceNamed(formProduct()) })
+          : [t("Choose the product first; a file given now waits for it.")]));
     const waiting = $("readNeedsProduct");
     const wait = Boolean(heldFile) && !chosen;
     waiting.hidden = !wait;
-    const said = wait ? heldFile.name + " is waiting for the product: choose one above, and it is read straight away." : "";
-    if (waiting.textContent !== said) waiting.textContent = said;
+    const said = wait ? sentence(t("{file} is waiting for the product: choose one above, and it is read straight away."),
+      { file: heldFile.name }) : [];
+    const saidText = said.map((part) => (part instanceof Node ? part.textContent : part)).join("");
+    if (waiting.textContent !== saidText) waiting.replaceChildren(...said);
     paintAlreadyOpen();
     paintSteps();
   }
@@ -3172,7 +3319,7 @@
     reading = true;
     readingFile = file;
     paintRead();
-    setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
+    setStatus($("extractStatus"), sentence(t("Reading {file}…"), { file: file.name }), "busy");
 
     let why = "";  // the questionnaire reader's own reason, when it found nothing
     try {
@@ -3184,8 +3331,11 @@
       if (error.code === "product_not_found") {
         // Refused before anything was kept: the file waits for another choice.
         if (!heldFile) heldFile = file;
-        await productGone($("extractStatus"), "the file was not opened for it");
-      } else setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
+        await productGone($("extractStatus"), "file");
+      } else {
+        // The reader's own reason is the server's, about the file's own sheets (plan 038).
+        setStatus($("extractStatus"), why ? [I18n.error(error) + "\n", content(I18n.server(why))] : I18n.error(error), "error");
+      }
     } finally {
       reading = false;
       readingFile = null;
@@ -3198,14 +3348,24 @@
      chat does it). The server refused before keeping anything; the selector
      goes back to nothing chosen, not to General (plan 029, 2), and the page
      says so where the person is looking. */
+  /* `what` was refused: "file" (not opened), "list" (not kept or answered) or
+     "answers" (not answered). */
   async function productGone(status, what) {
     const gone = formProduct();
-    const name = (Cards.product(gone) || {}).name || "That product";
+    const known = (Cards.product(gone) || {}).name;
     teamProducts = teamProducts.filter((p) => p.id !== gone);  // said by the server, whether or not the list reloads
     await loadFormProducts();
     if (formBatch && formBatch.product_id === gone) await redrawBatch();  // the open one is read-only now
-    setStatus(status, name + " has been deleted, so " + what + ". Nothing was kept" +
-      (formBatch ? "." : ". Choose another product, or General."), "error");
+    const open = Boolean(formBatch);
+    const said = what === "file"
+      ? (open ? t("{product} has been deleted, so the file was not opened for it. Nothing was kept.")
+        : t("{product} has been deleted, so the file was not opened for it. Nothing was kept. Choose another product, or General."))
+      : what === "list"
+        ? (open ? t("{product} has been deleted, so they were not kept or answered for it. Nothing was kept.")
+          : t("{product} has been deleted, so they were not kept or answered for it. Nothing was kept. Choose another product, or General."))
+        : (open ? t("{product} has been deleted, so they were not answered for it. Nothing was kept.")
+          : t("{product} has been deleted, so they were not answered for it. Nothing was kept. Choose another product, or General."));
+    setStatus(status, sentence(said, { product: known ? content(known) : t("That product") }), "error");
   }
 
   /* A questionnaire outlives the page that uploaded it: the answers are stored
@@ -3241,17 +3401,17 @@
     if (!open.length) return;
     const rows = open.map(recentRow);
     if (rows.length <= 3) {
-      line.append(document.createTextNode("Or pick up:"), ...rows);
+      line.append(document.createTextNode(t("Or pick up:")), ...rows);
       return;
     }
-    line.append(document.createTextNode("Or pick up one of your " + rows.length +
-      " questionnaires, most recently used first:"));
+    line.append(document.createTextNode(t("Or pick up one of your {n} questionnaires, most recently used first:",
+      { n: rows.length })));
     const box = document.createElement("div");
     box.className = "recent-list";
     box.append(...rows);
     line.append(box);
     if (forms.length >= RECENT_LIMIT) {
-      line.append(document.createTextNode("Showing the " + RECENT_LIMIT + " most recently used."));
+      line.append(document.createTextNode(t("Showing the {n} most recently used.", { n: RECENT_LIMIT })));
     }
   }
 
@@ -3264,9 +3424,9 @@
     const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(day || "");
     if (!parts) return "";
     const date = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
-    return "Kept until " + date.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+    return t("Kept until {date}", { date: I18n.date(date, { day: "numeric", month: "long", year: "numeric" }) });
   }
-  const KEPT_TITLE = "Deleted with its answers if nobody opens it by then; opening it keeps it longer";
+  const KEPT_TITLE = t("Deleted with its answers if nobody opens it by then; opening it keeps it longer");
 
   /* One questionnaire in "Or pick up": a button that opens it, until when it
      is kept, and Delete, its own button at the end of the row. */
@@ -3286,9 +3446,9 @@
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "quiet danger recent-delete";
-    remove.textContent = "Delete";
-    remove.setAttribute("aria-label", "Delete " + form.source_name);
-    remove.title = "Delete " + form.source_name + " and its answers, for good";
+    remove.textContent = t("Delete");
+    remove.setAttribute("aria-label", t("Delete {file}", { file: form.source_name }));
+    remove.title = t("Delete {file} and its answers, for good", { file: form.source_name });
     remove.onclick = () => deleteQuestionnaire(form);
     row.append(remove);
     return row;
@@ -3298,24 +3458,25 @@
   function pickUpButton(form) {
     const link = document.createElement("button");
     link.className = "quiet pick-up";
-    link.textContent = form.source_name +
-      (form.answered ? " (" + form.answered + " answered)" : "");
+    link.append(...(form.answered
+      ? sentence(t("{file} ({n} answered)", { n: form.answered }), { file: form.source_name })
+      : [content(form.source_name)]));
     const product = Cards.productBadge(form.product_id);
     if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
     if (form.format === "list") {
       const list = document.createElement("span");
       list.className = "recent-when";
-      list.textContent = "list";
+      list.textContent = t("list");
       link.append(list);
     }
     const used = usedAt(form);
     if (used) {
       const when = document.createElement("span");
       when.className = "recent-when";
-      when.textContent = "used " + new Date(used).toLocaleString(undefined,
-        { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      when.textContent = t("used {when}", { when: I18n.dateTime(used,
+        { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) });
       link.append(when);
-      link.title = "Last used " + new Date(used).toLocaleString();
+      link.title = t("Last used {when}", { when: I18n.dateTime(used) });
     }
     link.onclick = () => reopenForm(form.id);
     return link;
@@ -3330,28 +3491,32 @@
     const answers = form.answered || 0;
     const typed = formBatch && formBatch.id === form.id
       ? questions.filter((q) => !q.formId && q.text.trim()).length : 0;
-    if (!confirm("Delete “" + name + "”?\n\n" +
-        (answers ? "Its " + plural(answers, "answer") + " " + (answers === 1 ? "goes" : "go") + " with it"
-          : "It has no answers yet") +
-        (typed ? ", and so " + (typed === 1 ? "does the question" : "do the " + typed + " questions") + " typed beside it" : "") +
-        ". This cannot be undone.")) return;
+    if (!confirm(t("Delete “{name}”?\n\n{answers}{typed}. This cannot be undone.", {
+      name,
+      answers: !answers ? t("It has no answers yet")
+        : answers === 1 ? t("Its {n} answer goes with it", { n: answers }) : t("Its {n} answers go with it", { n: answers }),
+      typed: !typed ? "" : typed === 1 ? t(", and so does the question typed beside it")
+        : t(", and so do the {n} questions typed beside it", { n: typed }),
+    }))) return;
     const status = $("extractStatus");
     try {
       await request("/api/forms/" + encodeURIComponent(form.id), { method: "DELETE" });
     } catch (error) {
       if (error.code === "questionnaire_not_found") {
-        setStatus(status, name + " is no longer there: it was deleted already.", "error");
+        setStatus(status, sentence(t("{file} is no longer there: it was deleted already."), { file: name }), "error");
         if (lastClosed && lastClosed.id === form.id) lastClosed = null;
         listRecentForms();
       } else {
-        setStatus(status, name + " was not deleted. " + error.message, "error");
+        setStatus(status, sentence(t("{file} was not deleted. {why}", { why: I18n.error(error) }), { file: name }), "error");
       }
       return;
     }
     if (lastClosed && lastClosed.id === form.id) lastClosed = null;
     if (formBatch && formBatch.id === form.id) putAway(formBatch);
     else listRecentForms();
-    setStatus(status, "Deleted " + name + (answers ? ", with its " + plural(answers, "answer") : "") + ".", "ok");
+    setStatus(status, sentence(!answers ? t("Deleted {file}.")
+      : answers === 1 ? t("Deleted {file}, with its {n} answer.", { n: answers })
+      : t("Deleted {file}, with its {n} answers.", { n: answers }), { file: name }), "ok");
   }
 
   /* The open questionnaire is in the address, `?q=<id>`, so a reload or a
@@ -3381,14 +3546,14 @@
       const batch = await request("/api/forms/" + encodeURIComponent(id));
       if (formBatch) return;  // something else was opened while this was on its way
       await adoptBatch(batch, { quiet: true });
-      setStatus($("extractStatus"), "Reopened " + batch.source_name + ", as it was left.", "ok");
+      setStatus($("extractStatus"), sentence(t("Reopened {file}, as it was left."), { file: batch.source_name }), "ok");
     } catch (error) {
       if (error.code === "questionnaire_not_found") {
         rememberInAddress("");
-        setStatus($("extractStatus"), "The questionnaire in this address could not be opened: " +
-          "it is not one of yours, or it is no longer there.", "error");
+        setStatus($("extractStatus"),
+          t("The questionnaire in this address could not be opened: it is not one of yours, or it is no longer there."), "error");
       } else if (error.status !== 401) {
-        setStatus($("extractStatus"), error.message, "error");
+        setStatus($("extractStatus"), I18n.error(error), "error");
       }
     }
   }
@@ -3396,12 +3561,12 @@
   async function reopenForm(id) {
     // A file waiting for a product is not read for this questionnaire's: picking one up lets it go.
     heldFile = null;
-    setStatus($("extractStatus"), "Opening…", "busy");
+    setStatus($("extractStatus"), t("Opening…"), "busy");
     try {
       await adoptBatch(await request("/api/forms/" + id));
       await listRecentForms();
     } catch (error) {
-      setStatus($("extractStatus"), error.message, "error");
+      setStatus($("extractStatus"), I18n.error(error), "error");
     }
   }
 
@@ -3463,9 +3628,9 @@
     if (!fresh) return;
     const chosen = productChosen();
     fresh.disabled = !chosen || reading || answering;
-    fresh.textContent = chosen
-      ? "Start fresh (for " + choiceName(formProduct()) + ")"
-      : "Start fresh (choose a product first)";
+    fresh.replaceChildren(...(chosen
+      ? sentence(t("Start fresh (for {product})"), { product: choiceNamed(formProduct()) })
+      : [t("Start fresh (choose a product first)")]));
     $("alreadyOpen").querySelectorAll(".match").forEach((row) => {
       const shown = row.querySelector(".tag.product");
       const now = Cards.choiceTag(row.dataset.choice);
@@ -3477,30 +3642,30 @@
     const panel = $("alreadyOpen");
     panel.replaceChildren();
     setStatus($("extractStatus"), "");
-    const day = (when) => new Date(when).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-    const progress = (match) => match.answered + " of " + match.questions + " answered, last changed " +
-      day(match.updated_at || match.created_at);
-    const named = (text) => Object.assign(document.createElement("strong"), { textContent: text });
+    const day = (when) => I18n.date(when, { day: "numeric", month: "short" });
+    const progress = (match) => t("{answered} of {questions} answered, last changed {day}",
+      { answered: match.answered, questions: match.questions, day: day(match.updated_at || match.created_at) });
+    const named = (text) => content(text, "strong");
     const lead = document.createElement("p");
     lead.id = "alreadyOpenLead";
     if (matches.length === 1) {
-      lead.append("You already have ", named(matches[0].source_name), ", with " + progress(matches[0]) +
-        ". Open it, or start fresh?");
+      lead.append(...sentence(t("You already have {file}, with {progress}. Open it, or start fresh?",
+        { progress: progress(matches[0]) }), { file: named(matches[0].source_name) }));
     } else {
-      lead.append("You already have " + matches.length + " questionnaires read from ", named(file.name),
-        ". Open one of them, or start fresh?");
+      lead.append(...sentence(t("You already have {n} questionnaires read from {file}. Open one of them, or start fresh?",
+        { n: matches.length }), { file: named(file.name) }));
     }
     panel.append(lead);
     matches.forEach((match) => {
       const row = document.createElement("div");
       row.className = "match";
       row.dataset.choice = Cards.choiceOf(match.product_id);
-      if (matches.length > 1) row.append(match.source_name + ": " + progress(match));
+      if (matches.length > 1) row.append(content(match.source_name), ": " + progress(match));
       // Each copy names its product, General's included (plan 029, 2's review).
       const badge = Cards.choiceTag(row.dataset.choice);
       if (badge) row.append(badge);
       const open = document.createElement("button");
-      open.textContent = "Open it";
+      open.textContent = t("Open it");
       open.onclick = () => { hideAlreadyOpen(); reopenForm(match.id); };
       row.append(open);
       panel.append(row);
@@ -3510,14 +3675,14 @@
     const fresh = document.createElement("button");
     fresh.id = "alreadyOpenFresh";
     fresh.className = "ghost";
-    fresh.title = "Read the file again as a new questionnaire, with no answers";
+    fresh.title = t("Read the file again as a new questionnaire, with no answers");
     fresh.onclick = () => readQuestionnaire(file, true);
     const cancel = document.createElement("button");
     cancel.className = "quiet";
-    cancel.textContent = "Cancel";
+    cancel.textContent = t("Cancel");
     cancel.onclick = () => {
       hideAlreadyOpen();
-      setStatus($("extractStatus"), "Nothing was opened.", "ok");
+      setStatus($("extractStatus"), t("Nothing was opened."), "ok");
     };
     choices.append(fresh, cancel);
     panel.append(choices);
@@ -3552,7 +3717,7 @@
     // for: one started before a reload, in another tab, or by the chat.
     if (batch.running && !answering) followRun(batch, "", false);  // drawn below, locked
     else if (!batch.running) {
-      if (following && following.id === batch.id) setStatus($("answerStatus"), "The run has ended.", "ok");
+      if (following && following.id === batch.id) setStatus($("answerStatus"), t("The run has ended."), "ok");
       stopFollowing();
     }
     sourceName = batch.source_name || sourceName;
@@ -3625,24 +3790,27 @@
       // "Found 0 question(s)" in green said nothing about why. The reader
       // says which sheets it read and as what, and that is the part a person
       // can act on.
-      setStatus($("extractStatus"),
-        "No questions were read from " + batch.source_name + "." +
-        ((batch.warnings || []).length ? "\n" + batch.warnings.join("\n") : "") +
-        "\nCheck what was found below, or open the file again.", "error");
+      // The reader's warnings are the server's, about the file's own sheets (plan 038).
+      const warnings = (batch.warnings || []).map((warning) => content(I18n.server(warning)));
+      setStatus($("extractStatus"), [
+        ...sentence(t("No questions were read from {file}."), { file: batch.source_name }),
+        ...warnings.flatMap((warning) => ["\n", warning]),
+        "\n" + t("Check what was found below, or open the file again."),
+      ], "error");
       return;
     }
     const unsure = batch.parts.reduce(
       (total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
     const already = batch.counts.already_in_file || 0;
-    setStatus($("extractStatus"),
-      "Found " + batch.counts.questions + " question(s) in " + batch.source_name +
-      (batch.counts.answered ? ", " + batch.counts.answered + " answered here" : "") +
-      // Said plainly, because it changes what the button below is about to do:
-      // those rows are finished and will be left exactly as they are.
-      (already ? ", " + already + " already answered in the file and left alone" : "") +
-      (unsure ? " — " + unsure + " reading(s) worth checking below" : "") + "." +
-      (isList() ? " It is kept as a list: it has no place for answers, so they are downloaded instead." : ""),
-      unsure ? "warn" : "ok");
+    // Said plainly, because it changes what the button below is about to do:
+    // those rows are finished and will be left exactly as they are.
+    const found = t("Found {n} question(s) in {file}{answered}{already}{unsure}.", {
+      n: batch.counts.questions,
+      answered: batch.counts.answered ? t(", {n} answered here", { n: batch.counts.answered }) : "",
+      already: already ? t(", {n} already answered in the file and left alone", { n: already }) : "",
+      unsure: unsure ? t(" — {n} reading(s) worth checking below", { n: unsure }) : "",
+    }) + (isList() ? " " + t("It is kept as a list: it has no place for answers, so they are downloaded instead.") : "");
+    setStatus($("extractStatus"), sentence(found, { file: batch.source_name }), unsure ? "warn" : "ok");
     $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
@@ -3654,12 +3822,12 @@
        spreadsheet was left pointing at a questionnaire the page no longer
        held. The work is not lost, the batch is still on the server, but the
        person has to know that is where it went. */
-    if (formBatch && !confirm(
-        formBatch.source_name + " is open" + (isList() ? "" : " and can be filled in") + ".\n\n" +
-        "Reading " + file.name + " closes it and starts a new list — the answers " +
-        "already written stay on the server, and you can pick it up again " +
-        "from “Or pick up”.\n\nRead " + file.name + " anyway?")) {
-      setStatus($("extractStatus"), "Left " + formBatch.source_name + " open.", "ok");
+    if (formBatch && !confirm(isList()
+        ? t("{open} is open.\n\nReading {file} closes it and starts a new list — the answers already written stay on the server, and you can pick it up again from “Or pick up”.\n\nRead {file} anyway?",
+          { open: formBatch.source_name, file: file.name })
+        : t("{open} is open and can be filled in.\n\nReading {file} closes it and starts a new list — the answers already written stay on the server, and you can pick it up again from “Or pick up”.\n\nRead {file} anyway?",
+          { open: formBatch.source_name, file: file.name }))) {
+      setStatus($("extractStatus"), sentence(t("Left {file} open."), { file: formBatch.source_name }), "ok");
       return;
     }
     /* Kept as a list questionnaire (plan 033), for the product chosen: it
@@ -3699,18 +3867,21 @@
       const tick = document.createElement("span");
       tick.className = "tick";
       tick.textContent = part.used ? "✓" : "—";
-      const name = document.createElement("span");
+      const name = content(part.name);  // the sheet's or the part's own name
       name.className = "pname";
-      name.textContent = part.name;
       const count = document.createElement("span");
       count.className = "pcount";
-      count.textContent = part.used ? part.questions + " question(s)" : part.kind;
+      // What the reader took an unused part for is its word, the server's (plan 038).
+      count.replaceChildren(part.used ? t("{n} question(s)", { n: part.questions }) : content(I18n.server(part.kind)));
       row.append(tick, name, count);
       part.findings.forEach((finding) => {
         const why = document.createElement("div");
         why.className = "why" + (finding.confident ? "" : " check");
-        why.textContent = (finding.confident ? "" : "worth checking — ") +
-          finding.subject + ": " + finding.verdict + ". " + finding.because;
+        /* What the reader found, in its own words: the subject is the file's
+           sheet or column, and the reason quotes the file's headings. */
+        const found = [content(I18n.server(finding.subject)), ": ", content(I18n.server(finding.verdict)), ". ",
+          content(I18n.server(finding.because))];
+        why.append(...(finding.confident ? found : [t("worth checking — "), ...found]));
         row.append(why);
       });
       return row;
@@ -3718,11 +3889,13 @@
   }
 
   const ROLE_LABELS = [
-    ["answer", "the written answer"],
-    ["status", "a status from the dropdown"],
-    ["evidence", "evidence (left blank)"],
-    ["ignore", "do not write here"],
+    ["answer", t("the written answer")],
+    ["status", t("a status from the dropdown")],
+    ["evidence", t("evidence (left blank)")],
+    ["ignore", t("do not write here")],
   ];
+  // A column's role, as a sentence names it: the server's word in English, as it always was.
+  const ROLE_WORDS = { answer: t("answer"), status: t("status"), evidence: t("evidence"), ignore: t("ignore") };
 
   async function renderColumns(batchId) {
     const host = $("formColumns");
@@ -3738,16 +3911,15 @@
     const heading = document.createElement("p");
     heading.className = "field-label accent";
     heading.style.marginTop = "12px";
-    heading.textContent = "Where the answers will be written";
+    heading.textContent = t("Where the answers will be written");
     host.append(heading);
 
     sheets.forEach((sheet) => {
       const row = document.createElement("div");
       row.className = "adm-add";
-      const name = document.createElement("span");
+      const name = content(sheet.sheet);  // the sheet's own name
       name.className = "pname";
       name.style.flex = "0 0 auto";
-      name.textContent = sheet.sheet;
       row.append(name);
 
       sheet.columns.forEach((column) => {
@@ -3758,8 +3930,9 @@
         wrap.style.alignItems = "center";
         // The heading, where the file has one: "column D" alone is not something
         // a person can recognise their spreadsheet by.
-        wrap.append(document.createTextNode(
-          "column " + column.column + (column.label ? " — " + column.label : "")));
+        wrap.append(...(column.label  // the file's own heading
+          ? sentence(t("column {column} — {label}", { column: column.column }), { label: column.label })
+          : [t("column {column}", { column: column.column })]));
         const picker = document.createElement("select");
         picker.disabled = readOnly();  // shown, to read, on a deleted product's questionnaire
         ROLE_LABELS.forEach(function (pair) {
@@ -3779,11 +3952,10 @@
               }),
             });
             await adoptBatch(updated, { quiet: true });
-            setStatus($("extractStatus"),
-              "Column " + column.column + " on " + sheet.sheet + " now holds " +
-              picker.value + ".", "ok");
+            setStatus($("extractStatus"), sentence(t("Column {column} on {sheet} now holds {role}.",
+              { column: column.column, role: ROLE_WORDS[picker.value] || picker.value }), { sheet: sheet.sheet }), "ok");
           } catch (error) {
-            setStatus($("extractStatus"), error.message, "error");
+            setStatus($("extractStatus"), I18n.error(error), "error");
           }
         });
         wrap.append(picker);
@@ -3815,10 +3987,10 @@
   async function applySkill(skillId, name) {
     if (!formBatch) return;
     const status = $("answerStatus");
-    setStatus(status, "Rewording with \u201c" + name + "\u201d…", "busy");
+    // A skill's name is the person's own: content (plan 038).
+    setStatus(status, sentence(t("Rewording with “{skill}”…"), { skill: name }), "busy");
     const stop = watchProgress(formBatch.id, (state) => {
-      status.innerHTML = progressMessage(state);
-      status.className = "status busy";
+      paintProgress(status, state);
     });
     try {
       const outcome = await request(
@@ -3828,16 +4000,17 @@
         });
       stop();
       await adoptBatch(outcome.batch, { quiet: true });
+      // Whole sentences, each said after the last.
       const kept = outcome.protected
-        ? " " + outcome.protected + " written by a person were left exactly as they are." : "";
+        ? " " + t("{n} written by a person were left exactly as they are.", { n: outcome.protected }) : "";
       const failed = outcome.failed
-        ? " " + outcome.failed + " could not be reworded and were left as they were." : "";
-      setStatus(status, outcome.attempted
-        ? "Reworded " + outcome.answered + " answer(s) with \u201c" + name + "\u201d." + failed + kept
-        : "Nothing to reword with \u201c" + name + "\u201d." + kept, "ok");
+        ? " " + t("{n} could not be reworded and were left as they were.", { n: outcome.failed }) : "";
+      setStatus(status, sentence(outcome.attempted
+        ? t("Reworded {n} answer(s) with “{skill}”.", { n: outcome.answered }) + failed + kept
+        : t("Nothing to reword with “{skill}”.") + kept, { skill: name }), "ok");
     } catch (error) {
       stop();
-      setStatus(status, error.message, "error");
+      setStatus(status, I18n.error(error), "error");
     }
   }
 
@@ -3850,9 +4023,9 @@
         body: JSON.stringify({ question_id: entry.formId }),
       });
       await adoptBatch(updated, { quiet: true });
-      setStatus($("answerStatus"), "The original draft is back, as it was before it was reworded.", "ok");
+      setStatus($("answerStatus"), t("The original draft is back, as it was before it was reworded."), "ok");
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
     }
   }
 
@@ -3863,7 +4036,7 @@
     host.hidden = false;
     host.append(Cards.detailPicker(detailLevel, async (level) => {
       setStatus($("answerStatus"), level === "brief"
-        ? "Shortening the answers…" : "Switching back to the full answers…", "busy");
+        ? t("Shortening the answers…") : t("Switching back to the full answers…"), "busy");
       try {
         const updated = await request("/api/forms/" + formBatch.id + "/detail", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -3871,10 +4044,10 @@
         });
         await adoptBatch(updated, { quiet: true });
         setStatus($("answerStatus"), level === "brief"
-          ? "Showing the brief answers. The full ones are kept — switch back any time."
-          : "Showing the full answers.", "ok");
+          ? t("Showing the brief answers. The full ones are kept — switch back any time.")
+          : t("Showing the full answers."), "ok");
       } catch (error) {
-        setStatus($("answerStatus"), error.message, "error");
+        setStatus($("answerStatus"), I18n.error(error), "error");
       }
     }));
     host.append(Cards.skillPicker(mySkills, applySkill));
@@ -3918,8 +4091,8 @@
      the only thing on this page that passes `replace_existing`. */
   async function answerAnyway(entry) {
     if (!formBatch || answering) return;
-    if (!confirm("Replace the answer already in the file for this question?\n\n" +
-                 entry.existing.slice(0, 300))) return;
+    if (!confirm(t("Replace the answer already in the file for this question?\n\n{existing}",
+                   { existing: entry.existing.slice(0, 300) }))) return;
     entry.status = "pending";
     entry.replace = true;
     renderQuestions();
@@ -4006,7 +4179,7 @@
       citations: [],
       review_reasons: [],
       confidence_reason: "",
-      error: "This question was not answered.",
+      error: t("This question was not answered."),
     };
   }
 
@@ -4020,14 +4193,15 @@
     const body = new FormData();
     typed.forEach((entry) => body.append("questions", entry.text.trim()));
     body.append("product", wireProduct());
-    setStatus(status, "Keeping " + plural(typed.length, "question") + " as a list…", "busy");
+    setStatus(status, typed.length === 1 ? t("Keeping {n} question as a list…", { n: typed.length })
+      : t("Keeping {n} questions as a list…", { n: typed.length }), "busy");
     try {
       await adoptBatch(await request("/api/forms/list", { method: "POST", body }), { quiet: true });
       setStatus(status, "");
       return true;
     } catch (error) {
-      if (error.code === "product_not_found") await productGone(status, "they were not kept or answered for it");
-      else setStatus(status, error.message, "error");
+      if (error.code === "product_not_found") await productGone(status, "list");
+      else setStatus(status, I18n.error(error), "error");
       return false;
     }
   }
@@ -4121,19 +4295,20 @@
       /* Zero is not a quiet success. "Wrote 0 value(s) — every other part of
          the file is untouched" is true and reads like it worked, which is the
          worst way to find out nothing reached the file. */
-      line.textContent = filled.because
-        ? filled.because
-        : "Wrote " + filled.written + " value(s) into " + filled.file +
-          (unconfirmed ? ", including " + unconfirmed + " answer(s) nobody has confirmed" : "") +
-          (filled.intact ? " — every other part of the file is untouched." : ".");
+      const wrote = { n: filled.written,
+        unconfirmed: unconfirmed ? t(", including {n} answer(s) nobody has confirmed", { n: unconfirmed }) : "" };
+      line.replaceChildren(...(filled.because
+        ? [I18n.server(filled.because)]  // the server's sentence (plan 038)
+        : sentence(filled.intact
+          ? t("Wrote {n} value(s) into {file}{unconfirmed} — every other part of the file is untouched.", wrote)
+          : t("Wrote {n} value(s) into {file}{unconfirmed}.", wrote), { file: filled.file })));
       panel.append(line);
       if (blanks || refused) {
         const note = document.createElement("div");
         note.className = "blanks";
-        note.textContent = [
-          blanks ? blanks + " left blank on purpose" : "",
-          refused ? refused + " refused" : "",
-        ].filter(Boolean).join(", ") + ".";
+        note.textContent = blanks && refused
+          ? t("{blanks} left blank on purpose, {refused} refused.", { blanks, refused })
+          : blanks ? t("{n} left blank on purpose.", { n: blanks }) : t("{n} refused.", { n: refused });
         panel.append(note);
       }
       /* Held back, and the way past it. An answer nobody has confirmed is not
@@ -4144,14 +4319,14 @@
       if (heldCount) {
         const note = document.createElement("div");
         note.className = "blanks held-note";
-        note.textContent = heldCount + " answer(s) were held back because nobody has " +
-          "confirmed them. Edit or approve them in Review, or write them in as they are.";
+        note.textContent = t("{n} answer(s) were held back because nobody has confirmed them. Edit or approve them in Review, or write them in as they are.",
+          { n: heldCount });
         if (result && formBatch && formBatch.id === id) {
           const show = document.createElement("button");
           show.className = "quiet";
           show.style.marginInlineStart = "8px";
-          show.textContent = "Show them";
-          show.title = "Show the answers that need review";
+          show.textContent = t("Show them");
+          show.title = t("Show the answers that need review");
           show.onclick = () => {
             reviewTab = "review";
             renderResult(result, { keepQuestions: true });
@@ -4165,12 +4340,10 @@
         const anyway = document.createElement("button");
         anyway.className = "quiet";
         anyway.style.marginInlineStart = "8px";
-        anyway.textContent = "Write them in anyway";
+        anyway.textContent = t("Write them in anyway");
         anyway.onclick = () => {
-          if (confirm("Write " + heldCount + " unconfirmed answer(s) into the file?\n\n" +
-                      "These are the ones the system is least sure about. " +
-                      "Their reasons are listed under 'Which, and why'. " +
-                      "An answer held back since this list was made stays out.")) fillTheForm(true, heldIds);
+          if (confirm(t("Write {n} unconfirmed answer(s) into the file?\n\nThese are the ones the system is least sure about. Their reasons are listed under 'Which, and why'. An answer held back since this list was made stays out.",
+            { n: heldCount }))) fillTheForm(true, heldIds);
         };
         note.append(anyway);
         panel.append(note);
@@ -4179,7 +4352,7 @@
         const which = document.createElement("details");
         which.className = "held-which";
         const summary = document.createElement("summary");
-        summary.textContent = "Which, and why";
+        summary.textContent = t("Which, and why");
         const list = document.createElement("ul");
         Object.entries(filled.held_back).forEach(([questionId, why]) => {
           const question = ((batch && batch.questions) || []).find((q) => q.id === questionId) || {};
@@ -4187,9 +4360,10 @@
           const row = document.createElement("li");
           const reason = document.createElement("span");
           reason.className = "why";
-          reason.textContent = " — " + why;
-          row.append((question.number || question.location || questionId) + "  " +
-            (text.length > 80 ? text.slice(0, 80) + "…" : text), reason);
+          reason.textContent = " — " + I18n.server(why);  // why it is held: the server's sentence (plan 038)
+          // Where it is in the file, and the question: the customer's words.
+          row.append(content((question.number || I18n.server(question.location) || questionId) + "  " +
+            (text.length > 80 ? text.slice(0, 80) + "…" : text)), reason);
           list.append(row);
         });
         which.append(summary, list);
@@ -4202,8 +4376,8 @@
       if (loose) {
         const note = document.createElement("div");
         note.className = "blanks";
-        note.textContent = loose + " answered question(s) are not rows in this file, " +
-          "so nothing was written for them — export them instead.";
+        note.textContent = t("{n} answered question(s) are not rows in this file, so nothing was written for them — export them instead.",
+          { n: loose });
         panel.append(note);
       }
       /* Fill and download are one action (plan 033): what was written is
@@ -4212,12 +4386,12 @@
       if (filled.written) {
         const going = document.createElement("div");
         going.className = "blanks downloading";
-        going.textContent = filled.file + " is downloading.";
+        going.append(...sentence(t("{file} is downloading."), { file: filled.file }));
         line.after(going);  // under what was written into it
         const download = document.createElement("button");
         download.className = "primary";
         download.style.marginTop = "10px";
-        download.textContent = "Download the filled file again";
+        download.textContent = t("Download the filled file again");
         download.addEventListener("click", () => downloadFilled(id));
         panel.append(download);
         downloadFilled(id);
@@ -4225,7 +4399,7 @@
       paintSteps();
       scrollUnderTheBar(panel);  // wherever the person was when they clicked
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
     } finally {
       filling = false;
       paintFill();
@@ -4238,7 +4412,7 @@
   async function rewordAnswers() {
     const instruction = $("reviseInstruction").value.trim();
     if (!instruction) {
-      setStatus($("answerStatus"), "Say how the answers should change first.", "error");
+      setStatus($("answerStatus"), t("Say how the answers should change first."), "error");
       return;
     }
     const button = $("reviseBtn");
@@ -4258,7 +4432,8 @@
     const button = $("retryFailed");
     button.hidden = failed === 0;
     button.disabled = answering;
-    button.textContent = "Try " + failed + " failed question" + (failed === 1 ? "" : "s") + " again";
+    button.textContent = failed === 1 ? t("Try {n} failed question again", { n: failed })
+      : t("Try {n} failed questions again", { n: failed });
   }
 
   /* `only` answers exactly the entries given, rather than everything waiting:
@@ -4296,11 +4471,10 @@
     const runId = formBatch.id;
     answering = true;
     refreshAnswerButton();
-    setStatus(status, "Answering " + batch.length + " question(s)…", "busy");
+    setStatus(status, t("Answering {n} question(s)…", { n: batch.length }), "busy");
 
     const stop = watchProgress(runId, (state) => {
-      status.innerHTML = progressMessage(state);
-      status.className = "status busy";
+      paintProgress(status, state);
     });
 
     try {
@@ -4347,8 +4521,9 @@
       renderResult(result, { keepQuestions: true });
       refreshFormControls();
       const typedOut = typedOutOf(reviewTab);
-      setStatus(status, "Answered " + data.answers.length + " question(s)." + (typedOut
-        ? " The answers to " + typedOut + " you typed beside the file are under All: they are not rows in it." : ""), "ok");
+      setStatus(status, t("Answered {n} question(s).", { n: data.answers.length }) + (typedOut
+        ? " " + t("The answers to {n} you typed beside the file are under All: they are not rows in it.", { n: typedOut })
+        : ""), "ok");
 
       /* A wording instruction given before the run is applied after it, as a
          rewording pass over the answers just written. It is not injected into
@@ -4382,11 +4557,10 @@
          again started a second run, paid for twice (plan 029, 1.4). */
       const carriesOn = error.code === "questionnaire_busy" || !error.status || (error.status >= 500 && !error.code);
       if (formBatch && batch.some((entry) => entry.formId) && carriesOn) {
-        followRun(formBatch, error.code === "questionnaire_busy" ? error.message
-          : "The connection to the server timed out, but the answering carries on there. " +
-            "This page will show the answers when it finishes.");
-      } else if (error.code === "product_not_found") await productGone(status, "they were not answered for it");
-      else setStatus(status, error.message, "error");
+        followRun(formBatch, error.code === "questionnaire_busy" ? I18n.error(error)
+          : t("The connection to the server timed out, but the answering carries on there. This page will show the answers when it finishes."));
+      } else if (error.code === "product_not_found") await productGone(status, "answers");
+      else setStatus(status, I18n.error(error), "error");
     } finally {
       stop();
       answering = false;
@@ -4423,14 +4597,13 @@
       covering.some((answer) => !loose.includes(answer) && answer.answer && !answer.error);
 
     if (!loose.length && !throughBatch) {
-      setStatus(status, "There are no answers to reword yet.", "error");
+      setStatus(status, t("There are no answers to reword yet."), "error");
       return 0;
     }
 
-    setStatus(status, "Rewording the answers…", "busy");
+    setStatus(status, t("Rewording the answers…"), "busy");
     const stop = watchProgress(batch ? batch.id : rewordRunId(), (state) => {
-      status.innerHTML = progressMessage(state);
-      status.className = "status busy";
+      paintProgress(status, state);
     });
     // Takes its progress off the status line Close cleared, unless an answering run has it now.
     const dropped = () => {
@@ -4480,11 +4653,11 @@
 
       stop();
       renderResult(result, { keepQuestions: true });
-      setStatus(status, "Reworded " + done + " answer(s).", "ok");
+      setStatus(status, t("Reworded {n} answer(s).", { n: done }), "ok");
       return done;
     } catch (error) {
       if (putAway()) return dropped();
-      setStatus(status, error.message, "error");
+      setStatus(status, I18n.error(error), "error");
       return done;
     } finally {
       stop();
@@ -4539,8 +4712,10 @@
       });
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
-        throw new Error(
-          detail.detail || (format.toUpperCase() + " export failed (" + response.status + ")"));
+        const failure = new Error(detail.detail
+          || t("{format} export failed ({status})", { format: format.toUpperCase(), status: response.status }));
+        failure.code = detail.code;  // for its Arabic, by the code (plan 038)
+        throw failure;
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -4550,7 +4725,7 @@
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setStatus($("answerStatus"), error.message, "error");
+      setStatus($("answerStatus"), I18n.error(error), "error");
     } finally {
       button.disabled = false;
     }
@@ -4630,9 +4805,9 @@
   $("clearQuestions").onclick = () => {
     const answered = questions.filter((q) => q.status === "answered").length;
     const warning = answered
-      ? "Remove all " + questions.length + " questions? " + answered +
-        " already have answers, and those will go too."
-      : "Remove all " + questions.length + " questions?";
+      ? t("Remove all {n} questions? {answered} already have answers, and those will go too.",
+        { n: questions.length, answered })
+      : t("Remove all {n} questions?", { n: questions.length });
     if (!confirm(warning)) return;
     questions = [];
     result = null;
@@ -4668,8 +4843,9 @@
     }
   }
 
-  function documentsSaid(count, what) {
-    return count === 0 ? "no " + what + "s" : count + " " + what + (count === 1 ? "" : "s");
+  function sharedSaid(count) {
+    return count === 0 ? t("no shared documents")
+      : count === 1 ? t("{n} shared document", { n: count }) : t("{n} shared documents", { n: count });
   }
 
   function paintKnowledgeLine() {
@@ -4683,15 +4859,19 @@
     }
     const own = product ? productDocuments[product.id] : null;
     let said;
-    if (sharedDocuments === null) said = "Counting the documents answers are drawn from…";
+    if (sharedDocuments === null) said = [t("Counting the documents answers are drawn from…")];
     else if (sharedDocuments instanceof Error) {
-      said = "Could not count the documents answers are drawn from: " + sharedDocuments.message;
+      said = [t("Could not count the documents answers are drawn from: {why}", { why: I18n.error(sharedDocuments) })];
     } else {
-      said = "Answers from " + documentsSaid(sharedDocuments, "shared document");
-      if (typeof own === "number") said += " and " + (own || "none") + " for " + product.name;
-      else if (own instanceof Error) said += "; " + product.name + "'s could not be counted";
+      const shared = sharedSaid(sharedDocuments);
+      if (typeof own === "number") {
+        said = sentence(t("Answers from {shared} and {own} for {product}", { shared, own: own || t("none") }),
+          { product: product.name });
+      } else if (own instanceof Error) {
+        said = sentence(t("Answers from {shared}; {product}'s could not be counted", { shared }), { product: product.name });
+      } else said = [t("Answers from {shared}", { shared })];
     }
-    $("kbLineText").textContent = said;
+    $("kbLineText").replaceChildren(...said);
     /* The page chooses nothing for the person (plan 031), so "Manage" names the
        choice made here: a product's knowledge base, the shared one for General,
        and nothing while nothing is chosen. */
@@ -4716,8 +4896,13 @@
   function needsProduct() { return !formBatch && !productChosen(); }
   function wireProduct() { return Cards.serverProduct(formProduct()); }
   function choiceName(choice) {
-    if (choice === Cards.GENERAL) return "General";
-    return (Cards.product(choice) || {}).name || "the product chosen";
+    if (choice === Cards.GENERAL) return t("General");
+    return (Cards.product(choice) || {}).name || t("the product chosen");
+  }
+  /* The same, for a sentence: a product's name is content, General is a word of the interface (plan 038). */
+  function choiceNamed(choice) {
+    const known = choice !== Cards.GENERAL && (Cards.product(choice) || {}).name;
+    return known ? content(known) : choiceName(choice);
   }
   /* The selector chooses the product the next file is opened for. Once a
      questionnaire is open its product is fixed (TD-040), and so is a typed
@@ -4736,24 +4921,25 @@
     chip.classList.toggle("unchosen", !choice);
     if (product && product.color) chip.style.setProperty("--product", product.color);
     else chip.style.removeProperty("--product");
-    $("formProductHint").textContent = !choice
-      ? (productsFailed
-        ? "Your products could not be loaded. Reload the page before choosing; choose General only if this " +
-          "questionnaire is about the whole company."
-        : "Choose the product this questionnaire is for. General answers from the shared policies only; " +
-          "a product adds its own policies and past answers.")
-      : (gone
-        ? "Answered from " + gone.name + "'s knowledge base and answer memory, which were deleted with it."
+    // Two sentences: where the answers come from, then why the choice is fixed.
+    const fixedWhy = isList()
+      ? " " + t("Fixed for this list: to answer these questions for another product, close it and give them again with that product chosen.")
+      : formBatch
+      ? " " + t("Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen.")
+      : fixed ? " " + t("Fixed while these answers are on the page: clear the list to choose another product.") : "";
+    $("formProductHint").replaceChildren(...(!choice
+      ? [productsFailed
+        ? t("Your products could not be loaded. Reload the page before choosing; choose General only if this questionnaire is about the whole company.")
+        : t("Choose the product this questionnaire is for. General answers from the shared policies only; a product adds its own policies and past answers.")]
+      : gone
+        ? sentence(t("Answered from {product}'s knowledge base and answer memory, which were deleted with it.") + fixedWhy,
+          { product: gone.name })
         : product
-          ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
-          : "Answered from the shared knowledge base and answer memory.") +
-        (isList()
-          ? " Fixed for this list: to answer these questions for another product, close it and give them again with that product chosen."
-          : formBatch
-          ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
-          : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
+          ? sentence(t("Answered from {product}'s knowledge base and answer memory, beside the shared ones.") + fixedWhy,
+            { product: product.name })
+          : [t("Answered from the shared knowledge base and answer memory.") + fixedWhy]));
     // The review names the product its approvals are filed under (plan 029, 2).
-    const label = choice ? Cards.choiceTag(choice, "These answers are for " + choiceName(choice)) : null;
+    const label = choice ? Cards.choiceTag(choice, t("These answers are for {product}", { product: choiceName(choice) })) : null;
     $("resultsProduct").replaceChildren(...(label ? [label] : []));
     paintRead();
     paintLastUsed();
@@ -4767,9 +4953,11 @@
     [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
     const gone = Cards.product(choice);
     if (formBatch && gone && gone.deleted && formBatch.product_id === choice) {
-      const option = new Option(gone.name + " (deleted)", choice);
+      const option = new Option(t("{product} (deleted)", { product: gone.name }), choice);
       option.disabled = true;
       option.dataset.deleted = "true";
+      option.setAttribute("data-no-translate", "");  // it holds a product's name (plan 038)
+      option.dir = "auto";
       select.append(option);
     }
     select.value = choice && [...select.options].some((option) => option.value === choice) ? choice : "";
@@ -4827,11 +5015,18 @@
     // under it searches the shared policies, and an open drawer searches again.
     if (fillSearchScopes() && searchIsOpen()) searchScopeChanged();
     const select = $("formProduct");
+    // General's label is the one cards.js keeps for every page; its Arabic is the catalog's (plan 038).
     select.replaceChildren(
-      new Option("Product: choose…", "", true, true),
-      new Option(Cards.GENERAL_LABEL, Cards.GENERAL));
+      new Option(t("Product: choose…"), "", true, true),
+      new Option(Cards.GENERAL_LABEL === "General (shared policies only)"
+        ? t("General (shared policies only)") : Cards.GENERAL_LABEL, Cards.GENERAL));
     select.options[0].disabled = true;  // a prompt, never a choice
-    teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
+    teamProducts.forEach((product) => {
+      const option = new Option(product.name, product.id);
+      option.setAttribute("data-no-translate", "");  // a product's name (plan 038)
+      option.dir = "auto";
+      select.append(option);
+    });
     showFormProduct(formBatch ? Cards.choiceOf(formBatch.product_id) : chosen);
     paintReadOnly();  // its note names the product, which may only now be known
     listRecentForms();
@@ -4861,21 +5056,20 @@
     if (!on) return;
     if (running() && !formBatch.read_only) {
       const run = formBatch.running;
-      const counted = run.total ? ": " + run.completed + " of " + run.total + " done" : "";
+      const counted = run.total ? t(": {done} of {all} done", { done: run.completed, all: run.total }) : "";
       // When it started, so a run that has stopped moving can be told from a long one (TD-064).
       const started = run.started_at ? new Date(run.started_at) : null;
-      const since = started && !isNaN(started) ? ", started at " + started.toLocaleString(undefined,
+      const since = started && !isNaN(started) ? t(", started at {when}", { when: I18n.dateTime(started,
         started.toDateString() === new Date().toDateString()
           ? { hour: "2-digit", minute: "2-digit" }
-          : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-      note.textContent = "Being answered on the server" + counted + since + ". Answers appear here when it " +
-        "finishes; editing opens then.";
+          : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) }) : "";
+      note.textContent = t("Being answered on the server{counted}{since}. Answers appear here when it finishes; editing opens then.",
+        { counted, since });
       return;
     }
-    const name = (Cards.product(formBatch.product_id) || {}).name || "Its product";
-    note.textContent = name + " was deleted. This questionnaire is kept so its answers can be read and its " +
-      "filled file downloaded; it can no longer be answered, edited or approved. To answer the file again, " +
-      "close it and open the file for another product or General.";
+    const known = (Cards.product(formBatch.product_id) || {}).name;
+    note.replaceChildren(...sentence(t("{product} was deleted. This questionnaire is kept so its answers can be read and its filled file downloaded; it can no longer be answered, edited or approved. To answer the file again, close it and open the file for another product or General."),
+      { product: known ? content(known) : t("Its product") }));
   }
   /* A run on the server this page is not waiting on: started before a reload,
      cut off by the proxy, or started elsewhere (plan 029, 1.4). The
@@ -4902,7 +5096,7 @@
       if (result) renderResult(result, { keepQuestions: true });
     }
     const status = $("answerStatus");
-    setStatus(status, note || "Being answered on the server…", "busy");
+    setStatus(status, note || t("Being answered on the server…"), "busy");
     const here = () => !stopped && formBatch && formBatch.id === id;
     (async () => {
       let looked = Date.now();
@@ -4919,8 +5113,7 @@
             else if (here()) {
               Object.assign(formBatch.running, state);
               paintReadOnly();
-              status.innerHTML = progressMessage(state);
-              status.className = "status busy";
+              paintProgress(status, state);
             }
           }
         } catch (error) { /* a dropped poll: the next one will do */ }
@@ -4948,12 +5141,12 @@
            waiting (plan 029's review). */
         const left = (batchNow.counts || {}).still_blank || 0;
         const typed = pendingQuestions().filter((entry) => !entry.formId).length;
-        const typedLeft = typed ? " The " + typed + " question(s) you typed beside the file were not answered: " +
-          "answer them again." : "";
+        const typedLeft = typed
+          ? " " + t("The {n} question(s) you typed beside the file were not answered: answer them again.", { n: typed }) : "";
         setStatus(status, left
-          ? "The run has ended, and " + left + " question(s) still have no answer. Answer them to carry on." + typedLeft
-          : typed ? "The file's questions are answered." + typedLeft
-          : "Finished: every question has an answer.", left || typed ? "warn" : "ok");
+          ? t("The run has ended, and {n} question(s) still have no answer. Answer them to carry on.", { n: left }) + typedLeft
+          : typed ? t("The file's questions are answered.") + typedLeft
+          : t("Finished: every question has an answer."), left || typed ? "warn" : "ok");
         return;
       }
     })();
@@ -4981,7 +5174,8 @@
     if (document.visibilityState !== "visible") return;
     const gone = await loadFormProducts();
     if (formBatch && !formBatch.read_only && (Cards.product(formBatch.product_id) || {}).deleted) redrawBatch();
-    else if (gone) setStatus($("extractStatus"), gone + " has been deleted; choose a product again.", "error");
+    else if (gone) setStatus($("extractStatus"), sentence(t("{product} has been deleted; choose a product again."),
+      { product: gone }), "error");
   });
 
   /* Close waits while answering, or while any request about the questionnaire
@@ -5012,9 +5206,11 @@
     if (!formBatch || answering || batchRequests > 0) return;
     const typed = questions.filter((q) => !q.formId && q.text.trim());
     const answered = typed.filter((q) => q.status === "answered").length;
-    if (typed.length && !confirm("Close " + formBatch.source_name + "?\n\n" + typed.length +
-        " question(s) typed beside it are not part of the file and will go" +
-        (answered ? ", and so will the answers to " + answered + " of them" : "") + ".")) return;
+    if (typed.length && !confirm(answered
+        ? t("Close {file}?\n\n{n} question(s) typed beside it are not part of the file and will go, and so will the answers to {answered} of them.",
+          { file: formBatch.source_name, n: typed.length, answered })
+        : t("Close {file}?\n\n{n} question(s) typed beside it are not part of the file and will go.",
+          { file: formBatch.source_name, n: typed.length }))) return;
     const closed = formBatch;
     lastClosed = {
       id: closed.id, source_name: closed.source_name, product_id: closed.product_id, format: closed.format,
@@ -5022,7 +5218,8 @@
       kept_until: closed.kept_until, answered: (closed.counts || {}).answered || 0,
     };
     putAway(closed);
-    setStatus($("extractStatus"), "Closed " + closed.source_name + ". It stays in “Or pick up” below.", "ok");
+    setStatus($("extractStatus"), sentence(t("Closed {file}. It stays in “Or pick up” below."),
+      { file: closed.source_name }), "ok");
   };
 
   /* The open questionnaire off the page, closed or deleted: back to step 1,
@@ -5138,6 +5335,25 @@
     event.preventDefault();
     event.returnValue = "";
   });
+
+  /* Switching the interface's language draws the page again (plan 038), and a
+     reload loses what only this page holds: what leaving asks about, and a
+     wording typed under "More options" or "More", or a file waiting for its
+     product. Asked in the language the person is reading. */
+  I18n.beforeSwitch = () => (unsavedWork() || heldFile
+    || $("answerStyle").value.trim() !== "" || $("reviseInstruction").value.trim() !== ""
+    ? t("Switching the language reloads the page, and what you have typed or given here and not yet saved will be lost. Switch anyway?")
+    : "");
+
+  /* Two sentences with elements inside, written here so the elements stay
+     whole in either language (plan 038). */
+  $("worthCheckingHint").replaceChildren(...sentence(
+    t("Anything marked {worth} was read from the shape of the sheet rather than from its headings. If a column was taken for the wrong thing, the answers land in the wrong place — change it here before answering."),
+    { worth: textElement("em", t("worth checking")) }));
+  const kbd = (key) => textElement("kbd", key);
+  $("reviewKeys").replaceChildren(...sentence(
+    t("Keys: {up} {down} or {j} {k} move between answers, {a} accepts, {e} edits, {esc} closes the editor and keeps what you typed."),
+    { up: kbd("↑"), down: kbd("↓"), j: kbd("J"), k: kbd("K"), a: kbd("A"), e: kbd("E"), esc: kbd("Esc") }));
 
   loadSkills();
   countDocuments("").then((count) => { sharedDocuments = count; paintKnowledgeLine(); });
