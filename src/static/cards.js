@@ -48,6 +48,15 @@
    A page that drives the cards from the keyboard (the Workbench, plan 033)
    finds a card's controls by `data-card-action`: "approve" and "edit", the
    latter with `data-editing` while its editor is open.
+
+   In the interface's language (plan 038): every word the card writes goes
+   through `t()`, with its Arabic in `i18n/ar-cards.js`, and the server's
+   sentences it shows (the review's reasons, why an answer is held back, why
+   the confidence is low) through `I18n.server`. What the card shows of the
+   questionnaire and the answer -- the question, the answer, a source's text,
+   name and locator, a person's address, the model's own words -- is content:
+   inside `data-no-translate`, in its own direction. The helpers a page calls
+   with words (`stat`, a badge's title) are given them in the page's language.
 */
 
 const Cards = (window.Cards = {
@@ -74,11 +83,61 @@ const Cards = (window.Cards = {
 });
 
 (function () {
+  const t = I18n.t;
+
   // Where the Formatted/Raw choice is remembered, per browser.
   const VIEW_KEY = "assessment-chunk-view";
 
   function isArabic(text) {
     return /[؀-ۿ]/.test(text || "");
+  }
+
+  /* Content keeps its own direction in an Arabic page (plan 038): Arabic right
+     to left, anything else by its own first letter, so an English answer reads
+     left to right there. An English page is as it was. */
+  function ownWay(node, text) {
+    if (I18n.rtl) node.dir = isArabic(text) ? "rtl" : "auto";
+    return node;
+  }
+
+  /* The same, for content that has always been drawn right to left when it is
+     Arabic: the question, the answer, a source's text, the drafter's words. */
+  function directed(node, text) {
+    if (isArabic(text)) node.dir = "rtl";
+    return ownWay(node, text);
+  }
+
+  /* An element holding content: the questionnaire's, the answer's, a source's.
+     Never translated, and in its own direction in an Arabic page. */
+  function asContent(tag, text) {
+    const node = document.createElement(tag);
+    node.setAttribute("data-no-translate", "");
+    node.textContent = text;
+    return ownWay(node, text);
+  }
+
+  /* A sentence the server wrote, into `element` in the page's language
+     (`I18n.server`); `shape` dresses it (a capital, a full stop). In Arabic,
+     what the sentence carries from the case itself -- clause numbers, the
+     drafter's or the reviewer's own words, left as they came -- is content: a
+     run of Latin text in the Arabic sentence gets an element of its own. A
+     sentence with no Arabic is shown as it came, for the catalog to catch. */
+  const CARRIED = /[A-Za-z][^؀-ۿ\n]*?(?=[\s.,;:!?)\]"'»]*(?:[؀-ۿ\n]|$))/g;
+
+  function serverInto(element, english, shape) {
+    const text = I18n.server(english);
+    const shown = shape ? shape(text) : text;
+    if (!I18n.rtl || text === english) {
+      element.append(shown);
+      return element;
+    }
+    let at = 0;
+    for (const found of shown.matchAll(CARRIED)) {
+      element.append(shown.slice(at, found.index), asContent("span", found[0]));
+      at = found.index + found[0].length;
+    }
+    element.append(shown.slice(at));
+    return element;
   }
 
   function chunkView() {
@@ -91,7 +150,7 @@ const Cards = (window.Cards = {
       button.setAttribute("aria-pressed", String(button.dataset.view === view));
     });
     document.querySelectorAll("[data-chunk-source]").forEach((node) => {
-      node.replaceWith(renderChunk(node.getAttribute("data-chunk-source"), view));
+      node.replaceWith(renderChunk(node.getAttribute("data-chunk-source"), view, node.hasAttribute("data-chunk-ours")));
     });
   }
 
@@ -102,7 +161,11 @@ const Cards = (window.Cards = {
   function flatText(node) {
     const parts = [];
     const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-    while (walk.nextNode()) parts.push(walk.currentNode.nodeValue);
+    while (walk.nextNode()) {
+      // A figure stands for the source's "<!-- image -->", in whichever language it is named.
+      const figure = walk.currentNode.parentElement && walk.currentNode.parentElement.closest(".figure");
+      parts.push(figure ? "image" : walk.currentNode.nodeValue);
+    }
     return parts.join(" ");
   }
 
@@ -119,7 +182,7 @@ const Cards = (window.Cards = {
       values.forEach((value) => {
         const cell = document.createElement(isHead ? "th" : "td");
         cell.textContent = value;
-        if (isArabic(value)) cell.dir = "rtl";
+        directed(cell, value);
         row.append(cell);
       });
       if (isHead) {
@@ -176,7 +239,7 @@ const Cards = (window.Cards = {
         } else {
           element.textContent = rest;
         }
-        if (isArabic(rest)) element.dir = "rtl";
+        directed(element, rest);
         box.append(element);
         index += 1;
         continue;
@@ -186,7 +249,7 @@ const Cards = (window.Cards = {
         list = null;
         const figure = document.createElement("div");
         figure.className = "figure";
-        figure.textContent = "image";
+        figure.textContent = t("image");
         box.append(figure);
         index += 1;
         continue;
@@ -200,7 +263,7 @@ const Cards = (window.Cards = {
         }
         const item = document.createElement("li");
         item.textContent = bullet[1];
-        if (isArabic(bullet[1])) item.dir = "rtl";
+        directed(item, bullet[1]);
         list.append(item);
         index += 1;
         continue;
@@ -209,7 +272,7 @@ const Cards = (window.Cards = {
       list = null;
       const paragraph = document.createElement("p");
       paragraph.textContent = trimmed;
-      if (isArabic(trimmed)) paragraph.dir = "rtl";
+      directed(paragraph, trimmed);
       box.append(paragraph);
       index += 1;
     }
@@ -221,11 +284,14 @@ const Cards = (window.Cards = {
     const pre = document.createElement("pre");
     pre.className = "snippet";
     pre.textContent = text;
-    if (isArabic(text)) pre.dir = "rtl";
+    directed(pre, text);
     return pre;
   }
 
-  function renderChunk(text, view) {
+  /* A source's text, formatted or raw. It is content (plan 038): never
+     translated, and in its own direction, a table's columns too. `ours` is a
+     sentence of the card's own drawn the same way, in the page's language. */
+  function renderChunk(text, view, ours) {
     const source = String(text == null ? "" : text);
     let node;
     if ((view || chunkView()) !== "pretty") {
@@ -248,20 +314,42 @@ const Cards = (window.Cards = {
       }
     }
     node.setAttribute("data-chunk-source", source);
+    if (ours) {
+      node.setAttribute("data-chunk-ours", "");
+    } else {
+      node.setAttribute("data-no-translate", "");
+      if (I18n.rtl) node.dir = isArabic(source) ? "rtl" : "ltr";
+    }
     return node;
   }
 
   /* The review's tabs: which answers to show, by what the fill does with each
      (plan 029, 1.3). One set for the Workbench and the chat's answers panel
      (plan 037), so the same answer is in the same tab on both pages. */
-  const REVIEW_TABS = [
-    ["review", "Needs review", "Held back until a person edits or approves them, and the ones that failed"],
-    ["written", "Will be written", "Confident answers nobody has checked: they go into the file as drafted"],
-    ["person", "Done by a person", "Approved, edited or written by a person"],
-    ["blank", "Blank or set aside", "Left blank on purpose, and rows set aside: nothing goes in for them"],
-    ["all", "All", "Every answer, in the file's order"],
-  ];
-  const WRITTEN_IN_A_LIST = ["Ready to use", "Confident answers nobody has checked: ready to use as drafted"];
+  const REVIEW_TABS = ["review", "written", "person", "blank", "all"];
+
+  /* A tab's name with its count, and what it holds. One literal string each,
+     for the catalogs. A list has no file to write into: its confident answers
+     are ready to use (plan 033). */
+  function tabName(key, n) {
+    if (key === "review") return t("Needs review ({n})", { n });
+    if (key === "written") return Cards.fileless ? t("Ready to use ({n})", { n }) : t("Will be written ({n})", { n });
+    if (key === "person") return t("Done by a person ({n})", { n });
+    if (key === "blank") return t("Blank or set aside ({n})", { n });
+    return t("All ({n})", { n });
+  }
+
+  function tabAbout(key) {
+    if (key === "review") return t("Held back until a person edits or approves them, and the ones that failed");
+    if (key === "written") {
+      return Cards.fileless
+        ? t("Confident answers nobody has checked: ready to use as drafted")
+        : t("Confident answers nobody has checked: they go into the file as drafted");
+    }
+    if (key === "person") return t("Approved, edited or written by a person");
+    if (key === "blank") return t("Left blank on purpose, and rows set aside: nothing goes in for them");
+    return t("Every answer, in the file's order");
+  }
 
   /* An answer's tab, from the card's own facts. */
   function reviewBucket(item) {
@@ -280,13 +368,11 @@ const Cards = (window.Cards = {
   function reviewTabs(tabs, counted, tab, onPick, keepFocus) {
     const hadFocus = keepFocus || tabs.contains(document.activeElement);
     tabs.replaceChildren();
-    REVIEW_TABS.forEach(([key, name, about]) => {
-      // A list has no file to write into: its confident answers are ready to use (plan 033).
-      if (key === "written" && Cards.fileless) [name, about] = WRITTEN_IN_A_LIST;
+    REVIEW_TABS.forEach((key) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = name + " (" + (counted[key] || 0) + ")";
-      button.title = about;
+      button.textContent = tabName(key, counted[key] || 0);
+      button.title = tabAbout(key);
       button.dataset.tab = key;
       button.setAttribute("aria-pressed", String(key === tab));
       button.onclick = () => onPick(key);
@@ -300,11 +386,16 @@ const Cards = (window.Cards = {
 
   /* What an empty tab says: where the answers are instead. */
   function emptyTab(tab, counted) {
-    const going = (counted.written || 0) + (counted.person || 0);
-    const fate = Cards.fileless ? " ready to use" : " will be written";
-    return tab === "review"
-      ? "Nothing needs review. " + going + " answer(s)" + fate + "."
-      : "No answers here. " + (counted.review || 0) + " need review, " + going + fate + ".";
+    const n = (counted.written || 0) + (counted.person || 0);
+    const review = counted.review || 0;
+    if (tab === "review") {
+      return Cards.fileless
+        ? t("Nothing needs review. {n} answer(s) ready to use.", { n })
+        : t("Nothing needs review. {n} answer(s) will be written.", { n });
+    }
+    return Cards.fileless
+      ? t("No answers here. {review} need review, {n} ready to use.", { review, n })
+      : t("No answers here. {review} need review, {n} will be written.", { review, n });
   }
 
   /* Full or Brief, for one questionnaire.
@@ -344,32 +435,32 @@ const Cards = (window.Cards = {
   function withdrawnMessage(question) {
     if (question && question.will_be_written) {
       return question.by_hand
-        ? "Approval withdrawn. A person wrote this answer, so it still goes into the file; it is out of the answer memory."
-        : "Approval withdrawn. It is confident enough to go into the file without a person looking.";
+        ? t("Approval withdrawn. A person wrote this answer, so it still goes into the file; it is out of the answer memory.")
+        : t("Approval withdrawn. It is confident enough to go into the file without a person looking.");
     }
-    return "Approval withdrawn. It will be held back until somebody edits or approves it.";
+    return t("Approval withdrawn. It will be held back until somebody edits or approves it.");
   }
 
   function detailPicker(current, onPick) {
     const wrap = document.createElement("div");
     wrap.className = "detail-pick";
     const label = document.createElement("span");
-    label.textContent = "Answers:";
+    label.textContent = t("Answers:");
     const seg = document.createElement("div");
     seg.className = "seg";
 
-    const buttons = [["full", "Full"], ["brief", "Brief"]].map(([value, text]) => {
+    const buttons = [["full", t("Full")], ["brief", t("Brief")]].map(([value, text]) => {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = text;
       button.setAttribute("aria-pressed", String((current || "full") === value));
       button.title = value === "brief"
-        ? "One sentence each, condensed from the full answer"
-        : "The full answer, with its supporting detail";
+        ? t("One sentence each, condensed from the full answer")
+        : t("The full answer, with its supporting detail");
       button.onclick = async () => {
         if (button.getAttribute("aria-pressed") === "true") return;
         buttons.forEach((b) => { b.disabled = true; });
-        if (value === "brief") button.textContent = "Shortening…";
+        if (value === "brief") button.textContent = t("Shortening…");
         try {
           await onPick(value);
         } finally {
@@ -396,20 +487,24 @@ const Cards = (window.Cards = {
       return wrap;
     }
     const label = document.createElement("span");
-    label.textContent = "Skills:";
+    label.textContent = t("Skills:");
     const select = document.createElement("select");
-    select.setAttribute("aria-label", "Choose one of your skills");
-    select.append(new Option("Choose a skill…", ""));
+    select.setAttribute("aria-label", t("Choose one of your skills"));
+    select.append(new Option(t("Choose a skill…"), ""));
     // Two groups, because they are two different promises: the built-in ones
     // are the same for everybody, and "Yours" are nobody else's.
-    [["Built in", skills.filter((s) => s.builtin)], ["Yours", skills.filter((s) => !s.builtin)]]
+    [[t("Built in"), skills.filter((s) => s.builtin)], [t("Yours"), skills.filter((s) => !s.builtin)]]
       .forEach(([label, group]) => {
         if (!group.length) return;
         const holder = document.createElement("optgroup");
         holder.label = label;
         group.forEach((skill) => {
-          const option = new Option(skill.name, skill.skill_id);
-          if (skill.description) option.title = skill.description;
+          /* A built-in skill's name and description are the server's, in the
+             page's language; a person's own are theirs (plan 038). */
+          const name = skill.builtin ? I18n.server(skill.name) : skill.name;
+          const option = new Option(name, skill.skill_id);
+          if (!skill.builtin) ownWay(option, name).setAttribute("data-no-translate", "");
+          if (skill.description) option.title = skill.builtin ? I18n.server(skill.description) : skill.description;
           holder.append(option);
         });
         select.append(holder);
@@ -418,8 +513,8 @@ const Cards = (window.Cards = {
     apply.type = "button";
     apply.className = "ghost";
     apply.dataset.mutates = "true";
-    apply.textContent = "Reword with it";
-    apply.title = "Rewords the answers shown here. Answers somebody wrote by hand are left as they are.";
+    apply.textContent = t("Reword with it");
+    apply.title = t("Rewords the answers shown here. Answers somebody wrote by hand are left as they are.");
     apply.onclick = async () => {
       if (!select.value) { select.focus(); return; }
       const name = select.options[select.selectedIndex].text;
@@ -434,7 +529,7 @@ const Cards = (window.Cards = {
     };
     const manage = document.createElement("a");
     manage.href = "preferences";
-    manage.textContent = "Manage";
+    manage.textContent = t("Manage");
     wrap.append(label, select, apply, manage);
     return wrap;
   }
@@ -443,8 +538,8 @@ const Cards = (window.Cards = {
     const box = document.createElement("div");
     box.className = "view-toggle";
     box.setAttribute("role", "group");
-    box.setAttribute("aria-label", "How to show the text");
-    [["pretty", "Formatted"], ["raw", "Raw"]].forEach(([mode, label]) => {
+    box.setAttribute("aria-label", t("How to show the text"));
+    [["pretty", t("Formatted")], ["raw", t("Raw")]].forEach(([mode, label]) => {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.view = mode;
@@ -472,13 +567,13 @@ const Cards = (window.Cards = {
     if (!canOpenDocument(sourceName)) return null;
     const button = document.createElement("button");
     button.className = "quiet";
-    button.textContent = "open document";
+    button.textContent = t("open document");
     button.onclick = () => Cards.onOpenDocument({
       name: sourceName,
       title: sourceName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
       origin: "uploaded",
       category: "uploaded",
-      label: sourceType === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
+      label: sourceType === "prior_answer" ? t("Uploaded completed assessment") : t("Uploaded guideline"),
       extension: sourceName.split(".").pop().toLowerCase(),
       size_bytes: 0,
     });
@@ -566,26 +661,36 @@ const Cards = (window.Cards = {
      short chip. Matched on the words that say which check it was, so answers
      stored under earlier wordings read the same. */
   const REASON_CHIPS = [
-    [/not consistent|disagree/i, "Sources disagree"],
-    [/not find the answer grounded|not grounded/i, "Not backed by our documents"],
-    [/rests only on what we told/i, "Only from previous answers"],
-    [/part of a split source/i, "Partial source"],
-    [/cites clauses not covered|not covered by its sources/i, "Cites clauses not in its sources"],
+    [/not consistent|disagree/i, "disagree"],
+    [/not find the answer grounded|not grounded/i, "ungrounded"],
+    [/rests only on what we told/i, "memory"],
+    [/part of a split source/i, "partial"],
+    [/cites clauses not covered|not covered by its sources/i, "clauses"],
   ];
+
+  function chipName(check) {
+    if (check === "disagree") return t("Sources disagree");
+    if (check === "ungrounded") return t("Not backed by our documents");
+    if (check === "memory") return t("Only from previous answers");
+    if (check === "partial") return t("Partial source");
+    if (check === "clauses") return t("Cites clauses not in its sources");
+    return check === "low" ? t("Low confidence") : t("Flagged");
+  }
 
   function reasonChips(item) {
     const chips = [];
     (item.review_reasons || []).forEach((reason) => {
       const known = REASON_CHIPS.find(([pattern]) => pattern.test(reason));
-      const label = known ? known[1] : "Flagged";
-      const same = chips.find((chip) => chip.label === label);
-      if (same) same.why.push(reason); else chips.push({ label, why: [reason] });
+      const check = known ? known[1] : "flagged";
+      const same = chips.find((chip) => chip.check === check);
+      if (same) same.why.push(reason); else chips.push({ check, label: chipName(check), why: [reason] });
     });
     // No check spoke: held for the score itself, unless it is above the line,
     // which only an answer flagged by hand before the checks had reasons is.
     if (!chips.length) {
       const above = typeof Cards.reviewThreshold === "number" && !heldByScore(item.confidence);
-      chips.push({ label: above ? "Flagged" : "Low confidence", why: [item.held_back_because || ""] });
+      const check = above ? "flagged" : "low";
+      chips.push({ check, label: chipName(check), why: [item.held_back_because || ""] });
     }
     return chips;
   }
@@ -599,15 +704,15 @@ const Cards = (window.Cards = {
      that never came through it -- one typed on the Workbench, one in the chat
      -- is judged by the same rule here, and goes into no file. */
   function statusOf(item) {
-    if (item.blanked) return { key: "blank", word: "Left blank" };
-    if (item.set_aside) return { key: "aside", word: "Set aside" };
-    if (item.error) return { key: "failed", word: "Could not be answered" };
-    if (byAPerson(item)) return { key: "person", word: "Done by a person" };
+    if (item.blanked) return { key: "blank", word: t("Left blank") };
+    if (item.set_aside) return { key: "aside", word: t("Set aside") };
+    if (item.error) return { key: "failed", word: t("Could not be answered") };
+    if (byAPerson(item)) return { key: "person", word: t("Done by a person") };
     const judged = item.will_be_written !== undefined;
     const held = judged ? !item.will_be_written : Boolean(item.needs_review) || heldByScore(item.confidence);
-    if (held) return { key: "review", word: "Needs review", chips: reasonChips(item) };
+    if (held) return { key: "review", word: t("Needs review"), chips: reasonChips(item) };
     // A list's answers go into no file either (plan 033): judged by the gate, and ready to use.
-    return { key: "ready", word: judged && !Cards.fileless ? "Will be written" : "Ready to use" };
+    return { key: "ready", word: judged && !Cards.fileless ? t("Will be written") : t("Ready to use") };
   }
 
   function statusBar(item, status) {
@@ -621,7 +726,8 @@ const Cards = (window.Cards = {
       const tag = document.createElement("span");
       tag.className = "reason-chip";
       tag.textContent = chip.label;
-      const why = chip.why.filter(Boolean).join("\n");
+      // The server's sentences, each in the page's language.
+      const why = chip.why.filter(Boolean).map((reason) => I18n.server(reason)).join("\n");
       if (why) tag.title = why;
       bar.append(tag);
     });
@@ -629,8 +735,8 @@ const Cards = (window.Cards = {
     if (status.key !== "blank" && status.key !== "failed") {
       const score = document.createElement("span");
       score.className = "status-score";
-      score.textContent = Math.round((item.confidence || 0) * 100) + "% confidence";
-      score.title = "How well the models found the sources support the answer. Whether it goes in is the status.";
+      score.textContent = t("{n}% confidence", { n: Math.round((item.confidence || 0) * 100) });
+      score.title = t("How well the models found the sources support the answer. Whether it goes in is the status.");
       bar.append(score);
     }
     return bar;
@@ -639,7 +745,7 @@ const Cards = (window.Cards = {
   let refusedNotes = 0;  // each editor's refusal note has an id of its own, for aria-describedby
 
   function answerField(item, index) {
-    const field = labelledField("Answer", "");
+    const field = labelledField(t("Answer"), "");
     const rendered = document.createElement("div");
     rendered.className = "rendered";
     const editor = document.createElement("textarea");
@@ -666,17 +772,21 @@ const Cards = (window.Cards = {
            already in the file gets cleared. */
         const note = document.createElement("p");
         note.className = "empty";
-        note.textContent = "This answer will be left blank.";
+        note.textContent = t("This answer will be left blank.");
         rendered.append(note);
       } else if (!text.trim()) {
         const empty = document.createElement("p");
         empty.className = "empty";
-        empty.textContent = "No answer was produced — see the note below.";
+        empty.textContent = t("No answer was produced — see the note below.");
         rendered.append(empty);
       } else {
         renderMarkdown(text).forEach((node) => rendered.append(node));
       }
-      rendered.dir = isArabic(text) ? "rtl" : "ltr";
+      /* The answer is content, in its own direction (plan 038); the card's own
+         note in its place is in the page's. */
+      const answered = Boolean(!item.blanked && text.trim());
+      rendered.toggleAttribute("data-no-translate", answered);
+      rendered.dir = !answered && I18n.rtl ? "rtl" : isArabic(text) ? "rtl" : "ltr";
     };
     Cards.repaint = paint;
 
@@ -693,15 +803,15 @@ const Cards = (window.Cards = {
       const aside = document.createElement("div");
       aside.className = "held aside";
       const what = document.createElement("strong");
-      what.textContent = "Set aside.";
+      what.textContent = t("Set aside.");
       const why = document.createElement("span");
-      why.textContent = " Nothing is written to the file for this question, whatever its answer says.";
+      why.textContent = " " + t("Nothing is written to the file for this question, whatever its answer says.");
       aside.append(what, why);
       if (Cards.canSetAside && !Cards.readOnly) {
         const back = document.createElement("button");
         back.className = "quiet";
         back.dataset.mutates = "true";
-        back.textContent = "Include it again";
+        back.textContent = t("Include it again");
         back.onclick = () => Cards.onSetAside(item, index, false);
         aside.append(back);
       }
@@ -710,16 +820,19 @@ const Cards = (window.Cards = {
       const held = document.createElement("div");
       held.className = "held";
       const what = document.createElement("strong");
-      what.textContent = Cards.fileless ? "Not confirmed yet." : "Not going into the file yet.";
+      what.textContent = Cards.fileless ? t("Not confirmed yet.") : t("Not going into the file yet.");
       const why = document.createElement("span");
-      why.textContent = item.held_back_because
-        ? " " + item.held_back_because[0].toUpperCase() + item.held_back_because.slice(1) + "."
-        : " Nobody has confirmed this answer.";
+      if (item.held_back_because) {
+        // The server's sentence (`selection.ready_to_write`), in the page's language.
+        serverInto(why, item.held_back_because, (because) => " " + because[0].toUpperCase() + because.slice(1) + ".");
+      } else {
+        why.textContent = " " + t("Nobody has confirmed this answer.");
+      }
       held.append(what, why);
       if (!Cards.readOnly) {
         const how = document.createElement("span");
         how.className = "how";
-        how.textContent = "Edit it, or approve it as it stands.";
+        how.textContent = t("Edit it, or approve it as it stands.");
         held.append(how);
       }
       field.append(held);
@@ -731,7 +844,7 @@ const Cards = (window.Cards = {
       if (item.approved) {
         const approved = document.createElement("span");
         approved.className = "tag";
-        approved.textContent = "approved";
+        approved.textContent = t("approved");
         grow.before(approved);
       }
       toggle.hidden = true;
@@ -751,7 +864,7 @@ const Cards = (window.Cards = {
     if (item.length && !item.blanked && (item.answer || "").trim() && !Cards.readOnly) {
       const lengths = document.createElement("span");
       lengths.className = "len-pick";
-      const buttons = [["full", "Full"], ["brief", "Brief"]].map(([value, text]) => {
+      const buttons = [["full", t("Full")], ["brief", t("Brief")]].map(([value, text]) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "quiet";
@@ -760,15 +873,15 @@ const Cards = (window.Cards = {
         button.setAttribute("aria-pressed", String(item.length === value));
         button.title = value === "brief"
           ? item.brief
-            ? "Write this one briefly, whatever the rest of the file does"
-            : "Shorten this one answer and write it briefly, whatever the rest of the file does"
-          : "Write this one in full, whatever the rest of the file does";
+            ? t("Write this one briefly, whatever the rest of the file does")
+            : t("Shorten this one answer and write it briefly, whatever the rest of the file does")
+          : t("Write this one in full, whatever the rest of the file does");
         button.onclick = async () => {
           if (button.getAttribute("aria-pressed") === "true") return;
           buttons.forEach((b) => { b.disabled = true; });
           // Deriving a brief form is a model call; a button that sits there
           // for five seconds reads as a button that did nothing.
-          if (value === "brief" && !item.brief) button.textContent = "Shortening…";
+          if (value === "brief" && !item.brief) button.textContent = t("Shortening…");
           try {
             await Cards.onLength(item, index, value);
           } finally {
@@ -796,17 +909,18 @@ const Cards = (window.Cards = {
       const byHand = item.by_hand || item.confidence_reason === "written by hand";
       const approve = document.createElement("button");
       approve.className = item.approved ? "quiet" : "quiet approve";
-      approve.textContent = item.approved ? "Approved ✓" : "Approve";
+      approve.textContent = item.approved ? t("Approved ✓") : t("Approve");
       approve.title = item.approved
         ? byHand
-          ? "You approved this answer, and it is in the answer memory. Click to withdraw both."
-          : "You approved this answer. It is not in the answer memory — the memory only keeps answers a person wrote."
+          ? t("You approved this answer, and it is in the answer memory. Click to withdraw both.")
+          : t("You approved this answer. It is not in the answer memory — the memory only keeps answers a person wrote.")
         : byHand
-          ? "Confirm this answer, and remember your wording for next time"
+          ? t("Confirm this answer, and remember your wording for next time")
           : gated
-            ? "Accept this answer as it stands" + (Cards.fileless ? "" : ", so it goes into the file") +
-              ". It is not added to the answer memory: nobody has changed a word of it."
-            : "Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.";
+            ? Cards.fileless
+              ? t("Accept this answer as it stands. It is not added to the answer memory: nobody has changed a word of it.")
+              : t("Accept this answer as it stands, so it goes into the file. It is not added to the answer memory: nobody has changed a word of it.")
+            : t("Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.");
       approve.dataset.mutates = "true";
       approve.dataset.cardAction = "approve";  // what a page's A key presses (plan 033)
       approve.onclick = () => Cards.onApprove(item, index, !item.approved);
@@ -819,8 +933,8 @@ const Cards = (window.Cards = {
       if (item.remembered) {
         const kept = document.createElement("span");
         kept.className = "tag memory";
-        kept.textContent = "in the answer memory";
-        kept.title = "Your wording is saved. The next questionnaire asking this is answered from it.";
+        kept.textContent = t("in the answer memory");
+        kept.title = t("Your wording is saved. The next questionnaire asking this is answered from it.");
         grow.before(kept);
       }
     }
@@ -831,7 +945,7 @@ const Cards = (window.Cards = {
     if (!Cards.readOnly) {
       const blank = document.createElement("button");
       blank.className = "quiet";
-      blank.textContent = item.blanked ? "Write an answer" : "Leave blank";
+      blank.textContent = item.blanked ? t("Write an answer") : t("Leave blank");
       blank.onclick = () => Cards.onBlank(item, index, !item.blanked);
       toggle.after(blank);
     }
@@ -848,7 +962,7 @@ const Cards = (window.Cards = {
     refused.setAttribute("role", "status");
     editor.setAttribute("aria-describedby", refused.id);
     const sayRefused = (yes) => {
-      refused.textContent = yes ? "A brief answer cannot be empty. To write nothing here, use Leave blank." : "";
+      refused.textContent = yes ? t("A brief answer cannot be empty. To write nothing here, use Leave blank.") : "";
     };
 
     let editing = false;
@@ -857,12 +971,13 @@ const Cards = (window.Cards = {
       if (editing) {
         shown = Cards.shownAnswer(item, index);
         editor.value = shown.text;
-        editor.dir = isArabic(shown.text) ? "rtl" : "ltr";
+        // Nothing written yet, in an Arabic page: whichever way the person starts typing (plan 038).
+        editor.dir = isArabic(shown.text) ? "rtl" : I18n.rtl && !shown.text.trim() ? "auto" : "ltr";
         sayRefused(false);
       }
       rendered.hidden = editing;
       editor.hidden = !editing;
-      toggle.textContent = editing ? "Done editing" : "Edit";
+      toggle.textContent = editing ? t("Done editing") : t("Edit");
       toggle.dataset.editing = String(editing);
       if (editing) { editor.focus(); } else { paint(); }
     };
@@ -899,29 +1014,26 @@ const Cards = (window.Cards = {
   /* What removing from a knowledge base asks first (plan 029), in one wording
      for the workbench and the chat drawer. A shared document is used by every
      questionnaire and chat, General and every product, so that is said; its
-     file stays. A product's takes its file with it (TD-039). */
-  const SHARED_IMPACT = "Every questionnaire and chat, General and every product, stops using ";
-  const PRODUCT_FILES = "cannot be recovered from here — unless the shared knowledge base, " +
-    "another product or a questionnaire also uses ";
-
+     file stays. A product's takes its file with it (TD-039). Each question is
+     one whole sentence, for the catalogs (plan 038). */
   function removalQuestion(name, productName) {
     if (productName) {
-      return "Remove “" + name + "” from " + productName + "'s knowledge base?\n\n" +
-        "Its file is deleted too, and " + PRODUCT_FILES + "it.";
+      return t("Remove “{name}” from {product}'s knowledge base?\n\nIts file is deleted too, and cannot be recovered from here — unless the shared knowledge base, another product or a questionnaire also uses it.", { name, product: productName });
     }
-    return "Remove “" + name + "” from the shared knowledge base?\n\n" + SHARED_IMPACT +
-      "it from now on. Answers already written are not changed.\n\n" +
-      "Its file stays on the server; to use it again, add it again.";
+    return t("Remove “{name}” from the shared knowledge base?\n\nEvery questionnaire and chat, General and every product, stops using it from now on. Answers already written are not changed.\n\nIts file stays on the server; to use it again, add it again.", { name });
   }
 
   function clearQuestion(count, productName) {
-    const which = productName ? productName + "'s knowledge base" : "the shared knowledge base";
-    const what = count === 1 ? "the 1 policy document" : count > 1 ? "all " + count + " policy documents"
-      : "every policy document";
-    const impact = productName
-      ? "Their files are deleted too, and " + PRODUCT_FILES + "them."
-      : SHARED_IMPACT + "them from now on. Answers already written are not changed.";
-    return "Remove " + what + " from " + which + "?\n\n" + impact + "\n\nThe answer memory is not affected.";
+    const n = count;
+    if (productName) {
+      const product = productName;
+      if (count === 1) return t("Remove the 1 policy document from {product}'s knowledge base?\n\nTheir files are deleted too, and cannot be recovered from here — unless the shared knowledge base, another product or a questionnaire also uses them.\n\nThe answer memory is not affected.", { product });
+      if (count > 1) return t("Remove all {n} policy documents from {product}'s knowledge base?\n\nTheir files are deleted too, and cannot be recovered from here — unless the shared knowledge base, another product or a questionnaire also uses them.\n\nThe answer memory is not affected.", { n, product });
+      return t("Remove every policy document from {product}'s knowledge base?\n\nTheir files are deleted too, and cannot be recovered from here — unless the shared knowledge base, another product or a questionnaire also uses them.\n\nThe answer memory is not affected.", { product });
+    }
+    if (count === 1) return t("Remove the 1 policy document from the shared knowledge base?\n\nEvery questionnaire and chat, General and every product, stops using them from now on. Answers already written are not changed.\n\nThe answer memory is not affected.");
+    if (count > 1) return t("Remove all {n} policy documents from the shared knowledge base?\n\nEvery questionnaire and chat, General and every product, stops using them from now on. Answers already written are not changed.\n\nThe answer memory is not affected.", { n });
+    return t("Remove every policy document from the shared knowledge base?\n\nEvery questionnaire and chat, General and every product, stops using them from now on. Answers already written are not changed.\n\nThe answer memory is not affected.");
   }
 
   /* Whose document a source is. Only drawn for external ones: "our policy" is
@@ -931,9 +1043,8 @@ const Cards = (window.Cards = {
     if (authority !== "external") return null;
     const tag = document.createElement("span");
     tag.className = "tag external";
-    tag.textContent = "law / external";
-    tag.title = "A regulation or framework we are subject to, not a document we wrote. "
-      + "It says what we are required to do, which is not evidence that we do it.";
+    tag.textContent = t("law / external");
+    tag.title = t("A regulation or framework we are subject to, not a document we wrote. It says what we are required to do, which is not evidence that we do it.");
     return tag;
   }
 
@@ -960,18 +1071,19 @@ const Cards = (window.Cards = {
     if (!found) return null;
     const tag = document.createElement("span");
     tag.className = "tag product" + (found.deleted ? " deleted" : "");
-    tag.textContent = found.deleted ? found.name + " · deleted" : found.name;
+    // The product's name is a name (plan 038): as it was written, in its own direction.
+    tag.append(asContent("span", found.name));
+    if (found.deleted) tag.append(" · " + t("deleted"));
     if (found.color) tag.style.setProperty("--product", found.color);
     tag.title = found.deleted
-      ? found.name + " has been deleted. What was done for it is kept to read, and its filled files " +
-        "to download; it can no longer be changed."
-      : title || "For " + found.name;
+      ? t("{name} has been deleted. What was done for it is kept to read, and its filled files to download; it can no longer be changed.", { name: found.name })
+      : title || t("For {name}", { name: found.name });
     return tag;
   }
 
   function ownSourceBadge(source) {
     return productBadge(source && source.product_id,
-      "From this product's own knowledge base. The drafter was told it takes precedence over the shared one.");
+      t("From this product's own knowledge base. The drafter was told it takes precedence over the shared one."));
   }
 
   /* A product choice on a page (plan 029, 2): the user's rule is no silent
@@ -981,7 +1093,8 @@ const Cards = (window.Cards = {
      product_id comes back as a choice through choiceOf. When the server
      learns to refuse a missing product, only serverProduct changes. */
   const GENERAL = "general";  // never a product's id: those are 12 hex characters (products.add)
-  const GENERAL_LABEL = "General (shared policies only)";
+  // In the page's language: every page loads its catalogs before this script (plan 038).
+  const GENERAL_LABEL = t("General (shared policies only)");
 
   function serverProduct(choice) { return choice === GENERAL ? "" : choice || ""; }
   function choiceOf(productId) { return productId || GENERAL; }
@@ -1004,8 +1117,8 @@ const Cards = (window.Cards = {
     if (choice !== GENERAL) return productBadge(choice, title);
     const tag = document.createElement("span");
     tag.className = "tag product general";
-    tag.textContent = "General";
-    tag.title = title || "General: answered from the shared policies and answer memory only";
+    tag.textContent = t("General");
+    tag.title = title || t("General: answered from the shared policies and answer memory only");
     return tag;
   }
 
@@ -1017,9 +1130,9 @@ const Cards = (window.Cards = {
     button.type = "button";
     button.className = "last-used";
     button.dataset.choice = choice;
-    const name = choice === GENERAL ? "General" : (product(choice) || {}).name || "";
-    button.append("Last used: ", choiceTag(choice, "Choose " + name));
-    button.title = "Choose " + name + ", the product of your most recent work. Nothing is chosen until you click.";
+    const name = choice === GENERAL ? t("General") : (product(choice) || {}).name || "";
+    button.append(t("Last used:") + " ", choiceTag(choice, t("Choose {name}", { name })));
+    button.title = t("Choose {name}, the product of your most recent work. Nothing is chosen until you click.", { name });
     button.onclick = () => onPick(choice);
     return button;
   }
@@ -1049,8 +1162,8 @@ const Cards = (window.Cards = {
     cites.className = "cites";
     const label = document.createElement("span");
     label.className = "field-label accent cites-label";
-    label.textContent = "Sources";
-    label.title = "Click a source to read the clause it names";
+    label.textContent = t("Sources");
+    label.title = t("Click a source to read the clause it names");
     cites.append(label);
     const panel = document.createElement("div");
     panel.className = "cite-panel";
@@ -1069,13 +1182,14 @@ const Cards = (window.Cards = {
       const chip = document.createElement("button");
       chip.className = "cite " + kind;
       chip.title = kind === "prior_answer"
-        ? "From a previously answered assessment — click to read it"
+        ? t("From a previously answered assessment — click to read it")
         : kind === "guideline"
-          ? "From an indexed guideline — click to read the clause"
-          : "Named in the answer; the chunk is not in the exported evidence";
+          ? t("From an indexed guideline — click to read the clause")
+          : t("Named in the answer; the chunk is not in the exported evidence");
       chip.type = "button";
       chip.setAttribute("aria-expanded", "false");
-      chip.append(document.createTextNode(citation));
+      // The locator is the source's own (plan 038): a file's name and its clause, as written.
+      chip.append(asContent("span", citation));
       // Before the caret, so it reads as part of the source's name rather than
       // as another control.
       if (mark) chip.append(mark);
@@ -1106,14 +1220,28 @@ const Cards = (window.Cards = {
     if (sourceTypes.size > 1) {
       const key = document.createElement("div");
       key.className = "cite-key";
-      key.innerHTML =
-        '<span><i class="guideline"></i>guideline</span>' +
-        '<span><i class="prior_answer"></i>previous answer</span>';
+      [["guideline", t("guideline")], ["prior_answer", t("previous answer")]].forEach(([kind, name]) => {
+        const entry = document.createElement("span");
+        const dot = document.createElement("i");
+        dot.className = kind;
+        entry.append(dot, name);
+        key.append(entry);
+      });
       cites.append(key);
     }
 
     field.append(cites, panel);
     return field;
+  }
+
+  /* A question's kind (`models.QuestionType`), in words. One the card does not
+     know yet reads as the server names it. */
+  function questionKind(kind) {
+    if (kind === "free_text") return t("free text");
+    if (kind === "yes_no") return t("yes no");
+    if (kind === "single_choice") return t("single choice");
+    if (kind === "multi_choice") return t("multi choice");
+    return String(kind || "").replace(/_/g, " ");
   }
 
   function renderAnswer(item, index) {
@@ -1127,9 +1255,9 @@ const Cards = (window.Cards = {
     const head = document.createElement("div");
     head.className = "answer-head";
 
-    const number = document.createElement("div");
+    // The question's number and text are the questionnaire's (plan 038).
+    const number = asContent("div", item.question.id || String(index + 1));
     number.className = "qnum";
-    number.textContent = item.question.id || String(index + 1);
 
     const body = document.createElement("div");
     body.className = "qbody";
@@ -1145,18 +1273,16 @@ const Cards = (window.Cards = {
        from a character count: the same two hundred characters are two lines on
        a wide screen and five on a phone. It starts clamped so a long one never
        flashes open, and un-clamps itself when there was nothing to hide. */
-    const question = document.createElement("div");
+    const question = directed(asContent("div", item.question.text), item.question.text);
     question.className = "qtext clamped";
-    question.textContent = item.question.text;
-    if (isArabic(item.question.text)) question.dir = "rtl";
 
     const more = document.createElement("button");
     more.className = "quiet qmore";
     more.hidden = true;
-    more.textContent = "show the whole question";
+    more.textContent = t("show the whole question");
     more.onclick = () => {
       const clamped = question.classList.toggle("clamped");
-      more.textContent = clamped ? "show the whole question" : "show less";
+      more.textContent = clamped ? t("show the whole question") : t("show less");
     };
     requestAnimationFrame(() => {
       if (question.scrollHeight > question.clientHeight + 1) more.hidden = false;
@@ -1165,12 +1291,13 @@ const Cards = (window.Cards = {
 
     const meta = document.createElement("div");
     meta.className = "qmeta";
+    // The section is the questionnaire's own heading; the kind and the rounds are the card's words.
     const bits = [];
-    if (item.question.section) bits.push(item.question.section);
-    bits.push(item.question.question_type.replace(/_/g, " "));
-    if (item.attempts > 1) bits.push(item.attempts + " retrieval rounds");
+    if (item.question.section) bits.push(asContent("span", item.question.section));
+    bits.push(questionKind(item.question.question_type));
+    if (item.attempts > 1) bits.push(t("{n} retrieval rounds", { n: item.attempts }));
     const detail = document.createElement("span");
-    detail.textContent = bits.join(" · ");
+    bits.forEach((bit, at) => detail.append(...(at ? [" · ", bit] : [bit])));
     meta.append(detail, more);
     /* Beside the question, because it is a decision about the question: leave
        it out of the file, whatever the answer says. */
@@ -1178,8 +1305,8 @@ const Cards = (window.Cards = {
       const aside = document.createElement("button");
       aside.className = "quiet";
       aside.dataset.mutates = "true";
-      aside.textContent = "Set aside";
-      aside.title = "Leave this question out of the file. Its answer is kept, and it can be brought back.";
+      aside.textContent = t("Set aside");
+      aside.title = t("Leave this question out of the file. Its answer is kept, and it can be brought back.");
       aside.onclick = () => Cards.onSetAside(item, index, true);
       meta.append(aside);
     }
@@ -1194,7 +1321,7 @@ const Cards = (window.Cards = {
       remove.className = "quiet danger qdelete";
       remove.dataset.mutates = "true";
       remove.textContent = "✕";
-      remove.title = "Remove this question and its answer";
+      remove.title = t("Remove this question and its answer");
       remove.onclick = () => Cards.onDiscard(item.__key);
       head.append(number, body, remove);
     } else {
@@ -1212,21 +1339,19 @@ const Cards = (window.Cards = {
        gets noticed has to be the place it can be put right. Which one it was is
        in the reasoning below. */
     if (item.drafted && !item.blanked) {
-      const field = labelledField("Reworded after drafting", "accent");
+      const field = labelledField(t("Reworded after drafting"), "accent");
       const box = document.createElement("details");
       box.className = "drafted";
       const summary = document.createElement("summary");
-      summary.textContent = "See the answer as it was drafted";
-      const original = document.createElement("div");
+      summary.textContent = t("See the answer as it was drafted");
+      const original = directed(asContent("div", item.drafted), item.drafted);
       original.className = "rationale";
-      original.textContent = item.drafted;
-      if (isArabic(item.drafted)) original.dir = "rtl";
       const back = document.createElement("button");
       back.type = "button";
       back.className = "ghost";
       back.dataset.mutates = "true";
-      back.textContent = "Put the draft back";
-      back.title = "Replace the reworded answer with the original draft, for this question only";
+      back.textContent = t("Put the draft back");
+      back.title = t("Replace the reworded answer with the original draft, for this question only");
       back.onclick = () => Cards.onRestoreDraft(item, index);
       box.append(summary, original);
       if (!Cards.readOnly) box.append(back);
@@ -1244,13 +1369,18 @@ const Cards = (window.Cards = {
     // reason list and showed nothing here at all — the one place it was most
     // needed. Fall back to the same wording the exports use.
     if (item.needs_review) {
-      const reasonText = (item.review_reasons && item.review_reasons.length)
-        ? item.review_reasons.join("; ")
-        : "The confidence score is below the level set for automatic acceptance.";
-      const field = labelledField("Why this is flagged", "warn");
+      const field = labelledField(t("Why this is flagged"), "warn");
       const reasons = document.createElement("div");
       reasons.className = "reasons";
-      reasons.textContent = reasonText;
+      if (item.review_reasons && item.review_reasons.length) {
+        // The review's own sentences, each in the page's language.
+        item.review_reasons.forEach((reason, at) => {
+          if (at) reasons.append(t("; "));
+          serverInto(reasons, reason);
+        });
+      } else {
+        reasons.textContent = t("The confidence score is below the level set for automatic acceptance.");
+      }
       field.append(reasons);
       content.append(field);
     }
@@ -1259,17 +1389,17 @@ const Cards = (window.Cards = {
     // nothing to read, judge or edit. A rate limit or a withdrawn model is
     // transient, so the only useful thing to offer is another go.
     if (item.error) {
-      const field = labelledField("Could not be answered", "err");
-      const box = document.createElement("div");
+      const field = labelledField(t("Could not be answered"), "err");
+      // What went wrong, as the model's service said it: content (plan 038).
+      const box = asContent("div", item.error);
       box.className = "reasons why";
-      box.textContent = item.error;
       field.append(box);
       if (item.__key && !Cards.readOnly) {
         const again = document.createElement("button");
         again.className = "ghost";
         again.dataset.mutates = "true";
         again.style.marginTop = "9px";
-        again.textContent = "Try this question again";
+        again.textContent = t("Try this question again");
         again.onclick = () => Cards.onRetry([item.__key], again);
         field.append(again);
       }
@@ -1288,20 +1418,23 @@ const Cards = (window.Cards = {
     // that, and say it in the right place.
     const decision = ["approved by a reviewer", "written by hand"].includes(item.confidence_reason);
     if (item.confidence_reason && !item.blanked && !decision) {
-      const field = labelledField("Why the confidence is low", "err");
+      const field = labelledField(t("Why the confidence is low"), "err");
       const why = document.createElement("div");
       why.className = "reasons why";
-      why.textContent = item.confidence_reason;
+      serverInto(why, item.confidence_reason);  // the server's sentence (`explain_confidence`)
       field.append(why);
       content.append(field);
     }
 
     if (item.rationale) {
-      const field = labelledField("Reasoning", "accent");
-      const rationale = document.createElement("div");
+      const field = labelledField(t("Reasoning"), "accent");
+      /* The drafter's own words: content. A failed answer's is the server's
+         sentence ("Answering failed: ..."), in the page's language. */
+      const said = I18n.server(item.rationale) !== item.rationale;
+      const rationale = said
+        ? serverInto(document.createElement("div"), item.rationale)
+        : directed(asContent("div", item.rationale), item.rationale);
       rationale.className = "rationale";
-      rationale.textContent = item.rationale;
-      if (isArabic(item.rationale)) rationale.dir = "rtl";
       field.append(rationale);
       content.append(field);
     }
@@ -1365,9 +1498,8 @@ const Cards = (window.Cards = {
     const head = document.createElement("div");
     head.className = "cite-head";
 
-    const who = document.createElement("span");
+    const who = asContent("span", citation);  // the source's locator, as written (plan 038)
     who.className = "who";
-    who.textContent = citation;
     head.append(who);
 
     head.append(viewToggle());
@@ -1375,14 +1507,14 @@ const Cards = (window.Cards = {
     if (source) {
       const kind = document.createElement("span");
       kind.className = "tag " + source.source_type;
-      kind.textContent = source.source_type === "prior_answer" ? "previous answer" : "guideline";
+      kind.textContent = source.source_type === "prior_answer" ? t("previous answer") : t("guideline");
       head.prepend(kind);
       const own = ownSourceBadge(source);
       if (own) kind.after(own);
 
       if (typeof source.score === "number") {
         const score = document.createElement("span");
-        score.textContent = "relevance " + source.score.toFixed(2);
+        score.textContent = t("relevance {score}", { score: source.score.toFixed(2) });
         head.append(score);
       }
 
@@ -1390,9 +1522,9 @@ const Cards = (window.Cards = {
       if (open) head.append(open);
     }
 
-    const body = renderChunk(source
-      ? source.snippet
-      : "This clause was named in the answer, but the chunk behind it is not in the exported evidence.");
+    const body = source
+      ? renderChunk(source.snippet)
+      : renderChunk(t("This clause was named in the answer, but the chunk behind it is not in the exported evidence."), null, true);
 
     panel.append(head, body);
   }
