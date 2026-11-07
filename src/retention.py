@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from src import batches, busy, chat_running, conversations, events, search_plans, store, uploads
+from src import batches, busy, chat_running, conversations, events, reading, search_plans, store, uploads
 from src.batches import Batch
 from src.config import settings
 from src.errors import QuestionnaireBusy
@@ -147,7 +147,7 @@ def _only_its_own(batch: Batch) -> bool:
         mine = source.parent.resolve() == settings.user_upload_dir(batch.team_id, batch.actor_email).resolve()
     except (OSError, ValueError):
         return False
-    return mine and not read_by_a_questionnaire(source, other_than=batch.id)
+    return mine and not read_by_a_questionnaire(source, other_than=batch.id) and not reading.being_read(source)
 
 
 def in_a_running_chat(batch_id: str) -> bool:

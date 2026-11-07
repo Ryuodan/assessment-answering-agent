@@ -126,6 +126,8 @@
     font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint);
   }
   .side-head .spacer { flex: 1; }
+  /* Only where the list covers the page (TD-076): beside it, ☰ in the bar is in reach. */
+  .side-close { display: none; }
   .side-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
   /* A row is two sibling buttons: the conversation, and Forget beside it. */
   .convo-row { display: flex; align-items: flex-start; border-radius: var(--radius-sm); }
@@ -498,6 +500,8 @@
     .side { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 25; box-shadow: var(--shadow-lg); width: 250px; }
     .answers-pane { position: fixed; inset: 0; z-index: 24; flex-basis: auto; }
     .pane-resizer, .side-resizer { display: none; }
+    /* It covers the bar, ☰ included (TD-076): it closes from inside it. */
+    .side-close { display: inline-flex; margin-inline-start: auto; }
   }
 </style>
 </head>
@@ -540,7 +544,9 @@
   <button class="ghost pane-toggle to-answers" id="toggleAnswers" hidden>Answers →</button>
 
   <aside class="side" id="history">
-    <div class="side-head"><span>Conversations</span></div>
+    <div class="side-head"><span>Conversations</span>
+      <button class="ghost side-close" id="closeHistory" type="button" aria-label="Close the conversation list"
+              title="Close the list">✕</button></div>
     <div class="side-list" id="historyList"></div>
     <div class="status error history-status" id="historyStatus" role="status"></div>
   </aside>
@@ -2153,7 +2159,7 @@
           what.append(fresh);
         }
         row.append(what);
-        row.onclick = () => open(c.id);
+        row.onclick = () => { open(c.id); closeHistoryIfOver(); };
 
         // Forgetting deletes for good, so it asks first and names what it deletes.
         const title = c.title || "New conversation";
@@ -2436,14 +2442,24 @@
     $("prompt").focus();
     loadHistory();
   }
-  $("newChat").onclick = newConversation;
-  $("toggleHistory").onclick = () => {
-    const side = $("history");
-    side.hidden = !side.hidden;
-    $("toggleHistory").classList.toggle("on", !side.hidden);
-    if (!side.hidden) reclampSide();
+  $("newChat").onclick = () => { newConversation(); closeHistoryIfOver(); };
+  function showHistory(on) {
+    $("history").hidden = !on;
+    $("toggleHistory").classList.toggle("on", on);
+    if (on) reclampSide();
     reclampPane();
-  };
+  }
+  $("toggleHistory").onclick = () => showHistory($("history").hidden);
+  /* On a narrow window the list is an overlay over the page and its bar, ☰ included
+     (TD-076): it starts closed, closes from its own ✕ or Escape, and closes once a
+     conversation is chosen from it. */
+  const overPage = () => window.matchMedia("(max-width: 860px)").matches;
+  function closeHistoryIfOver() { if (overPage() && !$("history").hidden) showHistory(false); }
+  $("closeHistory").onclick = () => { showHistory(false); $("toggleHistory").focus(); };
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && overPage() && !$("history").hidden) showHistory(false);
+  });
+  if (overPage()) showHistory(false);
 
   /* --- composer ------------------------------------------------------------- */
 

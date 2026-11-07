@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
-from src import chat_running, conversations, forms, products, retention, service, store
+from src import chat_running, conversations, forms, products, reading, retention, service, store
 from src.agents import assistant
 from src.conversations import Conversation
 from src.errors import NotFound, Unavailable
@@ -169,6 +169,7 @@ async def say_with_a_file(
             # not this upload once its file is in the folder. A new chat's id is nobody else's yet.
             held.enter_context(chat_running.hold(existing.id, run_id=run_id, message=assistant.spoken(said), file=name))
         path = service.save_upload(name, await file.read(), user.team_id, owner=user.email)
+        held.enter_context(reading.holding(path))  # until the turn has opened it, or ended (TD-078)
         conversation = existing or assistant.start(user, message or f"Read {name}", product)
         if existing is None:
             held.enter_context(

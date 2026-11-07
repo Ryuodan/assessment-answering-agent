@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from src import batches, forms, lists, products, questionnaire, retention, service, tools
+from src import batches, forms, lists, products, questionnaire, reading, retention, service, tools
 from src.errors import NotFound
 from src.identity import User
 from src.logs import get_logger
@@ -74,7 +74,8 @@ async def open_questionnaire(
     # In a thread: reading a workbook is a CPU-bound XML parse, and under the
     # assisted and agent strategies it is also a network call. Either way it is
     # not something to do on the event loop of a server answering other people.
-    batch = await run_in_threadpool(lambda: tools.open_form(user, path, product_id=product_id))
+    with reading.holding(path):  # not removed under the read by a deletion meanwhile (TD-078)
+        batch = await run_in_threadpool(lambda: tools.open_form(user, path, product_id=product_id))
     return tools.inspect(user, batch.id)
 
 
@@ -103,7 +104,8 @@ async def open_question_list(
         return tools.inspect(user, batch.id)
     check_suffix(file.filename or "")
     path = service.save_upload(file.filename or "questions", await file.read(), user.team_id, owner=user.email)
-    batch = await lists.read_list(user, path, name=name, product_id=product_id, also=typed)
+    with reading.holding(path):  # TD-078
+        batch = await lists.read_list(user, path, name=name, product_id=product_id, also=typed)
     return tools.inspect(user, batch.id)
 
 

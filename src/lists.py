@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from src import batches, events, preferences, products, retention, service, uploads
+from src import batches, events, preferences, products, reading, retention, service, uploads
 from src.batches import Batch
 from src.errors import Invalid, Unprocessable
 from src.extraction import detect_question_language
@@ -123,7 +123,8 @@ async def read_list(
     _, found = await service.extract_assessment_questions(path)
     questions = [*found, *also]
     if not questions:
-        if not retention.read_by_a_questionnaire(path):
+        # Not while another read of the same file holds it: this read is the one hold allowed (TD-078).
+        if not retention.read_by_a_questionnaire(path) and not reading.being_read(path, besides=1):
             uploads.remove([path])
         raise Unprocessable(f"No questions could be extracted from '{path.name}'.", code="no_questions_found")
     return open_list(user, questions, name=name, product_id=product_id, source=path)

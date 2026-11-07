@@ -10,7 +10,7 @@ lines are drawn here: [ARCHITECTURE.md](../../ARCHITECTURE.md#layers).
 
 Settings, domain types, prompts and pure text rules. Reads configuration; talks to nothing else.
 
-- **Modules:** `src`, `src.busy`, `src.chat_running`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.product_prompts`, `src.progress`, `src.prompts`, `src.roles`, `src.schemas`, `src.verification`
+- **Modules:** `src`, `src.busy`, `src.chat_running`, `src.chunking`, `src.config`, `src.credentials`, `src.errors`, `src.formatting`, `src.logs`, `src.models`, `src.product_prompts`, `src.progress`, `src.prompts`, `src.reading`, `src.roles`, `src.schemas`, `src.verification`
 
 | Module | What it is |
 |---|---|
@@ -27,6 +27,7 @@ Settings, domain types, prompts and pure text rules. Reads configuration; talks 
 | `src/product_prompts.py` | What a product's questionnaire tells the drafter and the reviewer (plan 031, D-026). |
 | `src/progress.py` | How far along a run is, for anything watching it. |
 | `src/prompts.py` | All prompts, in one place. |
+| `src/reading.py` | Which uploaded files are being read right now, so that deleting other work does not remove one (TD-078). |
 | `src/roles.py` | The roles a person can have, and what each may do beyond answering. |
 | `src/schemas.py` | What a structured model call is asked to produce. |
 | `src/verification.py` | Checks applied to a drafted answer before it is returned. |

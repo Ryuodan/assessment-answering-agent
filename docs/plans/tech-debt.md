@@ -680,6 +680,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-07 by plan 033's chat builder; not caused by plan 033. At 860 px wide and below, the conversation list (`.side`) is an overlay. It opens when the page loads and covers the ☰ toggle that would close it. At 375 px a phone user cannot close it, and it hides the left of the message box, including Attach.
 - **Impact:** the Assistant page is hard to use on a phone.
 - **Fix:** start the overlay closed at 860 px and below, keep the toggle above it, and close it when a conversation is chosen. A browser test at 375 px.
+- **Resolved** 2026-11-07 (Claude, plan 035, approved by the user): at 860 px and below the list starts closed, has its own ✕, closes on Escape, and closes when a conversation is chosen or started. `tests/browser/test_chat_narrow.py`.
 
 ## TD-077: "Force English/Arabic" does not reach a spreadsheet's or Word form's own questions
 
@@ -688,6 +689,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Plan 033 sends lists through that route, so it now takes `language`, and the page sends it for a list only. The option's note says so.
 - **Impact:** a person who forces English on an Arabic form gets Arabic answers in the file.
 - **Fix (needs approval):** send `language` for a file questionnaire too. It changes what a file's answers are written in, so the user decides. One line in `answerThroughBatch` in `src/static/index.html`, and the note.
+- **Resolved** 2026-11-07 (Claude, plan 035, approved by the user): the Workbench sends the forced language for a file's own rows as for a list's, and the note says so. `tests/browser/test_forced_language.py`.
 
 ## TD-078: Deleting a questionnaire while the same file is read again can remove the file under the new read
 
@@ -698,3 +700,4 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - `lists.read_list`'s "nothing found" path has the same window.
 - **Impact:** a questionnaire whose upload is gone. Filling it asks for the file again.
 - **Fix:** hold the file's name while it is read, as `busy` holds a questionnaire, and have deletion skip a held file.
+- **Resolved** 2026-11-07 (Claude, plan 035, approved by the user): `src/reading.py` holds a kept upload's name while it is read (`POST /api/forms`, `POST /api/forms/list`, a chat upload's turn). Deleting a questionnaire, and a list that found nothing, leave a held file alone. `tests/test_files_being_read.py`.
