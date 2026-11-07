@@ -183,6 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    import eval as evaluation
+
+    evaluation.plan_afresh()  # no kept search plans (plan 034's review)
     configure_logging()
     args = build_parser().parse_args()
 

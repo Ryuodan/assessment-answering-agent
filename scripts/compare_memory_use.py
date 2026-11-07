@@ -215,6 +215,9 @@ async def main_async(args) -> int:
 
 
 def main() -> int:
+    import eval as evaluation
+
+    evaluation.plan_afresh()  # no kept search plans (plan 034's review)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", type=int, default=45)
     parser.add_argument("--seed", type=int, default=11)

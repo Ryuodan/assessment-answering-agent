@@ -1744,7 +1744,16 @@
     ++searchAsked;
     if ($("searchInput").value.trim()) setStatus($("searchStatus"), "Searching…", "busy");
     await loadSearchSources();
-    if ($("searchInput").value.trim() && scope === searchScope()) runSearch();
+    // Again only if what is asked now differs from the search last sent: one typed while the
+    // files loaded was sent for this scope already, and searching twice drew it twice.
+    const now = searchAskedNow();
+    const sent = lastSearched && ["query", "scope", "source"].every((key) => lastSearched[key] === now[key]);
+    if (now.query && scope === searchScope() && !sent) runSearch();
+  }
+
+  let lastSearched = null;  // what the last search sent asked: its words, scope and file
+  function searchAskedNow() {
+    return { query: $("searchInput").value.trim(), scope: searchScope(), source: $("searchSource").value };
   }
 
   /* Fill the file filter, tolerating either shape the API can hand back: the
@@ -1856,6 +1865,7 @@
 
     setStatus($("searchStatus"), "Searching…", "busy");
     const scope = searchScope(), productName = searchScopeName();
+    lastSearched = searchAskedNow();
     try {
       const params = new URLSearchParams({
         q: query, mode: $("searchMode").value, limit: "20", source: $("searchSource").value,

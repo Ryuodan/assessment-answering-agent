@@ -124,14 +124,32 @@ def test_a_kept_plan_is_cut_to_todays_limit(monkeypatch) -> None:
     assert kept_searches.recall(_state(ASKED)) == [ASKED, "a one"]
 
 
-def test_an_evaluation_keeps_no_plans_and_reads_none() -> None:
+def test_an_evaluation_keeps_no_plans_and_reads_none(monkeypatch) -> None:
     import eval as evaluation
 
+    monkeypatch.setattr(settings, "reuse_search_plans", True)
     importlib.reload(evaluation)
-    try:
-        assert settings.reuse_search_plans is False
-    finally:
-        settings.reuse_search_plans = True  # as the rest of the suite expects
+    assert settings.reuse_search_plans is True, "importing the package changes nothing"
+    evaluation.plan_afresh()
+    assert settings.reuse_search_plans is False, "each runner turns them off as it starts"
+
+
+@pytest.mark.parametrize(
+    "runner",
+    [
+        "scripts/run_house_eval.py",
+        "eval/run_eval.py",
+        "scripts/run_both_evals.py",
+        "scripts/compare_memory_use.py",
+        "scripts/probe_certifications.py",
+        "scripts/measure_noise.py",
+    ],
+)
+def test_every_evaluation_runner_plans_afresh(runner: str) -> None:
+    from src.config import PROJECT_ROOT
+
+    main = (PROJECT_ROOT / runner).read_text(encoding="utf-8").split("def main() -> int:", 1)[1].split("\ndef ", 1)[0]
+    assert "evaluation.plan_afresh()" in main
 
 
 # --- 4. the same question's answer survives the cut, wherever it ranks -------------------------------

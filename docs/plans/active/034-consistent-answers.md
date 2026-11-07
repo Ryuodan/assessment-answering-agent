@@ -16,12 +16,12 @@ Each is measured: 12 questions, three runs each, before and after, and then the 
 
 ## Acceptance criteria
 
-- [ ] **No invented names:** the drafter and the reviewer are told not to claim a technology, product or programme from the question unless a source names it.
-- [ ] **Same question:** an earlier answer whose question is the same words (ignoring case, punctuation and digits' script) is kept in the sources, first, beyond the cap on earlier answers, and marked PREVIOUS ANSWER TO THIS SAME QUESTION. The drafter keeps its position and facts unless OUR POLICY says otherwise.
-- [ ] **Same searches:** the search plan is stored per question, language and product, and reused. A plan that failed is not stored.
-- [ ] Measured on the 12 questions, three runs each, before and after each step: the same decision, the same verdict, cited sources in common, and wording in common.
-- [ ] The held-out evaluation is run after, and compared with the runs on file.
-- [ ] Every change has a test that fails without it. `uv run poe check` passes. The docs are updated: decisions, evaluation.md, tech-debt and ARCHITECTURE.md.
+- [x] **No invented names:** the drafter and the reviewer are told not to claim a technology, product or programme from the question unless a source names it.
+- [x] **Same question:** an earlier answer whose question is the same words (ignoring case, punctuation and digits' script) is kept in the sources, first, beyond the cap on earlier answers, and marked PREVIOUS ANSWER TO THIS SAME QUESTION. The drafter keeps its position and facts unless OUR POLICY says otherwise.
+- [x] **Same searches:** the search plan is stored per question, language and product, and reused. A plan that failed is not stored.
+- [x] Measured on the 12 questions, three runs each, before and after each step: the same decision, the same verdict, cited sources in common, and wording in common.
+- [x] The held-out evaluation is run after, and compared with the runs on file.
+- [x] Every change has a test that fails without it. `uv run poe check` passes. The docs are updated: decisions, evaluation.md, tech-debt and ARCHITECTURE.md.
 
 ## Plan
 
@@ -115,3 +115,12 @@ Each is measured: 12 questions, three runs each, before and after, and then the 
 ## Decision log
 
 - 2026-11-07, by the user: no verbatim reuse. Build the same searches, confirmed answers first, and no invented names, each measured.
+
+## How to test it yourself
+
+On your local copy. Start the app with `uv run python -m uvicorn src.api:app --reload` and open http://127.0.0.1:8000.
+
+1. On the Workbench, choose General, type "Do you have a documented incident response plan, and how often is it tested?" and answer it. Then Close, type the same question again, and answer it again. Both answers cite the same clauses: the second was searched with the first's plan.
+2. Ask "Do you implement Network Access Control (NAC) to restrict unauthorised devices?". The answer says what our policies say, "network access controls", and does not claim a product called NAC unless a source names it.
+3. Approve an answer to a question on the Workbench. Then answer a questionnaire with the same question, word for word. The earlier answer is first among the card's sources, and the new answer keeps its position.
+4. Optional: set `REUSE_SEARCH_PLANS=false` in `.env` and restart. The same question is then planned afresh each time, as before.

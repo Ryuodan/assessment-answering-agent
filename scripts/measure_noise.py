@@ -104,6 +104,9 @@ def _report(runs: list[dict], label: str) -> int:
 
 
 def main() -> int:
+    import eval as evaluation
+
+    evaluation.plan_afresh()  # no kept search plans (plan 034's review)
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repeats", type=int, default=3)

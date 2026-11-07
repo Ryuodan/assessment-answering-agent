@@ -194,6 +194,9 @@ def _write(out: Path, label: str, house: dict, facts: dict) -> None:
 
 
 def main() -> int:
+    import eval as evaluation
+
+    evaluation.plan_afresh()  # no kept search plans (plan 034's review)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--label", default="current", help="what changed, for the record")
     parser.add_argument("--sample", type=int, default=30)

@@ -179,6 +179,9 @@ async def answer_and_score(cases, label: str, out: Path | None, memory_cases=Non
 
 
 def main() -> int:
+    import eval as evaluation
+
+    evaluation.plan_afresh()  # no kept search plans (plan 034's review)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--set",

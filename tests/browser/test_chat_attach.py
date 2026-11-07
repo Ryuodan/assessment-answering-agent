@@ -96,7 +96,10 @@ def test_the_labelled_button_beside_the_box_attaches_a_file_from_the_keyboard(pa
     assert inner["y"] <= at["y"] and at["y"] + at["height"] <= inner["y"] + inner["height"], (inner, at)
     assert abs((at["y"] + at["height"] / 2) - (send["y"] + send["height"] / 2)) <= 2, (at, send)
 
-    # The next stop after the message, and Enter opens the file chooser.
+    # The next stop after the message, and Enter opens the file chooser. Listened for early:
+    # Playwright turns interception on without waiting, and under a full run's load Enter
+    # reached the page first and no chooser event came (flaky, 2 full runs in 3).
+    page.on("filechooser", lambda chooser: None)
     page.focus("#prompt")
     page.keyboard.press("Tab")
     expect(button).to_be_focused()
