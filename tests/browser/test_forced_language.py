@@ -1,4 +1,4 @@
-""""Force English" or "Force Arabic" reaches every question of a questionnaire (TD-077).
+""" "Force English" or "Force Arabic" reaches every question of a questionnaire (TD-077).
 
 A spreadsheet's or Word form's own rows were answered in each question's own
 language whatever "More options" said: the questionnaire's answer route took no
