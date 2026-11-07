@@ -23,6 +23,8 @@
      Cards.canSetAside                    whether the page offers that on the card
      Cards.readOnly                       the answers are to read, not change: a deleted
                                           product's (plan 027), so no control that changes one
+     Cards.fileless                       a list of questions (plan 033): no file to write
+                                          into, so a confident answer reads "Ready to use"
      Cards.renderReadOnly(item, index)    one card drawn that way whatever the page's setting:
                                           a question answered in the chat (plan 030)
 
@@ -57,6 +59,7 @@ const Cards = (window.Cards = {
   onSetAside() {},
   canSetAside: false,
   readOnly: false,
+  fileless: false,  // a list of questions (plan 033): no file, so a confident answer is "Ready to use"
   reviewThreshold: null,  // the server's, once the page has set it; never a number of the card's own
   /* Which text the card shows, and so edits: `{ text, which }`, `which` being
      "brief" only when the brief is what is shown, else "answer". The card shows
@@ -543,7 +546,8 @@ const Cards = (window.Cards = {
     const judged = item.will_be_written !== undefined;
     const held = judged ? !item.will_be_written : Boolean(item.needs_review) || heldByScore(item.confidence);
     if (held) return { key: "review", word: "Needs review", chips: reasonChips(item) };
-    return { key: "ready", word: judged ? "Will be written" : "Ready to use" };
+    // A list's answers go into no file either (plan 033): judged by the gate, and ready to use.
+    return { key: "ready", word: judged && !Cards.fileless ? "Will be written" : "Ready to use" };
   }
 
   function statusBar(item, status) {
@@ -646,7 +650,7 @@ const Cards = (window.Cards = {
       const held = document.createElement("div");
       held.className = "held";
       const what = document.createElement("strong");
-      what.textContent = "Not going into the file yet.";
+      what.textContent = Cards.fileless ? "Not confirmed yet." : "Not going into the file yet.";
       const why = document.createElement("span");
       why.textContent = item.held_back_because
         ? " " + item.held_back_because[0].toUpperCase() + item.held_back_because.slice(1) + "."
@@ -740,7 +744,8 @@ const Cards = (window.Cards = {
         : byHand
           ? "Confirm this answer, and remember your wording for next time"
           : gated
-            ? "Accept this answer as it stands, so it goes into the file. It is not added to the answer memory: nobody has changed a word of it."
+            ? "Accept this answer as it stands" + (Cards.fileless ? "" : ", so it goes into the file") +
+              ". It is not added to the answer memory: nobody has changed a word of it."
             : "Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.";
       approve.dataset.mutates = "true";
       approve.dataset.cardAction = "approve";  // what a page's A key presses (plan 033)

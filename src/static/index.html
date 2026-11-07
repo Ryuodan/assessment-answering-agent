@@ -60,6 +60,14 @@
   }
   .steps-what #stepTitle { overflow-wrap: anywhere; }
   .steps-what .tag { text-transform: none; font-size: 11px; }
+  .kept-until { font-size: 12px; font-weight: 400; color: var(--ink-faint); }
+  .kept-until[hidden] { display: none; }
+  /* Apart from Close: a divider, then Delete, in the danger colour once pointed at. */
+  .steps-what .delete-form { margin-inline-start: 6px; position: relative; }
+  .steps-what .delete-form::before {
+    content: ""; position: absolute; inset-inline-start: -6px; top: 20%; bottom: 20%;
+    width: 1px; background: var(--line-strong);
+  }
   .step-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
   .step-list button {
     display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
@@ -435,11 +443,17 @@
   .form-recent { margin-top: 10px; }
   .form-recent .recent-when { margin-inline-start: 6px; font-size: 11px; color: var(--ink-faint); font-weight: 400; }
   .form-recent .recent-list {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-    max-height: 12em; overflow-y: auto; margin-top: 4px; padding: 4px 6px;
+    display: flex; flex-direction: column; align-items: stretch; gap: 2px;
+    max-height: 14em; overflow-y: auto; margin-top: 4px; padding: 4px 6px;
     border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-sunken);
   }
-  .form-recent .recent-list button { text-align: start; }
+  .form-recent button { text-align: start; }
+  /* One row each (plan 033): open it, until when it is kept, and Delete --
+     its own button, last and apart, always shown, never inside the one that opens. */
+  .form-recent .recent-item { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; padding: 2px 0; }
+  .form-recent .recent-item + .recent-item { border-top: 1px solid var(--line); }
+  .form-recent .recent-kept { font-size: 11px; color: var(--ink-faint); }
+  .form-recent .recent-delete { margin-inline-start: auto; }
   /* The same file again (plan 029, 1.2): open the questionnaire already read
      from it, or start fresh. In the page, not a modal: the person may want to
      look at "Or pick up" before choosing. */
@@ -697,8 +711,13 @@
     <div class="steps-what" id="openQuestionnaire">
       <span id="stepTitle">New questionnaire</span>
       <span id="stepProduct"></span>
+      <!-- How long it is kept unused (plan 033, RETENTION_DAYS); nothing when retention is off. -->
+      <span class="kept-until" id="keptUntil" hidden></span>
       <button class="quiet" id="closeForm" hidden
               title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
+      <!-- Apart from Close, and asked about first: deleting cannot be undone (plan 033). -->
+      <button class="quiet danger delete-form" id="deleteForm" hidden
+              title="Delete this questionnaire and its answers, for good">Delete questionnaire</button>
     </div>
     <ol class="step-list" id="stepList">
       <li><button type="button" data-step="1"><span class="n">1</span><span class="name">Choose and load</span></button></li>
@@ -839,6 +858,9 @@
                    title="Applied as a rewording pass once the answers are written"
                    placeholder="How should they be written? — optional, e.g. one sentence each, formal, no bullet points">
           </div>
+          <!-- Said because it is so: a questionnaire's answer route takes no language (plan 033). -->
+          <p class="hint" id="languageNote">A questionnaire's own questions, a list's included, are answered in each
+            question's own language; forcing English or Arabic applies to questions typed beside one.</p>
           <p class="hint">Left blank, answers come out in the house style. Anything typed here is applied as a
             rewording pass once the answers are written, so the facts and the citations are settled first and
             only the wording follows the instruction.</p>
@@ -2017,6 +2039,12 @@
     return Boolean(batch) && (batch.parts || []).some((part) => part.findings.some((f) => !f.confident));
   }
 
+  /* A list of questions, typed or read from a PDF's or a Word file's text
+     (plan 033): a questionnaire with no file, so nothing to check and nothing
+     to fill; its answers are downloaded. */
+  function isList() { return Boolean(formBatch && formBatch.format === "list"); }
+  function fillable() { return Boolean(formBatch) && !isList(); }
+
   let stepChoice = { for: null, open: {} };  // the person's, for the questionnaire or list on the page
   function stepKey() {
     if (formBatch) return "q:" + formBatch.id;
@@ -2054,7 +2082,7 @@
     if (!loadDone() || step1Busy()) return 1;
     const answers = answeredCount();
     const busy = answering || running();
-    if (formBatch && (!formBatch.counts.questions || (worthChecking(formBatch) && !answers && !busy))) return 2;
+    if (fillable() && (!formBatch.counts.questions || (worthChecking(formBatch) && !answers && !busy))) return 2;
     if (busy || !answers || (pendingQuestions().length && !needingReview())) return 3;
     return needingReview() ? 4 : 5;
   }
@@ -2064,7 +2092,7 @@
     const busy = answering || running();
     return {
       1: loadDone() && !step1Busy(),
-      2: Boolean(formBatch && formBatch.counts.questions) && (!worthChecking(formBatch) || answers > 0 || busy),
+      2: fillable() && Boolean(formBatch.counts.questions) && (!worthChecking(formBatch) || answers > 0 || busy),
       3: answers > 0 && !pendingQuestions().length && !busy,
       4: answers > 0 && !needingReview(),
       5: Boolean(lastFill && lastFill.written),
@@ -2080,13 +2108,13 @@
     const product = choice ? choiceName(choice) : "No product chosen";
     if (formBatch) {
       const count = formBatch.counts.questions;
+      if (isList()) return [product, formBatch.source_name, plural(count, "question")].join(" · ");
       return [product, formBatch.source_name, count
         ? plural(count, "question") + " in " + plural(partsUsed(formBatch), partsWord(formBatch))
         : "no questions were read"].join(" · ");
     }
     if (!questions.length) return product;
-    return [product, textSource, plural(questions.length, textSource ? "question" : "typed question")]
-      .filter(Boolean).join(" · ");
+    return [product, plural(questions.length, "typed question")].join(" · ");
   }
 
   /* "Found 120 questions in 3 sheets", and how many readings are worth checking. */
@@ -2115,7 +2143,7 @@
   }
 
   function fillSummary() {
-    if (!formBatch) return "No file to write into: the answers are downloaded";
+    if (!fillable()) return "No file to write into: the answers are downloaded";
     if (!lastFill) return "Not filled yet";
     return lastFill.because || ("Wrote " + plural(lastFill.written, "value") + " into " + lastFill.file +
       (lastFill.held ? " · " + lastFill.held + " held back" : ""));
@@ -2142,8 +2170,8 @@
     paintStepFold(1, forced1 || (choices[1] !== undefined ? choices[1] : false), forced1);
     $("step1Held").textContent = loadSummary();
 
-    $("step2").hidden = !formBatch;
-    if (formBatch) {
+    $("step2").hidden = !fillable();
+    if (fillable()) {
       paintStepFold(2, choices[2] !== undefined ? choices[2] : worthChecking(formBatch) || !formBatch.counts.questions, false);
       $("step2Held").textContent = foundSummary(formBatch);
     }
@@ -2154,7 +2182,7 @@
 
     $("step5").hidden = !answers;
     $("step5Held").textContent = answers ? fillSummary() : "";
-    const hint = !formBatch
+    const hint = !fillable()
       ? "These questions have no file to write into, so the answers are downloaded instead: PDF, Word, CSV or JSON, under More."
       : lastFill ? ""
       : "Fill and download, in the bar above the answers, writes them into " + formBatch.source_name +
@@ -2164,15 +2192,15 @@
     const more = $("moreActions");
     if (more.dataset.paintedFor !== stepChoice.for) {
       more.dataset.paintedFor = stepChoice.for;
-      more.open = choices.more !== undefined ? choices.more : !formBatch;
+      more.open = choices.more !== undefined ? choices.more : !fillable();
     }
 
     $("stepList").querySelectorAll("button[data-step]").forEach((button) => {
       const step = Number(button.dataset.step);
-      const available = step === 1 || step === 3 || (step === 2 ? Boolean(formBatch) : answers > 0);
+      const available = step === 1 || step === 3 || (step === 2 ? fillable() : answers > 0);
       button.disabled = !available;
       button.classList.toggle("done", Boolean(done[step]) && step !== current);
-      button.classList.toggle("skipped", step === 2 && !formBatch && questions.length > 0);
+      button.classList.toggle("skipped", step === 2 && !fillable() && questions.length > 0);
       if (step === current) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
       button.title = step === current ? "The step in front of you"
@@ -2181,7 +2209,8 @@
     });
 
     $("stepTitle").textContent = formBatch ? formBatch.source_name
-      : textSource || (questions.length ? "Typed questions" : "New questionnaire");
+      : questions.length ? "Typed questions" : "New questionnaire";
+    paintKeptUntil();
     const choice = formBatch ? Cards.choiceOf(formBatch.product_id) : formProduct();
     const known = Cards.product(choice);
     const said = choice + "|" + (known ? known.name + (known.deleted ? " deleted" : "") : "");
@@ -2192,9 +2221,6 @@
       shown.replaceChildren(...(tag ? [tag] : []));
     }
   }
-
-  /* A file read as text, a PDF's questions: it names the list in the steps. */
-  let textSource = "";
 
   /* --- the review queue (plan 029, 1.3) ------------------------------------
 
@@ -2209,6 +2235,7 @@
     ["blank", "Blank or set aside", "Left blank on purpose, and rows set aside: nothing goes in for them"],
     ["all", "All", "Every answer, in the file's order"],
   ];
+  const WRITTEN_IN_A_LIST = ["Ready to use", "Confident answers nobody has checked: ready to use as drafted"];
   let reviewTab = null;  // the person's choice; null until the next draw picks the default
 
   function reviewBucket(item) {
@@ -2227,6 +2254,8 @@
     const hadFocus = tabs.contains(document.activeElement);
     tabs.replaceChildren();
     REVIEW_TABS.forEach(([key, name, about]) => {
+      // A list has no file to write into: its confident answers are ready to use (plan 033).
+      if (key === "written" && isList()) [name, about] = WRITTEN_IN_A_LIST;
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = name + " (" + counted[key] + ")";
@@ -2243,7 +2272,7 @@
       const chosen = tabs.querySelector('[data-tab="' + tab + '"]');
       if (chosen) chosen.focus({ preventScroll: true });
     }
-    $("reviewCounts").textContent = (counted.written + counted.person) + " will be written · " +
+    $("reviewCounts").textContent = (counted.written + counted.person) + (isList() ? " ready to use · " : " will be written · ") +
       counted.review + " need review";
     /* How far the review has got (plan 033): the answers a person has done,
        of those that needed one or have had one. An accept moves one across. */
@@ -2280,6 +2309,7 @@
 
   function renderResult(data, options = {}) {
     result = data;
+    Cards.fileless = isList();  // its cards say "Ready to use", not "Will be written" (plan 033)
 
     // The first draw of a questionnaire, and the first after a run of its
     // rows, opens on what needs a person; every other keeps the person's tab.
@@ -2311,9 +2341,10 @@
       const empty = document.createElement("div");
       empty.className = "qlist-empty";
       const going = counted.written + counted.person;
+      const fate = isList() ? " ready to use" : " will be written";
       empty.textContent = tab === "review"
-        ? "Nothing needs review. " + going + " answer(s) will be written."
-        : "No answers here. " + counted.review + " need review, " + going + " will be written.";
+        ? "Nothing needs review. " + going + " answer(s)" + fate + "."
+        : "No answers here. " + counted.review + " need review, " + going + fate + ".";
       container.append(empty);
     }
     paintCounts(data, counted, queue, tab);
@@ -2495,6 +2526,7 @@
       aside.textContent = entry.skip ? "Include" : "Set aside";
       aside.title = entry.skip
         ? "Answer this one after all"
+        : isList() ? "Leave this one out: unanswered, and not in the downloads"
         : "Leave this one unanswered and write nothing into the file";
       aside.dataset.mutates = "true";
       aside.disabled = answering;
@@ -2534,8 +2566,10 @@
     if (formBatch && !entry.formId) {
       const loose = document.createElement("div");
       loose.className = "qmeta";
-      loose.textContent = "Not a row in " + (formBatch.source_name || "the file") +
-        " — answered, but exported rather than written into it.";
+      loose.textContent = isList()
+        ? "Not one of " + formBatch.source_name + "'s questions — answered here, and not kept with it."
+        : "Not a row in " + (formBatch.source_name || "the file") +
+          " — answered, but exported rather than written into it.";
       row.append(loose);
     }
 
@@ -2570,7 +2604,7 @@
       await adoptBatch(updated, { quiet: true });
       setStatus($("answerStatus"), skip
         ? "Set aside. Nothing will be written into that row."
-        : "Back in. Its answer will be written into the file.", "ok");
+        : isList() ? "Back in." : "Back in. Its answer will be written into the file.", "ok");
       return true;
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
@@ -2854,7 +2888,8 @@
       if (!text.trim() || !typingInACard()) await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       else recountWith(updated, index);
       setStatus(status, text.trim()
-        ? "Your edit is saved, and is what will be written into the file."
+        ? (isList() ? "Your edit is saved, and is what the downloads carry."
+          : "Your edit is saved, and is what will be written into the file.")
         : "Cleared. Nothing is written for it: the file keeps whatever that cell already held.", "ok");
     } catch (error) {
       setStatus(status, "That edit could not be saved: " + error.message, "error");
@@ -2879,7 +2914,7 @@
       });
       await keepingPlace(() => adoptBatch(updated, { quiet: true }));
       setStatus($("answerStatus"), blank
-        ? "That row will be written empty when you fill the file."
+        ? (isList() ? "That answer is left blank on purpose." : "That row will be written empty when you fill the file.")
         : "Back to unanswered. Answer it whenever you like.", "ok");
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
@@ -2931,8 +2966,10 @@
       // the model wrote and a reviewer agreed with.
       setStatus($("answerStatus"), approved
         ? (updated.remembered
-            ? "Approved. It will be written into the file, and your wording is now in the answer memory."
-            : "Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
+            ? "Approved." + (isList() ? "" : " It will be written into the file,") +
+              (isList() ? " Your" : " and your") + " wording is now in the answer memory."
+            : "Approved." + (isList() ? "" : " It will be written into the file.") +
+              " It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
         : withdrawnMessage(updated, entry.formId), "ok");
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
@@ -3204,9 +3241,11 @@
      file a second time would make a second batch and orphan the first. */
   let lastClosed = null;  // the questionnaire Close put away, as the list shows one
   const RECENT_LIMIT = 500;
-  /* Every questionnaire of this person, last changed first (plan 029, 1.1):
-     three were shown, by when they were uploaded, so the one somebody worked
-     on yesterday was not there to pick up. Each appears exactly once. */
+  /* Every questionnaire of this person, most recently used first (plan 029,
+     1.1; used, not changed, since plan 033): three were shown, by when they
+     were uploaded, so the one somebody worked on yesterday was not there to
+     pick up. Each appears exactly once, as a row: open it, until when it is
+     kept, and Delete, last and apart. */
   async function listRecentForms() {
     const line = $("formRecent");
     let forms = [];
@@ -3227,46 +3266,119 @@
     const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id));
     line.replaceChildren();
     if (!open.length) return;
-    const buttons = open.map(pickUpButton);
-    if (buttons.length <= 3) {
-      line.append(document.createTextNode("Or pick up: "));
-      buttons.forEach((link, index) => {
-        if (index) line.append(document.createTextNode(" · "));
-        line.append(link);
-      });
+    const rows = open.map(recentRow);
+    if (rows.length <= 3) {
+      line.append(document.createTextNode("Or pick up:"), ...rows);
       return;
     }
-    line.append(document.createTextNode("Or pick up one of your " + buttons.length +
-      " questionnaires, last changed first:"));
+    line.append(document.createTextNode("Or pick up one of your " + rows.length +
+      " questionnaires, most recently used first:"));
     const box = document.createElement("div");
     box.className = "recent-list";
-    box.append(...buttons);
+    box.append(...rows);
     line.append(box);
     if (forms.length >= RECENT_LIMIT) {
-      line.append(document.createTextNode("Showing the " + RECENT_LIMIT + " most recently changed."));
+      line.append(document.createTextNode("Showing the " + RECENT_LIMIT + " most recently used."));
     }
   }
 
-  /* One questionnaire in "Or pick up": its name, how much is answered, its
-     product and when it last changed; a click opens it. */
+  /* When it was last used: opened or changed, which is the list's order (plan 033). */
+  function usedAt(form) { return form.used_at || form.updated_at || form.created_at || ""; }
+
+  /* "Kept until 6 May 2027": the day it is deleted if nobody opens it, in the
+     reader's own way of writing a date, or "" when nothing is deleted. */
+  function keptUntilText(day) {
+    const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(day || "");
+    if (!parts) return "";
+    const date = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+    return "Kept until " + date.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+  }
+  const KEPT_TITLE = "Deleted with its answers if nobody opens it by then; opening it keeps it longer";
+
+  /* One questionnaire in "Or pick up": a button that opens it, until when it
+     is kept, and Delete, its own button at the end of the row. */
+  function recentRow(form) {
+    const row = document.createElement("div");
+    row.className = "recent-item";
+    row.dataset.form = form.id;
+    row.append(pickUpButton(form));
+    const kept = keptUntilText(form.kept_until);
+    if (kept) {
+      const until = document.createElement("span");
+      until.className = "recent-kept";
+      until.textContent = kept;
+      until.title = KEPT_TITLE;
+      row.append(until);
+    }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "quiet danger recent-delete";
+    remove.textContent = "Delete";
+    remove.setAttribute("aria-label", "Delete " + form.source_name);
+    remove.title = "Delete " + form.source_name + " and its answers, for good";
+    remove.onclick = () => deleteQuestionnaire(form);
+    row.append(remove);
+    return row;
+  }
+
+  /* Its name, how much is answered, its product and when it was last used; a click opens it. */
   function pickUpButton(form) {
     const link = document.createElement("button");
-    link.className = "quiet";
+    link.className = "quiet pick-up";
     link.textContent = form.source_name +
       (form.answered ? " (" + form.answered + " answered)" : "");
     const product = Cards.productBadge(form.product_id);
     if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
-    const changed = form.updated_at || form.created_at;
-    if (changed) {
+    if (form.format === "list") {
+      const list = document.createElement("span");
+      list.className = "recent-when";
+      list.textContent = "list";
+      link.append(list);
+    }
+    const used = usedAt(form);
+    if (used) {
       const when = document.createElement("span");
       when.className = "recent-when";
-      when.textContent = "changed " + new Date(changed).toLocaleString(undefined,
+      when.textContent = "used " + new Date(used).toLocaleString(undefined,
         { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
       link.append(when);
-      link.title = "Last changed " + new Date(changed).toLocaleString();
+      link.title = "Last used " + new Date(used).toLocaleString();
     }
     link.onclick = () => reopenForm(form.id);
     return link;
+  }
+
+  /* Deleting a questionnaire, from "Or pick up" or the open one's header
+     (plan 033): asked first, naming it, its answers and that it cannot be
+     undone. Refused while it is being answered, and said why. Deleting the
+     open one puts it away, as Close does, and leaves the address. */
+  async function deleteQuestionnaire(form) {
+    const name = form.source_name;
+    const answers = form.answered || 0;
+    const typed = formBatch && formBatch.id === form.id
+      ? questions.filter((q) => !q.formId && q.text.trim()).length : 0;
+    if (!confirm("Delete “" + name + "”?\n\n" +
+        (answers ? "Its " + plural(answers, "answer") + " " + (answers === 1 ? "goes" : "go") + " with it"
+          : "It has no answers yet") +
+        (typed ? ", and so " + (typed === 1 ? "does the question" : "do the " + typed + " questions") + " typed beside it" : "") +
+        ". This cannot be undone.")) return;
+    const status = $("extractStatus");
+    try {
+      await request("/api/forms/" + encodeURIComponent(form.id), { method: "DELETE" });
+    } catch (error) {
+      if (error.code === "questionnaire_not_found") {
+        setStatus(status, name + " is no longer there: it was deleted already.", "error");
+        if (lastClosed && lastClosed.id === form.id) lastClosed = null;
+        listRecentForms();
+      } else {
+        setStatus(status, name + " was not deleted. " + error.message, "error");
+      }
+      return;
+    }
+    if (lastClosed && lastClosed.id === form.id) lastClosed = null;
+    if (formBatch && formBatch.id === form.id) putAway(formBatch);
+    else listRecentForms();
+    setStatus(status, "Deleted " + name + (answers ? ", with its " + plural(answers, "answer") : "") + ".", "ok");
   }
 
   /* The open questionnaire is in the address, `?q=<id>`, so a reload or a
@@ -3461,7 +3573,6 @@
     }
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
-    textSource = "";
     rememberInAddress(batch.id);
     hideAlreadyOpen();
     // Being answered on the server, by a run this page is not itself waiting
@@ -3556,7 +3667,8 @@
       // Said plainly, because it changes what the button below is about to do:
       // those rows are finished and will be left exactly as they are.
       (already ? ", " + already + " already answered in the file and left alone" : "") +
-      (unsure ? " — " + unsure + " reading(s) worth checking below" : "") + ".",
+      (unsure ? " — " + unsure + " reading(s) worth checking below" : "") + "." +
+      (isList() ? " It is kept as a list: it has no place for answers, so they are downloaded instead." : ""),
       unsure ? "warn" : "ok");
     $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
@@ -3570,39 +3682,25 @@
        held. The work is not lost, the batch is still on the server, but the
        person has to know that is where it went. */
     if (formBatch && !confirm(
-        formBatch.source_name + " is open and can be filled in.\n\n" +
+        formBatch.source_name + " is open" + (isList() ? "" : " and can be filled in") + ".\n\n" +
         "Reading " + file.name + " closes it and starts a new list — the answers " +
-        "already written stay on the server, and you can pick the file up again " +
-        "from “Or pick up” below.\n\nRead " + file.name + " anyway?")) {
+        "already written stay on the server, and you can pick it up again " +
+        "from “Or pick up”.\n\nRead " + file.name + " anyway?")) {
       setStatus($("extractStatus"), "Left " + formBatch.source_name + " open.", "ok");
       return;
     }
+    /* Kept as a list questionnaire (plan 033), for the product chosen: it
+       reopens, is listed and is answered like a file's, with nothing to fill.
+       Questions typed on the page with nothing open join it after the file's;
+       the ones typed beside an open questionnaire go with it, as before. */
     const body = new FormData();
     body.append("file", file);
-    const data = await request("/api/assessments/extract", { method: "POST", body });
-    if (formBatch) {
-      // A clean list, not the spreadsheet's rows with a PDF's questions after
-      // them: those rows cannot be answered or filled any more.
-      questions = [];
-      result = null;
-      $("results").innerHTML = "";
-      $("resultsCard").hidden = true;
-      forgetFilling();
+    body.append("product", wireProduct());
+    if (!formBatch) {
+      questions.filter((q) => !q.formId && q.text.trim()).forEach((q) => body.append("questions", q.text.trim()));
     }
-    formBatch = null;
-    rememberInAddress("");
-    stopFollowing();
-    paintReadOnly();
-    $("formReport").hidden = true;
-    refreshFormControls();
-    data.questions.forEach((q) => addQuestion(q.text, q));
-    sourceName = data.source_name || sourceName;
-    textSource = data.source_name || file.name;
-    setStatus($("extractStatus"),
-      "Found " + data.questions.length + " question(s) in " + data.source_name +
-      ". This file cannot be written back into, so the answers are exported instead.", "ok");
-    renderQuestions();
-    $("questionListPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const batch = await request("/api/forms/list", { method: "POST", body });
+    await adoptBatch(batch);  // says what was found, and that the answers are downloaded
   }
 
   // --- what was found, and how to correct it -------------------------------
@@ -3812,7 +3910,7 @@
   function refreshFormControls() {
     // Filling needs a file to fill. Rewording only needs answers, and works the
     // same on a list of typed questions as it does on a questionnaire.
-    $("fillFormBtn").hidden = !formBatch;
+    $("fillFormBtn").hidden = !fillable();  // a list has no file: its answers are downloaded (plan 033)
     paintFill();
     $("reviewBar").hidden = !(formBatch && result && result.answers.length);
     $("reviseRow").hidden = !(result && result.answers.length);
@@ -3936,6 +4034,31 @@
     };
   }
 
+  /* Typed questions, kept as a list questionnaire for the product chosen
+     (plan 033), and opened on the page: in the address, in "Or pick up", its
+     product fixed from now on. Nothing is answered here. False when it could
+     not be kept, and the status says why. */
+  async function keepTypedList(status) {
+    const typed = questions.filter((q) => !q.formId && q.text.trim());
+    if (!typed.length) return false;
+    const body = new FormData();
+    typed.forEach((entry) => body.append("questions", entry.text.trim()));
+    body.append("product", wireProduct());
+    setStatus(status, "Keeping " + plural(typed.length, "question") + " as a list…", "busy");
+    try {
+      await adoptBatch(await request("/api/forms/list", { method: "POST", body }), { quiet: true });
+      setStatus(status, "");
+      return true;
+    } catch (error) {
+      if (error.code === "product_not_found") await productGone(status, "they were not kept or answered for it");
+      else setStatus(status, error.message, "error");
+      return false;
+    }
+  }
+
+  /* Questions typed beside an open questionnaire: it has no place for them,
+     so they are answered on their own and exported (the one use left of
+     /api/assessments/answer-questions, plan 033). */
   function answerLooseQuestions(pending, runId) {
     return request("/api/assessments/answer-questions", {
       method: "POST",
@@ -4172,13 +4295,29 @@
     if (needsProduct()) { refreshAnswerButton(); $("formProduct").focus(); return; }
     const status = $(statusId);
 
+    /* Typed questions are kept as a list first (plan 033): a questionnaire
+       with no file, for the product chosen, which then answers, reloads, is
+       listed and is reviewed like a file's. They were answered on the page
+       and kept nowhere a page could read: a reload lost them. */
+    if (!formBatch) {
+      answering = true;  // locked while it is kept: a second click made a second list
+      refreshAnswerButton();
+      let kept = false;
+      try {
+        kept = await keepTypedList(status);
+      } finally {
+        answering = false;
+        refreshAnswerButton();
+      }
+      if (kept) await answerPending(statusId);
+      return;
+    }
+
     /* Answering through a batch is tracked under the batch's own id -- see the
        note on POST /api/forms/{id}/answer -- so watching a freshly minted one
        polled a run nobody had started and the progress bar sat at nothing for
        the several minutes a large questionnaire takes. */
-    const runId = formBatch
-      ? formBatch.id
-      : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).replace(/-/g, "").slice(0, 16);
+    const runId = formBatch.id;
     answering = true;
     refreshAnswerButton();
     setStatus(status, "Answering " + batch.length + " question(s)…", "busy");
@@ -4189,14 +4328,10 @@
     });
 
     try {
-      /* A questionnaire we can write back into is answered through its batch,
-         so the answers are kept on the server against the places they belong.
-         A list of typed questions goes the way it always did. Both come back
-         as the same answers, and everything below this renders them the same. */
-      const data = formBatch
-        ? await answerThroughBatch(batch, runId)
-        : await answerLooseQuestions(batch, runId);
-      if (!formBatch) pageLastUsed = formProduct();  // a list answered: its product is the one last used
+      /* Through the questionnaire, a file's or a list's, so the answers are
+         kept on the server against the questions they belong to. Questions
+         typed beside an open one are answered on their own, as before. */
+      const data = await answerThroughBatch(batch, runId);
 
       // Positional: the endpoint answers the list it was given, in order. That
       // is what lets an answer be tied back to the row it came from, so a later
@@ -4525,7 +4660,6 @@
     if (!confirm(warning)) return;
     questions = [];
     result = null;
-    textSource = "";
     unsavedEdits.clear();
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
@@ -4637,7 +4771,9 @@
         : product
           ? "Answered from " + product.name + "'s knowledge base and answer memory, beside the shared ones."
           : "Answered from the shared knowledge base and answer memory.") +
-        (formBatch
+        (isList()
+          ? " Fixed for this list: to answer these questions for another product, close it and give them again with that product chosen."
+          : formBatch
           ? " Fixed for this questionnaire: to answer it for another product, close it and open the file again with that product chosen."
           : fixed ? " Fixed while these answers are on the page: clear the list to choose another product." : "");
     // The review names the product its approvals are filed under (plan 029, 2).
@@ -4877,6 +5013,18 @@
   function paintClose() {
     $("closeForm").hidden = !formBatch;
     $("closeForm").disabled = answering || batchRequests > 0;
+    // Delete waits as Close does; a run on the server is the server's to refuse, and it says why.
+    $("deleteForm").hidden = !formBatch;
+    $("deleteForm").disabled = answering || batchRequests > 0;
+  }
+
+  /* Until when the open questionnaire is kept unused (plan 033); nothing when retention is off. */
+  function paintKeptUntil() {
+    const kept = $("keptUntil");
+    const said = formBatch ? keptUntilText(formBatch.kept_until) : "";
+    kept.hidden = !said;
+    if (kept.textContent !== said) kept.textContent = said;
+    kept.title = said ? KEPT_TITLE : "";
   }
 
   /* Put the open questionnaire away, so another file -- or the same one, for
@@ -4893,11 +5041,18 @@
         (answered ? ", and so will the answers to " + answered + " of them" : "") + ".")) return;
     const closed = formBatch;
     lastClosed = {
-      id: closed.id, source_name: closed.source_name, product_id: closed.product_id,
-      created_at: closed.created_at, updated_at: closed.updated_at, answered: (closed.counts || {}).answered || 0,
+      id: closed.id, source_name: closed.source_name, product_id: closed.product_id, format: closed.format,
+      created_at: closed.created_at, updated_at: closed.updated_at, used_at: closed.used_at,
+      kept_until: closed.kept_until, answered: (closed.counts || {}).answered || 0,
     };
+    putAway(closed);
+    setStatus($("extractStatus"), "Closed " + closed.source_name + ". It stays in “Or pick up” below.", "ok");
+  };
+
+  /* The open questionnaire off the page, closed or deleted: back to step 1,
+     out of the address, its answers and edits gone from the page with it. */
+  function putAway(closed) {
     formBatch = null;
-    textSource = "";
     heldFile = null;  // the next file is given, and read, for the next product
     rememberInAddress("");
     hideAlreadyOpen();
@@ -4922,7 +5077,12 @@
     renderQuestions();
     refreshFormControls();
     listRecentForms();
-    setStatus($("extractStatus"), "Closed " + closed.source_name + ". It stays in “Or pick up” below.", "ok");
+  }
+
+  $("deleteForm").onclick = () => {
+    if (!formBatch || answering || batchRequests > 0) return;
+    deleteQuestionnaire({ id: formBatch.id, source_name: formBatch.source_name,
+                          answered: (formBatch.counts || {}).answered || 0 });
   };
   // Awaited before a questionnaire named in the address is opened (plan 029, 2).
   const productsListed = loadFormProducts().catch(() => {});

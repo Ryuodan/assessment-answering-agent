@@ -9,6 +9,7 @@ server's, read from the session.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -108,7 +109,11 @@ def test_a_released_answer_says_it_will_be_written(page: Page, tmp_path: Path, m
 
 
 def test_the_page_holds_by_the_servers_threshold(page: Page, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Typed questions go into no file, so the card judges them itself: with the server's threshold, not 0.6."""
+    """Typed questions go into no file, so the card judges them itself: with the server's threshold, not 0.6.
+
+    Changed on purpose by plan 033: typed questions are kept as a list questionnaire, so the server's
+    gate judges them, with the same threshold, and the review opens on "Needs review": the
+    confident answer is under All, "Ready to use" because a list has no file."""
     monkeypatch.setattr(settings, "review_confidence_threshold", 0.7)
     answering(
         monkeypatch,
@@ -126,6 +131,7 @@ def test_the_page_holds_by_the_servers_threshold(page: Page, monkeypatch: pytest
     under = page.locator("#results .answer", has_text="backups")
     expect(under.locator(".status-word")).to_have_text("Needs review", timeout=15_000)
     expect(under.locator(".reason-chip")).to_have_text(["Low confidence"])
+    page.locator("#reviewTabs").get_by_role("button", name=re.compile(r"^All")).click()
     above = page.locator("#results .answer", has_text="MFA")
     expect(above.locator(".status-word")).to_have_text("Ready to use")
     assert page.evaluate("Cards.reviewThreshold") == 0.7

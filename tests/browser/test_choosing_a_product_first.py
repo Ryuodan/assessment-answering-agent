@@ -132,12 +132,13 @@ def test_the_workbench_starts_with_no_product_and_reading_waits_for_one(
 def test_typed_questions_wait_for_a_product_before_answering(
     page: Page, availo: products.Product, answers_yes: None
 ) -> None:
-    sent: list[dict] = []
+    # Changed on purpose by plan 033: typed questions are kept as a list questionnaire for the
+    # product chosen (`POST /api/forms/list`), then answered through it; they were sent to
+    # /api/assessments/answer-questions with the product.
+    sent: list[str] = []
     page.on(
         "request",
-        lambda request: (
-            sent.append(request.post_data_json) if request.url.endswith("/api/assessments/answer-questions") else None
-        ),
+        lambda request: sent.append(request.url) if request.method == "POST" and "/api/" in request.url else None,
     )
     page.goto("/workbench")
     page.click("#addQuestionBtn")
@@ -152,13 +153,16 @@ def test_typed_questions_wait_for_a_product_before_answering(
     expect(hint).to_contain_text("Choose a product first.")
     hint.get_by_role("button", name="Choose…").click()
     expect(page.locator("#formProduct")).to_be_focused()
+    assert sent == [], "nothing is sent before a product is chosen"
 
     page.select_option("#formProduct", availo.id)
     expect(hint).to_be_hidden()
     expect(answer).to_be_enabled()
     answer.click()
     expect(page.locator("#results").get_by_text(ANSWER).first).to_be_visible(timeout=15_000)
-    assert [body["product"] for body in sent] == [availo.id]
+    [kept] = batches.recent(TEAM)
+    assert (kept["format"], kept["product_id"]) == ("list", availo.id)
+    assert not [url for url in sent if url.endswith("/api/assessments/answer-questions")]
 
 
 def test_closing_a_questionnaire_goes_back_to_choose(
@@ -222,29 +226,21 @@ def test_start_fresh_follows_the_product_box_after_clear_all(
     page: Page, tmp_path: Path, availo: products.Product, answers_yes: None
 ) -> None:
     """Plan 029's review of Stage 2: "Start fresh" skipped the product check. After Clear all it
-    still said "for Availo" under "Product: choose…", and opened the file as General."""
+    still said "for Availo" under "Product: choose…", and opened the file as General.
+
+    Changed on purpose by plan 033: answered typed questions are a list questionnaire now, its
+    product fixed like a file's, so Clear all no longer frees the box. The box is changed with
+    nothing open; "(choose a product first)" is held by the deleted-product test below."""
     msegat = products.add(None, TEAM, "Msegat", color="#dc2626")
     workbook = shapes.simple(tmp_path / "vendor.xlsx")
     tools.open_form(identity.local_user(), workbook, product_id=availo.id)  # the copy this person has
 
     page.goto("/workbench")
     page.select_option("#formProduct", availo.id)
-    page.click("#addQuestionBtn")
-    page.get_by_role("textbox", name="Type a question").last.fill("Do you encrypt backups?")
-    page.click("#answerBtn")
-    expect(page.locator("#results").get_by_text(ANSWER).first).to_be_visible(timeout=15_000)
-    expect(page.locator("#formProduct")).to_be_disabled()  # the list's answers fix its product
-
     page.set_input_files("#assessmentInput", str(workbook))
     offer = page.locator("#alreadyOpen")
     fresh = offer.get_by_role("button", name=re.compile(r"^Start fresh"))
     expect(fresh).to_have_text("Start fresh (for Availo)")
-
-    page.once("dialog", lambda dialog: dialog.accept())
-    page.click("#clearQuestions")
-    expect(page.locator("#formProduct")).to_have_value("")
-    expect(fresh).to_have_text("Start fresh (choose a product first)")
-    expect(fresh).to_be_disabled()
     expect(offer.get_by_role("button", name="Open it")).to_be_enabled()  # a copy keeps its own product
 
     page.select_option("#formProduct", msegat.id)

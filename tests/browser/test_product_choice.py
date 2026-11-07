@@ -190,10 +190,11 @@ def test_a_typed_list_keeps_its_product_while_its_answers_are_on_the_page(
     page.click("#answerBtn")
     expect(page.locator("#results").get_by_text(ANSWER).first).to_be_visible(timeout=15_000)
     expect(selector).to_be_disabled()
-    expect(page.locator("#formProductHint")).to_contain_text("clear the list to choose another product")
+    # Changed on purpose by plan 033: the answered list is a questionnaire, its product fixed as a
+    # file's is, and Close (not Clear all) puts it away; it said "clear the list to choose another".
+    expect(page.locator("#formProductHint")).to_contain_text("Fixed for this list")
 
-    page.once("dialog", lambda dialog: dialog.accept())
-    page.click("#clearQuestions")
+    page.click("#closeForm")
     expect(selector).to_be_enabled()
     expect(selector).to_have_value("")  # plan 029 (D-022): back to "choose…", and Availo offered as Last used
     expect(page.locator("#formLastUsed button")).to_have_text("Last used: Availo")
