@@ -49,7 +49,6 @@ def answered_on_the_workbench(page: Page, tmp_path: Path) -> None:
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "vendor.xlsx")))
     choose_general(page)
-    page.click("#extractBtn")
     page.click("#answerBtn")
     expect(page.locator("#reviewBar")).to_be_visible(timeout=15_000)
     page.locator("#reviewTabs").get_by_role("button", name="All (4)").click()

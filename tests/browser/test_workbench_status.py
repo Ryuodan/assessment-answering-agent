@@ -43,7 +43,6 @@ def test_a_spreadsheet_uploaded_with_no_questions_says_why_and_nothing_false(pag
     page.goto("/workbench")
     page.set_input_files("#assessmentInput", str(notes))
     choose_general(page)
-    page.click("#extractBtn")
 
     status = page.locator("#extractStatus")
     expect(status).to_contain_text("No questions were read from notes.xlsx")

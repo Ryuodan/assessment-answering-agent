@@ -41,10 +41,57 @@
 
   main { max-width: 1120px; margin: 0 auto; padding: 26px 24px 80px; }
 
-  /* --- steps ------------------------------------------------------------- */
+  /* --- steps (plan 033) -------------------------------------------------
+     A questionnaire in five steps: choose and load, check what was found,
+     answer, review, fill and download. The header says where it is; a step
+     that is done folds to one line saying what it holds, and opens again. It
+     was one long scroll: with 120 questions at 1366x768, Answer was 14,000
+     pixels down and Fill sixty screens. */
 
-  .step { margin-bottom: 30px; }
-  .step-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .steps-header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    margin: 0 0 12px; padding: 11px 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+  .steps-what {
+    flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 14px; font-weight: 620;
+  }
+  .steps-what #stepTitle { overflow-wrap: anywhere; }
+  .steps-what .tag { text-transform: none; font-size: 11px; }
+  .step-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .step-list button {
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    background: var(--surface); color: var(--ink-faint); border: 1px solid var(--line);
+    border-radius: var(--radius-pill); padding: 3px 11px 3px 4px; font-size: 12.5px; font-weight: 550;
+  }
+  .step-list button:hover:not(:disabled) { filter: none; color: var(--ink); border-color: var(--line-strong); }
+  .step-list .n {
+    width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; background: var(--surface-sunken); border: 1px solid var(--line-strong);
+  }
+  .step-list button.done { color: var(--ok); }
+  .step-list button.done .n { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .step-list button[aria-current="step"] {
+    color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft);
+  }
+  .step-list button[aria-current="step"] .n { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+  .step-list button.skipped { opacity: .5; }
+  .step-list button:disabled { opacity: .5; }
+  @media (max-width: 640px) {
+    /* The numbers, and the name of the step in front of you. */
+    .step-list button:not([aria-current="step"]) .name { display: none; }
+    .step-list button:not([aria-current="step"]) { padding-inline-end: 4px; }
+  }
+  /* What is said about the questionnaire as a whole, under the header: what
+     was read and why not, and a run on the server or a deleted product. */
+  .page-status { margin: 0 0 12px; }
+  .page-status:empty { display: none; }
+
+  .step { margin-bottom: 26px; }
+  .step[hidden] { display: none; }
+  .step-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
   .step-number {
     flex: 0 0 auto; width: 24px; height: 24px; border-radius: var(--radius-pill);
     background: var(--accent-soft); color: var(--accent-ink);
@@ -52,7 +99,62 @@
     align-self: center;
   }
   .step-head h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  .step-held { flex: 1 1 220px; min-width: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }
+  .step-held:empty { display: none; }
+  .step-head .step-toggle { margin-inline-start: auto; }
+  /* Folded: one line, in a box, saying what the step holds. */
+  .step.folded { margin-bottom: 12px; }
+  .step.folded > .step-head {
+    margin: 0; padding: 9px 12px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+  }
+  .step.folded > .step-head h2 { font-size: 14.5px; }
+  .step.folded .step-number { background: var(--ok-soft); color: var(--ok); }
+  #step1:not(.folded) #step1Held { display: none; }
   .step-hint { margin: 0 0 15px 36px; color: var(--ink-soft); font-size: 13.5px; }
+  /* The other way in, before anything is loaded: typing the questions, under
+     step 1 rather than as a step of its own with nothing in it. */
+  .step.way-in { margin-top: -12px; }
+  .step.way-in > .step-head, .step.way-in .qlist-empty, .step.way-in #questionListFold,
+  .step.way-in #answerBar, .step.way-in #questionListHint:empty { display: none; }
+  .step.way-in #questionListPanel { padding: 12px 18px; }
+  .step.way-in .library-heading { margin: 0; }
+
+  /* Answer: one button, in a bar that stays in view at the bottom of the
+     window while the questions above it scroll, with the progress in it. */
+  .answer-bar {
+    position: sticky; bottom: 0; z-index: 14;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    margin-top: 12px; padding: 10px 12px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+  }
+  .answer-bar[hidden] { display: none; }
+  .answer-bar > .status { flex-basis: 100%; margin: 0; min-height: 0; }
+  .answer-bar > .status:empty { display: none; }
+  .answer-options { margin-inline-start: auto; font-size: 13px; }
+  .answer-options > summary { cursor: pointer; color: var(--accent-ink); font-weight: 550; padding: 4px 2px; }
+  .answer-options[open] { flex-basis: 100%; margin-inline-start: 0; }
+  .answer-options .hint { margin: 6px 0 0; color: var(--ink-faint); font-size: 12.5px; }
+
+  /* Review from the keyboard: the card in focus has a ring, and the keys are said once. */
+  .keys-hint { margin: 0 0 12px; font-size: 12px; color: var(--ink-faint); }
+  .keys-hint[hidden] { display: none; }
+  .keys-hint kbd {
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    padding: 2px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px;
+    border-radius: 4px; background: var(--surface); color: var(--ink-soft);
+  }
+  #results > .answer { scroll-margin-top: calc(var(--topbar-height, 0px) + var(--review-bar-height, 0px) + 16px); scroll-margin-bottom: 16px; }
+  #results > .answer:focus { outline: none; }
+  #results > .answer:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+  /* Fill and download, and the rest under "More". */
+  .more { margin-top: 14px; }
+  .more > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); padding: 6px 0; }
+  .more[open] > summary { margin-bottom: 10px; }
+  #fillHint { margin: 0 0 10px; }
+  #fillHint:empty { display: none; }
 
   .panel {
     background: var(--surface);
@@ -126,6 +228,12 @@
     display: block; margin-top: 7px; color: var(--ink); font-size: 13px;
     font-weight: 550; word-break: break-all;
   }
+  label.file .chosen:empty { display: none; }
+  /* What a file dropped here is read for, said before it is dropped: reading
+     starts as soon as a file and a product are both here (plan 033). */
+  label.file .drop-for { display: block; margin-top: 6px; font-size: 12px; color: var(--ink-faint); }
+  label.file.disabled { opacity: .55; cursor: not-allowed; }
+  #readNeedsProduct { margin-top: 10px; }
 
   .status { font-size: 13px; color: var(--ink-faint); min-height: 20px; margin-top: 11px; white-space: pre-line; }
   .status.error { color: var(--err); }
@@ -166,7 +274,11 @@
 
   .library-heading {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 10px;
+    flex-wrap: wrap;
   }
+  #questionListPanel .library-heading { margin-top: 0; }
+  .heading-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .heading-actions button.ghost { padding: 5px 11px; font-size: 13px; }
 
   /* --- the question list -------------------------------------------------
      One row per question, editable in place. Deliberately quieter than an
@@ -312,7 +424,7 @@
   #formReadOnly[hidden] { display: none; }
   body.read-only .changes-it, body.read-only #detailPick, body.read-only #reviseRow,
   body.read-only #retryFailed, body.read-only #composer, body.read-only #clearQuestions,
-  body.read-only label.file[data-drop="assessment"], body.read-only #extractBtn { display: none !important; }
+  body.read-only label.file[data-drop="assessment"], body.read-only #reviewKeys { display: none !important; }
   /* --- fill a questionnaire ---------------------------------------------- */
   .qn-empty { color: var(--ink-faint); font-size: 13.5px; }
   .qn-recent { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -360,6 +472,8 @@
   .review-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
   .review-side { display: flex; align-items: center; gap: 10px; margin-inline-start: auto; }
   .review-counts { font-size: 12.5px; color: var(--ink-soft); }
+  .review-counts:empty { display: none; }
+  #fillFormBtn { white-space: nowrap; }
   .review-bar .review-status { flex-basis: 100%; margin: 0; min-height: 0; }
   .review-bar .review-status:empty { display: none; }
   @media (max-width: 600px) {
@@ -576,65 +690,101 @@
 </div>
 
 <main>
+  <!-- Where the questionnaire is (plan 033): its five steps, the one in front
+       of you marked, the ones done ticked. Each opens its step. Close is here
+       rather than in step 1, because step 1 folds once a file is open. -->
+  <nav class="steps-header" id="stepHeader" aria-label="Where this questionnaire is">
+    <div class="steps-what" id="openQuestionnaire">
+      <span id="stepTitle">New questionnaire</span>
+      <span id="stepProduct"></span>
+      <button class="quiet" id="closeForm" hidden
+              title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
+    </div>
+    <ol class="step-list" id="stepList">
+      <li><button type="button" data-step="1"><span class="n">1</span><span class="name">Choose and load</span></button></li>
+      <li><button type="button" data-step="2"><span class="n">2</span><span class="name">Check what was found</span></button></li>
+      <li><button type="button" data-step="3"><span class="n">3</span><span class="name">Answer</span></button></li>
+      <li><button type="button" data-step="4"><span class="n">4</span><span class="name">Review</span></button></li>
+      <li><button type="button" data-step="5"><span class="n">5</span><span class="name">Fill and download</span></button></li>
+    </ol>
+  </nav>
+  <!-- A deleted product's questionnaire (plan 027), or one being answered on
+       the server (plan 029, 1.4): said for the whole questionnaire. -->
+  <div class="status" id="formReadOnly" role="status" hidden></div>
+  <!-- What reading said: found, reopened, closed, or why nothing was read. -->
+  <div class="status page-status" id="extractStatus"></div>
+
   <!-- Step 1 ------------------------------------------------------------ -->
   <!-- The Workbench opens on the questionnaire (plan 030). The knowledge base
        it answers from is managed on its own page, and is said in one line here. -->
-  <section class="step">
+  <section class="step" id="step1" data-step="1">
     <div class="step-head">
       <span class="step-number">1</span>
-      <h2>Load a questionnaire</h2>
+      <h2>Choose and load</h2>
+      <span class="step-held" id="step1Held"></span>
+      <button class="quiet step-toggle" id="step1Toggle" type="button" aria-controls="step1Body" aria-expanded="true">Fold</button>
     </div>
-    <p class="step-hint">
-      Drop in a questionnaire — a spreadsheet, a Word form or a PDF — or type questions
-      yourself. Check what was found, fix anything that came out wrong, then answer it.
-      A spreadsheet or Word form can be filled in and downloaded with the answers written
-      back into it.
-    </p>
+    <div class="step-body" id="step1Body">
+      <p class="step-hint">
+        Choose the product, then drop in a questionnaire — a spreadsheet, a Word form or a PDF.
+        It is read as soon as both are here. Or type the questions yourself, below.
+      </p>
 
-    <div class="panel">
-      <!-- Which product this questionnaire is answered for (plan 024): General,
-           or a product's knowledge base and answer memory beside the shared ones.
-           Chosen before reading a file or answering a list, never chosen for the
-           person, General included (plan 029, 2), and fixed once a questionnaire
-           is open (TD-040): to answer the file for another product, close it and
-           open it again with that product chosen. -->
-      <div class="row kb-scope" id="formProductRow" style="margin:0 0 12px">
-        <label class="product-chip unchosen" id="formProductChip">
-          <span class="dot" aria-hidden="true"></span>
-          <select id="formProduct" aria-label="Which product this questionnaire is for"
-                  aria-describedby="formProductHint">
-            <option value="" disabled selected>Product: choose…</option>
-            <option value="general">General (shared policies only)</option>
-          </select>
+      <div class="panel">
+        <!-- Which product this questionnaire is answered for (plan 024): General,
+             or a product's knowledge base and answer memory beside the shared ones.
+             Chosen before reading a file or answering a list, never chosen for the
+             person, General included (plan 029, 2), and fixed once a questionnaire
+             is open (TD-040): to answer the file for another product, close it and
+             open it again with that product chosen. -->
+        <div class="row kb-scope" id="formProductRow" style="margin:0 0 12px">
+          <label class="product-chip unchosen" id="formProductChip">
+            <span class="dot" aria-hidden="true"></span>
+            <select id="formProduct" aria-label="Which product this questionnaire is for"
+                    aria-describedby="formProductHint">
+              <option value="" disabled selected>Product: choose…</option>
+              <option value="general">General (shared policies only)</option>
+            </select>
+          </label>
+          <span id="formLastUsed"></span>
+          <span class="hint" id="formProductHint">Choose the product this questionnaire is for. General answers from
+            the shared policies only; a product adds its own policies and past answers.</span>
+        </div>
+        <!-- What the answers draw on, counted, following the product chosen
+             (plan 030). The documents are managed on the Knowledge base page. -->
+        <p class="kb-line" id="kbLine"><span id="kbLineText">Counting the documents answers are drawn from…</span>
+          · <a id="kbManage" href="knowledge"
+               title="Add, open and remove the documents answers are drawn from">Manage</a></p>
+        <!-- Reading starts as soon as a file and a product are both here (plan
+             033). A file given first waits in the page for the product: the
+             product is fixed when the questionnaire is made (D-018, TD-040), so
+             nothing is sent before one is chosen. -->
+        <label class="file" data-drop="assessment">
+          <input type="file" id="assessmentInput" accept=".xlsx,.xlsm,.docx,.pdf" />
+          Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
+          <span class="chosen" id="assessmentChosen"></span>
+          <span class="drop-for" id="dropFor"></span>
         </label>
-        <span id="formLastUsed"></span>
-        <span class="hint" id="formProductHint">Choose the product this questionnaire is for. General answers from
-          the shared policies only; a product adds its own policies and past answers.</span>
-        <button class="quiet" id="closeForm" hidden
-                title="Put this questionnaire away; it stays in “Or pick up”">Close questionnaire</button>
+        <div class="product-needed warn" id="readNeedsProduct" role="status" hidden></div>
+        <div class="already-open" id="alreadyOpen" role="group" aria-label="You already have this file" hidden></div>
+        <div class="adm-note form-recent" id="formRecent"></div>
       </div>
-      <!-- What the answers draw on, counted, following the product chosen
-           (plan 030). The documents are managed on the Knowledge base page. -->
-      <p class="kb-line" id="kbLine"><span id="kbLineText">Counting the documents answers are drawn from…</span>
-        · <a id="kbManage" href="knowledge"
-             title="Add, open and remove the documents answers are drawn from">Manage</a></p>
-      <!-- A deleted product's questionnaire (plan 027): read, filled and downloaded, never changed. -->
-      <div class="status" id="formReadOnly" role="status" hidden></div>
-      <label class="file" data-drop="assessment">
-        <input type="file" id="assessmentInput" accept=".xlsx,.xlsm,.docx,.pdf" />
-        Drop a questionnaire here, or click to choose — XLSX, DOCX or PDF
-        <span class="chosen" id="assessmentChosen"></span>
-      </label>
-      <div class="already-open" id="alreadyOpen" role="group" aria-label="You already have this file" hidden></div>
-      <div class="row">
-        <button class="ghost" id="extractBtn" disabled>Read questions from file</button>
-        <span class="product-needed warn" id="readNeedsProduct" hidden>Choose a product first.</span>
-      </div>
-      <div class="adm-note form-recent" id="formRecent"></div>
-      <div class="status" id="extractStatus"></div>
+    </div>
+  </section>
 
-      <details id="formReport" hidden>
-        <summary>What was found in the file</summary>
+  <!-- Step 2 ------------------------------------------------------------ -->
+  <!-- What the reader found in the file. Folded unless something was read
+       from the shape of a sheet rather than its headings: a wrong column means
+       answers written into the wrong cells, so that is checked before answering. -->
+  <section class="step" id="step2" data-step="2" hidden>
+    <div class="step-head">
+      <span class="step-number">2</span>
+      <h2>Check what was found</h2>
+      <span class="step-held" id="step2Held"></span>
+      <button class="quiet step-toggle" id="step2Toggle" type="button" aria-controls="step2Body" aria-expanded="false">Open</button>
+    </div>
+    <div class="step-body" id="step2Body" hidden>
+      <div class="panel" id="formReport" hidden>
         <div class="qn-parts" id="formPartsList"></div>
 
         <div id="formColumns"></div>
@@ -644,13 +794,24 @@
           rather than from its headings. If a column was taken for the wrong thing, the
           answers land in the wrong place — change it here before answering.
         </p>
-      </details>
+      </div>
     </div>
+  </section>
 
+  <!-- Step 3 ------------------------------------------------------------ -->
+  <section class="step" id="step3" data-step="3">
+    <div class="step-head">
+      <span class="step-number">3</span>
+      <h2>Answer</h2>
+      <span class="step-held" id="step3Held"></span>
+    </div>
     <div class="panel" id="questionListPanel">
       <div class="library-heading">
         <h3 id="questionListTitle">Questions</h3>
-        <button class="quiet danger" id="clearQuestions">Clear all</button>
+        <span class="heading-actions">
+          <button class="ghost changes-it" id="addQuestionBtn">+ Add a question</button>
+          <button class="quiet danger" id="clearQuestions">Clear all</button>
+        </span>
       </div>
       <p class="hint" id="questionListHint"></p>
 
@@ -659,41 +820,47 @@
         <div id="questionList"></div>
       </details>
 
-      <div class="row changes-it" style="margin-top:14px">
-        <button class="ghost" id="addQuestionBtn">+ Add a question</button>
-        <span class="divider"></span>
-        <select id="languageSelect" title="Output language">
-          <option value="">Answer in each question's own language</option>
-          <option value="en">Force English</option>
-          <option value="ar">Force Arabic — العربية</option>
-        </select>
-        <button id="answerBtn" disabled>Answer questions</button>
+      <!-- One Answer button, kept in view while the questions scroll, with the
+           progress; how the answers are written is under "More options". -->
+      <div class="answer-bar" id="answerBar">
+        <button id="answerBtn" class="changes-it" disabled>Answer questions</button>
         <span class="product-needed warn" id="answerNeedsProduct" hidden></span>
+        <details class="answer-options changes-it" id="answerOptions">
+          <summary>More options</summary>
+          <div class="row">
+            <select id="languageSelect" title="Output language">
+              <option value="">Answer in each question's own language</option>
+              <option value="en">Force English</option>
+              <option value="ar">Force Arabic — العربية</option>
+            </select>
+          </div>
+          <div class="row">
+            <input type="text" id="answerStyle" style="flex:1 1 320px;min-width:0"
+                   title="Applied as a rewording pass once the answers are written"
+                   placeholder="How should they be written? — optional, e.g. one sentence each, formal, no bullet points">
+          </div>
+          <p class="hint">Left blank, answers come out in the house style. Anything typed here is applied as a
+            rewording pass once the answers are written, so the facts and the citations are settled first and
+            only the wording follows the instruction.</p>
+        </details>
+        <div class="status" id="answerStatus"></div>
       </div>
-      <div class="row changes-it" style="margin-top:10px">
-        <input type="text" id="answerStyle" style="flex:1 1 320px;min-width:0"
-               title="Applied as a rewording pass once the answers are written"
-               placeholder="How should they be written? — optional, e.g. one sentence each, formal, no bullet points">
-      </div>
-      <p class="hint changes-it" style="margin:6px 0 0">Left blank, answers come out in the house style. Anything
-        typed here is applied as a rewording pass once the answers are written, so the facts and the
-        citations are settled first and only the wording follows the instruction.</p>
-      <div class="status" id="answerStatus"></div>
     </div>
   </section>
 
-  <!-- Step 2 ------------------------------------------------------------ -->
-  <section class="step" id="resultsCard" hidden>
+  <!-- Step 4 ------------------------------------------------------------ -->
+  <section class="step" id="resultsCard" data-step="4" hidden>
     <div class="step-head">
-      <span class="step-number">2</span>
-      <h2>Review and export</h2>
+      <span class="step-number">4</span>
+      <h2>Review</h2>
       <!-- The product the answers were written for, and approvals are filed
            under, in sight of whoever is approving (plan 029, 2). -->
       <span id="resultsProduct" class="results-product"></span>
+      <span class="step-held" id="step4Held"></span>
     </div>
-    <p class="step-hint">Read each answer, follow a citation to the exact clause it came from, and
-      edit anything you disagree with. The answers that need you come first; filling the original
-      file stays in the bar above them, and rewording and the downloads are past the last answer.</p>
+    <p class="step-hint">Read each answer, follow a source to the exact clause it came from, and
+      edit or accept it. The answers that need you come first; Fill and download stays in the bar
+      above them.</p>
 
     <div class="summary" id="resultsSummary"></div>
 
@@ -701,64 +868,82 @@
          every card below is showing, not only what the button will write. -->
     <div id="detailPick" class="pick-row" hidden></div>
 
-    <div class="status changes-it" style="margin-bottom:18px">Edits you make here are kept, and go into
+    <div class="status changes-it" style="margin-bottom:14px">Edits you make here are kept, and go into
       the filled file and every download.</div>
 
     <!-- The review queue (plan 029, 1.3): which answers to show, how many will
-         be written, and Fill, kept in reach while the answers scroll. -->
+         be written, and Fill and download, kept in reach while the answers scroll. -->
     <div class="review-bar" id="reviewBar" hidden>
       <div class="review-tabs" id="reviewTabs" role="group" aria-label="Show"></div>
       <div class="review-side">
         <span class="review-counts" id="reviewCounts" aria-live="polite"></span>
-        <button id="fillFormBtn" hidden title="Write the answers into the original file">Fill the original file</button>
+        <span class="review-counts" id="reviewDone" aria-live="polite"></span>
+        <button id="fillFormBtn" hidden title="Write the answers into the original file, and download it">Fill and download</button>
       </div>
       <div class="status review-status" id="reviewStatus" role="status"></div>
     </div>
-    <div class="qn-filled" id="formFilled" hidden></div>
+    <!-- Said once, in a line: the keys act only while nobody is typing (plan 033). -->
+    <p class="keys-hint" id="reviewKeys" hidden>Keys: <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>J</kbd> <kbd>K</kbd>
+      move between answers, <kbd>A</kbd> accepts, <kbd>E</kbd> edits, <kbd>Esc</kbd> closes the editor
+      and keeps what you typed.</p>
 
     <div id="results"></div>
+  </section>
 
-    <!-- Taking the answers out comes after reading them: these sit below the
-         cards so that reaching them means having scrolled past every one. -->
-    <div class="row" id="reviseRow" hidden style="margin:22px 0 14px">
-      <input type="text" id="reviseInstruction" style="flex:1 1 260px;min-width:0"
-             placeholder="Reword every answer — e.g. keep it to one sentence, be more formal">
-      <button class="ghost" id="reviseBtn">Reword the answers</button>
+  <!-- Step 5 ------------------------------------------------------------ -->
+  <section class="step" id="step5" data-step="5" hidden>
+    <div class="step-head">
+      <span class="step-number">5</span>
+      <h2>Fill and download</h2>
+      <span class="step-held" id="step5Held"></span>
     </div>
+    <p class="status" id="fillHint"></p>
+    <div class="qn-filled" id="formFilled" hidden></div>
 
-    <div class="toolbar" style="margin-top:14px">
-      <button class="ghost" id="exportJson">Download JSON</button>
-      <button class="ghost" id="exportCsv">Download CSV</button>
-      <button id="exportPdf">Download PDF</button>
-      <button id="exportDocx">Download Word</button>
-      <button class="ghost" id="retryFailed" hidden>Try failed questions again</button>
-      <span class="divider"></span>
-      <div class="pdf-options">
-        <span class="caption">PDF and Word include</span>
-        <label><input type="checkbox" id="pdfLowConfidence"> answers flagged for review</label>
-        <label><input type="checkbox" id="pdfCitations" checked> clause citations</label>
-        <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
-      </div>
-    </div>
+    <!-- Everything else that takes the answers out, or adds to them. -->
+    <details class="more" id="moreActions">
+      <summary>More: other downloads, rewording, another question</summary>
 
-    <div class="panel composer" id="composer">
-      <h3>Ask another question</h3>
-      <p class="hint">Answered questions stay above. Anything added here joins the same list, and only the unanswered ones are sent.</p>
-      <div id="composerPending"></div>
-      <textarea id="composerInput" rows="2" placeholder="Type a question and press Enter, or click Add"></textarea>
-      <div class="row" style="margin-top:11px">
-        <button class="ghost" id="composerAdd">+ Add to the list</button>
+      <div class="toolbar">
+        <button class="ghost" id="exportJson">Download JSON</button>
+        <button class="ghost" id="exportCsv">Download CSV</button>
+        <button id="exportPdf">Download PDF</button>
+        <button id="exportDocx">Download Word</button>
+        <button class="ghost" id="retryFailed" hidden>Try failed questions again</button>
         <span class="divider"></span>
-        <select id="composerLanguage" title="Output language">
-          <option value="">Answer in each question's own language</option>
-          <option value="en">Force English</option>
-          <option value="ar">Force Arabic — العربية</option>
-        </select>
-        <button id="composerAnswer" disabled>Answer questions</button>
-        <span class="product-needed warn" id="composerNeedsProduct" hidden></span>
+        <div class="pdf-options">
+          <span class="caption">PDF and Word include</span>
+          <label><input type="checkbox" id="pdfLowConfidence"> answers flagged for review</label>
+          <label><input type="checkbox" id="pdfCitations" checked> clause citations</label>
+          <label><input type="checkbox" id="pdfReasoning"> reasoning</label>
+        </div>
       </div>
-      <div class="status" id="composerStatus"></div>
-    </div>
+
+      <div class="row" id="reviseRow" hidden style="margin:14px 0">
+        <input type="text" id="reviseInstruction" style="flex:1 1 260px;min-width:0"
+               placeholder="Reword every answer — e.g. keep it to one sentence, be more formal">
+        <button class="ghost" id="reviseBtn">Reword the answers</button>
+      </div>
+
+      <div class="panel composer" id="composer">
+        <h3>Ask another question</h3>
+        <p class="hint">Answered questions stay above. Anything added here joins the same list, and only the unanswered ones are sent.</p>
+        <div id="composerPending"></div>
+        <textarea id="composerInput" rows="2" placeholder="Type a question and press Enter, or click Add"></textarea>
+        <div class="row" style="margin-top:11px">
+          <button class="ghost" id="composerAdd">+ Add to the list</button>
+          <span class="divider"></span>
+          <select id="composerLanguage" title="Output language">
+            <option value="">Answer in each question's own language</option>
+            <option value="en">Force English</option>
+            <option value="ar">Force Arabic — العربية</option>
+          </select>
+          <button id="composerAnswer" disabled>Answer questions</button>
+          <span class="product-needed warn" id="composerNeedsProduct" hidden></span>
+        </div>
+        <div class="status" id="composerStatus"></div>
+      </div>
+    </details>
   </section>
 </main>
 
@@ -1677,31 +1862,37 @@
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
-  // Wire a file input to its drop zone, chosen-file label and submit button.
-  // `paint`, when given, is the button's own rule, run instead of "a file is
-  // chosen": the questionnaire's Read also waits for a product (plan 029, 2).
-  function fileField(inputId, chosenId, buttonId, paint) {
-    const input = $(inputId), chosen = $(chosenId), button = $(buttonId);
+  /* The questionnaire's drop zone (plan 033). A file given here is read as
+     soon as a product is chosen too, with no second click; given first, it
+     waits in the page -- nothing is sent -- and the page says it is waiting.
+     The input is emptied once the file is taken, so the same file can be
+     given again, and a file read once is not read again by the next choice. */
+  function wireDropZone() {
+    const input = $("assessmentInput");
     const zone = input.closest("label.file");
 
-    function refresh() {
-      const names = Array.from(input.files).map((f) => f.name);
-      chosen.textContent = names.join(", ");
-      if (paint) paint();
-      else button.disabled = names.length === 0;
+    function arrived(file) {
+      hideAlreadyOpen();  // the offer was about the last file
+      if (!file) return;
+      heldFile = file;
+      input.value = "";
+      paintRead();
+      readWhenReady();
+      if (heldFile && !productChosen()) {
+        openStep(1);
+        $("formProduct").focus({ preventScroll: true });
+      }
     }
 
-    input.addEventListener("change", refresh);
-    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("drag"); });
+    input.addEventListener("change", () => arrived(input.files[0]));
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); if (!input.disabled) zone.classList.add("drag"); });
     zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
     zone.addEventListener("drop", (e) => {
       e.preventDefault();
       zone.classList.remove("drag");
-      input.files = e.dataTransfer.files;
-      refresh();
+      if (input.disabled) return;  // while answering, as the input itself
+      arrived(e.dataTransfer.files[0]);
     });
-
-    return input;
   }
 
   // --- document viewer -----------------------------------------------------
@@ -1810,6 +2001,201 @@
      hooks below are the three things a card does that differ per page. */
 
 
+  /* --- the steps (plan 033) ------------------------------------------------
+
+     Choose and load, check what was found, answer, review, fill and download.
+     Which step is in front of the person, which are done, and what each holds
+     are worked out from the page each time, as Read and Fill are: nothing here
+     is a flag to put back. Steps 1 and 2 fold once done, to one line saying
+     what they hold; the person can open or fold them, and that choice holds
+     for the questionnaire on the page. Step 3's list folds once there are
+     answers (plan 029, 1.3), and steps 4 and 5 are where the work ends up. */
+
+  /* Whether the reader read anything from the shape of a sheet rather than
+     its headings: step 2 is then open, to check before answering. */
+  function worthChecking(batch) {
+    return Boolean(batch) && (batch.parts || []).some((part) => part.findings.some((f) => !f.confident));
+  }
+
+  let stepChoice = { for: null, open: {} };  // the person's, for the questionnaire or list on the page
+  function stepKey() {
+    if (formBatch) return "q:" + formBatch.id;
+    return questions.length || (result && result.answers.length) ? "list" : "";
+  }
+  function stepChoices() {
+    const key = stepKey();
+    if (stepChoice.for !== key) stepChoice = { for: key, open: {} };
+    return stepChoice.open;
+  }
+  function chooseStep(step, open) { stepChoices()[step] = open; }
+  function stepSection(step) { return $(step === 4 ? "resultsCard" : "step" + step); }
+  function openStep(step, scroll) {
+    if (step === 1 || step === 2) chooseStep(step, true);
+    paintSteps();
+    const section = stepSection(step);
+    if (scroll && section && !section.hidden) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const plural = (count, word) => count + " " + word + (count === 1 ? "" : "s");
+  const answeredCount = () => (result ? result.answers.length : 0);
+
+  /* A product, and questions to answer. A file waiting, the offer of one
+     already open, or a file being read keep step 1 in front. */
+  function loadDone() { return Boolean(formBatch) || (questions.length > 0 && productChosen()); }
+  function step1Busy() { return Boolean(heldFile) || reading || !$("alreadyOpen").hidden; }
+
+  function needingReview() {
+    if (!answeredCount()) return 0;
+    const { queue, counted } = reviewCounts(result);
+    return queue ? counted.review : result.answers.filter((a) => a.error || a.needs_review || a.will_be_written === false).length;
+  }
+
+  function currentStep() {
+    if (!loadDone() || step1Busy()) return 1;
+    const answers = answeredCount();
+    const busy = answering || running();
+    if (formBatch && (!formBatch.counts.questions || (worthChecking(formBatch) && !answers && !busy))) return 2;
+    if (busy || !answers || (pendingQuestions().length && !needingReview())) return 3;
+    return needingReview() ? 4 : 5;
+  }
+
+  function stepsDone() {
+    const answers = answeredCount();
+    const busy = answering || running();
+    return {
+      1: loadDone() && !step1Busy(),
+      2: Boolean(formBatch && formBatch.counts.questions) && (!worthChecking(formBatch) || answers > 0 || busy),
+      3: answers > 0 && !pendingQuestions().length && !busy,
+      4: answers > 0 && !needingReview(),
+      5: Boolean(lastFill && lastFill.written),
+    };
+  }
+
+  function partsWord(batch) { return /\.xls[xm]$/i.test(batch.source_name || "") ? "sheet" : "part"; }
+  function partsUsed(batch) { return (batch.parts || []).filter((part) => part.used).length; }
+
+  /* "Msegat · vendor.xlsx · 120 questions in 3 sheets": the product, the file and what it holds. */
+  function loadSummary() {
+    const choice = formBatch ? Cards.choiceOf(formBatch.product_id) : formProduct();
+    const product = choice ? choiceName(choice) : "No product chosen";
+    if (formBatch) {
+      const count = formBatch.counts.questions;
+      return [product, formBatch.source_name, count
+        ? plural(count, "question") + " in " + plural(partsUsed(formBatch), partsWord(formBatch))
+        : "no questions were read"].join(" · ");
+    }
+    if (!questions.length) return product;
+    return [product, textSource, plural(questions.length, textSource ? "question" : "typed question")]
+      .filter(Boolean).join(" · ");
+  }
+
+  /* "Found 120 questions in 3 sheets", and how many readings are worth checking. */
+  function foundSummary(batch) {
+    if (!batch.counts.questions) return "No questions were read from " + batch.source_name;
+    const unsure = (batch.parts || []).reduce((total, part) => total + part.findings.filter((f) => !f.confident).length, 0);
+    return "Found " + plural(batch.counts.questions, "question") + " in " + plural(partsUsed(batch), partsWord(batch)) +
+      (unsure ? " · " + plural(unsure, "reading") + " worth checking" : "");
+  }
+
+  function answerSummary() {
+    const counted = questions.filter((q) => !q.skip);
+    if (!counted.length) return "";
+    if (answering) return "Answering…";
+    if (running()) return "Being answered on the server";
+    const answered = counted.filter((q) => q.status === "answered").length;
+    const pending = pendingQuestions().length;
+    return answered + " of " + counted.length + " answered" + (pending ? " · " + pending + " waiting" : "");
+  }
+
+  function reviewSummary() {
+    const answers = answeredCount();
+    if (!answers) return "";
+    const needs = needingReview();
+    return plural(answers, "answer") + (needs ? " · " + needs + " need review" : " · nothing needs review");
+  }
+
+  function fillSummary() {
+    if (!formBatch) return "No file to write into: the answers are downloaded";
+    if (!lastFill) return "Not filled yet";
+    return lastFill.because || ("Wrote " + plural(lastFill.written, "value") + " into " + lastFill.file +
+      (lastFill.held ? " · " + lastFill.held + " held back" : ""));
+  }
+
+  function paintStepFold(step, open, forced) {
+    const section = $("step" + step), body = $("step" + step + "Body"), toggle = $("step" + step + "Toggle");
+    section.classList.toggle("folded", !open);
+    body.hidden = !open;
+    toggle.hidden = forced;  // a step not yet done does not fold
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.textContent = open ? "Fold" : "Open";
+    toggle.title = open ? "Fold this step to one line" : "Open this step";
+  }
+
+  function paintSteps() {
+    if (!$("stepList")) return;
+    const choices = stepChoices();
+    const answers = answeredCount();
+    const current = currentStep();
+    const done = stepsDone();
+
+    const forced1 = !loadDone() || step1Busy();
+    paintStepFold(1, forced1 || (choices[1] !== undefined ? choices[1] : false), forced1);
+    $("step1Held").textContent = loadSummary();
+
+    $("step2").hidden = !formBatch;
+    if (formBatch) {
+      paintStepFold(2, choices[2] !== undefined ? choices[2] : worthChecking(formBatch) || !formBatch.counts.questions, false);
+      $("step2Held").textContent = foundSummary(formBatch);
+    }
+
+    $("step3").classList.toggle("way-in", !questions.length && !formBatch && !answers);
+    $("step3Held").textContent = answerSummary();
+    $("step4Held").textContent = reviewSummary();
+
+    $("step5").hidden = !answers;
+    $("step5Held").textContent = answers ? fillSummary() : "";
+    const hint = !formBatch
+      ? "These questions have no file to write into, so the answers are downloaded instead: PDF, Word, CSV or JSON, under More."
+      : lastFill ? ""
+      : "Fill and download, in the bar above the answers, writes them into " + formBatch.source_name +
+        " and downloads it. Answers nobody has confirmed are held back, and the report here says which and why.";
+    if ($("fillHint").textContent !== hint) $("fillHint").textContent = hint;
+    // A list has nothing to fill: its downloads are the way out, so they are open.
+    const more = $("moreActions");
+    if (more.dataset.paintedFor !== stepChoice.for) {
+      more.dataset.paintedFor = stepChoice.for;
+      more.open = choices.more !== undefined ? choices.more : !formBatch;
+    }
+
+    $("stepList").querySelectorAll("button[data-step]").forEach((button) => {
+      const step = Number(button.dataset.step);
+      const available = step === 1 || step === 3 || (step === 2 ? Boolean(formBatch) : answers > 0);
+      button.disabled = !available;
+      button.classList.toggle("done", Boolean(done[step]) && step !== current);
+      button.classList.toggle("skipped", step === 2 && !formBatch && questions.length > 0);
+      if (step === current) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
+      button.title = step === current ? "The step in front of you"
+        : !available ? (step === 2 ? "Only a file read as a questionnaire has anything to check" : "Not yet")
+        : done[step] ? "Done: open it again" : "";
+    });
+
+    $("stepTitle").textContent = formBatch ? formBatch.source_name
+      : textSource || (questions.length ? "Typed questions" : "New questionnaire");
+    const choice = formBatch ? Cards.choiceOf(formBatch.product_id) : formProduct();
+    const known = Cards.product(choice);
+    const said = choice + "|" + (known ? known.name + (known.deleted ? " deleted" : "") : "");
+    const shown = $("stepProduct");
+    if (shown.dataset.said !== said) {  // drawn again when the products arrive, or one is deleted
+      shown.dataset.said = said;
+      const tag = choice ? Cards.choiceTag(choice, "Answered for " + choiceName(choice)) : null;
+      shown.replaceChildren(...(tag ? [tag] : []));
+    }
+  }
+
+  /* A file read as text, a PDF's questions: it names the list in the steps. */
+  let textSource = "";
+
   /* --- the review queue (plan 029, 1.3) ------------------------------------
 
      Each answer is in one tab, by what the fill gate said of it on the server
@@ -1859,6 +2245,10 @@
     }
     $("reviewCounts").textContent = (counted.written + counted.person) + " will be written · " +
       counted.review + " need review";
+    /* How far the review has got (plan 033): the answers a person has done,
+       of those that needed one or have had one. An accept moves one across. */
+    const reviewable = counted.review + counted.person;
+    $("reviewDone").textContent = reviewable ? counted.person + " of " + reviewable + " reviewed" : "";
   }
 
   /* Each answer's tab, and how many each tab holds. The tabs are a
@@ -1905,6 +2295,14 @@
       if (tab !== "all" && buckets[index] !== tab) return;
       const card = Cards.render(item, index);
       card.dataset.key = item.__key || "";
+      /* For the keys (plan 033): which answer it is, where it is in the
+         file's order, and whether it is held. One card at a time takes Tab. */
+      card.dataset.index = String(index);
+      card.dataset.bucket = buckets[index] || "";
+      card.tabIndex = container.childElementCount ? -1 : 0;
+      card.setAttribute("role", "article");
+      card.setAttribute("aria-label", "Answer to question " + (item.question.id || index + 1) +
+        (buckets[index] === "review" ? ", needs review" : ""));
       container.append(card);
     });
     // A row set aside has no card; its own row, with "Include", is how it comes back.
@@ -1921,6 +2319,8 @@
     paintCounts(data, counted, queue, tab);
     refreshRetryAll();
     $("resultsCard").hidden = false;
+    $("reviewKeys").hidden = !container.querySelector(".answer");
+    paintSteps();
     // The caller scrolls when it is appending to a list the reader is already
     // looking at; a fresh run jumps straight to the answers.
     if (!options.keepQuestions) {
@@ -2235,6 +2635,7 @@
      during the run's rewording enabled it, and a fill could go out with
      wording about to change (plan 029's review). */
   let filling = false;
+  let lastFill = null;  // what the last fill of the open questionnaire wrote and held back (plan 033)
   function paintFill() {
     $("fillFormBtn").disabled = answering || running() || filling;
   }
@@ -2299,9 +2700,107 @@
       ? [...same.querySelectorAll("button")].find((button) => button.textContent === label && !button.hidden) : null;
     const target = control || same || shown[Math.min(position, shown.length - 1)];
     if (!target) return;
-    if (!control) target.tabIndex = -1;
+    if (target.matches(".answer")) rove(target);
+    else if (!control) target.tabIndex = -1;
     target.focus({ preventScroll: true });
   }
+
+  /* --- reviewing from the keyboard (plan 033) -------------------------------
+
+     While nobody is typing: up and down, or K and J, move between the cards;
+     A accepts the card in focus, as its Approve does, and the keyboard goes on
+     to the next answer still held; E opens its editor, and Esc closes it,
+     keeping what was typed, as leaving the editor always has. Keys with Ctrl,
+     Alt or Meta are the browser's, and are left to it. One card at a time
+     takes Tab, so the list is one stop on the way through the page. */
+  const reviewCards = () => [...$("results").querySelectorAll(":scope > .answer")];
+
+  function rove(card) {
+    reviewCards().forEach((other) => { other.tabIndex = other === card ? 0 : -1; });
+  }
+
+  function focusCard(card) {
+    if (!card) return;
+    rove(card);
+    card.focus({ preventScroll: true });
+    card.scrollIntoView({ block: "nearest" });
+  }
+
+  function moveBetweenCards(from, step) {
+    const cards = reviewCards();
+    if (!cards.length) return;
+    const at = cards.indexOf(from);
+    focusCard(at < 0 ? cards[step > 0 ? 0 : cards.length - 1]
+      : cards[Math.max(0, Math.min(cards.length - 1, at + step))]);
+  }
+
+  /* After an accept: the next held answer after it in the file's order, else
+     the first still held. In "Needs review" the accepted card has gone; in
+     "All" it stays, accepted, and the keyboard leaves it. */
+  function focusNextHeld(index) {
+    const held = reviewCards().filter((card) => card.dataset.bucket === "review");
+    const next = held.find((card) => Number(card.dataset.index) > index) || held[0];
+    if (next) focusCard(next);
+  }
+
+  async function acceptByKey(card) {
+    const index = Number(card.dataset.index);
+    const item = result && result.answers[index];
+    const approve = card.querySelector('[data-card-action="approve"]');
+    if (!item || !approve || approve.disabled || item.approved || item.error || Cards.readOnly) return;
+    await approveAnswer(item, index, true);
+    focusNextHeld(index);
+  }
+
+  function editByKey(card) {
+    const edit = card.querySelector('[data-card-action="edit"]');
+    if (edit && !edit.hidden && edit.dataset.editing !== "true") edit.click();
+  }
+
+  /* Esc in a card's editor: left, so the edit is saved as any leaving saves
+     it, then closed, and the keyboard is back on the card. */
+  function closeEditorByKey(editor, card) {
+    const edit = card.querySelector('[data-card-action="edit"]');
+    if (!edit) return;
+    editor.blur();
+    if (edit.dataset.editing === "true") edit.click();
+    focusCard(card.isConnected ? card : reviewCards()[0]);
+  }
+
+  const TYPING = "input, textarea, select, [contenteditable]:not([contenteditable='false'])";
+  function typingIn(node) {
+    return Boolean(node && node.nodeType === 1 && (node.closest(TYPING) || node.isContentEditable));
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
+    const target = event.target;
+    const inCard = target && target.nodeType === 1 ? target.closest("#results > .answer") : null;
+    if (event.key === "Escape") {
+      if (inCard && target.tagName === "TEXTAREA") { event.preventDefault(); closeEditorByKey(target, inCard); }
+      return;
+    }
+    if (typingIn(target)) return;  // never while a person is typing, anywhere
+    if ($("resultsCard").hidden || document.querySelector("dialog[open]") || searchIsOpen() ||
+        $("adminDrawer").classList.contains("open")) return;
+    let key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    // On an Arabic keyboard the J key types a letter of its own: the key's place says which it is.
+    if (key.length === 1 && !/[a-z]/.test(key) && /^Key[A-Z]$/.test(event.code || "")) key = event.code.slice(3).toLowerCase();
+    const arrow = key === "ArrowDown" || key === "ArrowUp";
+    // The arrows move between cards only from a card: elsewhere they scroll the page.
+    if (arrow && !inCard) return;
+    if (key === "j" || key === "ArrowDown" || key === "k" || key === "ArrowUp") {
+      if (!reviewCards().length) return;
+      event.preventDefault();
+      moveBetweenCards(inCard, key === "j" || key === "ArrowDown" ? 1 : -1);
+    } else if (key === "a" && inCard) {
+      event.preventDefault();
+      acceptByKey(inCard);
+    } else if (key === "e" && inCard) {
+      event.preventDefault();
+      editByKey(inCard);
+    }
+  });
 
   /* One answer as the server now has it, and the counts with it; the cards
      are left as drawn until the next draw. */
@@ -2493,10 +2992,13 @@
     // without uploading a file.
     $("questionListPanel").hidden = false;
     $("clearQuestions").hidden = questions.length === 0;
+    // Before anything is loaded this panel is the other way in, under step 1 (plan 033).
+    const wayIn = !questions.length && !formBatch;
     $("questionListTitle").textContent = questions.length
-      ? "Questions (" + questions.length + ")" : "Questions";
+      ? "Questions (" + questions.length + ")" : wayIn ? "Or type the questions yourself" : "Questions";
     paintFold();
-    $("questionListHint").textContent = !questions.length
+    $("questionListHint").textContent = wayIn ? ""
+      : !questions.length
       ? "Read them from a file above, or write your own — you do not need a file to ask a question."
       : running()
         ? answered + " answered so far. Being answered on the server: editing opens when it finishes."
@@ -2589,6 +3091,7 @@
       choose.textContent = "Choose…";
       choose.title = "Go to the Product box";
       choose.onclick = () => {
+        openStep(1);
         $("formProduct").scrollIntoView({ behavior: "smooth", block: "center" });
         $("formProduct").focus({ preventScroll: true });
       };
@@ -2606,25 +3109,44 @@
      PDF, or a Word file with nowhere to write, falls back to pulling the
      questions out as text. Either way the same list appears below and the same
      answering runs; only the option to write the file back differs. */
-  async function extractQuestions() {
-    const input = $("assessmentInput");
-    if (!input.files.length) return;
-    await readQuestionnaire(input.files[0], false);
+  /* The file given and not yet read: it waits for a product (plan 033). */
+  let heldFile = null;
+  let readingFile = null;  // the file being read, named in the drop zone until it is open
+
+  /* Reading starts when a file and a product are both here: on the file, on
+     the choice, and when a read before it has finished. Never while a file is
+     being read or questions answered. */
+  function readWhenReady() {
+    if (!heldFile || !productChosen() || reading || answering) return;
+    const file = heldFile;
+    heldFile = null;
+    readQuestionnaire(file, false);
   }
 
-  /* Read waits for a file and a product, and while a file is being read or
-     questions answered; it names the product the file will be opened for,
-     which is the open questionnaire's while one is open (plan 029, 2). Worked
-     out from the page each time, never put back. */
+  /* What the drop zone says a file is read for, and the file waiting for a
+     product; the product named is the open questionnaire's while one is open
+     (plan 029, 2). Worked out from the page each time, never put back. */
   let reading = false;
   function paintRead() {
-    const button = $("extractBtn");
-    const file = $("assessmentInput").files.length > 0;
     const chosen = productChosen();
-    button.disabled = !file || !chosen || reading || answering;
-    button.textContent = chosen ? "Read questions for " + choiceName(formProduct()) : "Read questions from file";
-    $("readNeedsProduct").hidden = !(file && !chosen);
+    const input = $("assessmentInput");
+    input.closest("label.file").classList.toggle("disabled", input.disabled);
+    const showing = readingFile || heldFile;
+    $("assessmentChosen").textContent = showing ? showing.name : "";
+    $("dropFor").textContent = reading ? ""
+      : formBatch
+        ? "Another file opens as a new questionnaire for " + choiceName(formProduct()) +
+          "; " + formBatch.source_name + " stays in “Or pick up”."
+        : chosen
+          ? "Read for " + choiceName(formProduct()) + " as soon as it is here."
+          : "Choose the product first; a file given now waits for it.";
+    const waiting = $("readNeedsProduct");
+    const wait = Boolean(heldFile) && !chosen;
+    waiting.hidden = !wait;
+    const said = wait ? heldFile.name + " is waiting for the product: choose one above, and it is read straight away." : "";
+    if (waiting.textContent !== said) waiting.textContent = said;
     paintAlreadyOpen();
+    paintSteps();
   }
 
   /* `fresh` opens a new questionnaire even when this person already has one
@@ -2633,11 +3155,12 @@
     // Any file, a PDF included, waits for a product: one rule, here so that
     // every way in keeps it. "Start fresh" skipped it, and opened the file as
     // General under "Product: choose…" (plan 029, 2, and its review).
-    if (!productChosen()) { paintRead(); $("formProduct").focus(); return; }
+    if (!productChosen()) { heldFile = file; paintRead(); openStep(1); $("formProduct").focus(); return; }
     const suffix = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
     hideAlreadyOpen();
 
     reading = true;
+    readingFile = file;
     paintRead();
     setStatus($("extractStatus"), "Reading " + file.name + "…", "busy");
 
@@ -2648,11 +3171,16 @@
       why = form ? form.why : "";
       await loadAsText(file);
     } catch (error) {
-      if (error.code === "product_not_found") await productGone($("extractStatus"), "the file was not opened for it");
-      else setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
+      if (error.code === "product_not_found") {
+        // Refused before anything was kept: the file waits for another choice.
+        if (!heldFile) heldFile = file;
+        await productGone($("extractStatus"), "the file was not opened for it");
+      } else setStatus($("extractStatus"), error.message + (why ? "\n" + why : ""), "error");
     } finally {
       reading = false;
+      readingFile = null;
       paintRead();
+      readWhenReady();  // a file given while this one was read
     }
   }
 
@@ -2699,25 +3227,7 @@
     const open = closed.concat(others.filter((form) => !closed.length || form.id !== lastClosed.id));
     line.replaceChildren();
     if (!open.length) return;
-    const buttons = open.map((form) => {
-      const link = document.createElement("button");
-      link.className = "quiet";
-      link.textContent = form.source_name +
-        (form.answered ? " (" + form.answered + " answered)" : "");
-      const product = Cards.productBadge(form.product_id);
-      if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
-      const changed = form.updated_at || form.created_at;
-      if (changed) {
-        const when = document.createElement("span");
-        when.className = "recent-when";
-        when.textContent = "changed " + new Date(changed).toLocaleString(undefined,
-          { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-        link.append(when);
-        link.title = "Last changed " + new Date(changed).toLocaleString();
-      }
-      link.onclick = () => reopenForm(form.id);
-      return link;
-    });
+    const buttons = open.map(pickUpButton);
     if (buttons.length <= 3) {
       line.append(document.createTextNode("Or pick up: "));
       buttons.forEach((link, index) => {
@@ -2735,6 +3245,28 @@
     if (forms.length >= RECENT_LIMIT) {
       line.append(document.createTextNode("Showing the " + RECENT_LIMIT + " most recently changed."));
     }
+  }
+
+  /* One questionnaire in "Or pick up": its name, how much is answered, its
+     product and when it last changed; a click opens it. */
+  function pickUpButton(form) {
+    const link = document.createElement("button");
+    link.className = "quiet";
+    link.textContent = form.source_name +
+      (form.answered ? " (" + form.answered + " answered)" : "");
+    const product = Cards.productBadge(form.product_id);
+    if (product) { product.style.marginInlineStart = "6px"; link.append(product); }
+    const changed = form.updated_at || form.created_at;
+    if (changed) {
+      const when = document.createElement("span");
+      when.className = "recent-when";
+      when.textContent = "changed " + new Date(changed).toLocaleString(undefined,
+        { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      link.append(when);
+      link.title = "Last changed " + new Date(changed).toLocaleString();
+    }
+    link.onclick = () => reopenForm(form.id);
+    return link;
   }
 
   /* The open questionnaire is in the address, `?q=<id>`, so a reload or a
@@ -2777,6 +3309,8 @@
   }
 
   async function reopenForm(id) {
+    // A file waiting for a product is not read for this questionnaire's: picking one up lets it go.
+    heldFile = null;
     setStatus($("extractStatus"), "Opening…", "busy");
     try {
       await adoptBatch(await request("/api/forms/" + id));
@@ -2830,6 +3364,7 @@
     $("alreadyOpen").hidden = true;
     $("alreadyOpen").replaceChildren();
     $("alreadyOpen").removeAttribute("aria-describedby");
+    paintSteps();
   }
 
   /* The box follows the Product box, as Read does: "Start fresh" is for the
@@ -2903,6 +3438,7 @@
     panel.append(choices);
     paintAlreadyOpen();
     panel.hidden = false;
+    paintSteps();  // step 1 holds the choice, and opens for it
     /* The choice is where the keyboard goes, and the sentence is what the
        group says when it gets there: it appeared silently, and a screen
        reader heard nothing after "Read questions from file" (plan 029's review). */
@@ -2925,6 +3461,7 @@
     }
     const sameFile = formBatch && formBatch.id === batch.id;
     formBatch = batch;
+    textSource = "";
     rememberInAddress(batch.id);
     hideAlreadyOpen();
     // Being answered on the server, by a run this page is not itself waiting
@@ -3060,6 +3597,7 @@
     refreshFormControls();
     data.questions.forEach((q) => addQuestion(q.text, q));
     sourceName = data.source_name || sourceName;
+    textSource = data.source_name || file.name;
     setStatus($("extractStatus"),
       "Found " + data.questions.length + " question(s) in " + data.source_name +
       ". This file cannot be written back into, so the answers are exported instead.", "ok");
@@ -3074,13 +3612,14 @@
   function renderFormReport(batch) {
     const report = $("formReport");
     report.hidden = false;
-    /* Opened for a reading worth checking, but only when a different file
-       arrives. Correcting a column re-renders this, and recomputing the state
-       there closed the panel under the person working in it -- every correction
-       makes the findings more confident, so the last one shut the drawer. */
+    /* Step 2 is opened for a reading worth checking, or for a file nothing was
+       read from, but only when a different file arrives. Correcting a column
+       re-renders this, and recomputing the state there closed the panel under
+       the person working in it -- every correction makes the findings more
+       confident, so the last one shut the drawer. */
     if (reportedBatch !== batch.id) {
       reportedBatch = batch.id;
-      report.open = batch.parts.some((part) => part.findings.some((f) => !f.confident));
+      chooseStep(2, worthChecking(batch) || !batch.counts.questions);
     }
 
     $("formPartsList").replaceChildren.apply($("formPartsList"), batch.parts.map((part) => {
@@ -3277,7 +3816,7 @@
     paintFill();
     $("reviewBar").hidden = !(formBatch && result && result.answers.length);
     $("reviseRow").hidden = !(result && result.answers.length);
-    describeFormProduct();
+    describeFormProduct();  // and with it the steps
   }
 
   let sourceName = "questions";
@@ -3419,9 +3958,20 @@
 
   /* What filling the last questionnaire said, and its download: they go with it. */
   function forgetFilling() {
+    lastFill = null;
     $("formFilled").hidden = true;
     $("formFilled").replaceChildren();
     setStatus($("composerStatus"), "");
+  }
+
+  /* The filled file, downloaded. A link with `download`, not a change of the
+     page's address: that asked "Leave site?" of anyone with typed questions,
+     for a download that leaves nothing. */
+  function downloadFilled(id) {
+    const link = Object.assign(document.createElement("a"), { href: "/api/forms/" + id + "/file", download: "" });
+    document.body.append(link);
+    link.click();
+    link.remove();
   }
 
   /* Into view just under the page header and the review bar. Both stick to
@@ -3463,6 +4013,10 @@
       panel.hidden = false;
       const blanks = Object.keys(filled.blank || {}).length;
       const refused = Object.keys(filled.skipped || {}).length;
+      if (formBatch && formBatch.id === id) {
+        lastFill = { written: filled.written, file: filled.file, because: filled.because,
+                     held: Object.keys(filled.held_back || {}).length };
+      }
       panel.replaceChildren();
       const line = document.createElement("div");
       /* Zero is not a quiet success. "Wrote 0 value(s) — every other part of
@@ -3492,7 +4046,7 @@
         const note = document.createElement("div");
         note.className = "blanks held-note";
         note.textContent = heldCount + " answer(s) were held back because nobody has " +
-          "confirmed them. Open them below to edit or approve, or write them in as they are.";
+          "confirmed them. Edit or approve them in Review, or write them in as they are.";
         if (result && formBatch && formBatch.id === id) {
           const show = document.createElement("button");
           show.className = "quiet";
@@ -3502,7 +4056,10 @@
           show.onclick = () => {
             reviewTab = "review";
             renderResult(result, { keepQuestions: true });
-            scrollUnderTheBar(panel);  // the report, and the answers it is about right below it
+            // The answers it is about, in Review above, the first of them in focus.
+            const first = reviewCards()[0];
+            if (first) focusCard(first);
+            else $("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
           };
           note.append(show);
         }
@@ -3550,17 +4107,23 @@
           "so nothing was written for them — export them instead.";
         panel.append(note);
       }
-      // Nothing was written, so there is no filled file to offer.
+      /* Fill and download are one action (plan 033): what was written is
+         downloaded straight away, and can be again. Nothing was written, so
+         there is no filled file to offer. */
       if (filled.written) {
+        const going = document.createElement("div");
+        going.className = "blanks downloading";
+        going.textContent = filled.file + " is downloading.";
+        line.after(going);  // under what was written into it
         const download = document.createElement("button");
         download.className = "primary";
         download.style.marginTop = "10px";
-        download.textContent = "Download the filled file";
-        download.addEventListener("click", () => {
-          window.location.href = "/api/forms/" + id + "/file";
-        });
+        download.textContent = "Download the filled file again";
+        download.addEventListener("click", () => downloadFilled(id));
         panel.append(download);
+        downloadFilled(id);
       }
+      paintSteps();
       scrollUnderTheBar(panel);  // wherever the person was when they clicked
     } catch (error) {
       setStatus($("answerStatus"), error.message, "error");
@@ -3902,10 +4465,20 @@
 
 
 
-  fileField("assessmentInput", "assessmentChosen", "extractBtn", paintRead);  // a file and a product (plan 029, 2)
-  // Another file chosen: the offer was about the last one.
-  $("assessmentInput").addEventListener("change", hideAlreadyOpen);
-  $("assessmentInput").closest("label.file").addEventListener("drop", hideAlreadyOpen);
+  wireDropZone();  // read as soon as a file and a product are both here (plan 033)
+
+  // The steps: the header opens each one, and steps 1 and 2 fold and open (plan 033).
+  $("stepList").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-step]");
+    if (button && !button.disabled) openStep(Number(button.dataset.step), true);
+  });
+  [1, 2].forEach((step) => {
+    $("step" + step + "Toggle").onclick = () => {
+      chooseStep(step, $("step" + step + "Body").hidden);
+      paintSteps();
+    };
+  });
+  $("moreActions").addEventListener("toggle", () => { chooseStep("more", $("moreActions").open); });
 
   $("answerBtn").onclick = () => answerPending("answerStatus");
   $("composerAnswer").onclick = () => answerPending("composerStatus");
@@ -3933,7 +4506,6 @@
   const syncLanguage = (from, to) => { $(to).value = $(from).value; };
   $("languageSelect").onchange = () => syncLanguage("languageSelect", "composerLanguage");
   $("composerLanguage").onchange = () => syncLanguage("composerLanguage", "languageSelect");
-  $("extractBtn").onclick = extractQuestions;
   $("questionListFold").addEventListener("toggle", paintFoldSummary);
   $("questionListSummary").addEventListener("click", () => { foldChosenFor = formBatch ? formBatch.id : ""; });
   $("addQuestionBtn").onclick = () => {
@@ -3953,6 +4525,7 @@
     if (!confirm(warning)) return;
     questions = [];
     result = null;
+    textSource = "";
     unsavedEdits.clear();
     $("results").innerHTML = "";
     $("resultsCard").hidden = true;
@@ -4115,6 +4688,7 @@
     showFormProduct(choice);
     refreshAnswerButton();
     $("formProduct").focus();  // the button has gone; the keyboard stays by the choice it made
+    readWhenReady();
   }
 
   /* The team's products, again. Returns the name of the product the selector
@@ -4157,6 +4731,7 @@
   $("formProduct").onchange = () => {
     describeFormProduct();
     refreshAnswerButton();
+    readWhenReady();  // a file waiting for a product is read for this one (plan 033)
   };
 
   /* A deleted product's questionnaire: kept so its answers can be read and its
@@ -4322,6 +4897,8 @@
       created_at: closed.created_at, updated_at: closed.updated_at, answered: (closed.counts || {}).answered || 0,
     };
     formBatch = null;
+    textSource = "";
+    heldFile = null;  // the next file is given, and read, for the next product
     rememberInAddress("");
     hideAlreadyOpen();
     stopFollowing();  // the run carries on on the server, and the questionnaire reopens with it
@@ -4396,9 +4973,18 @@
   (function stickBelowTheHeader() {
     const topbar = document.querySelector(".topbar");
     if (!topbar) return;
-    const measure = () => document.documentElement.style.setProperty("--topbar-height", topbar.offsetHeight + "px");
+    const bar = $("reviewBar");
+    const measure = () => {
+      document.documentElement.style.setProperty("--topbar-height", topbar.offsetHeight + "px");
+      // A card the keys move to is scrolled to below the bar, not under it (plan 033).
+      document.documentElement.style.setProperty("--review-bar-height", (bar.hidden ? 0 : bar.offsetHeight) + "px");
+    };
     measure();
-    if (window.ResizeObserver) new ResizeObserver(measure).observe(topbar);
+    if (window.ResizeObserver) {
+      const watch = new ResizeObserver(measure);
+      watch.observe(topbar);
+      watch.observe(bar);
+    }
   })();
 
   /* Leaving with work only this page holds asks first (plan 029, 1.5): an

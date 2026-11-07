@@ -14,7 +14,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from playwright.sync_api import Page, expect
 
-from src import conversations, identity, knowledge, products, tools
+from src import batches, conversations, identity, knowledge, products, tools
 from src.agents import assistant
 from src.config import settings
 from tests import forms_fixtures as shapes
@@ -81,7 +81,7 @@ def test_a_deleted_products_questionnaire_is_shown_read_only_and_can_still_be_fi
         "#detailPick",
         "#reviseRow",
         "#composer",
-        "#extractBtn",
+        'label.file[data-drop="assessment"]',  # plan 033: the file is read when given; no Read button
     ):
         expect(page.locator(control)).to_be_hidden()
     expect(page.locator("#questionList .qactions button")).to_have_count(0)
@@ -108,10 +108,13 @@ def test_a_deleted_products_questionnaire_is_shown_read_only_and_can_still_be_fi
     expect(selector).to_be_enabled()
     expect(selector).to_have_value("")  # nothing chosen since plan 029 (D-022), not General
     expect(selector.locator("option", has_text="(deleted)")).to_have_count(0)
-    expect(page.locator("#answerBtn")).to_be_visible()
+    # Changed on purpose by plan 033: with nothing open, Answer is not shown until there is
+    # something to answer; "+ Add a question" shows the page is no longer read-only.
+    expect(page.locator("#addQuestionBtn")).to_be_visible()
     expect(page.locator("#formLastUsed button")).to_have_count(0)  # a deleted product is never offered
     page.set_input_files("#assessmentInput", str(shapes.simple(tmp_path / "next.xlsx")))
-    expect(page.locator("#extractBtn")).to_be_disabled()  # the next file waits for a product
+    expect(page.locator("#readNeedsProduct")).to_be_visible()  # the next file waits for a product
+    assert len(batches.recent(TEAM)) == 1, "and is not read"
 
 
 def test_a_questionnaire_open_when_its_product_is_deleted_turns_read_only(

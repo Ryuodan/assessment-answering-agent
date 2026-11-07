@@ -38,6 +38,10 @@
    coloured by that status; the score is secondary. Where the server has said
    whether the fill writes an answer (`will_be_written`), the card says the
    same; elsewhere it applies the server's own rule with that threshold.
+
+   A page that drives the cards from the keyboard (the Workbench, plan 033)
+   finds a card's controls by `data-card-action`: "approve" and "edit", the
+   latter with `data-editing` while its editor is open.
 */
 
 const Cards = (window.Cards = {
@@ -577,10 +581,16 @@ const Cards = (window.Cards = {
     const editor = document.createElement("textarea");
     const toggle = document.createElement("button");
     toggle.className = "quiet";
+    toggle.dataset.cardAction = "edit";  // what a page's keys press (plan 033)
 
+    /* The card's controls, in one row at the end of the label (plan 033):
+       approve, edit, leave blank, then the length. Tags stay by the label. */
     const grow = document.createElement("span");
     grow.className = "grow";
-    field.querySelector(".field-label").append(grow, toggle);
+    const controls = document.createElement("span");
+    controls.className = "card-controls";
+    controls.append(toggle);
+    field.querySelector(".field-label").append(grow, controls);
 
     const paint = () => {
       const text = Cards.shownAnswer(item, index).text;
@@ -658,7 +668,7 @@ const Cards = (window.Cards = {
         const approved = document.createElement("span");
         approved.className = "tag";
         approved.textContent = "approved";
-        field.querySelector(".field-label").append(approved);
+        grow.before(approved);
       }
       toggle.hidden = true;
       editor.readOnly = true;
@@ -705,7 +715,7 @@ const Cards = (window.Cards = {
         lengths.append(button);
         return button;
       });
-      field.querySelector(".field-label").append(lengths);
+      controls.append(lengths);
     }
 
     /* Approving is the other half of editing: an answer that is right as
@@ -733,8 +743,9 @@ const Cards = (window.Cards = {
             ? "Accept this answer as it stands, so it goes into the file. It is not added to the answer memory: nobody has changed a word of it."
             : "Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.";
       approve.dataset.mutates = "true";
+      approve.dataset.cardAction = "approve";  // what a page's A key presses (plan 033)
       approve.onclick = () => Cards.onApprove(item, index, !item.approved);
-      field.querySelector(".field-label").append(approve);
+      controls.prepend(approve);  // first in the row: the decision a review is for
 
       /* The second effect, on the card rather than in a message that scrolls
          away: this wording is what the next questionnaire asking this question
@@ -745,7 +756,7 @@ const Cards = (window.Cards = {
         kept.className = "tag memory";
         kept.textContent = "in the answer memory";
         kept.title = "Your wording is saved. The next questionnaire asking this is answered from it.";
-        field.querySelector(".field-label").append(kept);
+        grow.before(kept);
       }
     }
 
@@ -757,7 +768,7 @@ const Cards = (window.Cards = {
       blank.className = "quiet";
       blank.textContent = item.blanked ? "Write an answer" : "Leave blank";
       blank.onclick = () => Cards.onBlank(item, index, !item.blanked);
-      field.querySelector(".field-label").append(blank);
+      toggle.after(blank);
     }
 
     /* The editor holds the text the card shows: the brief on a brief card, and
@@ -787,6 +798,7 @@ const Cards = (window.Cards = {
       rendered.hidden = editing;
       editor.hidden = !editing;
       toggle.textContent = editing ? "Done editing" : "Edit";
+      toggle.dataset.editing = String(editing);
       if (editing) { editor.focus(); } else { paint(); }
     };
 
@@ -963,10 +975,18 @@ const Cards = (window.Cards = {
     });
   }
 
+  /* The sources as one row of chips, each opening its clause; the label is
+     the row's first word rather than a line of its own (plan 033). */
   function citationsField(item) {
-    const field = labelledField("Sources cited — click to read the clause", "accent");
+    const field = document.createElement("div");
+    field.className = "field sources-field";
     const cites = document.createElement("div");
     cites.className = "cites";
+    const label = document.createElement("span");
+    label.className = "field-label accent cites-label";
+    label.textContent = "Sources";
+    label.title = "Click a source to read the clause it names";
+    cites.append(label);
     const panel = document.createElement("div");
     panel.className = "cite-panel";
     panel.hidden = true;
@@ -1053,7 +1073,8 @@ const Cards = (window.Cards = {
        this corpus runs to six lines of bold text, which pushes the answer --
        the thing the card is about -- below the fold, and strands the confidence
        meter at the top of an empty column. So a long question is clamped to
-       three lines with a control to see the rest.
+       two lines (three until plan 033 made the cards smaller) with a control
+       to see the rest.
 
        Whether it needs clamping is measured after layout rather than guessed
        from a character count: the same two hundred characters are two lines on
