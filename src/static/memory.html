@@ -218,7 +218,7 @@
 
 <div class="topbar">
   <div class="brand">
-    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-mark" aria-hidden="true" data-no-translate>A</div>
     <div class="brand-text">
       <h1>Answer memory</h1>
       <p>What your team has said before, and which of it still stands</p>
@@ -322,6 +322,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   const gate = $("authGate"), form = $("authForm"), error = $("authError");
 
   function apply(session) {
@@ -350,13 +351,15 @@
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.textContent = body.detail
+          ? I18n.error({ message: body.detail, code: body.code })
+          : t("That did not work. Check the address and try again.");
         error.hidden = false;
         return;
       }
       window.location.reload();
     } catch (e) {
-      error.textContent = "Could not reach the server.";
+      error.textContent = t("Could not reach the server.");
       error.hidden = false;
     } finally {
       $("authSubmit").disabled = false;
@@ -374,6 +377,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   const PAGE = 50;
   let offset = 0;
   let total = 0;
@@ -409,14 +413,18 @@
       const detail = body && body.detail;
       // Validation failures arrive as a list; a person needs the sentence.
       const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
-      throw new Error(said || ("Request failed (" + response.status + ")"));
+      const failure = new Error(said || t("Request failed ({status})", { status: response.status }));
+      failure.code = body && body.code;  // for I18n.error's Arabic by the code (plan 038)
+      throw failure;
     }
     return body;
   }
 
+  /* A message is a string, or the nodes withContent() made of a sentence with names in it. */
   function say(node, message, kind) {
     node.className = "status" + (kind ? " " + kind : "");
-    node.textContent = message;
+    if (message instanceof Node) node.replaceChildren(message);
+    else node.textContent = message;
   }
 
   function when(value) {
@@ -426,26 +434,69 @@
 
   // Half this corpus is Arabic. Left-to-right is not a neutral default for it:
   // an Arabic answer laid out LTR puts its punctuation at the wrong end and
-  // reads as broken to the person who wrote it.
+  // reads as broken to the person who wrote it. The rest finds its own
+  // direction, so an English answer reads left to right on an Arabic page.
   const ARABIC = /[؀-ۿ]/;
   function withDirection(node, text) {
-    if (ARABIC.test(text || "")) node.dir = "rtl";
+    node.dir = ARABIC.test(text || "") ? "rtl" : "auto";
     return node;
+  }
+
+  /* Content inside the interface's own sentence (plan 038): a question, an
+     answer, a file's or a product's name, an address. It stays as it was
+     written, in its own direction, and is never translated.
+     `withContent(t("added by {name}"), { name })` draws the translated
+     sentence with each {name} in `content` put in as content. */
+  function asContent(value) {
+    const span = document.createElement("span");
+    span.setAttribute("data-no-translate", "");
+    span.dir = "auto";
+    span.textContent = String(value);
+    return span;
+  }
+  function withContent(sentence, content) {
+    const drawn = document.createDocumentFragment();
+    sentence.split(/(\{\w+\})/).forEach((part) => {
+      const name = /^\{(\w+)\}$/.exec(part);
+      if (name && name[1] in content) drawn.append(asContent(content[name[1]]));
+      else if (part) drawn.append(part);
+    });
+    return drawn;
+  }
+  function contentText(node, text) {
+    node.setAttribute("data-no-translate", "");
+    node.textContent = text;
+    return withDirection(node, text);
+  }
+  function productOption(name, id) {
+    const option = new Option(name, id);
+    option.setAttribute("data-no-translate", "");  // a product's name is content
+    option.dir = "auto";
+    return option;
+  }
+  /* The parts of a line that are there, with " · " between them, as join(" · ") wrote them. */
+  function joined(parts) {
+    const drawn = [];
+    parts.filter(Boolean).forEach((part, index) => {
+      if (index) drawn.push(" · ");
+      drawn.push(part);
+    });
+    return drawn;
   }
 
   // --- the counts ----------------------------------------------------------
 
   function drawCounts(stats) {
     const cells = [
-      { n: stats.standing, label: "in use" },
-      { n: stats.superseded, label: "replaced" },
-      { n: (stats.by_origin || {}).approved || 0, label: "approved here" },
-      { n: stats.open_conflicts, label: "disagreements", warn: stats.open_conflicts > 0 },
+      { n: stats.standing, label: t("in use") },
+      { n: stats.superseded, label: t("replaced") },
+      { n: (stats.by_origin || {}).approved || 0, label: t("approved here") },
+      { n: stats.open_conflicts, label: t("disagreements"), warn: stats.open_conflicts > 0 },
     ];
     // Shown only when there is a backlog, and it is what makes the "Check for
     // conflicts" button mean something: without it the button is an offer to do
     // nothing in particular.
-    if (stats.unscanned) cells.push({ n: stats.unscanned, label: "still to compare" });
+    if (stats.unscanned) cells.push({ n: stats.unscanned, label: t("still to compare") });
     $("counts").replaceChildren(...cells.map((cell) => {
       const box = document.createElement("div");
       box.className = "count" + (cell.warn ? " warn" : "");
@@ -472,31 +523,29 @@
     card.className = "entry" + (entry.stands ? "" : " replaced");
     card.dataset.entryId = entry.entry_id;
 
-    const question = withDirection(document.createElement("p"), entry.question);
+    const question = contentText(document.createElement("p"), entry.question);
     question.className = "q";
-    question.textContent = entry.question;
 
-    const answer = withDirection(document.createElement("p"), entry.answer);
+    const answer = contentText(document.createElement("p"), entry.answer);
     answer.className = "a";
-    answer.textContent = entry.answer;
 
     const meta = document.createElement("div");
     meta.className = "meta";
-    if (entry.origin === "approved") meta.append(tag("approved", "approved"));
-    else if (entry.origin === "manual") meta.append(tag("added by hand", "manual"));
-    else meta.append(tag("from a questionnaire"));
-    if (!entry.stands) meta.append(tag("replaced", "replaced"));
+    if (entry.origin === "approved") meta.append(tag(t("approved"), "approved"));
+    else if (entry.origin === "manual") meta.append(tag(t("added by hand"), "manual"));
+    else meta.append(tag(t("from a questionnaire")));
+    if (!entry.stands) meta.append(tag(t("replaced"), "replaced"));
 
     // "Approved by" is only true of an approval. The same field carries who
     // typed an entry in by hand, and calling that an approval would claim a
     // review that never happened.
-    const who = entry.origin === "approved" ? "approved by " : "added by ";
+    const who = entry.origin === "approved" ? t("approved by {name}") : t("added by {name}");
     const where = document.createElement("span");
-    where.textContent = [
-      entry.from_file,
-      entry.approved_by ? who + entry.approved_by : "",
+    where.append(...joined([
+      entry.from_file ? asContent(entry.from_file) : "",
+      entry.approved_by ? withContent(who, { name: entry.approved_by }) : "",
       when(entry.approved_on),
-    ].filter(Boolean).join(" · ");
+    ]));
     meta.append(where);
 
     const actions = document.createElement("span");
@@ -506,14 +555,14 @@
     if (!entry.stands) {
       const restore = document.createElement("button");
       restore.className = "quiet";
-      restore.textContent = "Put back in use";
+      restore.textContent = t("Put back in use");
       restore.onclick = () => act(restore, () => api("/api/memory/" + encodeURIComponent(entry.entry_id) + "/restore", { method: "POST" }));
       actions.append(restore);
     }
 
     const edit = document.createElement("button");
     edit.className = "quiet";
-    edit.textContent = "Edit";
+    edit.textContent = t("Edit");
     edit.onclick = () => openEditor(card, entry);
     actions.append(edit);
 
@@ -521,11 +570,11 @@
     if (scopes.length) {
       const move = document.createElement("select");
       move.className = "move";
-      move.title = "Move this answer to another memory";
-      move.append(new Option("Move to\u2026", ""));
-      [["", "Shared, for every product"], ...scopes.map((p) => [p.id, p.name])]
+      move.title = t("Move this answer to another memory");
+      move.append(new Option(t("Move to\u2026"), ""));
+      [["", t("Shared, for every product")], ...scopes.map((p) => [p.id, p.name])]
         .filter(([id]) => id !== (entry.product_id || ""))
-        .forEach(([id, name]) => move.append(new Option(name, id || "shared")));
+        .forEach(([id, name]) => move.append(id ? productOption(name, id) : new Option(name, "shared")));
       move.onchange = () => {
         const target = move.value === "shared" ? "" : move.value;
         act(move, () => api("/api/memory/" + encodeURIComponent(entry.entry_id) + "/move", {
@@ -537,10 +586,10 @@
 
     const remove = document.createElement("button");
     remove.className = "quiet danger";
-    remove.textContent = "Forget";
-    remove.title = "Remove this answer from the memory entirely";
+    remove.textContent = t("Forget");
+    remove.title = t("Remove this answer from the memory entirely");
     remove.onclick = () => {
-      if (!confirm("Forget this answer?\n\nIt stops being retrieved and cannot be recovered from here.")) return;
+      if (!confirm(t("Forget this answer?\n\nIt stops being retrieved and cannot be recovered from here."))) return;
       act(remove, () => api("/api/memory/" + encodeURIComponent(entry.entry_id), { method: "DELETE" }));
     };
     actions.append(remove);
@@ -563,11 +612,11 @@
 
     const row = document.createElement("div");
     const save = document.createElement("button");
-    save.textContent = "Save";
+    save.textContent = t("Save");
     const cancel = document.createElement("button");
     cancel.className = "ghost";
-    cancel.textContent = "Cancel";
-    cancel.style.marginLeft = "8px";
+    cancel.textContent = t("Cancel");
+    cancel.style.marginInlineStart = "8px";  // logical, so it is the gap after Save right to left too
     cancel.onclick = () => box.remove();
     row.append(save, cancel);
 
@@ -583,7 +632,7 @@
         });
         await reload();
       } catch (error) {
-        say(status, error.message, "err");
+        say(status, I18n.error(error), "err");
         save.disabled = false;
       }
     };
@@ -610,9 +659,9 @@
       const note = document.createElement("div");
       note.className = "status err";
       note.style.marginTop = "9px";
-      note.textContent = error.message;
+      note.textContent = I18n.error(error);
       where.append(note);
-      say($("listStatus"), error.message, "err");
+      say($("listStatus"), I18n.error(error), "err");
       button.disabled = false;
     }
   }
@@ -623,18 +672,21 @@
     const box = document.createElement("div");
     box.className = "side";
 
-    const question = withDirection(document.createElement("p"), entry.question);
+    const question = contentText(document.createElement("p"), entry.question);
     question.className = "q";
-    question.textContent = entry.question;
 
-    const answer = withDirection(document.createElement("p"), entry.answer);
+    const answer = contentText(document.createElement("p"), entry.answer);
     answer.className = "a";
-    answer.textContent = entry.answer;
 
     const from = document.createElement("p");
     from.className = "from";
-    from.textContent = [entry.from_file, entry.approved_by, when(entry.approved_on)]
-      .filter(Boolean).join(" · ") || "no date recorded";
+    const recorded = joined([
+      entry.from_file ? asContent(entry.from_file) : "",
+      entry.approved_by ? asContent(entry.approved_by) : "",
+      when(entry.approved_on),
+    ]);
+    if (recorded.length) from.append(...recorded);
+    else from.textContent = t("no date recorded");
 
     const keep = document.createElement("button");
     keep.className = "ghost";
@@ -654,19 +706,20 @@
 
     const why = document.createElement("p");
     why.className = "why";
-    why.textContent = pair.because || "These two answers disagree.";
+    // The scan's own sentence: the server's, in the page's language where it has one (plan 038).
+    why.textContent = pair.because ? I18n.server(pair.because) : t("These two answers disagree.");
 
     const sides = document.createElement("div");
     sides.className = "sides";
     sides.append(
-      side(pair.entry, pair.other, "This one is our position", "keep_this"),
-      side(pair.other, pair.entry, "This one is our position", "keep_this"),
+      side(pair.entry, pair.other, t("This one is our position"), "keep_this"),
+      side(pair.other, pair.entry, t("This one is our position"), "keep_this"),
     );
 
     const neither = document.createElement("button");
     neither.className = "quiet";
     neither.style.marginTop = "10px";
-    neither.textContent = "They are not the same question";
+    neither.textContent = t("They are not the same question");
     neither.onclick = () => act(neither, () => api("/api/memory/conflicts/resolve", {
       method: "POST",
       body: JSON.stringify({
@@ -692,7 +745,7 @@
   }
 
   async function loadEntries(append) {
-    say($("listStatus"), "Loading…");
+    say($("listStatus"), t("Loading…"));
     try {
       const body = await api("/api/memory?" + filters().toString());
       total = body.total;
@@ -705,16 +758,16 @@
         const empty = document.createElement("div");
         empty.className = "empty";
         empty.textContent = total === 0 && !$("search").value.trim()
-          ? "Nothing remembered yet. Add an answer above, or edit and approve an answer on a card."
-          : "Nothing matches that.";
+          ? t("Nothing remembered yet. Add an answer above, or edit and approve an answer on a card.")
+          : t("Nothing matches that.");
         $("entries").replaceChildren(empty);
       }
 
       const shown = $("entries").querySelectorAll(".entry").length;
       $("more").hidden = shown >= total;
-      say($("listStatus"), total ? "Showing " + shown + " of " + total : "");
+      say($("listStatus"), total ? t("Showing {shown} of {total}", { shown: shown, total: total }) : "");
     } catch (error) {
-      say($("listStatus"), error.message, "err");
+      say($("listStatus"), I18n.error(error), "err");
     }
   }
 
@@ -743,14 +796,17 @@
       scopes = (await api("/api/products")).products || [];
     } catch (error) { scopes = []; }
     const select = $("memoryScope");
-    select.replaceChildren(new Option("Shared, for every product", ""));
-    scopes.forEach((product) => select.append(new Option(product.name, product.id)));
+    select.replaceChildren(new Option(t("Shared, for every product"), ""));
+    scopes.forEach((product) => select.append(productOption(product.name, product.id)));
   }
   $("memoryScope").addEventListener("change", () => {
     const name = $("memoryScope").selectedOptions[0].textContent;
-    $("memoryScopeHint").textContent = scope()
-      ? "Used only for " + name + "'s questionnaires, beside the shared one."
-      : "Used for every questionnaire.";
+    if (scope()) {
+      $("memoryScopeHint").replaceChildren(withContent(t("Used only for {name}'s questionnaires, beside the shared one."),
+        { name: name }));
+    } else {
+      $("memoryScopeHint").textContent = t("Used for every questionnaire.");
+    }
     reload();
   });
 
@@ -772,19 +828,21 @@
   $("scan").addEventListener("click", async () => {
     const button = $("scan");
     button.disabled = true;
-    say($("listStatus"), "Comparing what is new against what we already remember…");
+    say($("listStatus"), t("Comparing what is new against what we already remember…"));
     try {
       const body = await api("/api/memory/scan", { method: "POST" });
       const found = body.found || [];
       const left = (body.stats && body.stats.unscanned) || 0;
       await reload();
       const said = found.length
-        ? found.filter((f) => f.kind === "conflict").length + " disagreement(s) and " +
-          found.filter((f) => f.kind !== "conflict").length + " replaced answer(s) found."
-        : "Nothing new found.";
-      say($("listStatus"), left ? said + " " + left + " still to compare — press again." : said, "ok");
+        ? t("{conflicts} disagreement(s) and {replaced} replaced answer(s) found.", {
+          conflicts: found.filter((f) => f.kind === "conflict").length,
+          replaced: found.filter((f) => f.kind !== "conflict").length,
+        })
+        : t("Nothing new found.");
+      say($("listStatus"), left ? said + " " + t("{n} still to compare — press again.", { n: left }) : said, "ok");
     } catch (error) {
-      say($("listStatus"), error.message, "err");
+      say($("listStatus"), I18n.error(error), "err");
     } finally {
       button.disabled = false;
     }
@@ -794,7 +852,7 @@
     const question = $("newQuestion").value.trim();
     const answer = $("newAnswer").value.trim();
     if (!question || !answer) {
-      say($("addStatus"), "An entry needs both the question and the answer.", "err");
+      say($("addStatus"), t("An entry needs both the question and the answer."), "err");
       return;
     }
     $("add").disabled = true;
@@ -818,14 +876,22 @@
         card.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
       say($("addStatus"), card
-        ? "Remembered. It is the first answer in the list below."
-        : "Remembered.", "ok");
+        ? t("Remembered. It is the first answer in the list below.")
+        : t("Remembered."), "ok");
     } catch (error) {
-      say($("addStatus"), error.message, "err");
+      say($("addStatus"), I18n.error(error), "err");
     } finally {
       $("add").disabled = false;
     }
   });
+
+  /* Switching the language draws the page again (plan 038): asked first when
+     an answer being added or edited would be lost. */
+  I18n.beforeSwitch = () => {
+    const adding = $("newQuestion").value.trim() || $("newAnswer").value.trim();
+    const editing = document.querySelector("#entries .editing");
+    return adding || editing ? t("Your changes on this page are not saved yet. Switch the language anyway, and lose them?") : "";
+  };
 
   loadScopes().then(reload);
 })();

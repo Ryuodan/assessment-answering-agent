@@ -93,6 +93,9 @@
 
   /* --- the two, side by side ------------------------------------------------ */
 
+  /* The pages' language: one choice, laid out as the preferences' choices are. */
+  .panel.language { padding-block: 6px; margin-bottom: 16px; }
+
   .glance { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 18px; }
   @media (max-width: 720px) { .glance { grid-template-columns: 1fr; } }
   .glance .kind {
@@ -244,7 +247,7 @@
 
 <div class="topbar">
   <div class="brand">
-    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-mark" aria-hidden="true" data-no-translate>A</div>
     <div class="brand-text">
       <h1>Your preferences</h1>
       <p>How you want your answers to read &mdash; nobody else sees these</p>
@@ -264,6 +267,20 @@
 </div>
 
 <main>
+  <!-- The pages' language (plan 038): the same choice as the switch in every
+       top bar, kept with the person. Each language is named in itself, as a
+       person who cannot read the other looks for it. It changes how the pages
+       read, never an answer. -->
+  <section class="panel language" id="languagePanel">
+    <div class="choice">
+      <div class="label">Language of the pages<small>Answers are not changed by it: they follow the question&rsquo;s language.</small></div>
+      <div class="options" data-field="interface_language">
+        <label><input type="radio" name="interface_language" value="en"> <span lang="en" dir="ltr" data-no-translate>English</span></label>
+        <label><input type="radio" name="interface_language" value="ar"> <span lang="ar" dir="rtl" data-no-translate>العربية</span></label>
+      </div>
+    </div>
+  </section>
+
   <!-- The two, side by side, because the first version of this page had them
        one above the other as two text boxes and nobody could tell them apart. -->
   <div class="glance">
@@ -315,8 +332,9 @@
       <div class="label">Call the organisation<small>Leave empty to keep the draft&rsquo;s wording</small></div>
       <div class="refer">
         <input type="text" id="referTo" placeholder="As drafted" spellcheck="false">
-        <button type="button" class="quiet" id="referShort" hidden></button>
-        <button type="button" class="quiet" id="referWe">&ldquo;we&rdquo;</button>
+        <!-- What each fills in, word for word: content, as it is the value sent (plan 038). -->
+        <button type="button" class="quiet" id="referShort" hidden data-no-translate dir="auto"></button>
+        <button type="button" class="quiet" id="referWe" data-no-translate dir="auto">&ldquo;we&rdquo;</button>
       </div>
     </div>
 
@@ -396,6 +414,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   const gate = $("authGate"), form = $("authForm"), error = $("authError");
 
   function apply(session) {
@@ -424,13 +443,15 @@
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.textContent = body.detail
+          ? I18n.error({ message: body.detail, code: body.code })
+          : t("That did not work. Check the address and try again.");
         error.hidden = false;
         return;
       }
       window.location.reload();
     } catch (e) {
-      error.textContent = "Could not reach the server.";
+      error.textContent = t("Could not reach the server.");
       error.hidden = false;
     } finally {
       $("authSubmit").disabled = false;
@@ -448,6 +469,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   let limits = { also: 1000, refer_to: 60, name: 60, description: 300, instruction: 2000, skills: 40 };
   let saved = null;
   let recommended = null;
@@ -484,7 +506,9 @@
       const detail = body && body.detail;
       // Validation failures arrive as a list; a person needs the sentence.
       const message = Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : detail;
-      throw new Error(message || ("Request failed (" + response.status + ")"));
+      const failure = new Error(message || t("Request failed ({status})", { status: response.status }));
+      failure.code = body && body.code;  // for I18n.error's Arabic by the code (plan 038)
+      throw failure;
     }
     return body;
   }
@@ -498,6 +522,32 @@
   function withDirection(node, text) {
     node.dir = ARABIC.test(text || "") ? "rtl" : "auto";
     return node;
+  }
+
+  /* Content (plan 038): what a person wrote, or the model, or the
+     instruction the server composes. Left as it is, in its own direction. */
+  function asContent(node, text) {
+    node.setAttribute("data-no-translate", "");
+    node.dir = "auto";
+    node.textContent = text;
+    return node;
+  }
+  /* The interface's own sentence with content in it: the translated sentence,
+     each {name} in `content` put in as content. */
+  function withContent(sentence, content) {
+    const drawn = document.createDocumentFragment();
+    sentence.split(/(\{\w+\})/).forEach((part) => {
+      const name = /^\{(\w+)\}$/.exec(part);
+      if (name && name[1] in content) drawn.append(asContent(document.createElement("span"), String(content[name[1]])));
+      else if (part) drawn.append(part);
+    });
+    return drawn;
+  }
+
+  /* A built-in skill's name and description are the app's own words, from the
+     server, and read in the page's language; a person's own are content. */
+  function skillName(skill) {
+    return skill.builtin ? I18n.server(skill.name) : skill.name;
   }
 
   function counter(input, note, max) {
@@ -520,12 +570,12 @@
 
   const SAMPLES = [
     {
-      label: "Illustrative — a yes/no question (English)",
+      label: t("Illustrative — a yes/no question (English)"),
       question: "Is personal data encrypted at rest?",
       answer: "Yes. The organisation encrypts personal data at rest in accordance with the Data Cybersecurity and Privacy Policy, section 3.2.4. Databases and file stores that hold personal data use AES-256 encryption, encryption keys are kept in a managed key store with access limited to authorised administrators, and backups are encrypted to the same standard.",
     },
     {
-      label: "Illustrative — a process question (English)",
+      label: t("Illustrative — a process question (English)"),
       question: "Describe how security incidents are reported and handled.",
       answer: "The organisation follows the Cybersecurity Incident and Threat Management Policy, sections 3.4–3.4.7. Incidents are reported to the Security Operations team through the service desk, logged and classified by severity within four hours. High-severity incidents are escalated to the CISO within one hour, affected clients are notified within 72 hours where their data is involved, and a post-incident review is completed within ten working days.",
     },
@@ -534,41 +584,42 @@
       question: "هل يتم تشفير البيانات الشخصية أثناء التخزين؟",
       answer: "نعم. تقوم المنظمة بتشفير البيانات الشخصية أثناء التخزين وفقاً لسياسة الأمن السيبراني وحماية البيانات، البند 3.2.4، باستخدام معيار AES-256، وتُدار مفاتيح التشفير في مخزن مفاتيح يقتصر الوصول إليه على المسؤولين المصرح لهم.",
     },
-    { label: "Paste one of your own…", question: "", answer: "" },
+    { label: t("Paste one of your own…"), question: "", answer: "" },
   ];
 
   /* A try-it box: pick a sample, reword it with the instruction as it stands
-     right now, and show the two side by side. Nothing is saved. */
-  function tryBox(host, instructionOf, what) {
+     right now, and show the two side by side. Nothing is saved. `title` is
+     the box's heading, already in the page's language. */
+  function tryBox(host, instructionOf, title) {
     host.replaceChildren();
     host.hidden = false;
 
-    const title = document.createElement("h4");
-    title.textContent = "Trying " + what + " on a sample. Nothing is saved.";
+    const heading = document.createElement("h4");
+    heading.append(title);
 
     const picker = document.createElement("select");
-    picker.setAttribute("aria-label", "Sample answer");
+    picker.setAttribute("aria-label", t("Sample answer"));
     SAMPLES.forEach((sample, index) => picker.append(new Option(sample.label, String(index))));
 
     const own = document.createElement("div");
     own.hidden = true;
     const ownQuestion = document.createElement("input");
     ownQuestion.type = "text";
-    ownQuestion.placeholder = "The question";
+    ownQuestion.placeholder = t("The question");
     ownQuestion.style.marginTop = "8px";
     const ownAnswer = document.createElement("textarea");
-    ownAnswer.placeholder = "An answer as the system drafted it";
+    ownAnswer.placeholder = t("An answer as the system drafted it");
     ownAnswer.style.marginTop = "8px";
     own.append(ownQuestion, ownAnswer);
     picker.onchange = () => { own.hidden = !!SAMPLES[Number(picker.value)].answer; };
 
     const run = document.createElement("button");
     run.type = "button";
-    run.textContent = "Reword it";
+    run.textContent = t("Reword it");
     const close = document.createElement("button");
     close.type = "button";
     close.className = "ghost";
-    close.textContent = "Close";
+    close.textContent = t("Close");
     close.onclick = () => { host.hidden = true; };
     const status = document.createElement("span");
     status.className = "status";
@@ -576,12 +627,13 @@
     const compare = document.createElement("div");
     compare.className = "compare";
     compare.hidden = true;
-    const sides = ["As drafted", "Reworded"].map((label, index) => {
+    const sides = [t("As drafted"), t("Reworded")].map((label, index) => {
       const side = document.createElement("div");
       side.className = "side" + (index ? " after" : "");
       const heading = document.createElement("h5");
       heading.textContent = label;
       const text = document.createElement("p");
+      text.setAttribute("data-no-translate", "");  // the model's words: content (plan 038)
       side.append(heading, text);
       compare.append(side);
       return text;
@@ -592,10 +644,10 @@
       const sample = SAMPLES[Number(picker.value)];
       const question = (sample.answer ? sample.question : ownQuestion.value).trim();
       const answer = (sample.answer ? sample.answer : ownAnswer.value).trim();
-      if (!instruction) { say(status, "Nothing to try: every choice is still as drafted.", "err"); return; }
-      if (!question || !answer) { say(status, "Paste a question and an answer to try it on.", "err"); return; }
+      if (!instruction) { say(status, t("Nothing to try: every choice is still as drafted."), "err"); return; }
+      if (!question || !answer) { say(status, t("Paste a question and an answer to try it on."), "err"); return; }
       run.disabled = true;
-      say(status, "Rewording…", "busy");
+      say(status, t("Rewording…"), "busy");
       try {
         const body = await api("/api/preferences/try", {
           method: "POST",
@@ -605,11 +657,11 @@
         withDirection(sides[1], body.after).textContent = body.after;
         compare.hidden = false;
         say(status, body.failed
-          ? "The rewording did not come back, so the answer would have been left as drafted. Try again."
-          : body.changed ? "" : "It came back unchanged: there was nothing to change in this one.",
+          ? t("The rewording did not come back, so the answer would have been left as drafted. Try again.")
+          : body.changed ? "" : t("It came back unchanged: there was nothing to change in this one."),
           body.failed ? "err" : "");
       } catch (error) {
-        say(status, error.message, "err");
+        say(status, I18n.error(error), "err");
       } finally {
         run.disabled = false;
       }
@@ -619,7 +671,7 @@
     row.className = "row";
     row.style.marginTop = "10px";
     row.append(run, close, status);
-    host.append(title, picker, own, row, compare);
+    host.append(heading, picker, own, row, compare);
     host.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
@@ -664,17 +716,29 @@
     return Object.keys(now).some((key) => String(now[key]).trim() !== String(saved[key]).trim());
   }
 
+  /* What the answers get reworded with: the server's instruction, which is
+     content (plan 038), or the page's own line when there is none. */
+  function showInstruction() {
+    const asks = $("asks");
+    asks.className = composed ? "" : "none";
+    if (composed) {
+      asContent(asks, composed);
+    } else {
+      asks.removeAttribute("data-no-translate");
+      asks.removeAttribute("dir");
+      asks.textContent = t("Nothing — your answers stay exactly as drafted.");
+    }
+  }
+
   let composing = null;
   function recompose() {
-    say($("preferencesStatus"), unsaved() ? "Not saved yet." : "");
+    say($("preferencesStatus"), unsaved() ? t("Not saved yet.") : "");
     clearTimeout(composing);
     composing = setTimeout(async () => {
       try {
         const body = await api("/api/preferences/compose", { method: "POST", body: JSON.stringify(chosen()) });
         composed = body.instruction || "";
-        const asks = $("asks");
-        asks.className = composed ? "" : "none";
-        asks.textContent = composed || "Nothing — your answers stay exactly as drafted.";
+        showInstruction();
       } catch (error) {
         /* The preview is a courtesy; saving still validates. */
       }
@@ -700,28 +764,28 @@
       tone: recommended.tone,
     }));
     recompose();
-    say($("preferencesStatus"), "Filled in. Save to use it, or try it on a sample first.");
+    say($("preferencesStatus"), t("Filled in. Save to use it, or try it on a sample first."));
   };
 
   $("savePreferences").addEventListener("click", async () => {
     const button = $("savePreferences");
     button.disabled = true;
-    say($("preferencesStatus"), "Saving…", "busy");
+    say($("preferencesStatus"), t("Saving…"), "busy");
     try {
       const body = await api("/api/preferences", { method: "PUT", body: JSON.stringify(chosen()) });
       adopt(body);
       say($("preferencesStatus"), body.instruction
-        ? "Saved. Answers you draft from now on are reworded with these."
-        : "Saved. Answers you draft stay exactly as drafted.", "ok");
+        ? t("Saved. Answers you draft from now on are reworded with these.")
+        : t("Saved. Answers you draft stay exactly as drafted."), "ok");
     } catch (error) {
-      say($("preferencesStatus"), error.message, "err");
+      say($("preferencesStatus"), I18n.error(error), "err");
     } finally {
       button.disabled = false;
     }
   });
 
   $("tryPreferences").addEventListener("click", () => {
-    tryBox($("preferencesTry"), () => composed, "your preferences");
+    tryBox($("preferencesTry"), () => composed, t("Trying your preferences on a sample. Nothing is saved."));
   });
 
   // --- skills ---------------------------------------------------------------
@@ -739,24 +803,24 @@
     const name = document.createElement("input");
     name.type = "text";
     name.maxLength = limits.name;
-    name.placeholder = "e.g. Tailspin format";
+    name.placeholder = t("e.g. Tailspin format");
     name.value = skill ? skill.name : "";
-    field("Name", name);
+    field(t("Name"), name);
 
     const desc = document.createElement("input");
     desc.type = "text";
     desc.maxLength = limits.description;
-    desc.placeholder = "e.g. Tailspin's supplier questionnaires: short, verdict first";
+    desc.placeholder = t("e.g. Tailspin's supplier questionnaires: short, verdict first");
     desc.value = skill ? skill.description : "";
-    field("When to use it (optional)", desc);
+    field(t("When to use it (optional)"), desc);
 
     const instr = document.createElement("textarea");
     instr.rows = 4;
-    instr.placeholder = "e.g. Open with Yes, No or Partially. Then at most one short sentence. No policy names or clause numbers.";
+    instr.placeholder = t("e.g. Open with Yes, No or Partially. Then at most one short sentence. No policy names or clause numbers.");
     instr.value = skill ? skill.instruction : "";
     withDirection(instr, instr.value);
     instr.addEventListener("input", () => withDirection(instr, instr.value));
-    field("How the answers should read", instr);
+    field(t("How the answers should read"), instr);
     const note = document.createElement("div");
     note.className = "count-note";
     box.append(note);
@@ -764,26 +828,26 @@
 
     const save = document.createElement("button");
     save.type = "button";
-    save.textContent = skill ? "Save changes" : "Save skill";
+    save.textContent = skill ? t("Save changes") : t("Save skill");
     const tryIt = document.createElement("button");
     tryIt.type = "button";
     tryIt.className = "ghost";
-    tryIt.textContent = "Try it on a sample";
+    tryIt.textContent = t("Try it on a sample");
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "ghost";
-    cancel.textContent = "Cancel";
+    cancel.textContent = t("Cancel");
     const status = document.createElement("span");
     status.className = "status";
     const trying = document.createElement("div");
     trying.className = "try";
     trying.hidden = true;
 
-    tryIt.onclick = () => tryBox(trying, () => instr.value, "this skill");
+    tryIt.onclick = () => tryBox(trying, () => instr.value, t("Trying this skill on a sample. Nothing is saved."));
     cancel.onclick = () => onDone(false);
     save.onclick = async () => {
       save.disabled = true;
-      say(status, "Saving…", "busy");
+      say(status, t("Saving…"), "busy");
       try {
         const payload = JSON.stringify({ name: name.value, description: desc.value, instruction: instr.value });
         if (skill) {
@@ -793,7 +857,7 @@
         }
         onDone(true);
       } catch (error) {
-        say(status, error.message, "err");
+        say(status, I18n.error(error), "err");
         save.disabled = false;
       }
     };
@@ -812,27 +876,32 @@
 
     const top = document.createElement("div");
     top.className = "top";
+    // A built-in skill's name and description are the app's words; a person's own, content (plan 038).
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = skill.name;
+    if (skill.builtin) name.textContent = skillName(skill);
+    else asContent(name, skill.name);
     top.append(name);
     if (skill.builtin) {
       const tag = document.createElement("span");
       tag.className = "tag";
-      tag.textContent = "built in";
+      tag.textContent = t("built in");
       top.append(tag);
     }
 
     const desc = document.createElement("div");
     desc.className = "desc";
-    desc.textContent = skill.description || "";
+    if (skill.builtin) desc.textContent = I18n.server(skill.description || "");
+    else asContent(desc, skill.description || "");
     desc.hidden = !skill.description;
 
+    // What the rewording is told is the instruction itself, as the model reads it: content.
     const more = document.createElement("details");
     const summary = document.createElement("summary");
-    summary.textContent = "What it tells the rewording";
+    summary.textContent = t("What it tells the rewording");
     const instr = withDirection(document.createElement("p"), skill.instruction);
     instr.className = "instr";
+    instr.setAttribute("data-no-translate", "");
     instr.textContent = skill.instruction;
     more.append(summary, instr);
 
@@ -844,13 +913,14 @@
 
     const tryIt = document.createElement("button");
     tryIt.className = "quiet";
-    tryIt.textContent = "Try it";
-    tryIt.onclick = () => tryBox(trying, () => skill.instruction, "“" + skill.name + "”");
+    tryIt.textContent = t("Try it");
+    tryIt.onclick = () => tryBox(trying, () => skill.instruction,
+      withContent(t("Trying “{name}” on a sample. Nothing is saved."), { name: skillName(skill) }));
     actions.append(tryIt);
 
     const copy = document.createElement("button");
     copy.className = "quiet";
-    copy.textContent = skill.builtin ? "Make a copy to change" : "Duplicate";
+    copy.textContent = skill.builtin ? t("Make a copy to change") : t("Duplicate");
     copy.onclick = async () => {
       copy.disabled = true;
       try {
@@ -863,7 +933,7 @@
         }
       } catch (error) {
         copy.disabled = false;
-        say(statusOf(card), error.message, "err");
+        say(statusOf(card), I18n.error(error), "err");
       }
     };
     actions.append(copy);
@@ -871,7 +941,7 @@
     if (!skill.builtin) {
       const edit = document.createElement("button");
       edit.className = "quiet edit";
-      edit.textContent = "Edit";
+      edit.textContent = t("Edit");
       edit.onclick = () => {
         card.replaceChildren(skillForm(skill, async (changed) => {
           if (changed) await load();
@@ -880,16 +950,17 @@
       };
       const remove = document.createElement("button");
       remove.className = "quiet danger";
-      remove.textContent = "Delete";
+      remove.textContent = t("Delete");
       remove.onclick = async () => {
-        if (!confirm("Delete the skill “" + skill.name + "”?\n\nAnswers already reworded with it keep their wording.")) return;
+        if (!confirm(t("Delete the skill “{name}”?\n\nAnswers already reworded with it keep their wording.",
+          { name: skill.name }))) return;
         remove.disabled = true;
         try {
           await api("/api/skills/" + encodeURIComponent(skill.skill_id), { method: "DELETE" });
           await load();
         } catch (error) {
           remove.disabled = false;
-          say(statusOf(card), error.message, "err");
+          say(statusOf(card), I18n.error(error), "err");
         }
       };
       actions.append(edit, remove);
@@ -920,7 +991,7 @@
     } else {
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = "None yet. Make a copy of a built-in one to change it, or write your own below.";
+      empty.textContent = t("None yet. Make a copy of a built-in one to change it, or write your own below.");
       $("ownSkills").replaceChildren(empty);
     }
     $("newSkill").hidden = own.length >= limits.skills;
@@ -942,8 +1013,7 @@
     recommended = body.recommended;
     show(saved);
     composed = body.instruction || "";
-    $("asks").className = composed ? "" : "none";
-    $("asks").textContent = composed || "Nothing — your answers stay exactly as drafted.";
+    showInstruction();
     if (recommended && recommended.refer_to) {
       $("referShort").hidden = false;
       $("referShort").dataset.name = recommended.refer_to;
@@ -957,9 +1027,35 @@
       adopt(body);
       drawSkills(body.skills || []);
     } catch (error) {
-      say($("preferencesStatus"), error.message, "err");
+      say($("preferencesStatus"), I18n.error(error), "err");
     }
   }
+
+  // --- the pages' language (plan 038) ---------------------------------------
+  /* The same choice as the switch in the top bar: kept with the person, and
+     the page drawn again in it. Shown as the language the page is in. */
+
+  const languages = document.querySelectorAll('input[name="interface_language"]');
+  function showLanguage() {
+    languages.forEach((input) => { input.checked = input.value === I18n.lang; });
+  }
+  languages.forEach((input) => input.addEventListener("change", async () => {
+    if (!input.checked) return;
+    await I18n.setLanguage(input.value);
+    showLanguage();  // still this page: the switch was not made, so the choice is as it was
+  }));
+  showLanguage();
+
+  /* Switching draws the page again: asked first when the preferences, or a
+     skill being written or edited, would be lost. */
+  function typing() {
+    if (unsaved()) return true;
+    if (document.querySelector("#ownSkills label.field-name")) return true;  // a skill open to edit
+    return [...$("newSkillForm").querySelectorAll("input, textarea")].some((field) => field.value.trim());
+  }
+  I18n.beforeSwitch = () => (typing()
+    ? t("Your changes on this page are not saved yet. Switch the language anyway, and lose them?")
+    : "");
 
   resetNewSkill();
   load();

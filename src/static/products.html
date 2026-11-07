@@ -124,7 +124,7 @@
   .danger-box {
     display: flex; gap: 12px; align-items: flex-start;
     background: var(--err-soft); color: var(--err);
-    border: 1px solid var(--err); border-left-width: 5px;
+    border: 1px solid var(--err); border-inline-start-width: 5px;
     border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px;
     font-size: 13.5px; line-height: 1.55;
   }
@@ -184,7 +184,7 @@
 
 <div class="topbar">
   <div class="brand">
-    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-mark" aria-hidden="true" data-no-translate>A</div>
     <div class="brand-text">
       <h1>Products</h1>
       <p>Each with its own knowledge and answers, beside what the whole team shares</p>
@@ -262,6 +262,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   const gate = $("authGate"), form = $("authForm"), error = $("authError");
 
   function apply(session) {
@@ -290,13 +291,15 @@
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.textContent = body.detail
+          ? I18n.error({ message: body.detail, code: body.code })
+          : t("That did not work. Check the address and try again.");
         error.hidden = false;
         return;
       }
       window.location.reload();
     } catch (e) {
-      error.textContent = "Could not reach the server.";
+      error.textContent = t("Could not reach the server.");
       error.hidden = false;
     } finally {
       $("authSubmit").disabled = false;
@@ -314,7 +317,12 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   const CONFIRM_WORD = "confirm";
+  /* The word to type in Arabic (plan 038): the page asks for "تأكيد", and
+     takes the English word too, for someone who read the English hint
+     elsewhere; the server is always sent its own, CONFIRM_WORD. */
+  const ARABIC_WORD = "تأكيد";
   let state = { products: [], can_manage: false, palette: [] };
   let deleting = null;
 
@@ -346,16 +354,49 @@
     if (!response.ok) {
       const detail = body && body.detail;
       const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
-      throw new Error(said || ("Request failed (" + response.status + ")"));
+      const failure = new Error(said || t("Request failed ({status})", { status: response.status }));
+      failure.code = body && body.code;  // for I18n.error's Arabic by the code (plan 038)
+      throw failure;
     }
     return body;
   }
 
   /* Always text, never markup: a product's name and description are whatever
-     somebody typed, and the server's messages can repeat them. */
+     somebody typed, and the server's messages can repeat them. A message is a
+     string, or the nodes withContent() made of a sentence with a name in it. */
   function say(node, message, kind) {
     node.className = "status" + (kind ? " " + kind : "");
-    node.textContent = message || "";
+    if (message instanceof Node) node.replaceChildren(message);
+    else node.textContent = message || "";
+  }
+
+  /* Content inside the interface's own sentence (plan 038): a product's name,
+     a file's, an address. It stays as it was written, in its own direction,
+     and is never translated. `withContent(t("Added {name}."), { name })` draws
+     the translated sentence with each {name} in `content` put in: as content,
+     or the element given. */
+  function asContent(value) {
+    if (value instanceof Node) return value;
+    const span = document.createElement("span");
+    span.setAttribute("data-no-translate", "");
+    span.dir = "auto";
+    span.textContent = String(value);
+    return span;
+  }
+  function withContent(sentence, content) {
+    const drawn = document.createDocumentFragment();
+    sentence.split(/(\{\w+\})/).forEach((part) => {
+      const name = /^\{(\w+)\}$/.exec(part);
+      if (name && name[1] in content) drawn.append(asContent(content[name[1]]));
+      else if (part) drawn.append(part);
+    });
+    return drawn;
+  }
+  function contentText(node, text) {
+    node.setAttribute("data-no-translate", "");
+    node.dir = "auto";
+    node.textContent = text;
+    return node;
   }
 
   // --- the list -------------------------------------------------------------
@@ -371,20 +412,20 @@
 
     const body = document.createElement("div");
     body.className = "body";
-    const name = document.createElement("p");
+    const name = contentText(document.createElement("p"), product.name);
     name.className = "name";
-    name.textContent = product.name;
     body.append(name);
     if (product.description) {
-      const description = document.createElement("p");
+      const description = contentText(document.createElement("p"), product.description);
       description.className = "description";
-      description.textContent = product.description;
       body.append(description);
     }
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = "Added " + (product.created_at || "").slice(0, 10) +
-      (product.created_by ? " by " + product.created_by : "");
+    const added = { date: (product.created_at || "").slice(0, 10) };
+    meta.append(product.created_by
+      ? withContent(t("Added {date} by {name}", added), { name: product.created_by })
+      : t("Added {date}", added));
     body.append(meta);
 
     card.append(swatch, body);
@@ -393,11 +434,11 @@
       actions.className = "actions";
       const edit = document.createElement("button");
       edit.className = "quiet";
-      edit.textContent = "Edit";
+      edit.textContent = t("Edit");
       edit.addEventListener("click", () => openEditor(card, product));
       const remove = document.createElement("button");
       remove.className = "quiet danger";
-      remove.textContent = "Delete";
+      remove.textContent = t("Delete");
       remove.addEventListener("click", () => openDelete(product));
       actions.append(edit, remove);
       card.append(actions);
@@ -426,10 +467,10 @@
     const actions = document.createElement("div");
     actions.className = "actions";
     const save = document.createElement("button");
-    save.textContent = "Save";
+    save.textContent = t("Save");
     const cancel = document.createElement("button");
     cancel.className = "ghost";
-    cancel.textContent = "Cancel";
+    cancel.textContent = t("Cancel");
     actions.append(save, cancel);
     editor.append(color, fields, actions);
     card.replaceWith(editor);
@@ -445,7 +486,7 @@
         });
         await load();
       } catch (error) {
-        say(status, error.message, "error");
+        say(status, I18n.error(error), "error");
         save.disabled = false;
       }
     });
@@ -454,14 +495,14 @@
   function draw() {
     $("addPanel").hidden = !state.can_manage;
     $("listHint").textContent = state.can_manage
-      ? "Rename, recolour or delete them here."
-      : "Only the team's leads and administrators can change products.";
+      ? t("Rename, recolour or delete them here.")
+      : t("Only the team's leads and administrators can change products.");
     const list = $("productList");
     list.replaceChildren();
     if (!state.products.length) {
       const empty = document.createElement("p");
       empty.className = "empty";
-      empty.textContent = "No products yet. Questionnaires are answered from the shared knowledge (General).";
+      empty.textContent = t("No products yet. Questionnaires are answered from the shared knowledge (General).");
       list.append(empty);
       return;
     }
@@ -475,7 +516,7 @@
       state = await api("/api/products");
       draw();
     } catch (error) {
-      say($("listStatus"), error.message, "error");
+      say($("listStatus"), I18n.error(error), "error");
     }
   }
 
@@ -496,10 +537,10 @@
       });
       $("productName").value = "";
       $("productDescription").value = "";
-      say($("addStatus"), "Added " + added.product.name + ".", "ok");
+      say($("addStatus"), withContent(t("Added {name}."), { name: added.product.name }), "ok");
       await load();
     } catch (error) {
-      say($("addStatus"), error.message, "error");
+      say($("addStatus"), I18n.error(error), "error");
     } finally {
       button.disabled = false;
     }
@@ -510,17 +551,26 @@
   let counted = false;  // the counts have arrived, or failed to: either way the warning is complete
   let opened = 0;       // which opening of the dialog a count belongs to
 
-  function plural(count, one, many) {
-    return count + " " + (count === 1 ? one : (many || one + "s"));
-  }
+  /* A count and what it counts, as one phrase: "1 file", "3 files", and in
+     Arabic the forms for one, two, a few and many (plan 038). Each phrase goes
+     whole into a sentence that is itself translated whole. */
+  const COUNTED = {
+    document: (n) => (n === 1 ? t("{n} document", { n: n }) : t("{n} documents", { n: n })),
+    passage: (n) => (n === 1 ? t("{n} passage", { n: n }) : t("{n} passages", { n: n })),
+    file: (n) => (n === 1 ? t("{n} file", { n: n }) : t("{n} files", { n: n })),
+    answer: (n) => (n === 1 ? t("{n} remembered answer", { n: n }) : t("{n} remembered answers", { n: n })),
+    questionnaire: (n) => (n === 1 ? t("{n} questionnaire", { n: n }) : t("{n} questionnaires", { n: n })),
+    chat: (n) => (n === 1 ? t("{n} chat", { n: n }) : t("{n} chats", { n: n })),
+  };
 
+  /* One thing deleting takes: its sentences, and the names it takes (drawn). */
   function consequence(text, detail) {
     const item = document.createElement("li");
     item.textContent = text;
     if (detail) {
       const names = document.createElement("span");
       names.className = "names";
-      names.textContent = detail;
+      names.append(detail);
       item.append(names);
     }
     return item;
@@ -530,92 +580,113 @@
      its answer memory. Counted when the server could count them, and said
      without numbers when it could not -- the warning never waits on a count. */
   function consequences(preview) {
-    const gone = (one) => (one ? " It leaves" : " They leave") + " the document library and can no longer be " +
-      "opened or downloaded, even from answers that cite " + (one ? "it." : "them.");
-    const forgotten = (one) => (one ? " It is" : " They are") + " deleted, not moved back to Shared.";
+    const gone = (one) => (one
+      ? t("It leaves the document library and can no longer be opened or downloaded, even from answers that cite it.")
+      : t("They leave the document library and can no longer be opened or downloaded, even from answers that cite them."));
+    const forgotten = (one) => (one
+      ? t("It is deleted, not moved back to Shared.")
+      : t("They are deleted, not moved back to Shared."));
     if (!preview) {
       return [
-        consequence("Its knowledge base: every document, and its file on the server unless the shared " +
-          "knowledge base, another product or a questionnaire also uses it." + gone(false)),
-        consequence("Its answer memory: every remembered answer, including any moved here from Shared." +
-          forgotten(false)),
+        consequence(t("Its knowledge base: every document, and its file on the server unless the shared knowledge base, another product or a questionnaire also uses it.") +
+          " " + gone(false)),
+        consequence(t("Its answer memory: every remembered answer, including any moved here from Shared.") +
+          " " + forgotten(false)),
       ];
     }
     const docs = preview.documents, answers = preview.answers;
     const kept = docs.kept || 0;
     const items = [];
     if (!docs.indexed && !docs.files) {
-      items.push(consequence("Its knowledge base: no documents."));
+      items.push(consequence(t("Its knowledge base: no documents.")));
     } else {
       const documents = docs.indexed || docs.files;
-      const more = docs.files > 5 ? " and " + (docs.files - 5) + " more" : "";
+      const counts = { documents: COUNTED.document(documents), passages: COUNTED.passage(docs.chunks) };
       /* A file that the shared knowledge base, another product or a
          questionnaire also uses stays (one name is one document), so the files
          said to leave are only those that do. */
-      const files = !docs.files ? "."
-        : !kept && docs.files === docs.indexed
-          ? ", " + (documents === 1 ? "and its file" : "and their files") + " on the server." + gone(documents === 1)
-          : ", and " + plural(docs.files, "file") + " on the server." + gone(docs.files === 1);
+      let said;
+      if (!docs.files) {
+        said = t("Its knowledge base: {documents} ({passages}).", counts);
+      } else if (!kept && docs.files === docs.indexed) {
+        said = (documents === 1
+          ? t("Its knowledge base: {documents} ({passages}), and its file on the server.", counts)
+          : t("Its knowledge base: {documents} ({passages}), and their files on the server.", counts)) +
+          " " + gone(documents === 1);
+      } else {
+        said = t("Its knowledge base: {documents} ({passages}), and {files} on the server.",
+          Object.assign({ files: COUNTED.file(docs.files) }, counts)) + " " + gone(docs.files === 1);
+      }
       /* Said of the team's copy, which is what stays: it may be in use, or it may
          only be impossible to tell from a shared upload of the same name. */
-      const stays = kept
-        ? " " + plural(kept, "file") + " of the same name in the team's folder " + (kept === 1 ? "stays" : "stay") +
-          ", because the shared knowledge base, another product or a questionnaire may use " +
-          (kept === 1 ? "it." : "them.")
-        : "";
-      items.push(consequence(
-        "Its knowledge base: " + plural(documents, "document") + " (" + plural(docs.chunks, "passage") + ")" +
-        files + stays,
-        docs.names.slice(0, 5).join(", ") + more,
-      ));
+      if (kept) {
+        said += " " + (kept === 1
+          ? t("{files} of the same name in the team's folder stays, because the shared knowledge base, another product or a questionnaire may use it.",
+            { files: COUNTED.file(kept) })
+          : t("{files} of the same name in the team's folder stay, because the shared knowledge base, another product or a questionnaire may use them.",
+            { files: COUNTED.file(kept) }));
+      }
+      const shown = docs.names.slice(0, 5).join(", ");
+      const names = docs.files > 5
+        ? withContent(t("{names} and {n} more", { n: docs.files - 5 }), { names: shown })
+        : shown ? asContent(shown) : "";
+      items.push(consequence(said, names));
     }
     if (!answers.remembered) {
-      items.push(consequence("Its answer memory: no remembered answers."));
+      items.push(consequence(t("Its answer memory: no remembered answers.")));
     } else {
-      items.push(consequence(
-        "Its answer memory: " + plural(answers.remembered, "remembered answer") +
-        (answers.moved_from_shared ? ", including " + answers.moved_from_shared + " moved here from Shared" : "") +
-        "." + forgotten(answers.remembered === 1),
-      ));
+      const remembered = { answers: COUNTED.answer(answers.remembered), moved: answers.moved_from_shared };
+      items.push(consequence((answers.moved_from_shared
+        ? t("Its answer memory: {answers}, including {moved} moved here from Shared.", remembered)
+        : t("Its answer memory: {answers}.", remembered)) + " " + forgotten(answers.remembered === 1)));
     }
     return items;
   }
 
   /* What becomes of the product's questionnaires and chats, before and after.
-     Kept to these two sentences, in this one place. Decided 2026-10-19 (plan
+     Kept to these sentences, in this one place. Decided 2026-10-19 (plan
      027): they stay read-only. Made General, a later approval in one would
      have filed the product's wording as a shared answer. */
   const ITS_WORK = {
     before(product, preview) {
-      const work = preview
-        ? plural(preview.questionnaires, "questionnaire") + " and " + plural(preview.conversations, "chat") +
-          " for " + product.name
-        : "its questionnaires and chats";
-      return "What stays: " + work + " stay listed, marked as from a deleted product, and become read-only. " +
-        "Their answers can be read and filled files downloaded, but nothing in them can be answered, edited, " +
-        "approved or chatted in again.";
-    },
-    after(removed) {
-      return plural(removed.questionnaires || 0, "questionnaire") + " and " +
-        plural(removed.conversations || 0, "chat") + " are kept, read-only.";
+      const drawn = document.createDocumentFragment();
+      drawn.append(preview
+        ? withContent(t("What stays: {questionnaires} and {chats} for {name} stay listed, marked as from a deleted product, and become read-only.", {
+          questionnaires: COUNTED.questionnaire(preview.questionnaires),
+          chats: COUNTED.chat(preview.conversations),
+        }), { name: product.name })
+        : t("What stays: its questionnaires and chats stay listed, marked as from a deleted product, and become read-only."));
+      drawn.append(" " + t("Their answers can be read and filled files downloaded, but nothing in them can be answered, edited, approved or chatted in again."));
+      return drawn;
     },
   };
 
+  /* The word as the server takes it: what was typed, or, typed in the page's
+     own language (Arabic: "تأكيد", with or without its hamza), the server's word. */
+  const TYPED_WORD = t("confirm");
+  function typedWord() {
+    const typed = $("deleteConfirm").value.trim();
+    const plain = (word) => word.replace(/[أإآ]/g, "ا");
+    return TYPED_WORD !== CONFIRM_WORD && plain(typed) === plain(TYPED_WORD) ? CONFIRM_WORD : typed;
+  }
+
   function ready() {
-    $("deleteGo").disabled = !counted || $("deleteConfirm").value.trim().toLowerCase() !== CONFIRM_WORD;
+    $("deleteGo").disabled = !counted || typedWord().toLowerCase() !== CONFIRM_WORD;
   }
 
   async function openDelete(product) {
     const mine = ++opened;
     deleting = product;
     counted = false;
-    $("deleteTitle").textContent = "Delete " + product.name + " permanently?";
-    $("deleteLead").textContent = "This cannot be undone. Deleting " + product.name + " removes, for the whole team:";
-    $("deleteConsequences").replaceChildren(consequence("Counting what would be deleted…"));
+    $("deleteTitle").replaceChildren(withContent(t("Delete {name} permanently?"), { name: product.name }));
+    $("deleteLead").replaceChildren(withContent(t("This cannot be undone. Deleting {name} removes, for the whole team:"),
+      { name: product.name }));
+    $("deleteConsequences").replaceChildren(consequence(t("Counting what would be deleted…")));
     $("deleteStays").textContent = "";
     const word = document.createElement("b");
-    word.textContent = CONFIRM_WORD;
-    $("deleteLabel").replaceChildren("Type ", word, " to delete " + product.name + " and everything listed above");
+    word.textContent = TYPED_WORD;
+    $("deleteLabel").replaceChildren(withContent(t("Type {word} to delete {name} and everything listed above"),
+      { word: word, name: product.name }));
     $("deleteConfirm").value = "";
     say($("deleteStatus"), "");
     ready();
@@ -627,22 +698,29 @@
       preview = await api("/api/products/" + encodeURIComponent(product.id) + "/deletion");
     } catch (error) {
       if (mine === opened) {
-        say($("deleteStatus"), "Could not count what would be deleted (" + error.message + "). " +
-          "Deleting still removes everything listed.", "error");
+        say($("deleteStatus"), t("Could not count what would be deleted ({error}). Deleting still removes everything listed.",
+          { error: I18n.error(error) }), "error");
       }
     }
     if (mine !== opened) return;  // the dialog was opened again while this was counting
     $("deleteConsequences").replaceChildren(...consequences(preview));
-    $("deleteStays").textContent = ITS_WORK.before(product, preview);
+    $("deleteStays").replaceChildren(ITS_WORK.before(product, preview));
     counted = true;
     ready();
   }
 
   function deleted(product, removed) {
-    let message = "Deleted " + product.name + ": " + plural(removed.files_removed || 0, "file") + " and " +
-      plural(removed.answers_forgotten || 0, "remembered answer") + " removed; " + ITS_WORK.after(removed);
+    const message = document.createDocumentFragment();
+    message.append(withContent(t("Deleted {name}: {files} and {answers} removed; {questionnaires} and {chats} are kept, read-only.", {
+      files: COUNTED.file(removed.files_removed || 0),
+      answers: COUNTED.answer(removed.answers_forgotten || 0),
+      questionnaires: COUNTED.questionnaire(removed.questionnaires || 0),
+      chats: COUNTED.chat(removed.conversations || 0),
+    }), { name: product.name }));
     const left = (removed.files_left || []).length;
-    if (left) message += " " + plural(left, "file") + " could not be removed from the server; see the log.";
+    if (left) {
+      message.append(" " + t("{files} could not be removed from the server; see the log.", { files: COUNTED.file(left) }));
+    }
     return message;
   }
 
@@ -655,7 +733,7 @@
     try {
       const done = await api(
         "/api/products/" + encodeURIComponent(product.id) + "?confirm=" +
-        encodeURIComponent($("deleteConfirm").value.trim()),
+        encodeURIComponent(typedWord()),
         { method: "DELETE" },
       );
       const removed = done.removed || {};
@@ -664,10 +742,18 @@
       deleting = null;
       await load();
     } catch (error) {
-      say($("deleteStatus"), error.message, "error");
+      say($("deleteStatus"), I18n.error(error), "error");
       ready();
     }
   });
+
+  /* Switching the language draws the page again (plan 038): asked first when
+     a product being added or edited would be lost. */
+  I18n.beforeSwitch = () => {
+    const adding = $("productName").value.trim() || $("productDescription").value.trim();
+    const editing = document.querySelector("#productList .fields");
+    return adding || editing ? t("Your changes on this page are not saved yet. Switch the language anyway, and lose them?") : "";
+  };
 
   load();
 })();
