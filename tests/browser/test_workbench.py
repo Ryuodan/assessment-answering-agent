@@ -307,7 +307,11 @@ def test_an_address_naming_someone_elses_questionnaire_opens_nothing(page: Page,
 def test_pick_up_lists_every_questionnaire_last_changed_first(
     page: Page, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Three were offered, by upload: the one worked on yesterday was not among them."""
+    """Three were offered, by upload: the one worked on yesterday was not among them.
+
+    Changed on purpose by plan 033: each entry is a row with its own Delete, so the entries are
+    counted by their open buttons, and each is labelled by when it was last used (the list's
+    order since plan 033), not when it last changed."""
     from datetime import datetime, timedelta, timezone
     from itertools import count
 
@@ -324,12 +328,12 @@ def test_pick_up_lists_every_questionnaire_last_changed_first(
 
     page.goto("/workbench")
 
-    offered = page.locator("#formRecent button")
+    offered = page.locator("#formRecent button.pick-up")
     expect(offered).to_have_count(5)
     expect(offered).to_contain_text(["d.xlsx", "b.xlsx", "e.xlsx", "c.xlsx", "a.xlsx"])
     expect(page.locator("#formRecent .recent-list")).to_be_visible()
     expect(offered.first).to_contain_text("(1 answered)")
-    expect(offered.first).to_have_attribute("title", re.compile("^Last changed "))
+    expect(offered.first).to_have_attribute("title", re.compile("^Last used "))
 
 
 # --- the same file again offers the questionnaire already open (plan 029, 1.2) ---
@@ -401,7 +405,11 @@ def test_the_offer_of_a_file_already_open_takes_the_keyboard_and_says_why(
 
 def test_a_word_file_written_as_prose_is_read_again_as_text(page: Page, tmp_path: Path, monkeypatch) -> None:
     """Plan 029's review: its first read leaves an empty questionnaire, and the second read offered
-    that, "0 of 0 answered", where it used to read the questions again."""
+    that, "0 of 0 answered", where it used to read the questions again.
+
+    Changed on purpose by plan 033: the questions read as text are kept as a list questionnaire,
+    so the same file again offers that list, with its two questions, and still never the empty
+    questionnaire the first read left."""
     from docx import Document
 
     from src import service
@@ -424,13 +432,21 @@ def test_a_word_file_written_as_prose_is_read_again_as_text(page: Page, tmp_path
     document.add_paragraph("2. How long are logs kept?")
     document.save(str(prose))
 
-    for _ in range(2):
-        page.goto("/workbench")
-        page.set_input_files("#assessmentInput", str(prose))
-        choose_general(page)
-        expect(page.locator("#extractStatus")).to_contain_text("Found 2 question(s) in questions.docx")
-        expect(page.locator("#alreadyOpen")).to_be_hidden()
-        expect(page.get_by_role("textbox", name="Type a question")).to_have_count(2)
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(prose))
+    choose_general(page)
+    expect(page.locator("#extractStatus")).to_contain_text("Found 2 question(s) in questions.docx")
+    expect(page.locator("#alreadyOpen")).to_be_hidden()
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(2)
+
+    page.goto("/workbench")
+    page.set_input_files("#assessmentInput", str(prose))
+    choose_general(page)
+    offer = page.locator("#alreadyOpen")
+    expect(offer).to_contain_text("You already have questions.docx, with 0 of 2 answered")
+    expect(offer.locator(".match")).to_have_count(1)  # the list, not the empty questionnaire
+    offer.get_by_role("button", name="Open it").click()
+    expect(page.get_by_role("textbox", name="Type a question")).to_have_count(2)
 
 
 # --- a run carries on after a reload or a timeout, and is followed (plan 029, 1.4) ---
