@@ -27,7 +27,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from src.models import Language
+from src.models import Language, QuestionType
 
 _UNFILLED = re.compile(r"^[\s\u2610\u25a1\u25cb\u25ef_\-\u2013\u2014.,:;/\\|()\[\]]*$")
 """A cell holding only whitespace, unticked boxes (☐ □ ○ ◯) or punctuation."""
@@ -73,6 +73,11 @@ class Role(str, Enum):
 
 WRITABLE = frozenset({Role.ANSWER, Role.STATUS, Role.EVIDENCE})
 """Roles a value may be written to. THEIRS is excluded on purpose."""
+
+LIST = "list"
+"""The format of a questionnaire with no file to write into (plan 033): questions
+typed, or read from a PDF's or a Word file's text. Its questions have no targets;
+it is answered and reviewed like a file, and downloaded instead of filled."""
 
 _VERDICT_WORD = re.compile(
     r"^\s*(yes|no|n/?a|not applicable|compliant|non[- ]compliant|fully compliant|"
@@ -139,6 +144,10 @@ class FormQuestion(BaseModel):
     language: Language = "en"
     targets: dict[Role, Target] = Field(default_factory=dict)
     location: str = Field(default="", description="Where it was found, for a person to check")
+    # What a list's question was read as, for the drafter (plan 033). A file's are free text;
+    # left out of the stored reading when they are the defaults, so a file's reads as before.
+    question_type: QuestionType = Field(default=QuestionType.FREE_TEXT, exclude_if=lambda kind: kind == "free_text")
+    options: list[str] = Field(default_factory=list, exclude_if=lambda options: not options)
 
     skip: bool = False
     """Set aside by a person. Never answered, never written.
@@ -218,7 +227,7 @@ class DetectedForm(BaseModel):
     """Everything understood about one uploaded questionnaire."""
 
     source_name: str
-    format: str = Field(description="'xlsx' or 'docx'")
+    format: str = Field(description="'xlsx', 'docx', or LIST for one with no file")
     questions: list[FormQuestion] = Field(default_factory=list)
     parts: list[Part] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

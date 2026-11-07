@@ -30,6 +30,12 @@ logger = get_logger(__name__)
 SUBJECT = "batch"
 """What `events.record(subject_type=...)` should say about a batch."""
 
+LAST_USED = (
+    "MAX(b.updated_at, b.used_at, COALESCE((SELECT MAX(MAX(c.updated_at, c.used_at))"
+    " FROM conversations c WHERE c.batch_id = b.batch_id), ''))"
+)
+"""When the questionnaire `b` was last used: changed, opened, or worked on in its chat (plan 033)."""
+
 
 @dataclass(frozen=True)
 class Batch:
@@ -52,6 +58,8 @@ class Batch:
     and answer memory beside the shared ones, and what a person approves in it
     is remembered for that product.
     """
+    used_at: str = ""
+    """When it was last used, `LAST_USED`: what retention counts from (plan 033)."""
 
     @property
     def exists(self) -> bool:
@@ -60,11 +68,11 @@ class Batch:
         Worth asking before offering to fill it in: uploads live in a directory
         somebody may have cleared, and the answers outlive the file.
         """
-        return self.source_path.exists()
+        return bool(self.source_path.name) and self.source_path.exists()
 
 
-def create(user: User, source: Path, form: DetectedForm, product_id: str = "") -> Batch:
-    """Record a newly uploaded questionnaire, for a product or General (""). Returns the batch."""
+def create(user: User, source: Path | None, form: DetectedForm, product_id: str = "") -> Batch:
+    """Record a newly uploaded questionnaire, for a product or General (""); `source` None for a typed list."""
     batch_id = uuid.uuid4().hex[:12]
     now = store.utcnow()
     conn = store.connect()
@@ -80,7 +88,7 @@ def create(user: User, source: Path, form: DetectedForm, product_id: str = "") -
             user.team_id,
             user.email,
             form.source_name,
-            str(source),
+            str(source or ""),
             form.format,
             form.model_dump_json(),
             now,
@@ -94,11 +102,12 @@ def create(user: User, source: Path, form: DetectedForm, product_id: str = "") -
         team_id=user.team_id,
         actor_email=user.email,
         source_name=form.source_name,
-        source_path=source,
+        source_path=source or Path(""),
         form=form,
         created_at=now,
         updated_at=now,
         product_id=product_id,
+        used_at=now,
     )
 
 
@@ -114,6 +123,7 @@ def _row_to_batch(row) -> Batch:
         updated_at=row["updated_at"],
         detail=(row["detail"] if "detail" in row.keys() else "full") or "full",
         product_id=row["product_id"],
+        used_at=row["last_used"],
     )
 
 
@@ -132,13 +142,13 @@ def load(
     learning. `actor_email=None` skips the owner check, for housekeeping.
     """
     conn = store.connect()
-    sql = "SELECT * FROM form_batches WHERE batch_id = ?"
+    sql = f"SELECT b.*, {LAST_USED} AS last_used FROM form_batches b WHERE b.batch_id = ?"
     params: list[object] = [batch_id]
     if team_id is not None:
-        sql += " AND team_id = ?"
+        sql += " AND b.team_id = ?"
         params.append(team_id)
     if actor_email is not None:
-        sql += " AND actor_email = ?"
+        sql += " AND b.actor_email = ?"
         params.append(actor_email)
     row = conn.execute(sql, params).fetchone()
     return _row_to_batch(row) if row else None
@@ -169,19 +179,19 @@ def claimed_sources(team_id: str) -> dict[str, str]:
 
 
 def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> list[dict]:
-    """One person's questionnaires, last changed first, with how far each has got.
+    """One person's questionnaires, most recently used first, with how far each has got.
 
-    Last changed is `updated_at`, which every write to a questionnaire or its
-    answers moves (plan 029, 1.1): the one somebody was working on is the one
-    they look for, whenever it was uploaded. Opening, filling and downloading
-    change nothing, so they do not move it.
+    Used is `LAST_USED`, which every write to it or its answers moves (plan 029,
+    1.1), and since plan 033 opening it too: the one somebody was working on is
+    the one they look for, whenever it was uploaded. `updated_at` is still when
+    it last changed; filling and downloading move neither.
 
     `actor_email=None` lists the team's, which nothing a person clicks asks for.
     """
     conn = store.connect()
-    sql = """
+    sql = f"""
         SELECT b.batch_id, b.source_name, b.format, b.actor_email, b.created_at,
-               b.updated_at, b.product_id, COUNT(a.question_id) AS answered
+               b.updated_at, b.product_id, COUNT(a.question_id) AS answered, {LAST_USED} AS used_at
         FROM form_batches b
         LEFT JOIN batch_answers a ON a.batch_id = b.batch_id
         WHERE b.team_id = ?
@@ -192,7 +202,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
         params.append(actor_email)
     # rowid breaks the tie: `updated_at` is accurate to the second, and two
     # files uploaded together came back in an arbitrary order without it.
-    sql += " GROUP BY b.batch_id ORDER BY b.updated_at DESC, b.rowid DESC LIMIT ?"
+    sql += " GROUP BY b.batch_id ORDER BY used_at DESC, b.rowid DESC LIMIT ?"
     params.append(max(1, limit))
     rows = conn.execute(sql, params).fetchall()
     return [
@@ -203,6 +213,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 25) -> 
             "actor_email": row["actor_email"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "used_at": row["used_at"],
             "answered": row["answered"],
             "product_id": row["product_id"],
         }
@@ -372,8 +383,15 @@ def forget_answer(batch_id: str, question_id: str) -> None:
         )
 
 
+def touch(batch_id: str) -> None:
+    """Record that a questionnaire was opened: opening is using it (plan 033). Nothing else changes."""
+    conn = store.connect()
+    with conn:
+        conn.execute("UPDATE form_batches SET used_at = ? WHERE batch_id = ?", (store.utcnow(), batch_id))
+
+
 def delete(batch_id: str) -> None:
-    """Forget a batch and its answers. The uploaded file is left alone."""
+    """Forget a batch and its answers; its chat keeps its messages. The files are `retention`'s."""
     conn = store.connect()
     conn.execute("DELETE FROM form_batches WHERE batch_id = ?", (batch_id,))
     conn.commit()

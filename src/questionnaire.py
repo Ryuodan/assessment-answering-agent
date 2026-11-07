@@ -1,18 +1,24 @@
-"""One questionnaire as its owner sees it: the gate every operation passes, and what the pages draw.
+"""One questionnaire as its owner sees it: the gate every operation passes, what the pages draw, and deleting it.
 
 Moved from `src/tools.py` (plan 033) to make room there, which re-exports what
 its callers use: `tools.inspect`, `tools._require` and `tools._memory_id` are
 the names the interface, the assistant and the tests have always used.
+
+A list -- typed questions, or a PDF's or a Word text's (`forms.model.LIST`,
+`src/lists.py`) -- is a questionnaire like a file's, with no file to write
+into: everything here works on it, and filling it is refused (`refuse_list`).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from src import answer_memory, batches, busy, products
+from src import answer_memory, batches, busy, events, products, retention
 from src.batches import Batch
-from src.errors import QuestionnaireNotFound
+from src.errors import NothingToFill, QuestionnaireBusy, QuestionnaireNotFound
+from src.forms.model import LIST
 from src.identity import User
+from src.logs import get_logger
 from src.selection import (
     APPROVED,
     BLANKED,
@@ -23,6 +29,8 @@ from src.selection import (
     ready_to_write,
     written_by_a_person,
 )
+
+logger = get_logger(__name__)
 
 
 def require(user: User, batch_id: str, *, reading: bool = False) -> Batch:
@@ -122,6 +130,9 @@ def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict[str, 
         "file_present": batch.exists,
         "created_at": batch.created_at,
         "updated_at": batch.updated_at,
+        # Last opened or changed, and the day it is kept until; None when nothing is deleted (plan 033).
+        "used_at": batch.used_at,
+        "kept_until": retention.kept_until(batch.used_at),
         "running": busy.state(batch.id),  # being answered now, and how far it has got (plan 029)
         "counts": {
             "questions": len(batch.form.questions),
@@ -175,3 +186,48 @@ def memory_id(batch_id: str, question_id: str) -> str:
     that was wrong.
     """
     return f"approved::{batch_id}::{question_id}"
+
+
+def refuse_list(batch: Batch) -> None:
+    """`nothing_to_fill` for a list: it has no file to write into, so its answers are downloaded instead."""
+    if batch.form.format == LIST:
+        raise NothingToFill(
+            "This questionnaire is a list of questions, with no file to write the answers into. "
+            "Download the answers instead, as PDF, Word, CSV or JSON."
+        )
+
+
+def fillable(user: User, batch_id: str) -> Batch:
+    """The questionnaire to fill or whose filled copy to download: a deleted product's too, never a list."""
+    batch = require(user, batch_id, reading=True)
+    refuse_list(batch)
+    return batch
+
+
+def delete(user: User, batch_id: str) -> dict[str, int]:
+    """Delete one of the caller's questionnaires: its answers, its upload and its filled copy (plan 033).
+
+    A deleted product's too: it is kept to be read, and its owner may still
+    want it gone. Refused with `questionnaire_busy` while it is being answered,
+    or while a chat turn runs in a conversation about it. The conversation
+    keeps its messages and loses its answers panel; the answer memory keeps
+    what approving taught it. The event has counts, never content.
+    """
+    batch = require(user, batch_id, reading=True)
+    if retention.in_a_running_chat(batch.id):
+        raise QuestionnaireBusy("A chat is working with this questionnaire right now. Wait until it finishes.")
+    with busy.hold(batch.id, "deleting"):  # refused if a run holds it; and none starts meanwhile
+        answers = len(batches.answers(batch.id))
+        files = retention.remove_questionnaire(batch)
+    events.record(
+        user,
+        events.QUESTIONNAIRE_DELETED,
+        subject_type=batches.SUBJECT,
+        subject_id=batch.id,
+        format=batch.form.format,  # "list" for a list
+        questions=len(batch.form.questions),
+        answers=answers,
+        files=files,
+    )
+    logger.info("questionnaire.deleted", batch_id=batch.id, answers=answers, files=files)
+    return {"answers": answers, "files": files}

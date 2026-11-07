@@ -71,6 +71,7 @@ modules = [
     "src.memory",
     "src.memory_sweep",
     "src.storage",
+    "src.retention",
 ]
 
 [[layer]]
@@ -97,6 +98,7 @@ modules = [
     "src.styling",
     "src.fill_audit",
     "src.questionnaire",
+    "src.lists",
     "src.tools",
     "src.agents.assistant",
     "src.agents.assistant_cards",

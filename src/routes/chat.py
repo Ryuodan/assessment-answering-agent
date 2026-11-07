@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
-from src import chat_running, conversations, forms, products, service, store
+from src import chat_running, conversations, forms, products, retention, service, store
 from src.agents import assistant
 from src.conversations import Conversation
 from src.errors import NotFound, Unavailable
@@ -93,10 +93,16 @@ def list_conversations(user: User = Depends(current_user), limit: int = 30) -> d
     """The caller's own conversations, most recently used first, each with its product.
 
     And with the turn running in it, or null (plan 031): the page marks the row,
-    and finds a new chat's id by the run id it sent the first message with.
+    and finds a new chat's id by the run id it sent the first message with. And
+    with the day it is kept until, or null when nothing is deleted (plan 033).
     """
     listed = conversations.recent(user.team_id, actor_email=user.email, limit=limit)
-    return {"conversations": [{**row, "running": chat_running.running(row["id"])} for row in listed]}
+    return {
+        "conversations": [
+            {**row, "running": chat_running.running(row["id"]), "kept_until": retention.kept_until(row["used_at"])}
+            for row in listed
+        ]
+    }
 
 
 @router.post("/api/chat")
@@ -187,9 +193,13 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
     that ends in between comes back saved and still reported, which the
     page's next check corrects. Read after, a slow `answers_for` let a turn
     end unseen, and the page drew a transcript without it, and no turn.
+
+    Opening it is using it: its `kept_until` starts again from now (plan 033).
+    A conversation whose questionnaire was deleted opens with `answers` null.
     """
     running = chat_running.running(conversation_id)
     conversation = _conversation(conversation_id, user)
+    conversations.touch(conversation.id)
     transcript = []
     for message in conversation.messages:
         kind = getattr(message, "type", "")
@@ -241,6 +251,7 @@ def get_conversation(conversation_id: str, user: User = Depends(current_user)) -
         "answers": assistant.answers_for(user, conversation),
         # The turn still running in it, or null: its message is not in the transcript until it ends (plan 031).
         "running": running,
+        "kept_until": retention.kept_until(store.utcnow()),  # opened just now (plan 033)
     }
 
 

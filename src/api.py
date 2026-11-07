@@ -16,7 +16,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from src import web
+from src import retention, web
 from src.web import attachment_headers as attachment_headers
 from src.logs import get_logger
 from src import (
@@ -97,7 +97,7 @@ async def lifespan(_: FastAPI):
             acting_as=identity.LOCAL_EMAIL,
             fix="add someone before exposing this beyond localhost",
         )
-    housekeeping = asyncio.create_task(storage.keep_within_limits())
+    housekeeping = asyncio.gather(storage.keep_within_limits(), retention.keep_for_days())  # RETENTION_DAYS too
     try:
         yield
     finally:

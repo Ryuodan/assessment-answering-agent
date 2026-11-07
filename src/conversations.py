@@ -35,6 +35,9 @@ SUBJECT = "conversation"
 
 TITLE_LENGTH = 70
 
+LAST_USED = "MAX(updated_at, used_at)"
+"""When a conversation was last used: something said in it, or opened (plan 033)."""
+
 
 @dataclass
 class Conversation:
@@ -50,6 +53,8 @@ class Conversation:
     updated_at: str = ""
     product_id: str = ""
     """The product this chat is for, or "" for General (plan 023). Its questionnaire's too."""
+    used_at: str = ""
+    """When it was last used, `LAST_USED`: what retention counts from (plan 033)."""
 
 
 def title_from(text: str) -> str:
@@ -79,6 +84,7 @@ def create(user: User, first_message: str = "", product_id: str = "") -> Convers
         created_at=now,
         updated_at=now,
         product_id=product_id,
+        used_at=now,
     )
     conn = store.connect()
     conn.execute(
@@ -113,6 +119,7 @@ def _row_to_conversation(row) -> Conversation:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         product_id=row["product_id"],
+        used_at=row["last_used"],
     )
 
 
@@ -131,7 +138,7 @@ def load(
     like the storage housekeeping.
     """
     conn = store.connect()
-    sql = "SELECT * FROM conversations WHERE conversation_id = ?"
+    sql = f"SELECT *, {LAST_USED} AS last_used FROM conversations WHERE conversation_id = ?"
     params: list[object] = [conversation_id]
     if team_id is not None:
         sql += " AND team_id = ?"
@@ -169,7 +176,7 @@ def save(conversation: Conversation) -> None:
 
 
 def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> list[dict]:
-    """One person's conversations, most recently used first.
+    """One person's conversations, most recently used first: said in, or since plan 033 opened.
 
     Theirs and nobody else's. A conversation is what somebody said while they
     were working -- half-formed instructions, a file another company sent them,
@@ -178,8 +185,9 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> 
     and the tests ask for.
     """
     conn = store.connect()
-    sql = """
+    sql = f"""
         SELECT conversation_id, title, batch_id, actor_email, created_at, updated_at, product_id,
+               {LAST_USED} AS used_at,
                (SELECT source_name FROM form_batches b
                  WHERE b.batch_id = c.batch_id) AS source_name
           FROM conversations c
@@ -189,7 +197,7 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> 
     if actor_email is not None:
         sql += " AND actor_email = ?"
         params.append(actor_email)
-    sql += " ORDER BY updated_at DESC, rowid DESC LIMIT ?"
+    sql += " ORDER BY used_at DESC, rowid DESC LIMIT ?"
     params.append(limit)
     rows = conn.execute(sql, params).fetchall()
     return [
@@ -201,10 +209,20 @@ def recent(team_id: str, *, actor_email: str | None = None, limit: int = 30) -> 
             "actor_email": row["actor_email"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "used_at": row["used_at"],
             "product_id": row["product_id"],
         }
         for row in rows
     ]
+
+
+def touch(conversation_id: str) -> None:
+    """Record that a conversation was opened: opening is using it (plan 033). Nothing else changes."""
+    conn = store.connect()
+    with conn:
+        conn.execute(
+            "UPDATE conversations SET used_at = ? WHERE conversation_id = ?", (store.utcnow(), conversation_id)
+        )
 
 
 def delete(conversation_id: str, *, actor_email: str | None = None) -> bool:

@@ -274,6 +274,11 @@ class Settings(BaseSettings):
     storage_limit_per_user_mb: int = Field(default=2048, ge=0)
     # Nothing used this recently is removed, even over the limit.
     storage_keep_days: int = Field(default=30, ge=1)
+    # Questionnaires, typed lists and chats nobody has opened or changed for this many days are
+    # deleted, with their answers and files, about once a day; so are the answered runs older than
+    # this. Never the knowledge base, the answer memory, products, people or the event log. 0 keeps
+    # everything.
+    retention_days: int = Field(default=180, ge=0)
     # At or below this, an answer is held for review, and a held answer never shows a higher score.
     review_confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 

@@ -40,7 +40,7 @@ from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role,
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
 from src.errors import ToolError as ToolError
-from src.questionnaire import inspect as inspect, memory_id as _memory_id, require as _require
+from src.questionnaire import fillable as _fillable, inspect as inspect, memory_id as _memory_id, require as _require
 from src.styling import in_house_style as in_house_style
 from src.selection import (
     APPROVED as APPROVED,
@@ -808,7 +808,7 @@ def fill(
     """
     from src import forms
 
-    batch = _require(user, batch_id, reading=True)  # the customer's file only: a deleted product's too
+    batch = _fillable(user, batch_id)  # the customer's file only: a deleted product's too, and never a list
     if not batch.exists:
         raise ToolError(
             f"The uploaded file for {batch.source_name!r} is no longer on the server. Upload it again to fill it in."
@@ -934,14 +934,14 @@ def _working_copy(existing: AnsweredQuestion | None, question: FormQuestion) -> 
 def _as_question(question: FormQuestion) -> Question:
     """A detected question, in the shape the answering pipeline takes.
 
-    The two models are deliberately separate: one describes a place in a
-    document, the other a thing to answer. This is the only seam between them.
+    The two models are deliberately separate: one describes a place in a document, the other a thing
+    to answer. This is the only seam between them, and a list's type and options cross it (plan 033).
     """
     return Question(
         id=question.id,
         text=question.text,
         section=question.section or None,
-        language=question.language,
+        **question.model_dump(include={"language", "question_type", "options"}),
     )
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.config import settings
-from src.forms.model import DetectedForm, FormQuestion
+from src.forms.model import LIST, DetectedForm, FormQuestion
 from src.models import AnsweredQuestion, BeforeApproval
 from src.verification import held_by_score
 
@@ -65,7 +65,8 @@ class Scope:
                 continue
             if self.unanswered_only and _settled(answered.get(question.id), question):
                 continue
-            if not question.writable:
+            # A list's questions have no place in a file, and are answered all the same (plan 033).
+            if question.skip or not (question.writable or form.format == LIST):
                 continue
             chosen.append(question)
         return chosen

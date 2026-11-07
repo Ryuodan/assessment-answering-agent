@@ -325,4 +325,11 @@ MIGRATIONS: list[str] = [
     # 14 -- what is left of a deleted product: the name its kept, read-only work is labelled with (plan 027).
     "CREATE TABLE deleted_products (product_id TEXT PRIMARY KEY, team_id TEXT NOT NULL, name TEXT NOT NULL,"
     " color TEXT NOT NULL DEFAULT '', deleted_at TEXT NOT NULL);",
+    # 15 -- when a questionnaire and a chat were last opened (plan 033). Opening is using, and
+    # work unused for RETENTION_DAYS is deleted. '' until opened: last used is the later of
+    # this and `updated_at`, so nothing from before is older than it was.
+    """
+    ALTER TABLE form_batches ADD COLUMN used_at TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN used_at TEXT NOT NULL DEFAULT '';
+    """,
 ]

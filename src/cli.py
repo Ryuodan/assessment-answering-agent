@@ -7,6 +7,7 @@ python -m src.cli stats
 python -m src.cli doctor [--network] [--json]
 python -m src.cli inspect request <request-id>
 python -m src.cli inspect fills [--team T] [--json]
+python -m src.cli inspect retention [--days N] [--json]
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-from src import answer_memory, diagnostics, fill_audit, llm, service
+from src import answer_memory, diagnostics, fill_audit, llm, retention, service
 from src.config import configure_logging, settings
 from src.models import SourceType
 
@@ -130,6 +131,16 @@ def _inspect_fills(team: str, as_json: bool) -> int:
     return 0
 
 
+def _inspect_retention(days: int, as_json: bool) -> int:
+    """What retention deletes in the next `days` days, by kind and owner, without content (plan 033). Read-only."""
+    items = retention.due(within_days=days)
+    if as_json:
+        print(json.dumps({"retention_days": settings.retention_days, "due": [vars(item) for item in items]}, indent=2))
+    else:
+        print("\n".join(retention.report(items, days)))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The command line's arguments: one subcommand per job."""
     parser = argparse.ArgumentParser(
@@ -176,6 +187,9 @@ def build_parser() -> argparse.ArgumentParser:
     fills = what.add_parser("fills", help="fills that wrote answers the review gate holds back (plan 029)")
     fills.add_argument("--team", default=settings.default_team, help="whose fills (default: %(default)s)")
     fills.add_argument("--json", action="store_true", help="the two lists as one JSON object")
+    kept = what.add_parser("retention", help="what RETENTION_DAYS deletes in the next N days (plan 033)")
+    kept.add_argument("--days", type=int, default=30, help="how far ahead to look (default: %(default)s)")
+    kept.add_argument("--json", action="store_true", help="one JSON object")
 
     return parser
 
@@ -213,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
         return _doctor(args.network, args.json)
     if args.command == "inspect" and args.what == "fills":
         return _inspect_fills(args.team, args.json)
+    if args.command == "inspect" and args.what == "retention":
+        return _inspect_retention(args.days, args.json)
     if args.command == "inspect":
         return _inspect_request(args.request_id, args.log)
 

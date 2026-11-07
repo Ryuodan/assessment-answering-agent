@@ -1,10 +1,13 @@
 """A questionnaire's routes, moving here from `src/api.py` (plan 029).
 
 Filling came first, to make room in `src/api.py`; opening, listing and reading
-one followed with plan 029's Stage 1, and downloading the filled copy with plan 033. Two routers, each included in
-`src/api.py` where its routes were, so the order the routes are matched in, and
-the OpenAPI document, stay the same: `opening` before answering, `router`
-(filling) after approving.
+one followed with plan 029's Stage 1, and downloading the filled copy with plan
+033. Two routers, each included in `src/api.py` where its routes were, so the
+order the routes are matched in, and the OpenAPI document, stay the same:
+`opening` before answering, `router` (filling) after approving.
+
+Plan 033 added a list's questionnaire (`POST /api/forms/list`), deleting one
+(`DELETE /api/forms/{id}`), and the day each is kept until (`kept_until`).
 """
 
 from __future__ import annotations
@@ -17,11 +20,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from src import batches, forms, products, questionnaire, service, tools
+from src import batches, forms, lists, products, questionnaire, retention, service, tools
 from src.errors import NotFound
 from src.identity import User
 from src.logs import get_logger
 from src.routes.auth import current_user
+from src.routes.knowledge import check_suffix
 from src.web import attachment_headers
 
 logger = get_logger(__name__)
@@ -74,15 +78,63 @@ async def open_questionnaire(
     return tools.inspect(user, batch.id)
 
 
+@opening.post("/api/forms/list")
+async def open_question_list(
+    questions: list[str] = Form(default=[]),
+    file: UploadFile | None = File(default=None),
+    product: str = Form(""),
+    name: str = Form("", max_length=200),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Keep typed questions, or a PDF's or a Word file's, as a questionnaire with no file to write into (plan 033).
+
+    Multipart: one `questions` field per typed question, in order, and/or a
+    `file` (PDF or Word) whose questions are read first. `product` as for a
+    file, checked before anything is kept; `name` is what it is listed as (the
+    file's name, or "Typed questions", when left out). Nothing is answered:
+    the answer is the questionnaire as `GET /api/forms/{id}` returns it, with
+    `format` "list". 400 `no_questions_given` when there is nothing to keep;
+    422 `no_questions_found` when the file has no questions.
+    """
+    product_id = products.chosen(user.team_id, product)  # before the file is kept
+    typed = lists.typed(questions)
+    if file is None:
+        batch = lists.open_list(user, typed, name=name, product_id=product_id)
+        return tools.inspect(user, batch.id)
+    check_suffix(file.filename or "")
+    path = service.save_upload(file.filename or "questions", await file.read(), user.team_id, owner=user.email)
+    batch = await lists.read_list(user, path, name=name, product_id=product_id, also=typed)
+    return tools.inspect(user, batch.id)
+
+
+def _kept(row: dict[str, Any]) -> dict[str, Any]:
+    return {**row, "kept_until": retention.kept_until(row["used_at"])}
+
+
 @opening.get("/api/forms")
 def list_questionnaires(user: User = Depends(current_user), limit: int = 25) -> dict[str, Any]:
-    """One person's questionnaires, last changed first."""
-    return {"forms": batches.recent(user.team_id, actor_email=user.email, limit=limit)}
+    """One person's questionnaires, most recently used first, each with the day it is kept until (plan 033)."""
+    return {"forms": [_kept(row) for row in batches.recent(user.team_id, actor_email=user.email, limit=limit)]}
 
 
 @opening.get("/api/forms/{batch_id}")
 def get_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
+    """One questionnaire. Opening it is using it: its `kept_until` starts again from now (plan 033)."""
+    questionnaire.require(user, batch_id, reading=True)
+    batches.touch(batch_id)
     return tools.inspect(user, batch_id)
+
+
+@opening.delete("/api/forms/{batch_id}")
+def delete_questionnaire(batch_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
+    """Delete one of the caller's questionnaires, a list's or a deleted product's too, with its answers and files.
+
+    409 `questionnaire_busy` while it is being answered, or while a chat turn
+    runs in a conversation about it. A conversation about it still opens,
+    without its answers.
+    """
+    removed = questionnaire.delete(user, batch_id)
+    return {"deleted": batch_id, **removed}
 
 
 class FillRequest(BaseModel):
@@ -141,7 +193,7 @@ OOXML_TYPES = {
 @router.get("/api/forms/{batch_id}/file")
 def download_filled_questionnaire(batch_id: str, user: User = Depends(current_user)) -> FileResponse:
     """The filled copy. Produced by `/fill`, which must have run first."""
-    batch = questionnaire.require(user, batch_id, reading=True)  # a deleted product's too (plan 027)
+    batch = questionnaire.fillable(user, batch_id)  # a deleted product's too (plan 027); a list's has none
     filled = tools._filled_path(batch)
     if not filled.exists():
         raise NotFound("Fill the questionnaire first.", code="filled_file_missing")

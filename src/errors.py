@@ -216,3 +216,14 @@ class QuestionnaireBusy(Conflict, ToolError):
     """
 
     code = "questionnaire_busy"
+
+
+# Raised by src.questionnaire, for a list of questions (plan 033).
+class NothingToFill(Unprocessable, ToolError):
+    """A list of questions has no file to write the answers into: they are downloaded instead.
+
+    Unprocessable, so the API answers 422; also a ToolError, so the chat
+    assistant hands the sentence to the model as the tool's result.
+    """
+
+    code = "nothing_to_fill"
