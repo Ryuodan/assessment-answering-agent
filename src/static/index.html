@@ -671,7 +671,7 @@
     <p>Enter your address and your team's access code. Ask an administrator if
        you do not have one.</p>
     <label for="authEmail">Email address</label>
-    <input id="authEmail" type="email" autocomplete="email" required
+    <input id="authEmail" type="email" dir="ltr" autocomplete="email" required
            placeholder="you@t2.sa" spellcheck="false">
     <label for="authCode">Access code</label>
     <input id="authCode" type="password" autocomplete="current-password" required
@@ -1022,7 +1022,7 @@
         An administrator signs in with a password of their own instead of the team code.
       </p>
       <div class="adm-add" style="margin: 0 0 14px">
-        <input id="adminNewEmail" type="email" placeholder="name@t2.sa" spellcheck="false">
+        <input id="adminNewEmail" type="email" dir="ltr" placeholder="name@t2.sa" spellcheck="false">
         <select id="adminNewTeam"></select>
         <select id="adminNewRole">
           <option value="member">Member</option>
@@ -1208,6 +1208,12 @@
 
   const drawer = $("adminDrawer");
   const scrim = $("adminScrim");
+
+  function escapeText(value) {
+    const node = document.createElement("span");
+    node.textContent = value == null ? "" : String(value);
+    return node.innerHTML;
+  }
 
   /* A name, an address or a code: content, never translated, in its own
      direction inside an Arabic sentence (plan 038). */
@@ -1786,8 +1792,7 @@
     select.replaceChildren(new Option(t("Shared policies"), ""));
     teamProducts.forEach((product) => {
       const option = new Option(t("{product} and shared policies", { product: product.name }), product.id);
-      option.setAttribute("data-no-translate", "");  // it holds a product's name (plan 038)
-      option.dir = "auto";
+      option.setAttribute("data-no-translate", "");  // it holds a product's name, in a sentence of the page's (plan 038)
       select.append(option);
     });
     select.value = [...select.options].some((option) => option.value === was) ? was : "";
@@ -3930,9 +3935,9 @@
         wrap.style.alignItems = "center";
         // The heading, where the file has one: "column D" alone is not something
         // a person can recognise their spreadsheet by.
-        wrap.append(...(column.label  // the file's own heading
-          ? sentence(t("column {column} — {label}", { column: column.column }), { label: column.label })
-          : [t("column {column}", { column: column.column })]));
+        // The column's letter and heading are the file's own (plan 038).
+        wrap.append(...sentence(column.label ? t("column {column} — {label}") : t("column {column}"),
+          { column: column.column, label: column.label }));
         const picker = document.createElement("select");
         picker.disabled = readOnly();  // shown, to read, on a deleted product's questionnaire
         ROLE_LABELS.forEach(function (pair) {
@@ -3953,7 +3958,7 @@
             });
             await adoptBatch(updated, { quiet: true });
             setStatus($("extractStatus"), sentence(t("Column {column} on {sheet} now holds {role}.",
-              { column: column.column, role: ROLE_WORDS[picker.value] || picker.value }), { sheet: sheet.sheet }), "ok");
+              { role: ROLE_WORDS[picker.value] || picker.value }), { column: column.column, sheet: sheet.sheet }), "ok");
           } catch (error) {
             setStatus($("extractStatus"), I18n.error(error), "error");
           }
@@ -4956,8 +4961,7 @@
       const option = new Option(t("{product} (deleted)", { product: gone.name }), choice);
       option.disabled = true;
       option.dataset.deleted = "true";
-      option.setAttribute("data-no-translate", "");  // it holds a product's name (plan 038)
-      option.dir = "auto";
+      option.setAttribute("data-no-translate", "");  // it holds a product's name, in a phrase of the page's (plan 038)
       select.append(option);
     }
     select.value = choice && [...select.options].some((option) => option.value === choice) ? choice : "";
