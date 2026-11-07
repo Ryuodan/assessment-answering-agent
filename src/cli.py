@@ -17,7 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-from src import answer_memory, diagnostics, fill_audit, llm, retention, service
+from src import answer_memory, diagnostics, fill_audit, llm, retention, service, store
 from src.config import configure_logging, settings
 from src.models import SourceType
 
@@ -121,8 +121,26 @@ def _inspect_request(request_id: str, log: str | None) -> int:
     return 0
 
 
+def _schema_behind() -> int:
+    """1, said, when the database is older than this code; 0 when the read-only commands can open it.
+
+    They read through the app's own connection, which upgrades an older database
+    first: an `inspect` against an installation not yet started on new code
+    changed its schema (plan 035, found on the user's own data). Asked on a
+    read-only connection, as `doctor` asks.
+    """
+    have, want = diagnostics.schema_version(), len(store.MIGRATIONS)
+    if have is None or have >= want:
+        return 0
+    print(f"the database is at schema version {have}, and this code reads version {want}", file=sys.stderr)
+    print("  FIX: start the app once, which upgrades it; then run this again. Nothing was changed.", file=sys.stderr)
+    return 1
+
+
 def _inspect_fills(team: str, as_json: bool) -> int:
     """Fills that wrote answers the review gate holds back, and withdrawn approvals left released (plan 029)."""
+    if _schema_behind():
+        return 1
     fills, released = fill_audit.held_fills(team), fill_audit.released_by_withdrawal(team)
     if as_json:
         print(json.dumps({"fills": [vars(f) for f in fills], "released": [vars(r) for r in released]}, indent=2))
@@ -133,6 +151,8 @@ def _inspect_fills(team: str, as_json: bool) -> int:
 
 def _inspect_retention(days: int, as_json: bool) -> int:
     """What retention deletes in the next `days` days, by kind and owner, without content (plan 033). Read-only."""
+    if _schema_behind():
+        return 1
     items = retention.due(within_days=days)
     if as_json:
         print(json.dumps({"retention_days": settings.retention_days, "due": [vars(item) for item in items]}, indent=2))

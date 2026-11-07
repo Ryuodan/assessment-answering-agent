@@ -109,6 +109,18 @@ def storage() -> list[Check]:
     return out
 
 
+def schema_version() -> int | None:
+    """The database's schema version, read without opening it for writing; None when there is none yet."""
+    path = settings.db_path
+    if not path.exists():
+        return None
+    conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
+    try:
+        return int(conn.execute("PRAGMA user_version").fetchone()[0])
+    finally:
+        conn.close()
+
+
 def database() -> Check:
     """The database's schema version and what it holds, read without opening it for writing."""
     path = settings.db_path

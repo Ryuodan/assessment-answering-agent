@@ -46,6 +46,11 @@ The user's request: "Fix the debts. Test the system from A to Z and make sure it
     - deleting a questionnaire, and a list that found nothing, leave a held file alone.
     - 4 tests (`test_files_being_read.py`); their module does not import without the fix.
   - Also: a "new" test file first overwrote the tracked `tests/test_reading.py`. It was restored from git at once, and the new tests renamed. A memory note now says to check a name is free.
+- 2026-11-07, before the A-to-Z run: the real `data/app.db` was found at schema version 16. It had been at 14 at 01:25 UTC, read by plan 033/034's reviewer, and changed at 01:35 UTC.
+  - **Only the schema changed:** migrations 15 and 16, which add the empty `used_at` columns and the empty `search_plans` table. There are no rows newer than the day before, no events since, and no plan or `used_at` set. It is exactly the upgrade the app makes when it next starts on this code.
+  - **What did it was not found.** Not the reviewer (by its own account), and not `poe gen`, `arch`, `types`, `docs` or the test runs of that window: each was run again against a version-14 copy, which none changed. No app server was running.
+  - **One way it could happen is closed:** `inspect retention` and `inspect fills`, documented as read-only, read through the app's connection, which upgrades an older database first. They now ask the version on a read-only connection, as `doctor` does, and refuse with a FIX when the database is older (`src/cli.py`, `diagnostics.schema_version`). 4 tests in `tests/test_inspect_older_database.py`; 2 fail on the old CLI.
+  - From here, the real data's hashes are taken at the new version, before the A-to-Z run.
 
 ## Decision log
 
