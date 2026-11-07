@@ -1,6 +1,6 @@
 # Plan 032: Three items of plan 031's tech debt: the evaluation's index, empty brackets, earlier answers in search
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -32,6 +32,7 @@ The user's decisions on the tech debt plan 031 recorded:
   - TD-073 in `src/formatting.py` (`_LEFT_EMPTY`). The 52 characterization tests pass unchanged.
   - TD-074 in `src/search.py` (`earlier_answers`, a share for each kind in each knowledge base), `src/knowledge.py` (`source_name` in `search`, `search_types` and `text_search`), `src/api.py` and the Workbench's results. The unused `lexical_search` was removed, so `knowledge.py` is 26 lines shorter.
   - New tests failed before their change: 5 on the brackets, 4 on search, 2 on the evaluation's index, 1 browser test on the "previous answer" mark. One guard test pins the assistant's lookups.
+- 2026-11-07: tested end to end at the user's request ("Test the system from A to Z and make sure it is ready to be used"): plan 035's A-to-Z run, the real app and model on a copy of the local data, 20 of 20 steps passed, with no page or server errors. Plan complete.
 
 ## Decision log
 

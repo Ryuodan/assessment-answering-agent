@@ -1,6 +1,6 @@
 # Plan 034: The same question gets the same answer more often, without copying
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -111,6 +111,7 @@ Each is measured: 12 questions, three runs each, before and after, and then the 
   - **The retention pass deleted what was opened after it listed it.** It checks last use again first.
   - Recorded rather than fixed: TD-078, a file removed under a new read of the same file.
 - Also while merging: `tools.answer` passes `product_id` only for a product again, as General's call always was. Two tests pinned it.
+- 2026-11-07: tested end to end at the user's request ("Test the system from A to Z and make sure it is ready to be used"): plan 035's A-to-Z run, the real app and model on a copy of the local data, 20 of 20 steps passed, with no page or server errors. Plan complete.
 
 ## Decision log
 

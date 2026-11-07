@@ -1,6 +1,6 @@
 # Plan 033: The team's feedback, part 3: a step-by-step Workbench, faster review, saved lists, retention
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -130,6 +130,7 @@ All:
   - **The evaluation switch moved out of the package's import.** Turning kept plans off when `eval` was imported leaked into the test suite (`test_every_setting_is_its_declared_default`). Each runner now calls `eval.plan_afresh()` as it starts, and a test checks all six do.
   - **The Workbench searched twice.** A search typed while the drawer's file list loaded ran again when the list arrived, for the same words, scope and file (`test_the_workbench_still_searches_the_knowledge_base`, flaky). It now runs again only if one of those changed.
   - **The keyboard-attach test** listens for the file chooser early. Playwright turns interception on without waiting, and under load Enter reached the page first. A test fix only.
+- 2026-11-07: tested end to end at the user's request ("Test the system from A to Z and make sure it is ready to be used"): plan 035's A-to-Z run, the real app and model on a copy of the local data, 20 of 20 steps passed, with no page or server errors. Plan complete.
 
 ## Decision log
 

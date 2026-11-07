@@ -1,6 +1,6 @@
 # Plan 035: The open debts fixed, and the system tested from A to Z for use
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -13,8 +13,8 @@ The user's request: "Fix the debts. Test the system from A to Z and make sure it
 
 ## Acceptance criteria
 
-- [ ] TD-076, TD-077 and TD-078 are fixed, each with a test that fails without the fix.
-- [ ] The A-to-Z run covers:
+- [x] TD-076, TD-077 and TD-078 are fixed, each with a test that fails without the fix.
+- [x] The A-to-Z run covers:
   - signing in;
   - the products;
   - the knowledge base: choose, add, view, remove;
@@ -24,10 +24,10 @@ The user's request: "Fix the debts. Test the system from A to Z and make sure it
   - the chat: a question, an attached questionnaire answered, switching conversations;
   - the answer memory, preferences, signing out;
   - `src.cli doctor`, `inspect retention` and `inspect fills`.
-- [ ] The run uses a copy of `data/` and `chroma_db/`, and a test account made for it on the copy. The hashes of the real `data/app.db` and `chroma_db/chroma.sqlite3` are the same after.
-- [ ] No page logs a JavaScript error, and the server logs no unhandled error.
-- [ ] What it finds is fixed, with tests, or recorded in tech-debt for the user.
-- [ ] `uv run poe check` passes. The docs are updated.
+- [x] The run uses a copy of `data/` and `chroma_db/`, and a test account made for it on the copy. The hashes of the real `data/app.db` and `chroma_db/chroma.sqlite3` are the same after.
+- [x] No page logs a JavaScript error, and the server logs no unhandled error.
+- [x] What it finds is fixed, with tests, or recorded in tech-debt for the user.
+- [x] `uv run poe check` passes. The docs are updated.
 
 ## Plan
 
@@ -72,6 +72,7 @@ The user's request: "Fix the debts. Test the system from A to Z and make sure it
   - **The gate's own findings:**
     - `test_a_long_conversation_title_does_not_widen_the_history` measured the list at 768 px without opening it. It now starts closed there (TD-076), so the test opens it first: changed on purpose.
     - The chat test's turn watcher counted the working bubble and then read it, and the reply could replace it in between. It reads it in one step now (flaky, a test fix only).
+- 2026-11-07: tested end to end at the user's request ("Test the system from A to Z and make sure it is ready to be used"): plan 035's A-to-Z run, the real app and model on a copy of the local data, 20 of 20 steps passed, with no page or server errors. Plan complete.
 
 ## Decision log
 

@@ -33,9 +33,9 @@ Work asked for directly, outside the milestones:
 | [027](completed/027-pre-deploy-fixes.md) | the pre-deploy tests' findings fixed as the user decided (TD-037 to TD-044) | done 2026-10-20 |
 | [029](completed/029-team-feedback-safety-workbench-product.md) | the team's feedback, part 1: safety fixes, Workbench relief, product choice | done 2026-11-06 |
 | [030](completed/030-knowledge-page-honest-confidence-chat-cards.md) | the team's feedback, part 2: knowledge-base page, honest confidence, answer cards in the chat | done 2026-11-06 |
-| [031](active/031-product-answers-and-chat-fixes.md) | product answers keep shared material apart; ingest asks which knowledge base; the chat's drawer goes; switching conversations mid-turn; search per product | active |
-| [032](active/032-tech-debt-eval-index-brackets-search.md) | TD-072 to TD-074: the evaluation's own index, no empty brackets, earlier answers in search | active |
-| [033](active/033-workbench-steps-lists-retention.md) | the team's feedback, part 3: a step-by-step Workbench, faster review on the cards, saved lists, retention, the chat's upload | active |
-| [034](active/034-consistent-answers.md) | the same question gets the same answer more often: the same searches, the same question's earlier answer first, no invented names | active |
-| [035](active/035-debts-and-readiness.md) | TD-076 to TD-078 fixed; the system tested from A to Z for use | active |
-| [036](active/036-gc-round-5.md) | cleanup round 5: gc, coverage, grades, ceilings, tech-debt states | active |
+| [031](completed/031-product-answers-and-chat-fixes.md) | product answers keep shared material apart; ingest asks which knowledge base; the chat's drawer goes; switching conversations mid-turn; search per product | done 2026-11-07 |
+| [032](completed/032-tech-debt-eval-index-brackets-search.md) | TD-072 to TD-074: the evaluation's own index, no empty brackets, earlier answers in search | done 2026-11-07 |
+| [033](completed/033-workbench-steps-lists-retention.md) | the team's feedback, part 3: a step-by-step Workbench, faster review on the cards, saved lists, retention, the chat's upload | done 2026-11-07 |
+| [034](completed/034-consistent-answers.md) | the same question gets the same answer more often: the same searches, the same question's earlier answer first, no invented names | done 2026-11-07 |
+| [035](completed/035-debts-and-readiness.md) | TD-076 to TD-078 fixed; the system tested from A to Z for use | done 2026-11-07 |
+| [036](completed/036-gc-round-5.md) | cleanup round 5: gc, coverage, grades, ceilings, tech-debt states | done 2026-11-07 |

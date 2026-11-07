@@ -1,6 +1,6 @@
 # Plan 036: Cleanup round 5
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -8,12 +8,12 @@ The fifth garbage-collection round, asked for by the user after plans 031 to 035
 
 ## Acceptance criteria
 
-- [ ] `poe gc` has been run, and every candidate is acted on or already decided.
-- [ ] Round 5 grades are recorded in [grades.md](../../quality/grades.md), with coverage measured on this tree.
-- [ ] The size ceilings are lowered to what the modules are now.
-- [ ] Every tech-debt item that plans 031 to 035 changed says so. Routes no page uses are recorded for the user.
-- [ ] The A-to-Z run is clean on the final tree. Plans 031 to 035 are completed and moved; the roadmap is updated.
-- [ ] `uv run poe check` passes.
+- [x] `poe gc` has been run, and every candidate is acted on or already decided.
+- [x] Round 5 grades are recorded in [grades.md](../../quality/grades.md), with coverage measured on this tree.
+- [x] The size ceilings are lowered to what the modules are now.
+- [x] Every tech-debt item that plans 031 to 035 changed says so. Routes no page uses are recorded for the user.
+- [x] The A-to-Z run is clean on the final tree. Plans 031 to 035 are completed and moved; the roadmap is updated.
+- [x] `uv run poe check` passes.
 
 ## Plan
 
@@ -41,6 +41,8 @@ The fifth garbage-collection round, asked for by the user after plans 031 to 035
   - TD-017: about 0.17 s a test, unprofiled;
   - TD-028: 21 modules, and every new one logs events.
   - Recorded for the user: TD-079, four API routes no page, script or evaluation uses.
+- 2026-11-07: the final A-to-Z run (plan 035) was clean on this tree: 20 of 20 steps, with no page or server errors. Plans 031 to 035 are completed and moved, and the roadmap is updated.
+- 2026-11-07: `uv run poe check` on the final tree (see the commit). Plan complete.
 
 ## Decision log
 

@@ -1,6 +1,6 @@
 # Plan 031: Product answers keep shared material apart; ingest asks which knowledge base; the chat's fixes; search per product
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -146,6 +146,7 @@ All:
   - **"Index guidelines" kept its hidden hint as its accessible description** after a choice was made (`53c6528`).
   - Two lesser things, also fixed. A reply lost to a proxy timeout no longer reads "That did not work" while the turn goes on: the page checks the server and follows the turn. Running turns are watched through the list, `GET /api/chat`, instead of re-reading each whole conversation every 2.4 s.
   - TD-075's duplicate message is fixed too: a pending message the transcript already ends with is not drawn again.
+- 2026-11-07: tested end to end at the user's request ("Test the system from A to Z and make sure it is ready to be used"): plan 035's A-to-Z run, the real app and model on a copy of the local data, 20 of 20 steps passed, with no page or server errors. Plan complete.
 
 ## Decision log
 
