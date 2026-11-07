@@ -306,7 +306,8 @@
   .did .count { flex: none; font-weight: 600; color: var(--ink-soft); }
   .did .gist { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .did ol {
-    list-style: none; counter-reset: step; margin: 6px 0 0 16px; padding: 2px 0 2px 12px;
+    list-style: none; counter-reset: step; margin-block: 6px 0; margin-inline: 16px 0;
+    padding-block: 2px; padding-inline: 12px 0;
     border-inline-start: 2px solid var(--line);
   }
   .did li {
@@ -374,7 +375,7 @@
   .composer-inner {
     max-width: 700px; margin: 0 auto; background: var(--surface);
     border: 1px solid var(--line-strong); border-radius: 20px;
-    padding: 6px 8px 8px 10px; display: flex; flex-direction: column; gap: 2px;
+    padding-block: 6px 8px; padding-inline: 10px 8px; display: flex; flex-direction: column; gap: 2px;
     box-shadow: var(--shadow-sm);
   }
   .composer-inner:focus-within { border-color: var(--accent); box-shadow: var(--shadow-md); }
@@ -389,7 +390,7 @@
      keyboard goes through, so the "＋" could not be reached without a mouse. */
   button.attach {
     flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
-    height: 32px; padding: 0 13px 0 10px; border-radius: var(--radius-pill);
+    height: 32px; padding-block: 0; padding-inline: 10px 13px; border-radius: var(--radius-pill);
     border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
     font-size: 13px; font-weight: 550; white-space: nowrap;
   }
@@ -504,6 +505,20 @@
     background: var(--surface-sunken); color: inherit;
   }
 
+  /* --- right to left (plan 038) -------------------------------------------
+     The layout is logical, so it mirrors by itself. What is left is what
+     points a way, and the spacing between letters: Arabic letters join, and
+     letter-spacing pulls them apart. */
+  html[dir="rtl"] .did > summary::before, html[dir="rtl"] .sources > summary::before { content: "◂"; }
+  html[dir="rtl"] .did[open] > summary::before, html[dir="rtl"] .sources[open] > summary::before { content: "▾"; }
+  html[dir="rtl"] .topbar h1, html[dir="rtl"] .side-head, html[dir="rtl"] .turn .role,
+  html[dir="rtl"] .aside-head, html[dir="rtl"] .empty h2 { letter-spacing: 0; }
+  /* A name in its own direction (dir="auto") on a line of its own: aligned
+     with the page around it, so an English title sits at the start of an
+     Arabic list rather than at its far edge. */
+  html[dir="rtl"] .convo .label, html[dir="rtl"] .aside-row .text, html[dir="rtl"] .did .scope,
+  html[dir="rtl"] .cite-panel .cite-head .who { text-align: match-parent; }
+
   @media (max-width: 1100px) { .answers-pane { flex-basis: var(--pane-width, 46vw); } }
   @media (max-width: 860px) {
     /* Over the conversation, at its own width: a width chosen beside it would cover a phone. */
@@ -534,7 +549,7 @@
   <button class="ghost" id="newChat">New conversation</button>
   <span class="spacer"></span>
   <div class="whoami" id="whoami" hidden>
-    <b id="whoamiEmail"></b>
+    <b id="whoamiEmail" data-no-translate></b>
     <button class="ghost" id="signOut" title="End this session">Sign out</button>
   </div>
   <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
@@ -586,7 +601,7 @@
 
     <div class="composer">
       <div class="attached" id="attached" hidden>
-        <span>Attached</span><span class="name" id="attachedName"></span>
+        <span>Attached</span><span class="name" id="attachedName" data-no-translate></span>
         <button class="ghost" id="detach">remove</button>
       </div>
       <div class="status error composer-note" id="composerNote" role="alert" hidden></div>
@@ -691,6 +706,32 @@
   const $ = (id) => document.getElementById(id);
   const THEME_KEY = "assessment-theme";
 
+  /* --- the interface's language (plan 038) --------------------------------
+     Every sentence this page writes goes through t(): the English as it was,
+     or the Arabic in static/i18n/ar-chat.js. What people said, and the names
+     of things, are content: never translated, and in an Arabic page each in
+     its own direction (ownDirection), so an English title reads left to right
+     there. In English nothing is drawn differently from before. */
+  const t = I18n.t;
+  function ownDirection(element) {
+    if (I18n.rtl) element.dir = "auto";
+    return element;
+  }
+  function content(text) {
+    const span = document.createElement("span");
+    span.setAttribute("data-no-translate", "");
+    span.textContent = text;
+    return ownDirection(span);
+  }
+  /* A translated sentence with content inside it: each {name} in `text`
+     filled with the node or the words in `parts`, for replaceChildren(...). */
+  function sentence(text, parts) {
+    return text.split(/(\{\w+\})/).filter(Boolean).map((piece) => {
+      const name = /^\{(\w+)\}$/.exec(piece);
+      return name && name[1] in parts ? parts[name[1]] : piece;
+    });
+  }
+
   /* --- theme, the same two lines the workbench uses ----------------------- */
   const systemDark = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const theme = () => document.documentElement.getAttribute("data-theme") || (systemDark() ? "dark" : "light");
@@ -753,7 +794,7 @@
   $("signInForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const status = $("gateStatus");
-    status.textContent = "Signing in…";
+    status.textContent = t("Signing in…");
     status.className = "status busy";
     try {
       await request("/api/auth/session", {
@@ -763,7 +804,7 @@
       status.textContent = "";
       if (await whoAmI()) await start();
     } catch (error) {
-      status.textContent = error.message;
+      status.textContent = I18n.error(error);
       status.className = "status error";
     }
   });
@@ -792,14 +833,16 @@
   let historyChoices = [];  // the products of this person's chats, most recently used first
   const hadQuestionnaire = new Set();  // conversations this page has seen with a questionnaire (plan 033)
 
+  /* In the interface's language (plan 038): sent in Arabic, a starter gets an
+     Arabic reply. The last is Arabic in both, to show that it can be asked. */
   const STARTERS = [
-    "Read this questionnaire and tell me what is in it",
-    "Answer everything, keeping each answer to one sentence",
-    "Answer only the governance questions",
-    "Finish the ones that are still blank",
+    t("Read this questionnaire and tell me what is in it"),
+    t("Answer everything, keeping each answer to one sentence"),
+    t("Answer only the governance questions"),
+    t("Finish the ones that are still blank"),
     // Nothing attached. Somebody who has only ever seen this used on a file
     // will not guess that a question can simply be asked.
-    "Do we encrypt customer data at rest?",
+    t("Do we encrypt customer data at rest?"),
     "اقرأ هذا الاستبيان وأجب عن أسئلة الخصوصية",
   ];
 
@@ -826,12 +869,12 @@
     if (isNaN(when)) return null;
     const time = document.createElement("time");
     time.dateTime = at;
-    time.title = when.toLocaleString();
+    time.title = I18n.dateTime(when);
     const today = new Date().toDateString() === when.toDateString();
+    const clock = I18n.time(when, { hour: "2-digit", minute: "2-digit" });
     time.textContent = today
-      ? when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      : when.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
-        when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      ? clock
+      : t("{day}, {time}", { day: I18n.date(when, { month: "short", day: "numeric" }), time: clock });
     return time;
   }
 
@@ -840,7 +883,7 @@
     turn.className = "turn " + role;
     const label = document.createElement("div");
     label.className = "role";
-    label.textContent = role === "you" ? "You" : "Assistant";
+    label.textContent = role === "you" ? t("You") : t("Assistant");
     const time = spokenAt(data && data.at);
     if (time) label.append(time);
     turn.append(label);
@@ -851,12 +894,13 @@
       const chip = document.createElement("div");
       chip.className = "attachment";
       chip.title = data.file;
+      chip.setAttribute("data-no-translate", "");  // a file's name (plan 038)
       const icon = document.createElement("b");
       icon.textContent = "●";
       icon.setAttribute("aria-hidden", "true");
       const name = document.createElement("span");
       name.textContent = data.file;
-      chip.append(icon, name);
+      chip.append(icon, ownDirection(name));
       turn.append(chip);
     }
 
@@ -869,7 +913,11 @@
     } else {
       bubble.textContent = text;
     }
+    /* What was said is content, in its own direction (plan 038), unless the
+       page wrote it (`ours`): a failure, what a fill wrote. */
+    if (!(data && data.ours)) bubble.setAttribute("data-no-translate", "");
     if (Cards.isArabic(text)) bubble.dir = "rtl";
+    else ownDirection(bubble);
     turn.append(bubble);
 
     /* A question answered here, as the card the Workbench draws: the answer
@@ -886,7 +934,7 @@
       const show = document.createElement("button");
       show.type = "button";
       show.className = "ghost show-answers to-answers";
-      show.textContent = "Show the answers →";
+      show.textContent = t("Show the answers →");
       show.onclick = async () => {
         showAnswersPane(true);
         await reloadAnswers();
@@ -926,21 +974,21 @@
      which is exact and is kept, underneath, as the scope; the name alone is
      jargon. An unknown tool keeps its own name rather than disappearing. */
   const DID = {
-    open_questionnaire: "Read the file",
-    describe_form: "Looked at what is in it",
-    list_questions: "Listed questions",
-    read_existing: "Read what the file already says",
-    read_answers: "Read the answers",
-    answer_questions: "Answered questions",
-    reword_answers: "Reworded answers",
-    put_back_drafts: "Put the drafts back",
-    write_one_answer: "Wrote in an answer",
-    set_aside: "Set questions aside",
-    propose_fill: "Checked what filling would write",
-    search_policies: "Searched the policies",
-    answer_directly: "Drafted an answer",
-    list_skills: "Looked at your skills",
-    apply_skill: "Applied a skill",
+    open_questionnaire: t("Read the file"),
+    describe_form: t("Looked at what is in it"),
+    list_questions: t("Listed questions"),
+    read_existing: t("Read what the file already says"),
+    read_answers: t("Read the answers"),
+    answer_questions: t("Answered questions"),
+    reword_answers: t("Reworded answers"),
+    put_back_drafts: t("Put the drafts back"),
+    write_one_answer: t("Wrote in an answer"),
+    set_aside: t("Set questions aside"),
+    propose_fill: t("Checked what filling would write"),
+    search_policies: t("Searched the policies"),
+    answer_directly: t("Drafted an answer"),
+    list_skills: t("Looked at your skills"),
+    apply_skill: t("Applied a skill"),
   };
 
   function parseStep(step) {
@@ -964,7 +1012,7 @@
     const summary = document.createElement("summary");
     const count = document.createElement("span");
     count.className = "count";
-    count.textContent = parsed.length === 1 ? "1 step" : parsed.length + " steps";
+    count.textContent = parsed.length === 1 ? t("1 step") : t("{n} steps", { n: parsed.length });
     const kinds = new Map();
     parsed.forEach((step) => kinds.set(step.action, (kinds.get(step.action) || 0) + 1));
     const gist = document.createElement("span");
@@ -984,10 +1032,13 @@
       action.textContent = step.action;
       what.append(action);
       if (step.scope) {
+        // The call's own arguments, exactly as it made them: content (plan 038).
         const scope = document.createElement("span");
         scope.className = "scope";
         scope.textContent = step.scope;
         if (Cards.isArabic(step.scope)) scope.dir = "auto";
+        else ownDirection(scope);
+        scope.setAttribute("data-no-translate", "");
         what.append(scope);
       }
       row.title = String(steps[index]);
@@ -1018,8 +1069,9 @@
     const details = document.createElement("details");
     details.className = "sources";
     const summary = document.createElement("summary");
-    summary.textContent = unique.length + " source" + (unique.length === 1 ? "" : "s") +
-      " — click to read the clauses";
+    summary.textContent = unique.length === 1
+      ? t("1 source — click to read the clauses")
+      : t("{n} sources — click to read the clauses", { n: unique.length });
     details.append(summary);
 
     const wrap = document.createElement("div");
@@ -1031,7 +1083,9 @@
       button.className = "cite " + kind;
       button.type = "button";
       button.setAttribute("aria-expanded", "false");
-      button.append(document.createTextNode(hit.locator || hit.source_name || "source"));
+      // Where it is from is a name: content (plan 038).
+      const where = hit.locator || hit.source_name;
+      button.append(where ? content(where) : t("source"));
       // Whose document this is. Only the external ones are marked -- our own
       // policy is the unmarked case, and badging every source would hide the
       // one that matters.
@@ -1054,13 +1108,19 @@
       const who = document.createElement("span");
       who.className = "who";
       who.textContent = hit.source_name || "";
-      head.append(who);
+      who.setAttribute("data-no-translate", "");  // a document's name (plan 038)
+      head.append(ownDirection(who));
       const ownHead = Cards.ownSourceBadge(hit);
       if (ownHead) head.append(ownHead);
       head.append(Cards.viewToggle());
       const openIt = Cards.openDocumentButton(hit.source_name, hit.source_type);
       if (openIt) head.append(openIt);
-      panel.append(head, Cards.chunk(hit.snippet || ""));
+      // The clause's own words are content (plan 038): held in a wrapper, since
+      // the Formatted/Raw switch puts a new chunk in place of the one drawn.
+      const said = document.createElement("div");
+      said.setAttribute("data-no-translate", "");
+      said.append(Cards.chunk(hit.snippet || ""));
+      panel.append(head, said);
 
       button.onclick = () => {
         const open = panel.hidden;
@@ -1159,8 +1219,10 @@
      transcript already ends with it (TD-075). */
   function drawPending(turn, withoutMessage) {
     turn.you = withoutMessage ? null : addTurn("you", turn.message, { at: turn.at, file: turn.file });
-    turn.shown = addTurn("assistant", "");
+    turn.shown = addTurn("assistant", "", { ours: true });
     turn.shown.classList.add("working");
+    // How far it has got is the page's own words, in the page's direction (plan 038).
+    turn.shown.querySelector(".bubble").removeAttribute("dir");
     workingBubble(turn.shown.querySelector(".bubble"), turn.label, turn.percent);
   }
   function shownNow(turn) {
@@ -1214,7 +1276,7 @@
     const turn = {
       runId: runOf(id, running), conversationId: id, held: false,
       message: running.message, file: running.file, at: running.at, serverAt: running.at,
-      label: "Working…", percent: null, you: null, shown: null, redraw: false, since: performance.now(),
+      label: t("Working…"), percent: null, you: null, shown: null, redraw: false, since: performance.now(),
     };
     turns.set(turn.runId, turn);
     follow(turn);
@@ -1316,18 +1378,19 @@
      assistant wrote about what it is doing right now, and is shown as it is. */
   function progressText(state) {
     if (state.total) {
-      const verb = state.stage === "rewriting" ? "Reworded"
-        : state.stage === "styling" ? "Applied your preferences to"
-        : state.stage === "shortening" ? "Shortened" : "Answered";
-      return verb + " " + state.completed + " of " + state.total +
-        " — " + state.remaining + " to go";
+      const counted = { done: state.completed, total: state.total, left: state.remaining };
+      return state.stage === "rewriting" ? t("Reworded {done} of {total} — {left} to go", counted)
+        : state.stage === "styling" ? t("Applied your preferences to {done} of {total} — {left} to go", counted)
+        : state.stage === "shortening" ? t("Shortened {done} of {total} — {left} to go", counted)
+        : t("Answered {done} of {total} — {left} to go", counted);
     }
-    if (state.stage === "extracting") return "Reading the document…";
-    if (state.stage === "answering") return "Answering…";
-    if (state.stage === "rewriting") return "Rewording…";
-    if (state.stage === "styling") return "Applying your preferences…";
-    if (state.stage === "done") return "Finishing up…";
-    return state.stage || "Working…";
+    if (state.stage === "extracting") return t("Reading the document…");
+    if (state.stage === "answering") return t("Answering…");
+    if (state.stage === "rewriting") return t("Rewording…");
+    if (state.stage === "styling") return t("Applying your preferences…");
+    if (state.stage === "done") return t("Finishing up…");
+    // The assistant's own sentence (src/agents/assistant.py, DOING): in ar-chat.js too.
+    return state.stage ? I18n.server(state.stage) : t("Working…");
   }
 
   /* --- sending -------------------------------------------------------------- */
@@ -1353,8 +1416,9 @@
       .replace(/-/g, "").slice(0, 16);
     const turn = {
       runId: runId, conversationId: conversationId, held: true,
-      message: message || ("Read " + file.name), file: file ? file.name : "", at: new Date().toISOString(),
-      label: "Thinking…", percent: null, you: null, shown: null, redraw: false,
+      message: message || t("Read {file}", { file: file.name }), file: file ? file.name : "",
+      at: new Date().toISOString(),
+      label: t("Thinking…"), percent: null, you: null, shown: null, redraw: false,
     };
     turns.set(runId, turn);
     if (!conversationId) {
@@ -1444,7 +1508,8 @@
       // Somewhere else: said under the list, until that conversation is opened.
       if (refusedProduct) await loadProducts();
       const what = sent.message.length > 60 ? sent.message.slice(0, 57) + "…" : sent.message;
-      $("historyStatus").textContent = "“" + what + "” could not be answered: " + error.message;
+      $("historyStatus").replaceChildren(...sentence(t("“{what}” could not be answered: {why}"),
+        { what: content(what), why: I18n.error(error) }));
       failedIn = turn.conversationId;
       loadHistory();
       return;
@@ -1465,12 +1530,14 @@
     if (error.code === "product_not_found" && sent.startingFor) {
       // A new chat: the chip goes back to nothing chosen, not to General,
       // whether or not the list of products can be read again (plan 029, 2).
-      const name = (teamProducts.find((p) => p.id === sent.startingFor) || {}).name || "That product";
+      const name = (teamProducts.find((p) => p.id === sent.startingFor) || {}).name;
       teamProducts = teamProducts.filter((p) => p.id !== sent.startingFor);
       await loadProducts();
       if (chosenProduct() === sent.startingFor) showProduct("");
-      noteByTheBox(name + " has been deleted, so the chat could not start for it. Nothing was sent. " +
-        "Choose another product, or General.");
+      noteByTheBox(name
+        ? sentence(t("{name} has been deleted, so the chat could not start for it. Nothing was sent. Choose another product, or General."),
+          { name: content(name) })
+        : t("That product has been deleted, so the chat could not start for it. Nothing was sent. Choose another product, or General."));
       return;
     }
     if (error.code === "product_deleted") {
@@ -1481,21 +1548,23 @@
       if (batchId && answersAvailable) reloadAnswers();
       return;
     }
+    const didNot = t("That did not work: {why}", { why: I18n.error(error) });
     if (turn.shown && turn.shown.isConnected) {
       turn.shown.classList.remove("working");
-      turn.shown.querySelector(".bubble").textContent = "That did not work: " + error.message;
+      turn.shown.querySelector(".bubble").textContent = didNot;
     } else {
-      addTurn("assistant", "That did not work: " + error.message);
+      addTurn("assistant", didNot, { ours: true });
     }
     loadHistory();
   }
 
-  /* `calm` for something that is so, rather than something that went wrong. */
+  /* `calm` for something that is so, rather than something that went wrong.
+     `text` is a sentence, or its parts with names in it (sentence()). */
   function noteByTheBox(text, calm) {
     fileRefused = false;  // whatever it says now, it is no longer about a file it refused
     const note = $("composerNote");
-    note.textContent = text || "";
-    note.hidden = !text;
+    note.replaceChildren(...(Array.isArray(text) ? text : [text || ""]).filter((part) => part !== ""));
+    note.hidden = !note.textContent;
     note.className = "status " + (calm ? "calm" : "error") + " composer-note";
     note.setAttribute("role", calm ? "status" : "alert");
   }
@@ -1503,7 +1572,10 @@
   /* A deleted product's chat (plan 027): its transcript and answers stay to
      read, and Fill and Download still work; nothing new can be said in it, and
      its answers are drawn without the controls that would change one. */
-  const ASK = $("prompt").placeholder;
+  /* The box's own placeholder, as the markup has it: not read back from the
+     markup, which is translated after this runs (plan 038). */
+  const ASK = t("Ask for something, ex: “answer the governance questions briefly”");
+  let readOnlyNote = [];  // what the box says of a deleted product's chat, for sayQuestionnaireGone
   function setReadOnly(on, productId) {
     readOnly = on;
     Cards.readOnly = on;
@@ -1513,11 +1585,16 @@
     $("attachTools").hidden = on;
     $("emptyAttach").hidden = on;
     if (on) dragEnded();
-    $("prompt").placeholder = on ? "Kept to read — start a new chat to carry on" : ASK;
+    $("prompt").placeholder = on ? t("Kept to read — start a new chat to carry on") : ASK;
     if (on) {
-      const name = (Cards.product(productId) || {}).name || "Its product";
-      noteByTheBox(name + " was deleted. This chat is kept so you can read it; start a new chat to carry on.", true);
+      const name = (Cards.product(productId) || {}).name;
+      readOnlyNote = name
+        ? sentence(t("{name} was deleted. This chat is kept so you can read it; start a new chat to carry on."),
+          { name: content(name) })
+        : [t("Its product was deleted. This chat is kept so you can read it; start a new chat to carry on.")];
+      noteByTheBox(readOnlyNote, true);
     } else {
+      readOnlyNote = [];
       noteByTheBox("");
     }
     refresh();
@@ -1547,7 +1624,7 @@
     // get out of it".
     if (!answersPaneClosed) $("answersPane").hidden = false;
     refreshAnswersToggle();
-    $("answerTitle").textContent = report.source_name || "Answers";
+    $("answerTitle").replaceChildren(report.source_name ? content(report.source_name) : t("Answers"));
 
     /* Which length this questionnaire is filled in with. Above the answers
        rather than beside the fill button, because it changes what every card
@@ -1592,24 +1669,24 @@
     const summary = document.createElement("div");
     summary.className = "summary";
     summary.append(
-      Cards.stat(counts.questions || 0, "questions"),
-      Cards.stat(counts.answered || 0, "answered here"),
+      Cards.stat(counts.questions || 0, t("questions")),
+      Cards.stat(counts.answered || 0, t("answered here")),
       // The tab's count, as on the Workbench: held back or failed, not only flagged.
-      Cards.stat(counted.review, "need review", counted.review ? "review" : ""),
+      Cards.stat(counted.review, t("need review"), counted.review ? "review" : ""),
     );
     // Only when there are any: a blank questionnaire showing "0 already in the
     // file" is a number about nothing.
     if (counts.already_in_file) {
-      summary.append(Cards.stat(counts.already_in_file, "already in the file"));
+      summary.append(Cards.stat(counts.already_in_file, t("already in the file")));
     }
     host.append(summary);
-    if (counts.set_aside) summary.append(Cards.stat(counts.set_aside, "set aside"));
+    if (counts.set_aside) summary.append(Cards.stat(counts.set_aside, t("set aside")));
 
     if (!answered.length && !aside.length) {
       const nothing = document.createElement("div");
       nothing.className = "nothing";
-      nothing.textContent = (counts.questions || 0) +
-        " question(s) found. Ask the assistant to answer some of them.";
+      nothing.textContent = t("{n} question(s) found. Ask the assistant to answer some of them.",
+        { n: counts.questions || 0 });
       host.append(nothing);
       $("fillBtn").hidden = true;
       return;
@@ -1618,7 +1695,7 @@
     tabs.className = "review-tabs answers-tabs";
     tabs.id = "answerTabs";
     tabs.setAttribute("role", "group");
-    tabs.setAttribute("aria-label", "Show");
+    tabs.setAttribute("aria-label", t("Show"));
     host.append(tabs);
     Cards.reviewTabs(tabs, counted, tab, (key) => {
       answersTab = key;
@@ -1634,7 +1711,7 @@
     if (aside.length && (tab === "all" || tab === "blank")) {
       const heading = document.createElement("h3");
       heading.className = "aside-head";
-      heading.textContent = "Set aside \u2014 not written to the file (" + aside.length + ")";
+      heading.textContent = t("Set aside \u2014 not written to the file ({n})", { n: aside.length });
       host.append(heading);
       aside.forEach((question, index) => {
         const card = Cards.fromQuestion(question);
@@ -1660,9 +1737,11 @@
     text.className = "text";
     text.textContent = question.text;
     if (Cards.isArabic(question.text)) text.dir = "rtl";
+    else ownDirection(text);
+    text.setAttribute("data-no-translate", "");  // the question is content (plan 038)
     const back = document.createElement("button");
     back.className = "ghost";
-    back.textContent = "Include it again";
+    back.textContent = t("Include it again");
     back.onclick = () => setAside(question.id, false);
     row.append(text);
     if (!readOnly) row.append(back);
@@ -1680,10 +1759,10 @@
       });
       showAnswers(updated);
       sayInPane(skip
-        ? "Set aside. Nothing will be written to the file for that question."
-        : "Brought back. It is part of the questionnaire again.");
+        ? t("Set aside. Nothing will be written to the file for that question.")
+        : t("Brought back. It is part of the questionnaire again."));
     } catch (error) {
-      sayInPane("That could not be changed: " + error.message, "err");
+      sayInPane(t("That could not be changed: {why}", { why: I18n.error(error) }), "err");
     }
   }
   Cards.canSetAside = true;
@@ -1740,19 +1819,25 @@
   }
   window.addEventListener("resize", reclampPane);
 
+  const rightToLeft = () => getComputedStyle(layout).direction === "rtl";
+
+  /* The panel is at the inline end: against the right edge in English, the
+     left in Arabic (plan 038), where it is dragged rightwards to widen. */
   $("paneResizer").addEventListener("pointerdown", (event) => {
     const handle = $("paneResizer");
     event.preventDefault();
     handle.setPointerCapture(event.pointerId);
     document.body.classList.add("resizing");
-    const edge = layout.getBoundingClientRect().right;
-    const move = (e) => setPaneWidth(edge - e.clientX, false);
+    const box = layout.getBoundingClientRect();
+    const rtl = rightToLeft();
+    const widthAt = (x) => (rtl ? x - box.left : box.right - x);
+    const move = (e) => setPaneWidth(widthAt(e.clientX), false);
     const up = (e) => {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
       handle.removeEventListener("pointercancel", up);
       document.body.classList.remove("resizing");
-      setPaneWidth(edge - e.clientX, true);
+      setPaneWidth(widthAt(e.clientX), true);
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
@@ -1766,7 +1851,8 @@
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
     const now = $("answersPane").getBoundingClientRect().width;
-    setPaneWidth(now + (event.key === "ArrowLeft" ? 40 : -40), true);
+    const wider = event.key === (rightToLeft() ? "ArrowRight" : "ArrowLeft");
+    setPaneWidth(now + (wider ? 40 : -40), true);
   });
 
   /* --- the conversation list's width (plan 031) -----------------------------
@@ -1814,8 +1900,6 @@
     try { stored = Number(localStorage.getItem(SIDE_KEY)) || 0; } catch (e) { /* private mode */ }
     if (stored) { sideWanted = stored; setSideWidth(stored, false); }
   })();
-
-  const rightToLeft = () => getComputedStyle(layout).direction === "rtl";
 
   $("sideResizer").addEventListener("pointerdown", (event) => {
     const handle = $("sideResizer");
@@ -1890,18 +1974,19 @@
          worst way for a person who has just watched a run finish to find out
          that nothing reached their file. */
       const held = Object.keys(filled.held_back || {}).length;
+      const wrote = { n: filled.written, file: filled.file };
+      // The page's own words (`ours`), with the server's when it says why nothing was written.
       addTurn("assistant", (filled.because
-        ? filled.because
-        : "Wrote " + filled.written + " value(s) into " + filled.file +
-          (filled.intact ? " — every other part of the file is untouched." : "."))
+        ? I18n.server(filled.because)
+        : filled.intact
+          ? t("Wrote {n} value(s) into {file} — every other part of the file is untouched.", wrote)
+          : t("Wrote {n} value(s) into {file}.", wrote))
         + (held
-            ? "\n\n" + held + " answer(s) were held back because nobody has confirmed them. "
-              + "They are marked in the panel beside this — edit one or approve it, and it "
-              + "goes in the next time you fill."
-            : ""));
+            ? "\n\n" + t("{n} answer(s) were held back because nobody has confirmed them. They are marked in the panel beside this — edit one or approve it, and it goes in the next time you fill.", { n: held })
+            : ""), { ours: true });
       $("downloadBtn").hidden = !filled.written;
     } catch (error) {
-      addTurn("assistant", "The file could not be filled: " + error.message);
+      addTurn("assistant", t("The file could not be filled: {why}", { why: I18n.error(error) }), { ours: true });
     } finally {
       button.disabled = false;
     }
@@ -1944,7 +2029,7 @@
         body: JSON.stringify({ question_id: item.question.id, text: text, which: which }),
       }));
     } catch (error) {
-      sayInPane("That edit could not be saved: " + error.message, "err");
+      sayInPane(t("That edit could not be saved: {why}", { why: I18n.error(error) }), "err");
     }
   };
 
@@ -1959,11 +2044,10 @@
         body: JSON.stringify({ question_id: item.question.id, blank: blank }),
       }));
       if (!blank) {
-        sayInPane("That one is blank again rather than left blank on purpose. " +
-          "Ask me to answer it and I will.");
+        sayInPane(t("That one is blank again rather than left blank on purpose. Ask me to answer it and I will."));
       }
     } catch (error) {
-      sayInPane("That could not be changed: " + error.message, "err");
+      sayInPane(t("That could not be changed: {why}", { why: I18n.error(error) }), "err");
     }
   };
 
@@ -1982,19 +2066,20 @@
       // anything, which is the half that changes the next questionnaire.
       sayInPane(approved
         ? (updated.remembered
-            ? "Approved. It will be written into the file, and your wording is now in the answer memory."
-            : "Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
+            ? t("Approved. It will be written into the file, and your wording is now in the answer memory.")
+            : t("Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one."))
         : Cards.withdrawnMessage((updated.questions || []).find((q) => q.id === item.question.id)));
     } catch (error) {
-      sayInPane("That could not be approved: " + error.message, "err");
+      sayInPane(t("That could not be approved: {why}", { why: I18n.error(error) }), "err");
     }
   };
 
   let paneNoteTimer = null;
+  /* `text` is a sentence, or its parts with names in it (sentence()). */
   function sayInPane(text, tone) {
     const note = $("answersStatus");
     note.className = "pane-status" + (tone ? " " + tone : "");
-    note.textContent = text;
+    note.replaceChildren(...(Array.isArray(text) ? text : [text || ""]));
     note.hidden = false;
     clearTimeout(paneNoteTimer);
     paneNoteTimer = setTimeout(() => { note.hidden = true; }, 9000);
@@ -2020,7 +2105,8 @@
 
   async function applySkill(skillId, name) {
     if (!batchId) return;
-    sayInPane("Rewording with \u201c" + name + "\u201d…");
+    // The skill's name is the person's: content, in each sentence that names it (plan 038).
+    sayInPane(sentence(t("Rewording with “{name}”…"), { name: content(name) }));
     try {
       const outcome = await request(
         "/api/forms/" + batchId + "/skills/" + encodeURIComponent(skillId), {
@@ -2028,15 +2114,18 @@
           body: JSON.stringify({ scope: {} }),
         });
       showAnswers(outcome.batch);
-      const kept = outcome.protected
-        ? " " + outcome.protected + " written by a person were left exactly as they are." : "";
-      const failed = outcome.failed
-        ? " " + outcome.failed + " could not be reworded and were left as they were." : "";
-      sayInPane(outcome.attempted
-        ? "Reworded " + outcome.answered + " answer(s) with \u201c" + name + "\u201d." + failed + kept
-        : "Nothing to reword with \u201c" + name + "\u201d." + kept);
+      const said = sentence(outcome.attempted
+        ? t("Reworded {n} answer(s) with “{name}”.", { n: outcome.answered })
+        : t("Nothing to reword with “{name}”."), { name: content(name) });
+      if (outcome.attempted && outcome.failed) {
+        said.push(" ", t("{n} could not be reworded and were left as they were.", { n: outcome.failed }));
+      }
+      if (outcome.protected) {
+        said.push(" ", t("{n} written by a person were left exactly as they are.", { n: outcome.protected }));
+      }
+      sayInPane(said);
     } catch (error) {
-      sayInPane("That could not be reworded: " + error.message, "err");
+      sayInPane(t("That could not be reworded: {why}", { why: I18n.error(error) }), "err");
     }
   }
 
@@ -2047,9 +2136,9 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question_id: item.question.id }),
       }));
-      sayInPane("The original draft is back, as it was before it was reworded.");
+      sayInPane(t("The original draft is back, as it was before it was reworded."));
     } catch (error) {
-      sayInPane("That could not be put back: " + error.message, "err");
+      sayInPane(t("That could not be put back: {why}", { why: I18n.error(error) }), "err");
     }
   };
 
@@ -2061,7 +2150,7 @@
         body: JSON.stringify({ question_id: item.question.id, prefer: prefer }),
       }));
     } catch (error) {
-      sayInPane("That could not be changed: " + error.message, "err");
+      sayInPane(t("That could not be changed: {why}", { why: I18n.error(error) }), "err");
     }
   };
 
@@ -2098,7 +2187,7 @@
 
   function showDocument(name) {
     if (!name) return;
-    $("viewerTitle").textContent = name;
+    $("viewerTitle").replaceChildren(content(name));
     $("viewerDownload").href = documentUrl(name, "file");
     $("viewerFrame").src = documentUrl(name, "preview");
     $("viewer").showModal();
@@ -2138,7 +2227,7 @@
         const none = document.createElement("div");
         none.className = "status";
         none.style.padding = "4px 10px";
-        none.textContent = "Nothing yet.";
+        none.textContent = t("Nothing yet.");
         host.append(none);
         if (back) $("newChat").focus();
         return;
@@ -2157,9 +2246,12 @@
         what.className = "what";
         const label = document.createElement("span");
         label.className = "label";
-        label.textContent = c.title || "New conversation";
+        label.textContent = c.title || t("New conversation");
         label.title = c.title + (c.source_name ? " — " + c.source_name : "");
+        // Its title is content (plan 038), in its own direction.
         if (Cards.isArabic(label.textContent)) label.dir = "rtl";
+        else ownDirection(label);
+        label.setAttribute("data-no-translate", "");
         what.append(label);
 
         // When it was last used -- opened, or said in -- which is the order the
@@ -2175,9 +2267,9 @@
         if (until) {
           const kept = document.createElement("span");
           kept.className = "kept";
-          kept.textContent = "Kept until " + until;
-          kept.title = "Kept until " + until + ". A conversation not opened for a while is deleted; opening it keeps it longer.";
-          when.title += " · Kept until " + until;
+          kept.textContent = t("Kept until {day}", { day: until });
+          kept.title = t("Kept until {day}. A conversation not opened for a while is deleted; opening it keeps it longer.", { day: until });
+          when.title = t("{used} · Kept until {day}", { used: exactly(usedAt), day: until });
           what.append(kept);
         }
 
@@ -2187,13 +2279,14 @@
         if (c.source_name) {
           const file = document.createElement("span");
           file.className = "file";
+          file.setAttribute("data-no-translate", "");  // a file's name (plan 038)
           const mark = document.createElement("span");
           mark.textContent = "📎";
           mark.setAttribute("aria-hidden", "true");
           const name = document.createElement("span");
           name.className = "name";
           name.textContent = c.source_name;
-          file.append(mark, name);
+          file.append(mark, ownDirection(name));
           file.title = c.source_name;
           what.append(file);
         }
@@ -2208,40 +2301,46 @@
           dots.className = "dots";
           dots.setAttribute("aria-hidden", "true");
           dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-          working.append(dots, "Working…");
+          working.append(dots, t("Working…"));
           what.append(working);
         } else if (unread.has(c.id)) {
           item.classList.add("unread");
           const fresh = document.createElement("span");
           fresh.className = "new-reply";
-          fresh.textContent = "New reply";
+          fresh.textContent = t("New reply");
           what.append(fresh);
         }
         row.append(what);
         row.onclick = () => { open(c.id); closeHistoryIfOver(); };
 
         // Forgetting deletes for good, so it asks first and names what it deletes.
-        const title = c.title || "New conversation";
+        const title = c.title || t("New conversation");
         const forget = document.createElement("button");
         forget.type = "button";
         forget.className = "forget";
-        forget.title = "Forget this conversation";
-        forget.setAttribute("aria-label", "Forget “" + title + "”");
+        forget.title = t("Forget this conversation");
+        forget.setAttribute("aria-label", t("Forget “{title}”", { title: title }));
         const cross = document.createElement("span");
         cross.textContent = "✕";
         cross.setAttribute("aria-hidden", "true");
         forget.append(cross);
         forget.onclick = async () => {
           const when = said(usedAt);
-          if (!confirm("Forget “" + title + "”" + (when ? " (" + when + ")" : "") + "?\n\n" +
-              "The conversation is deleted and cannot be recovered." +
-              (c.source_name ? "\n\nIts questionnaire, " + c.source_name +
-                ", and its answers are kept; open it from the Workbench." : ""))) return;
+          const asked = [
+            when ? t("Forget “{title}” ({when})?", { title: title, when: when }) : t("Forget “{title}”?", { title: title }),
+            t("The conversation is deleted and cannot be recovered."),
+          ];
+          if (c.source_name) {
+            asked.push(t("Its questionnaire, {file}, and its answers are kept; open it from the Workbench.",
+              { file: c.source_name }));
+          }
+          if (!confirm(asked.join("\n\n"))) return;
           $("historyStatus").textContent = "";
           try {
             await request("/api/chat/" + c.id, { method: "DELETE" });
           } catch (error) {
-            $("historyStatus").textContent = "Could not forget “" + title + "”: " + error.message;
+            $("historyStatus").replaceChildren(...sentence(t("Could not forget “{title}”: {why}"),
+              { title: content(title), why: I18n.error(error) }));
             return;
           }
           if (c.id === conversationId) newConversation();
@@ -2257,7 +2356,7 @@
       }
       if (back) putKeyboardBack(host, back);
     } catch (error) {
-      if (asked === historyAsked) host.textContent = error.message;
+      if (asked === historyAsked) host.textContent = I18n.error(error);
     }
   }
 
@@ -2314,19 +2413,19 @@
     const today = new Date();
     const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const days = Math.round((midnight - day) / 86400000);
-    const clock = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const clock = I18n.time(at, { hour: "numeric", minute: "2-digit" });
     if (days <= 0) return clock;
-    if (days === 1) return "Yesterday " + clock;
-    if (days < 7) return at.toLocaleDateString([], { weekday: "long" });
+    if (days === 1) return t("Yesterday {time}", { time: clock });
+    if (days < 7) return I18n.date(at, { weekday: "long" });
     const sameYear = at.getFullYear() === today.getFullYear();
-    return at.toLocaleDateString([], sameYear
+    return I18n.date(at, sameYear
       ? { day: "numeric", month: "short" }
       : { day: "numeric", month: "short", year: "numeric" });
   }
 
   function exactly(stamp) {
     const at = new Date(stamp);
-    return !stamp || isNaN(at) ? "" : "Last used " + at.toLocaleString();
+    return !stamp || isNaN(at) ? "" : t("Last used {when}", { when: I18n.dateTime(at) });
   }
 
   /* The day the server keeps something until, "2027-05-05", in the reader's
@@ -2335,8 +2434,8 @@
   function keptDay(iso) {
     const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
     if (!day) return "";
-    return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
-      .toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+    return I18n.date(new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])),
+      { day: "numeric", month: "short", year: "numeric" });
   }
 
   /* Only the last conversation asked for is drawn: two clicks in a row, or a
@@ -2352,7 +2451,10 @@
         await draw(data, mine);
       }
     } catch (error) {
-      if (mine === opening) addTurn("assistant", "That conversation could not be opened: " + error.message);
+      if (mine === opening) {
+        addTurn("assistant", t("That conversation could not be opened: {why}", { why: I18n.error(error) }),
+          { ours: true });
+      }
     }
   }
 
@@ -2433,9 +2535,10 @@
   let goneSaid = "";
   function sayQuestionnaireGone(id) {
     goneSaid = id;
+    // What the box says already is kept in readOnlyNote, not read back from the page (plan 038).
     noteByTheBox(readOnly
-      ? $("composerNote").textContent + " Its questionnaire was deleted too, with its answers."
-      : "This chat's questionnaire was deleted, with its answers. The conversation is kept.", true);
+      ? readOnlyNote.concat(" ", t("Its questionnaire was deleted too, with its answers."))
+      : t("This chat's questionnaire was deleted, with its answers. The conversation is kept."), true);
   }
 
   /* The turn to draw at the foot of an opened conversation, if one is running.
@@ -2552,6 +2655,7 @@
     if (readOnly) return;  // nothing can be sent in a deleted product's chat
     attached = file;
     $("attachedName").textContent = file.name;
+    ownDirection($("attachedName"));
     $("attached").hidden = false;
     refresh();
     $("prompt").focus();
@@ -2563,6 +2667,17 @@
   });
   $("send").onclick = send;
   $("detach").onclick = detach;
+
+  /* Switching the language draws the page again (plan 038): what is in the box,
+     and a file attached to it, would be lost, so it asks first. A turn that is
+     running is not lost: it carries on, and is found again after the reload. */
+  I18n.beforeSwitch = () => {
+    const typed = Boolean($("prompt").value.trim());
+    if (typed && attached) return t("Your message and the attached file have not been sent, and will be lost. Switch the language anyway?");
+    if (typed) return t("Your message has not been sent, and will be lost. Switch the language anyway?");
+    if (attached) return t("The attached file has not been sent, and will be lost. Switch the language anyway?");
+    return "";
+  };
 
   /* --- attaching a questionnaire (plan 033) ---------------------------------
      The team did not find how: a "＋" in the box was the only control, and a
@@ -2579,8 +2694,10 @@
     if (!file || readOnly) return;  // nothing can be sent in a deleted product's chat
     const kind = kindOf(file.name);
     if (!ATTACHABLE.includes(kind)) {
-      noteByTheBox("“" + file.name + "” was not attached: a questionnaire here is an XLSX, XLSM or DOCX file." +
-        (kind === ".pdf" ? " A PDF's questions can be read on the Workbench." : ""));
+      const refused = sentence(t("“{file}” was not attached: a questionnaire here is an XLSX, XLSM or DOCX file."),
+        { file: content(file.name) });
+      if (kind === ".pdf") refused.push(" ", t("A PDF's questions can be read on the Workbench."));
+      noteByTheBox(refused);
       fileRefused = true;
       $("fileInput").value = "";  // so choosing it again is a change, and says so again
       return;
@@ -2606,7 +2723,8 @@
   }
   function showDropTarget() {
     if (!$("dropTarget").hidden) return;
-    $("dropReplaces").textContent = attached ? "In place of " + attached.name : "";
+    $("dropReplaces").replaceChildren(...(attached
+      ? sentence(t("In place of {file}"), { file: content(attached.name) }) : []));
     $("dropReplaces").hidden = !attached;
     $("dropTarget").hidden = false;
   }
@@ -2663,14 +2781,15 @@
     chip.classList.toggle("unchosen", !choice);
     if (product && product.color) chip.style.setProperty("--product", product.color);
     else chip.style.removeProperty("--product");
+    const fixedNote = fixed ? " " + t("Fixed for this chat; start a new chat to work on another product.") : "";
     chip.title = !choice
-      ? "Choose which product this chat is for before you send."
+      ? t("Choose which product this chat is for before you send.")
       : gone
-        ? gone.name + " was deleted. This chat is kept to read; start a new chat to carry on."
+        ? t("{name} was deleted. This chat is kept to read; start a new chat to carry on.", { name: gone.name })
         : (product
-          ? "For " + product.name + ": answered from its knowledge base and answer memory beside the shared ones."
-          : "General: answered from the shared knowledge base and answer memory.") +
-          (fixed ? " Fixed for this chat; start a new chat to work on another product." : "");
+          ? t("For {name}: answered from its knowledge base and answer memory beside the shared ones.",
+            { name: product.name })
+          : t("General: answered from the shared knowledge base and answer memory.")) + fixedNote;
   }
   /* A deleted product cannot be chosen, so it is offered only as the badge of
      a chat kept from it: disabled and named as deleted, rather than the chip
@@ -2680,10 +2799,11 @@
     [...select.options].filter((option) => option.dataset.deleted).forEach((option) => option.remove());
     const gone = Cards.product(choice);
     if (conversationId && gone && gone.deleted) {
-      const option = new Option(gone.name + " (deleted)", choice);
+      const option = new Option(t("{name} (deleted)", { name: gone.name }), choice);
       option.disabled = true;
       option.dataset.deleted = "true";
-      select.append(option);
+      option.setAttribute("data-no-translate", "");  // a product's name (plan 038)
+      select.append(ownDirection(option));
     }
     select.value = choice && [...select.options].some((option) => option.value === choice) ? choice : "";
     paintProductChip();
@@ -2706,11 +2826,10 @@
     const wanting = Boolean(attempted || $("prompt").value.trim() || attached);
     row.classList.toggle("warn", wanting);
     const text = productsFailed
-      ? "Your products could not be loaded. Reload the page before choosing; choose General only if " +
-        "this chat is about the whole company."
+      ? t("Your products could not be loaded. Reload the page before choosing; choose General only if this chat is about the whole company.")
       : wanting
-        ? "Choose a product to send this."
-        : "Which product is this chat for? General uses the shared policies only.";
+        ? t("Choose a product to send this.")
+        : t("Which product is this chat for? General uses the shared policies only.");
     if ($("productNeededText").textContent !== text) $("productNeededText").textContent = text;
     const suggestion = lastUsedChoice();
     const host = $("chatLastUsed");
@@ -2754,11 +2873,16 @@
     const was = before.find((p) => p.id === chosen);
     Cards.setProducts(teamProducts, deletedProducts);
     const select = $("productPick");
+    // General's label as Cards.GENERAL_LABEL reads, in the interface's language (plan 038).
     select.replaceChildren(
-      new Option("Product: choose…", "", true, true),
-      new Option(Cards.GENERAL_LABEL, Cards.GENERAL));
+      new Option(t("Product: choose…"), "", true, true),
+      new Option(t("General (shared policies only)"), Cards.GENERAL));
     select.options[0].disabled = true;  // a prompt, never a choice
-    teamProducts.forEach((product) => select.append(new Option(product.name, product.id)));
+    teamProducts.forEach((product) => {
+      const option = new Option(product.name, product.id);
+      option.setAttribute("data-no-translate", "");  // a product's name (plan 038)
+      select.append(ownDirection(option));
+    });
     showProduct(chosen);
     refresh();
     return was && chosenProduct() !== chosen ? was.name : "";
@@ -2778,7 +2902,7 @@
     if (document.visibilityState !== "visible" || !$("gate").hidden) return;
     const gone = await loadProducts();
     if (conversationId && !readOnly && !turnOnScreen() && (Cards.product(chosenProduct()) || {}).deleted) redraw(conversationId);
-    else if (gone) noteByTheBox(gone + " has been deleted; choose a product again.");
+    else if (gone) noteByTheBox(sentence(t("{name} has been deleted; choose a product again."), { name: content(gone) }));
   });
 
   /* --- start ---------------------------------------------------------------- */
