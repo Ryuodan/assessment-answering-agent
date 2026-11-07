@@ -14,6 +14,55 @@ A grade is a measurement, not a target. The words under each table say what
 the letter stands for and where the gap is, so the next round can check
 whether it closed.
 
+## Round 5: 2026-11-07, after plans 026 to 035 (plan 036)
+
+Measured on the working tree of plan 036. 2,401 tests passed and none failed;
+the 197 browser tests are not part of the coverage run. Statement coverage of
+`src/` and `harness/` together is 93% (round 4: 92%).
+
+| Layer | Modules | Lines | Coverage | Over 400 | Suppressions | Duplicated blocks | Docstrings |
+|---|---|---|---|---|---|---|---|
+| foundation | 17 | 4231 | A (99%) | B (1) | A (0) | A (0) | A (96%) |
+| integrations | 26 | 7441 | A (92.1%) | D (6) | D (10) | C (2) | A (97%) |
+| records | 14 | 4495 | A (95.9%) | C (3) | D (10) | A (0) | A (91%) |
+| answering | 14 | 2363 | A (90.7%) | B (1) | C (4) | A (0) | A (100%) |
+| operations | 14 | 5417 | A (96.4%) | C (3) | C (7) | A (0) | A (99%) |
+| interfaces | 12 | 3070 | A (94.5%) | B (1) | B (3) | A (0) | B (82%) |
+
+Plans 026 to 035 added products' data, the team's feedback in three parts,
+consistency, retention, and the debts. Most new code went into new, small
+modules rather than into the large ones:
+
+- **foundation** gained `product_prompts`, `chat_running` and `reading` (and
+  counts `src` itself). Coverage went from 98.7% to 99%.
+- **integrations** gained `migration_steps` (TD-046) and others. Suppressions
+  went from 9 to 10: one more broad `except`, with its reason.
+- **records** gained `retention` and `search_plans`. Suppressions went from
+  7 to 10, all a broad `except` with its reason, in the retention pass and the
+  answer saver. Docstrings went from 89% to 91%.
+- **answering** went from B to A on coverage, 87.7% to 90.7%, and from C to
+  B on size: `graph/nodes.py` (385 lines) is under the limit, after the
+  product scope, the kept searches and the query parser moved to modules of
+  their own.
+- **operations** gained `lists`, `questionnaire`, `assistant_cards`,
+  `assistant_stopped`, `fill_audit` and others. Coverage went from 92.9% to
+  96.4%. The same three modules are over 400, all smaller than at round 4:
+  `assistant.py` 1,524 to 1,386, `tools.py` 1,376 to 1,144, `service.py`
+  614 to 469.
+- **interfaces**: `api.py` went from 1,296 to 1,178 lines. Docstrings 80% to
+  82%.
+
+`poe gc` found the round 1 candidates, two new duplicates and one
+suppression without a reason. The `lists`/`tools` duplicate is now one
+helper, and the migrations' is history that is not edited. OVERSIZE went from
+16 to 15.
+
+The gaps that remain, in order of size:
+
+- the oversized modules (TD-006);
+- the suppressions in integrations and records, each with its reason;
+- `api.py`'s undocumented names.
+
 ## Round 4: 2026-10-06, after M7 (plan 025)
 
 Measured on the working tree of plan 025: 1,861 tests passed and none failed.

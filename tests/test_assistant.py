@@ -1094,7 +1094,7 @@ def _scripted_model(monkeypatch, *replies: AIMessage) -> list[AIMessage]:
 
     left = iter(replies)
     monkeypatch.setattr(assistant, "chat_llm", lambda **kwargs: Scripted(messages=left))
-    return left  # type: ignore[return-value]
+    return left  # type: ignore[return-value]  # the replies left, typed as the fixture's list for its users
 
 
 def _searches(*queries: str) -> AIMessage:

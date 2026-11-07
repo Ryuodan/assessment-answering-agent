@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src import answer_memory, batches, busy, events, products, retention
+from src import answer_memory, batches, busy, events, preferences, products, retention
 from src.batches import Batch
 from src.errors import NothingToFill, QuestionnaireBusy, QuestionnaireNotFound
 from src.forms.model import LIST
@@ -231,3 +231,17 @@ def delete(user: User, batch_id: str) -> dict[str, int]:
     )
     logger.info("questionnaire.deleted", batch_id=batch.id, answers=answers, files=files)
     return {"answers": answers, "files": files}
+
+
+def at_their_length(user: User, batch: Batch) -> Batch:
+    """A questionnaire just opened, a file's or a list's, at the length its opener prefers.
+
+    Only the opening default: a teammate who picks the file up later sees the
+    length it already has, because changing it under somebody else's work is not
+    a preference. One place for `tools.open_form` and `lists.open_list` (cleaning round 5).
+    """
+    wanted = preferences.load(user.email).default_length
+    if wanted == batch.detail:
+        return batch
+    batches.set_detail(batch.id, wanted)
+    return batches.load(batch.id, team_id=user.team_id, actor_email=user.email) or batch

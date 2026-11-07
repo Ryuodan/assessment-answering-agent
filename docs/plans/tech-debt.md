@@ -66,6 +66,15 @@ or docs and has not been verified by running anything.
   - `service.py` 591 -> 462: the Word preview, to `src/docx_preview.py` (TD-019); then 469 with saving each answer as it finishes (1.4).
 
   The two raises after a move follow Stage 0's (`tools.py` 1,334 -> 1,347): the move commit has to lower the ceiling to the module's length, so the item after it raises it again, and each ceiling ends below where the stage started.
+- **Update** 2026-11-07 (plans 026 to 035, measured in plan 036): 15 remain, every one at or under its ceiling, and each plan that needed room moved a cohesive part out first.
+  - `api.py` 1296 -> 1178;
+  - `agents/assistant.py` 1524 -> 1386;
+  - `tools.py` 1376 -> 1144;
+  - `service.py` 614 -> 469;
+  - `knowledge.py` 836 -> 759;
+  - `answer_memory.py` 836 -> 820.
+  - `graph/nodes.py` left the list (385), and `migrations.py` stayed at 400 by moving a step out (TD-046).
+  - The others: `chunking.py` 1094, `forms/xlsx.py` 924, `export_pdf.py` 748, `forms/xlsx_package.py` 694, `identity.py` 612, `agents/excel_agent.py` 521, `preferences.py` 495, `forms/docx.py` 492, `documents.py` 404.
 
 ## TD-007: Import cycles and upward imports
 
@@ -157,6 +166,7 @@ or docs and has not been verified by running anything.
   - The workbench: its Product selector and the product badges (plan 024).
 
   Still exercised only as a served file: the preferences page.
+- **Resolved** 2026-11-07 (plan 036): the preferences page, the last one tested only as a served file, has a browser test of its own (`tests/browser/test_preferences_page.py`). Every page now has browser tests: 197 in all.
 
 ## TD-017: The test suite takes 3.5 to 4 minutes, and nobody knows why
 
@@ -170,6 +180,7 @@ or docs and has not been verified by running anything.
 
   The other ~270 s is spread across the remaining ~1,780 tests at about 0.15 s each, which points to per-test setup (the autouse fixtures) rather than to slow tests. Fixed in this round: the staleness tests build the documents once per module, and their file now takes 9.1 s instead of about 19 s. Not done: profiling the autouse fixtures, and `pytest-xdist`. That fixture shares process-wide settings, so running in parallel needs care.
 - **Measured** 2026-10-06 (plan 025), from the gate runs of plans 023 to 025: 1,861 tests in 355 to 415 s, about 0.2 s each. M7 added 58 tests, and the time per test rose too. The cause is still unprofiled.
+- **Measured** 2026-11-07 (plan 036): 2,401 tests in 510 s under coverage, and 2,393 to 2,401 in 360 to 450 s in the gate runs of plans 032 to 036, still about 0.17 s each; the 197 browser tests take another 300 s. The cause is still unprofiled.
 
 ## TD-018: Undefined name in a type annotation
 
@@ -250,6 +261,7 @@ or docs and has not been verified by running anything.
 - **Impact:** their lines cannot be filtered by event or read as fields; they still carry the request ID, which the logging filter adds to every record.
 - **Fix:** convert a module whenever it is next changed (`get_logger`, an event name, keyword fields), then delete its allow-list entry.
 - **Update** 2026-10-06 (plans 019 to 024): 21 modules are allow-listed. The modules M7 created log events: `products`, the routers, `memory_sweep` and `search`. The three prose lines that moved into the last two with the sweep and the search were converted on the way, as ARCH-LOG requires of a new module.
+- **Update** 2026-11-07 (plans 026 to 035): still 21 modules allow-listed, none added. Every module these plans created logs events: `retention`, `search_plans`, `lists`, `questionnaire`, `chat_running`, `reading` and the agents' helpers.
 
 ## TD-029: A generated team access code was written to the log
 
@@ -701,3 +713,13 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Impact:** a questionnaire whose upload is gone. Filling it asks for the file again.
 - **Fix:** hold the file's name while it is read, as `busy` holds a questionnaire, and have deletion skip a held file.
 - **Resolved** 2026-11-07 (Claude, plan 035, approved by the user): `src/reading.py` holds a kept upload's name while it is read (`POST /api/forms`, `POST /api/forms/list`, a chat upload's turn). Deleting a questionnaire, and a list that found nothing, leave a held file alone. `tests/test_files_being_read.py`.
+
+## TD-079: Four API routes no page uses
+
+- **What:** found 2026-11-07 by cleaning round 5 (plan 036). No page, script or evaluation calls these; only tests do.
+  - `POST /api/assessments/extract`: reading a document's questions. The Workbench keeps lists through `POST /api/forms/list` since plan 033.
+  - `POST /api/assessments/answer`: the whole-document flow.
+  - `GET /api/documents`: the document library that plan 031 took off the Knowledge base page.
+  - `GET /api/runs` and `GET /api/runs/{id}`: answered runs, which no page reads (retention deletes them after `RETENTION_DAYS`).
+- **Impact:** API surface to keep correct, secure and documented, with nobody using it; about 80 lines of `src/api.py`.
+- **Fix (needs the user's decision):** remove them with their tests. The pages and the team's own scripts are the API's only clients (TD-066), so nothing depends on them. `POST /api/assessments/answer-questions` stays: the Workbench answers questions typed beside an open questionnaire through it.

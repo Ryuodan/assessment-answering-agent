@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from src import batches, events, preferences, products, reading, retention, service, uploads
+from src import batches, events, products, questionnaire, reading, retention, service, uploads
 from src.batches import Batch
 from src.errors import Invalid, Unprocessable
 from src.extraction import detect_question_language
@@ -90,12 +90,7 @@ def open_list(
         ],
         parts=[Part(name=name, kind="questions", questions=len(questions))],
     )
-    batch = batches.create(user, source, form, product_id)
-    # Whoever opens it decides how long its answers start out, as for a file (`tools.open_form`).
-    wanted = preferences.load(user.email).default_length
-    if wanted != batch.detail:
-        batches.set_detail(batch.id, wanted)
-        batch = batches.load(batch.id, team_id=user.team_id, actor_email=user.email) or batch
+    batch = questionnaire.at_their_length(user, batches.create(user, source, form, product_id))
     events.record(
         user,
         events.FORM_OPENED,

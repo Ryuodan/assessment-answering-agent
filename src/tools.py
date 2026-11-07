@@ -39,7 +39,8 @@ from src.forms.model import WRITABLE, DetectedForm, Finding, FormQuestion, Role,
 from src.identity import User
 from src.models import AnsweredQuestion, Language, Question
 from src.errors import ToolError as ToolError
-from src.questionnaire import fillable as _fillable, inspect as inspect, memory_id as _memory_id, require as _require
+from src.questionnaire import at_their_length, fillable as _fillable, inspect as inspect, memory_id as _memory_id
+from src.questionnaire import require as _require
 from src.styling import in_house_style as in_house_style
 from src.selection import (
     APPROVED as APPROVED,
@@ -162,14 +163,7 @@ def open_form(user: User, path: Path, *, strategy: str | None = None, product_id
     chosen = strategy or settings.detection_strategy
     result = reading.read(path, chosen)
     form = result.form
-    batch = batches.create(user, path, form, product_id)
-    # Whoever opens it decides how long its answers start out. Only the opening
-    # default: a teammate who picks the file up later sees the length it already
-    # has, because changing it under somebody else's work is not a preference.
-    wanted = preferences.load(user.email).default_length
-    if wanted != batch.detail:
-        batches.set_detail(batch.id, wanted)
-        batch = batches.load(batch.id, team_id=user.team_id, actor_email=user.email) or batch
+    batch = at_their_length(user, batches.create(user, path, form, product_id))
     events.record(
         user,
         events.FORM_OPENED,
