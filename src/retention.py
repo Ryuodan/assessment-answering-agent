@@ -167,6 +167,8 @@ def remove_questionnaire(batch: Batch) -> int:
     upload = [batch.source_path] if _only_its_own(batch) else []
     filled = settings.filled_dir / batch.id
     files = upload + ([path for path in filled.rglob("*") if path.is_file()] if filled.is_dir() else [])
+    # Its questions' wording goes too: kept search plans hold it (plan 034's review).
+    search_plans.forget(batch.team_id, batch.product_id, [(q.text, q.section) for q in batch.form.questions])
     batches.delete(batch.id)
     left = uploads.remove(upload, filled if filled.is_dir() else None)
     if left:
@@ -174,8 +176,23 @@ def remove_questionnaire(batch: Batch) -> int:
     return len(files) - len(left)
 
 
+def _still_unused(item: Due) -> bool:
+    """Whether it has not been used since the pass listed it: opened meanwhile, it stays (the review)."""
+    if item.kind == "run":
+        return True
+    table, column, used = (
+        ("conversations", "conversation_id", conversations.LAST_USED)
+        if item.kind == "conversation"
+        else ("form_batches b", "b.batch_id", batches.LAST_USED)
+    )
+    row = store.connect().execute(f"SELECT {used} AS used FROM {table} WHERE {column} = ?", (item.id,)).fetchone()
+    return row is not None and row["used"] <= item.last_used
+
+
 def _remove(item: Due) -> int | None:
     """Delete one due thing; the files that went with it, or None when it is in use right now."""
+    if not _still_unused(item):
+        return None
     conn = store.connect()
     if item.kind == "run":
         with conn:

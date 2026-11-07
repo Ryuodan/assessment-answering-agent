@@ -158,6 +158,13 @@ def save(conversation: Conversation) -> None:
     as that product's (plan 027). Nothing a turn saves can change it.
     """
     conn = store.connect()
+    # A questionnaire the turn opened may have been deleted while it ran (plan 033's review):
+    # the turn is saved without it rather than lost to the foreign key.
+    if (
+        conversation.batch_id
+        and not conn.execute("SELECT 1 FROM form_batches WHERE batch_id = ?", (conversation.batch_id,)).fetchone()
+    ):
+        conversation.batch_id = ""
     conn.execute(
         """
         UPDATE conversations

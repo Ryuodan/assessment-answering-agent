@@ -121,7 +121,7 @@ async def plan(state: QuestionState) -> dict:
             )
             parsed = _parse_queries(response.content)
             queries.extend(parsed)
-            planned = bool(parsed)
+            planned = len(parsed) >= 2  # asked for 3 to 5: one line back is a reply, not a plan
         except Exception:  # noqa: BLE001 - retrieval must survive a bad plan
             logger.exception("Query planning failed for question %s; using the question alone", question.id)
 

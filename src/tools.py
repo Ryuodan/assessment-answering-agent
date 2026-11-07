@@ -259,8 +259,8 @@ async def answer(
             language=language,
             run_id=run_id or batch.id,
             team_id=user.team_id,
-            product_id=batch.product_id,  # its knowledge base beside the shared one; "" for General
             on_answer=batches.saver(batch.id),  # each saved as it finishes: a run cut short keeps them
+            **({"product_id": batch.product_id} if batch.product_id else {}),  # General's call is as it was
         )
         # Preferences are applied here, after drafting and review, and never
         # handed to `service`: see `src.preferences` for why the drafter must not

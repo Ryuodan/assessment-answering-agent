@@ -209,14 +209,20 @@ def select_evidence(evidence: list[Evidence], limit: int, prior_cap: int, questi
     keep = set(ranked_positions[: max(prior_cap, 0) + len(same)])
     spare = ranked_positions[max(prior_cap, 0) + len(same) :]
 
-    selected = [index for index, item in enumerate(evidence) if not is_prior(item) or index in keep][:limit]
+    first = set(same)
+
+    def same_first(index: int) -> tuple[bool, int]:
+        return (index not in first, index)
+
+    # Before the cut, so a late one is not cut (the review: with the reranker's order it was).
+    selected = sorted(
+        (index for index, item in enumerate(evidence) if not is_prior(item) or index in keep), key=same_first
+    )
+    selected = selected[:limit]
 
     # Guidelines ran out before the budget did — give the room back.
     if len(selected) < limit and spare:
-        selected = sorted(selected + spare[: limit - len(selected)])
-
-    first = set(same)
-    selected.sort(key=lambda index: (index not in first, index))  # stable otherwise
+        selected = sorted(selected + spare[: limit - len(selected)], key=same_first)
     return [evidence[index] for index in selected]
 
 

@@ -114,6 +114,18 @@ All:
   - **A flaky chat test**, `test_new_conversation_suggests_the_chat_that_was_open`. It expected "General" after a reload, but opening a chat now counts as using it, and the two chats' last use often fell in the same second. The test now dates them apart and expects the chat just opened.
   - **A flaky run-id test** from plan 031 (`ab2b97a`).
 - Recorded: TD-076 (the chat's list on a narrow screen), TD-077.
+- 2026-11-07: an adversarial review of plans 033 and 034 together. It checked the timestamps (all `store.utcnow()`), migrations 15 and 16 on an older database, the `[n]` citations, the owner checks and the keyboard review, and found them sound. Fixed, each with a test in `tests/test_review_033_034.py` that fails without the fix:
+  - **The same words are not always the same question.** "If yes, please provide details." under Encryption lent its kept searches to the same words under Access control (reproduced), and its earlier answer was put first, marked SAME QUESTION, whatever its score.
+    - `formatting.asks_on_its_own`: a follow-up, or anything of fewer than four words, is never matched by its words alone.
+    - A kept plan is keyed by the planner too (its prompt and model) and by the question's section.
+  - **A chat turn about a questionnaire deleted while it ran was lost**: its save failed on the foreign key (reproduced). `conversations.save` now saves it without the questionnaire.
+  - **Kept plans outlived what wrote them.** They are cut to today's `MAX_SEARCH_QUERIES`, a one-line reply is not kept as a plan, and a new planner prompt or model plans again.
+  - **The evaluations read and wrote kept plans**, so the house set's wording would have reached `data/app.db`. The `eval` package turns `REUSE_SEARCH_PLANS` off for every runner.
+  - **With the reranker's order, the same question's earlier answer was cut.** It is now kept before the cut.
+  - **Deleting a questionnaire left its questions' wording in the kept plans.** It takes them now.
+  - **The retention pass deleted what was opened after it listed it.** It checks last use again first.
+  - Recorded rather than fixed: TD-078, a file removed under a new read of the same file.
+- Also while merging: `tools.answer` passes `product_id` only for a product again, as General's call always was. Two tests pinned it.
 
 ## Decision log
 

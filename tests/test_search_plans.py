@@ -117,7 +117,7 @@ def test_unused_plans_go_with_the_work_they_came_from(monkeypatch) -> None:
     search_plans.keep(TEAM, "", "en", "Is data encrypted at rest?", ["Is data encrypted at rest?"])
     old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(timespec="seconds")
     conn = store.connect()
-    conn.execute("UPDATE search_plans SET used_at = ? WHERE wording LIKE 'do you%'", (old,))
+    conn.execute("UPDATE search_plans SET used_at = ? WHERE wording LIKE '%|do you%'", (old,))
     conn.commit()
 
     retention.sweep()

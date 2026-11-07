@@ -99,6 +99,18 @@ Each is measured: 12 questions, three runs each, before and after, and then the 
   - The −1.5 in agreement is within the 4 points identical runs differ by (evaluation.md). So is the total number of contradictions, which was 11 and 8 between identical runs.
   - The safety measure held: one contradiction among the released answers both times, with 5 more answers released.
   - Only counts and case ids were read from the sealed house set.
+- 2026-11-07: an adversarial review of plans 033 and 034 together. It checked the timestamps (all `store.utcnow()`), migrations 15 and 16 on an older database, the `[n]` citations, the owner checks and the keyboard review, and found them sound. Fixed, each with a test in `tests/test_review_033_034.py` that fails without the fix:
+  - **The same words are not always the same question.** "If yes, please provide details." under Encryption lent its kept searches to the same words under Access control (reproduced), and its earlier answer was put first, marked SAME QUESTION, whatever its score.
+    - `formatting.asks_on_its_own`: a follow-up, or anything of fewer than four words, is never matched by its words alone.
+    - A kept plan is keyed by the planner too (its prompt and model) and by the question's section.
+  - **A chat turn about a questionnaire deleted while it ran was lost**: its save failed on the foreign key (reproduced). `conversations.save` now saves it without the questionnaire.
+  - **Kept plans outlived what wrote them.** They are cut to today's `MAX_SEARCH_QUERIES`, a one-line reply is not kept as a plan, and a new planner prompt or model plans again.
+  - **The evaluations read and wrote kept plans**, so the house set's wording would have reached `data/app.db`. The `eval` package turns `REUSE_SEARCH_PLANS` off for every runner.
+  - **With the reranker's order, the same question's earlier answer was cut.** It is now kept before the cut.
+  - **Deleting a questionnaire left its questions' wording in the kept plans.** It takes them now.
+  - **The retention pass deleted what was opened after it listed it.** It checks last use again first.
+  - Recorded rather than fixed: TD-078, a file removed under a new read of the same file.
+- Also while merging: `tools.answer` passes `product_id` only for a product again, as General's call always was. Two tests pinned it.
 
 ## Decision log
 

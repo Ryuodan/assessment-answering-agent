@@ -217,7 +217,27 @@ def same_wording(asked: str, question: str) -> bool:
     drafting prompt warns about, and a looser match would put one's answer first
     for the other.
     """
-    return bool(asked.strip()) and wording_key(asked) == wording_key(question)
+    return asks_on_its_own(question) and wording_key(asked) == wording_key(question)
+
+
+_FOLLOW_UP = re.compile(
+    r"^(?:if (?:yes|no|so|not|applicable|available)|please (?:provide|describe|explain|specify|attach|list|share|"
+    r"give|state|detail)|provide|describe|explain|specify|attach|details?|comments?|evidence|remarks?|other|"
+    r"إذا|اذا|في حال|يرجى|الرجاء|يُرجى|يرجي)\b",
+    re.IGNORECASE,
+)
+
+
+def asks_on_its_own(question: str) -> bool:
+    """Whether a question's words say what it asks, without its section or the row above (plan 034's review).
+
+    "If yes, please provide details" asks about encryption under Encryption and
+    about access under Access control: the same words, two questions. Such a
+    follow-up, or anything of fewer than four words, is never matched by its
+    words alone -- neither to an earlier answer nor to a kept search plan.
+    """
+    words = wording_key(question)
+    return len(words.split()) >= 4 and not _FOLLOW_UP.match(words)
 
 
 def wording_key(text: str) -> str:

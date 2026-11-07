@@ -23,11 +23,14 @@ def _on() -> bool:
 
 
 def recall(state: QuestionState) -> list[str] | None:
-    """The searches kept for this question, or None to plan them."""
-    return search_plans.recall(*_where(state), state["question"].text) if _on() else None
+    """The searches kept for this question, cut to today's `MAX_SEARCH_QUERIES`, or None to plan them."""
+    question = state["question"]
+    kept = search_plans.recall(*_where(state), question.text, question.section or "") if _on() else None
+    return kept[: settings.max_search_queries] if kept else None
 
 
 def keep(state: QuestionState, queries: list[str]) -> None:
     """Keep a plan that worked. A failed or empty one is never kept, so it is planned again."""
     if _on():
-        search_plans.keep(*_where(state), state["question"].text, queries)
+        question = state["question"]
+        search_plans.keep(*_where(state), question.text, queries, question.section or "")

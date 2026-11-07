@@ -688,3 +688,13 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Plan 033 sends lists through that route, so it now takes `language`, and the page sends it for a list only. The option's note says so.
 - **Impact:** a person who forces English on an Arabic form gets Arabic answers in the file.
 - **Fix (needs approval):** send `language` for a file questionnaire too. It changes what a file's answers are written in, so the user decides. One line in `answerThroughBatch` in `src/static/index.html`, and the note.
+
+## TD-078: Deleting a questionnaire while the same file is read again can remove the file under the new read
+
+- **What:** found 2026-11-07 by the review of plans 033 and 034; PLAUSIBLE, not reproduced.
+  - `retention._only_its_own` and `read_by_a_questionnaire` see only questionnaires already saved.
+  - `service.save_upload` gives identical content one name. So deleting Q1, or retention removing it, while the same file is being read again removes the file from under the new read.
+  - The new read is in `POST /api/forms`, `POST /api/forms/list`, or a chat upload waiting for the assistant to open it.
+  - `lists.read_list`'s "nothing found" path has the same window.
+- **Impact:** a questionnaire whose upload is gone. Filling it asks for the file again.
+- **Fix:** hold the file's name while it is read, as `busy` holds a questionnaire, and have deletion skip a held file.
