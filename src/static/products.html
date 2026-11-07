@@ -422,10 +422,9 @@
     }
     const meta = document.createElement("div");
     meta.className = "meta";
-    const added = { date: (product.created_at || "").slice(0, 10) };
-    meta.append(product.created_by
-      ? withContent(t("Added {date} by {name}", added), { name: product.created_by })
-      : t("Added {date}", added));
+    // The date apart from the words beside it, or after Arabic ones it reads backwards (plan 038).
+    const added = { date: (product.created_at || "").slice(0, 10), name: product.created_by };
+    meta.append(withContent(product.created_by ? t("Added {date} by {name}") : t("Added {date}"), added));
     body.append(meta);
 
     card.append(swatch, body);

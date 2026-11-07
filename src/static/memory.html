@@ -431,6 +431,11 @@
     if (!value) return "";
     return String(value).slice(0, 10);
   }
+  /* A date drawn in a line, kept apart from the words beside it: after Arabic
+     words, "2026-10-19" would otherwise read "19-10-2026" (plan 038). */
+  function dated(value) {
+    return value ? asContent(when(value)) : "";
+  }
 
   // Half this corpus is Arabic. Left-to-right is not a neutral default for it:
   // an Arabic answer laid out LTR puts its punctuation at the wrong end and
@@ -544,7 +549,7 @@
     where.append(...joined([
       entry.from_file ? asContent(entry.from_file) : "",
       entry.approved_by ? withContent(who, { name: entry.approved_by }) : "",
-      when(entry.approved_on),
+      dated(entry.approved_on),
     ]));
     meta.append(where);
 
@@ -683,7 +688,7 @@
     const recorded = joined([
       entry.from_file ? asContent(entry.from_file) : "",
       entry.approved_by ? asContent(entry.approved_by) : "",
-      when(entry.approved_on),
+      dated(entry.approved_on),
     ]);
     if (recorded.length) from.append(...recorded);
     else from.textContent = t("no date recorded");

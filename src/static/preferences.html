@@ -518,9 +518,11 @@
     node.textContent = message;
   }
 
+  /* An empty box takes the page's direction, so its hint reads right to left
+     on an Arabic page (plan 038); "auto" otherwise, as before. */
   const ARABIC = /[؀-ۿ]/;
   function withDirection(node, text) {
-    node.dir = ARABIC.test(text || "") ? "rtl" : "auto";
+    node.dir = ARABIC.test(text || "") ? "rtl" : !text && I18n.rtl ? "rtl" : "auto";
     return node;
   }
 
