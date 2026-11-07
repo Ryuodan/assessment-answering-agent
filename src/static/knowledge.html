@@ -262,7 +262,7 @@
 
 <div class="topbar">
   <div class="brand">
-    <div class="brand-mark" aria-hidden="true">A</div>
+    <div class="brand-mark" aria-hidden="true" data-no-translate>A</div>
     <div class="brand-text">
       <h1>Knowledge base</h1>
       <p>The policies and standards every answer is drawn from</p>
@@ -310,7 +310,7 @@
       <label class="file" data-drop="guidelines">
         <input type="file" id="guidelinesInput" multiple accept=".pdf,.docx" />
         Drop PDF or DOCX files here, or click to choose
-        <span class="chosen" id="guidelinesChosen"></span>
+        <span class="chosen" id="guidelinesChosen" data-no-translate dir="auto"></span>
       </label>
       <!-- Asked rather than guessed. A file name is not evidence: the
            "DataClassificationPolicy.pdf" in this corpus is the regulator's,
@@ -363,7 +363,7 @@
   <div class="viewer-shell">
     <div class="viewer-header">
       <div>
-        <h2 id="viewerTitle">Document</h2>
+        <h2 id="viewerTitle" data-no-translate dir="auto">Document</h2>
         <p id="viewerMeta"></p>
       </div>
       <div class="viewer-actions">
@@ -396,6 +396,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   const gate = $("authGate"), form = $("authForm"), error = $("authError");
 
   function apply(session) {
@@ -424,14 +425,16 @@
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        error.textContent = body.detail || "That did not work. Check the address and try again.";
+        error.textContent = body.detail
+          ? I18n.error({ message: body.detail, code: body.code })
+          : t("That did not work. Check the address and try again.");
         error.hidden = false;
         return;
       }
       // Reload rather than just hiding the gate: the page loaded its lists signed out.
       window.location.reload();
     } catch (e) {
-      error.textContent = "Could not reach the server.";
+      error.textContent = t("Could not reach the server.");
       error.hidden = false;
     } finally {
       $("authSubmit").disabled = false;
@@ -451,6 +454,7 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const t = I18n.t;
   let currentDocument = null;
 
   // --- theme (same key as the other pages, so the choice follows you) -------
@@ -474,7 +478,8 @@
   // --- helpers -------------------------------------------------------------
 
   /* Always text, never markup: messages carry file names and what the server
-     said. Line breaks in a message are kept by the style. */
+     said. Line breaks in a message are kept by the style. A message is a
+     string, or the nodes withContent() made of a sentence with names in it. */
   function setStatus(el, message, kind) {
     el.className = "status" + (kind ? " " + kind : "");
     el.replaceChildren();
@@ -483,7 +488,28 @@
       spinner.className = "spinner";
       el.append(spinner);
     }
-    el.append(document.createTextNode(message == null ? "" : String(message)));
+    el.append(message instanceof Node ? message : document.createTextNode(message == null ? "" : String(message)));
+  }
+
+  /* Content inside the interface's own sentence (plan 038): a file's or a
+     product's name stays as it was written, in its own direction, and is
+     never translated. `withContent(t("Removed {name}."), { name })` draws the
+     translated sentence with each {name} in `content` put in as content. */
+  function asContent(value) {
+    const span = document.createElement("span");
+    span.setAttribute("data-no-translate", "");
+    span.dir = "auto";
+    span.textContent = String(value);
+    return span;
+  }
+  function withContent(sentence, content) {
+    const drawn = document.createDocumentFragment();
+    sentence.split(/(\{\w+\})/).forEach((part) => {
+      const name = /^\{(\w+)\}$/.exec(part);
+      if (name && name[1] in content) drawn.append(asContent(content[name[1]]));
+      else if (part) drawn.append(part);
+    });
+    return drawn;
   }
 
   async function request(url, options) {
@@ -493,7 +519,7 @@
       const detail = body && body.detail;
       // Validation failures arrive as a list; a person needs the sentence.
       const said = Array.isArray(detail) ? detail.map((d) => d.msg || String(d)).join("; ") : detail;
-      const failure = new Error(typeof said === "string" && said ? said : "Request failed (" + response.status + ")");
+      const failure = new Error(typeof said === "string" && said ? said : t("Request failed ({status})", { status: response.status }));
       failure.code = body && body.code;
       throw failure;
     }
@@ -551,7 +577,7 @@
 
     indexing = true;
     paintGuidelines();
-    setStatus(status, "Indexing " + files.length + " guideline(s). Large documents take a minute each.", "busy");
+    setStatus(status, t("Indexing {n} guideline(s). Large documents take a minute each.", { n: files.length }), "busy");
 
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
@@ -568,22 +594,22 @@
       const pairs = results.reduce((total, r) => total + (r.qa_pairs_found || 0), 0);
       const indexed = results.length - failed.length - duplicates.length;
 
-      let message = "Indexed " + indexed + "/" + results.length +
-                    " file(s) — " + chunks + " chunks" + (pairs ? ", " + pairs + " Q/A pairs" : "") + ".";
-      if (duplicates.length) {
-        message += "\n" + duplicates.map((r) => "– " + r.source_name +
-                   ": skipped, identical to " + r.duplicate_of).join("\n");
-      }
-      if (failed.length) {
-        message += "\n" + failed.map((r) => "✗ " + r.source_name + ": " + r.error).join("\n");
-      }
+      const counts = { indexed: indexed, n: results.length, chunks: chunks, pairs: pairs };
+      const message = document.createDocumentFragment();
+      message.append(pairs
+        ? t("Indexed {indexed}/{n} file(s) — {chunks} chunks, {pairs} Q/A pairs.", counts)
+        : t("Indexed {indexed}/{n} file(s) — {chunks} chunks.", counts));
+      // One line each, as before: the file's name, and what became of it.
+      duplicates.forEach((r) => message.append("\n", withContent(t("– {name}: skipped, identical to {other}"),
+        { name: r.source_name, other: r.duplicate_of })));
+      failed.forEach((r) => message.append("\n✗ ", asContent(r.source_name), ": " + I18n.error(r.error)));
       setStatus(status, message, failed.length ? "error" : "ok");
 
       input.value = "";
       input.dispatchEvent(new Event("change"));
       loadKnowledge();
     } catch (error) {
-      setStatus(status, error.message, "error");
+      setStatus(status, I18n.error(error), "error");
     } finally {
       indexing = false;
       paintGuidelines();
@@ -602,7 +628,7 @@
     // read as the knowledge base the page works on. Nothing to remove or clear.
     $("kbRefresh").hidden = $("kbClear").hidden = !kbChosen();
     if (!kbChosen()) {
-      $("kbSummary").textContent = "Choose a knowledge base above to see what is indexed in it.";
+      $("kbSummary").textContent = t("Choose a knowledge base above to see what is indexed in it.");
       $("kbSources").replaceChildren();
       return;
     }
@@ -612,15 +638,27 @@
       // late, it replaced the list, and the count "Remove every policy document" names.
       if (scope !== kbScope()) return;
       guidelineCount = stats.sources.filter((s) => s.source_type === "guideline").length;
-      $("kbSummary").innerHTML = stats.total_chunks
-        ? '<span class="tag guideline">' + stats.sources.length + " file(s)</span>" +
-          "<span>" + stats.guideline_chunks.toLocaleString() + " guideline chunks</span>" +
-          // The previous answers are the one part of the corpus with a page of
-          // its own: they are managed one answer at a time rather than one file
-          // at a time, which is why the count links there.
-          '<span><a href="memory" title="Manage the answer memory">' +
-            stats.prior_answer_chunks.toLocaleString() + " previous answers</a></span>"
-        : "Nothing indexed yet. Upload your policies above.";
+      if (stats.total_chunks) {
+        const files = document.createElement("span");
+        files.className = "tag guideline";
+        files.textContent = t("{n} file(s)", { n: stats.sources.length });
+        const chunks = document.createElement("span");
+        chunks.textContent = t("{count} guideline chunks",
+          { n: stats.guideline_chunks, count: I18n.number(stats.guideline_chunks) });
+        // The previous answers are the one part of the corpus with a page of
+        // its own: they are managed one answer at a time rather than one file
+        // at a time, which is why the count links there.
+        const previous = document.createElement("span");
+        const link = document.createElement("a");
+        link.setAttribute("href", "memory");
+        link.title = t("Manage the answer memory");
+        link.textContent = t("{count} previous answers",
+          { n: stats.prior_answer_chunks, count: I18n.number(stats.prior_answer_chunks) });
+        previous.append(link);
+        $("kbSummary").replaceChildren(files, chunks, previous);
+      } else {
+        $("kbSummary").textContent = t("Nothing indexed yet. Upload your policies above.");
+      }
 
       $("kbSources").innerHTML = "";
       stats.sources.forEach((source) => {
@@ -628,11 +666,11 @@
 
         const tag = document.createElement("span");
         tag.className = "tag " + source.source_type;
-        tag.textContent = source.source_type === "prior_answer" ? "answers" : "guideline";
+        tag.textContent = source.source_type === "prior_answer" ? t("answers") : t("guideline");
 
         const name = document.createElement("span");
         name.className = "name";
-        name.textContent = source.name + " (" + source.chunks + ")";
+        name.append(asContent(source.name), " (" + source.chunks + ")");
         // Whether this is ours or a law we follow: this list is where somebody
         // checks that the corpus is labelled correctly.
         const whose = Cards.authorityBadge(source.authority);
@@ -642,26 +680,26 @@
         // the library of uploaded files offered before plan 031 removed it.
         const view = document.createElement("button");
         view.className = "quiet";
-        view.textContent = "view";
-        view.title = "Open the document, and the text the agent read out of it";
+        view.textContent = t("view");
+        view.title = t("Open the document, and the text the agent read out of it");
         view.onclick = () => openDocument({
           name: source.name,
           title: source.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
           origin: "uploaded",
           category: "uploaded",
-          label: source.source_type === "prior_answer" ? "Uploaded completed assessment" : "Uploaded guideline",
+          label: source.source_type === "prior_answer" ? t("Uploaded completed assessment") : t("Uploaded guideline"),
         });
 
         const remove = document.createElement("button");
         remove.className = "quiet danger";
-        remove.textContent = "remove";
+        remove.textContent = t("remove");
         remove.onclick = async () => {
           // Both ask first (plan 029): a shared document is used by every product, and a
           // product's goes with its file (TD-039) unless something else uses it (plan 027).
           if (!confirm(Cards.removalQuestion(source.name, kbProduct() ? kbScopeName() : ""))) return;
           await removeFromKnowledge(
             "/api/knowledge/sources/" + encodeURIComponent(source.name) + kbScopeQuery("?"),
-            "Removed " + source.name + ".");
+            withContent(t("Removed {name}."), { name: source.name }));
         };
 
         item.append(tag, name, view, remove);
@@ -670,22 +708,25 @@
     } catch (error) {
       if (scope !== kbScope()) return;
       guidelineCount = null;  // not known: the question says "every policy document"
-      $("kbSummary").textContent = "Could not load the knowledge base: " + error.message;
+      $("kbSummary").textContent = t("Could not load the knowledge base: {error}", { error: I18n.error(error) });
     }
   }
 
   /* Removing a product's document, or all of them, takes their files, and a
-     file that could not be removed is said. */
+     file that could not be removed is said. `done` is the sentence, drawn. */
   async function removeFromKnowledge(url, done) {
     try {
       const removed = await request(url, { method: "DELETE" });
       const left = (removed && removed.files_left) || [];
-      setStatus($("kbStatus"), left.length
-        ? done + " " + left.length + " file(s) could not be removed from the server (" + left.join(", ") +
-          "); see the log."
-        : done, left.length ? "error" : "ok");
+      const message = document.createDocumentFragment();
+      message.append(done);
+      if (left.length) {
+        message.append(" ", withContent(t("{n} file(s) could not be removed from the server ({names}); see the log.",
+          { n: left.length }), { names: left.join(", ") }));
+      }
+      setStatus($("kbStatus"), message, left.length ? "error" : "ok");
     } catch (error) {
-      setStatus($("kbStatus"), error.message, "error");
+      setStatus($("kbStatus"), I18n.error(error), "error");
     }
     loadKnowledge();
   }
@@ -708,11 +749,15 @@
     return kbProduct() ? prefix + "product=" + encodeURIComponent(kbProduct()) : "";
   }
   function describeScope() {
-    $("kbScopeHint").textContent = !kbChosen()
-      ? "Choose which knowledge base to work on: the shared one, used for every product, or one product's own."
-      : kbProduct()
-        ? "Used only for " + kbScopeName() + "'s questionnaires, beside the shared one."
-        : "Used for every questionnaire.";
+    const hint = $("kbScopeHint");
+    if (!kbChosen()) {
+      hint.textContent = t("Choose which knowledge base to work on: the shared one, used for every product, or one product's own.");
+    } else if (kbProduct()) {
+      hint.replaceChildren(withContent(t("Used only for {name}'s questionnaires, beside the shared one."),
+        { name: kbScopeName() }));
+    } else {
+      hint.textContent = t("Used for every questionnaire.");
+    }
     paintGuidelines();
   }
   /* The choice in the address, so a reload or a copied link opens the same
@@ -726,10 +771,15 @@
       const listed = await request("/api/products");
       const select = $("kbScope");
       const chosen = select.value;
-      const prompt = new Option("Choose a knowledge base…", "", true, true);
+      const prompt = new Option(t("Choose a knowledge base…"), "", true, true);
       prompt.disabled = true;  // a prompt, never a choice
-      select.replaceChildren(prompt, new Option("Shared, for every product", Cards.GENERAL));
-      (listed.products || []).forEach((product) => select.append(new Option(product.name, product.id)));
+      select.replaceChildren(prompt, new Option(t("Shared, for every product"), Cards.GENERAL));
+      (listed.products || []).forEach((product) => {
+        const option = new Option(product.name, product.id);
+        option.setAttribute("data-no-translate", "");  // a product's name is content (plan 038)
+        option.dir = "auto";
+        select.append(option);
+      });
       if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
     } catch (error) { /* no products: the shared knowledge base is all there is */ }
   }
@@ -747,11 +797,11 @@
   async function openDocument(doc) {
     currentDocument = doc;
     $("viewerTitle").textContent = doc.title || doc.name;
-    $("viewerMeta").textContent = doc.label + " · " + doc.name;
+    $("viewerMeta").replaceChildren(doc.label + " · ", asContent(doc.name));
     $("documentDownload").href = documentUrl(doc, "file");
     $("documentDownload").download = doc.name;
     $("extractedText").textContent = "";
-    setStatus($("extractedStatus"), "Extracting text… the first view may take a minute.", "busy");
+    setStatus($("extractedStatus"), t("Extracting text… the first view may take a minute."), "busy");
 
     $("documentFrame").src = documentUrl(doc, "preview");
     showViewerTab("original");
@@ -764,10 +814,11 @@
       $("extractedText").textContent = data.text;
       if (Cards.isArabic(data.text)) $("extractedText").dir = "rtl";
       else $("extractedText").removeAttribute("dir");
-      setStatus($("extractedStatus"), data.characters.toLocaleString() + " extracted characters.", "ok");
+      setStatus($("extractedStatus"), t("{count} extracted characters.",
+        { n: data.characters, count: I18n.number(data.characters) }), "ok");
     } catch (error) {
       if (currentDocument !== doc) return;
-      setStatus($("extractedStatus"), error.message, "error");
+      setStatus($("extractedStatus"), I18n.error(error), "error");
     }
   }
 
@@ -785,9 +836,11 @@
   $("kbRefresh").onclick = loadKnowledge;
   $("kbClear").onclick = async () => {
     if (!kbChosen()) return;
-    const which = kbProduct() ? kbScopeName() + "'s knowledge base" : "the shared knowledge base";
+    const done = kbProduct()
+      ? withContent(t("Removed every policy document from {name}'s knowledge base."), { name: kbScopeName() })
+      : t("Removed every policy document from the shared knowledge base.");
     if (!confirm(Cards.clearQuestion(guidelineCount, kbProduct() ? kbScopeName() : ""))) return;
-    await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), "Removed every policy document from " + which + ".");
+    await removeFromKnowledge("/api/knowledge" + kbScopeQuery("?"), done);
   };
 
   $("kbScope").onchange = () => {
