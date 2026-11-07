@@ -297,6 +297,9 @@ def test_a_turn_sent_without_a_run_id_is_held_and_watched_under_one(client, turn
         client.post, "/api/chat", json={"message": "No run id here", "conversation_id": conversation_id}
     )
     held = until(lambda: chat_running.running(conversation_id), "the turn")
+    # The hold is taken before the turn starts: wait for the turn too, or this read the
+    # list before the stub had recorded it (flaky, 1 run in 3, found by plan 033's builder).
+    until(lambda: len(turns.run_ids) == 1, "the turn to start")
 
     assert held["run_id"], "named, never empty"
     assert turns.run_ids == [held["run_id"]], "and its progress is reported under the same name"
@@ -312,6 +315,7 @@ def test_a_turn_sent_without_a_run_id_is_held_and_watched_under_one(client, turn
         files={"file": (path.name, path.read_bytes(), "application/octet-stream")},
     )
     held = until(lambda: chat_running.running(conversation_id), "the upload's turn")
+    until(lambda: len(turns.run_ids) == 2, "the upload's turn to start")
     assert held["run_id"] and turns.run_ids[-1] == held["run_id"]
     turns.let_go()
     assert uploaded.result(timeout=10).status_code == 200
