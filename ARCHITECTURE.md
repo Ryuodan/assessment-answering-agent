@@ -129,13 +129,24 @@ The confidence follows as a number. The threshold comes from the server, in the
 session (`review_threshold`, `GET /api/auth/session`), set with
 `Cards.setReviewThreshold`.
 
-The Workbench keeps the open questionnaire in its own address, `?q=<id>`
-(plan 029), with `history.replaceState` on an address derived from the page's,
-so it stays under the deployment's prefix. A reload or a copied link opens it
-again, for its owner only. "Or pick up" lists every questionnaire of the
-person, last changed first (`form_batches.updated_at`). Its review shows the
+The Workbench is a questionnaire page in five steps (plan 033, D-029): choose
+and load, check what was found, answer, review, fill and download. Reading
+starts when a file and a product are both there. Answer sits in a bar that
+stays in view, and "Fill and download" is one action. Review is on the cards,
+which open on "Needs review" and can be worked from the keyboard. A typed list,
+or a PDF's or Word text's questions, is a questionnaire too (`POST
+/api/forms/list`, `src/lists.py`, D-030), with nothing to fill. It keeps the open
+questionnaire in its own address, `?q=<id>` (plan 029), with
+`history.replaceState` on an address derived from the page's, so it stays under
+the deployment's prefix. A reload or a copied link opens it again, for its owner
+only. "Or pick up" lists every questionnaire of the person, last used first
+(`used_at`, set on opening), with "Kept until" and Delete. Its review shows the
 answers in tabs by the fill gate's verdict (`will_be_written`, from
-`tools.inspect`), with Fill in a bar that stays in view.
+`tools.inspect`).
+
+The chat's message box has a labelled "Attach a questionnaire" control, and a
+file dragged over the page shows where to drop it (plan 033). Its list is
+ordered by last use and says until when each conversation is kept.
 
 `tests/browser/` drives them in headless Chromium (Playwright, plan 011): the
 app runs in a thread of the test process, so the suite's fixtures (temporary
@@ -284,7 +295,9 @@ answered yet. `POST /api/forms/{id}/answer` calls `tools.answer`, which calls
 `service.answer_questions`, which runs the LangGraph pipeline once per question
 (`graph/workflow.py`): plan the searches, retrieve, rerank, draft, review, and
 either retry retrieval with a refined query or finalize with confidence and
-citations. Each answer is saved on the batch as it finishes (`on_answer`,
+citations. A question planned before is searched with its kept plan
+(`graph/kept_searches.py`, `search_plans`, plan 034), and an earlier answer to
+the same words is put first among its sources (`state.select_evidence`). Each answer is saved on the batch as it finishes (`on_answer`,
 `batches.saver`), before it is counted in `progress`, and the run's styled
 answers are saved again at its end (`batches.save_answers`), with an event.
 While a run goes on, `busy` holds its questionnaire: a second run, and any
@@ -339,7 +352,7 @@ download for the optional reranker. Data-residency and secret handling are in
 
 | What | Where | Written by |
 |---|---|---|
-| users, teams, sessions, events, runs, questionnaires, chats, preferences | SQLite at `DB_PATH` (`data/app.db`) | `store` and the modules above it |
+| users, teams, sessions, events, runs, questionnaires, chats, preferences, kept search plans | SQLite at `DB_PATH` (`data/app.db`) | `store` and the modules above it; `retention` deletes questionnaires, lists, chats, runs and search plans unused for `RETENTION_DAYS` (D-031) |
 | uploaded and filled files, extracted text | `data/` (per team, per person) | `service`, `tools`, `storage` (which also deletes old files over a person's limit) |
 | the policy corpus and the answer-memory vectors | Chroma at `CHROMA_DIR` (`chroma_db/`) | `knowledge`, `answer_memory` |
 | evaluation sets and history | `eval/`; the house set and answer memory only sealed in git (`eval/sealed/`, plaintext gitignored) | `eval/`, `scripts/`; `eval/vault.py` seals and unlocks |

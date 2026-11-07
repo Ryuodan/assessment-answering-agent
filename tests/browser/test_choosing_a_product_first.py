@@ -11,13 +11,14 @@ they did on the page. A fixed product shows as a label in its colour.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from playwright.sync_api import Page, expect
 
-from src import batches, conversations, identity, knowledge, products, tools
+from src import batches, conversations, identity, knowledge, products, store, tools
 from src.agents import assistant
 from src.config import settings
 from src.models import AnsweredQuestion
@@ -490,9 +491,19 @@ def test_last_used_skips_a_deleted_product(page: Page, tmp_path: Path, availo: p
     expect(page.locator("#formLastUsed button")).to_have_text("Last used: Availo")
 
 
+def _used(title: str, minutes_ago: int) -> None:
+    """Date a chat's last use, so the order by last use does not depend on which second the test ran in."""
+    stamp = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat(timespec="seconds")
+    conn = store.connect()
+    conn.execute("UPDATE conversations SET updated_at = ?, used_at = ? WHERE title = ?", (stamp, stamp, title))
+    conn.commit()
+
+
 def test_new_conversation_suggests_the_chat_that_was_open(page: Page, availo: products.Product) -> None:
     chat("About Availo", availo.id)
     chat("About everything")  # General, the most recent
+    _used("About Availo", 2)
+    _used("About everything", 1)
 
     page.goto("/")
     offer, pick = page.locator("#chatLastUsed button"), page.locator("#productPick")
@@ -514,7 +525,10 @@ def test_new_conversation_suggests_the_chat_that_was_open(page: Page, availo: pr
     expect(page.locator("#send")).to_be_enabled()
 
     page.reload()
-    expect(offer).to_have_text("Last used: General")  # from the chats, the most recently used
+    # Opening a chat is using it (plan 033, D-031): the one just opened is the most recently used.
+    # Changed on purpose; this read "General" while opening did not count, and was flaky once it
+    # did, the two chats' last use often falling in the same second.
+    expect(offer).to_have_text("Last used: Availo")
     expect(pick).to_have_value("")
 
 

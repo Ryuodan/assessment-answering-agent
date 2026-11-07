@@ -83,6 +83,22 @@ Each is measured: 12 questions, three runs each, before and after, and then the 
 
   - The incident-response question now cites the same sources run after run (0.42 to 0.93), and NAC's Arabic run cites identical ones.
   - What still varies is the drafter's wording (temperature 0.2) and the reviewer's judgement. One question, about leavers, was held once at 0.6.
+- 2026-11-07: the held-out evaluation, the dev split (82 questions, 3 questionnaires).
+  - It ran before (`9df3b3b`, a scratch checkout) and after (`4ddaee9`), each on its own copy of the local data, so the kept search plans and the migrations never touched the real database. The hashes of `data/app.db` and `chroma_db/chroma.sqlite3` were unchanged.
+
+    | dev split | before | after |
+    |---|---|---|
+    | agreement with the team | 83.7 | 82.2 |
+    | form | 95.1 | 97.6 |
+    | released (will be written) | 43 | 48 |
+    | contradictions among the released | 1 | 1 |
+    | held for review | 39 | 34 |
+    | contradictions among the held | 8 | 10 |
+
+  - Against the noise baseline (`compare_runs --noise`): 2 cases better, 4 worse, 7 moved within noise, 69 the same.
+  - The −1.5 in agreement is within the 4 points identical runs differ by (evaluation.md). So is the total number of contradictions, which was 11 and 8 between identical runs.
+  - The safety measure held: one contradiction among the released answers both times, with 5 more answers released.
+  - Only counts and case ids were read from the sealed house set.
 
 ## Decision log
 

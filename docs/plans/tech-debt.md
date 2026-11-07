@@ -428,6 +428,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** migration 14 (plan 027) brought the module to exactly 400 lines, the default ARCH-SIZE limit.
 - **Impact:** the next migration fails `poe arch`.
 - **Fix:** before adding one, move `_team_the_answer_memory` (migration 12's data step) into a module of its own, with no change in behaviour.
+- **Resolved** 2026-11-07 (Claude, plan 033): `_team_the_answer_memory` moved unchanged to `src/migration_steps.py`, which `src/migrations.py` imports under the old name; migrations 15 and 16 followed.
 
 ## TD-047: With hybrid search on, a superseded remembered answer can come back
 
@@ -581,6 +582,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-05 by the review of plan 029's Stage 1. `POST /api/forms` keeps a questionnaire for every file it reads, whatever it found. A Word file written as prose has no places for answers, so it is kept with 0 questions, and the Workbench then reads its questions as text. Older than plan 029.
 - **Impact:** "Or pick up" lists one "questions.docx" with nothing in it for each such read; opening one says "No questions were read". Since plan 029's 1.1 lists every questionnaire, not the last three, they all show. The review's other half, the second read offering that empty questionnaire instead of reading the file again, is fixed: `batches.same_upload` leaves out a questionnaire nothing was read from.
 - **Fix (needs approval):** do not keep a questionnaire when nothing was read from a Word file (the page reads it as text anyway), or leave those out of "Or pick up". Either changes what the chat's attach keeps too.
+- **Partly answered** 2026-11-07 (plan 033): an empty questionnaire can now be deleted (`DELETE /api/forms/{id}`), from "Or pick up". Not keeping one in the first place still needs the user's approval.
 
 ## TD-066: The server still answers as General when no product is sent
 
@@ -678,3 +680,11 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-07 by plan 033's chat builder; not caused by plan 033. At 860 px wide and below, the conversation list (`.side`) is an overlay. It opens when the page loads and covers the ☰ toggle that would close it. At 375 px a phone user cannot close it, and it hides the left of the message box, including Attach.
 - **Impact:** the Assistant page is hard to use on a phone.
 - **Fix:** start the overlay closed at 860 px and below, keep the toggle above it, and close it when a conversation is chosen. A browser test at 375 px.
+
+## TD-077: "Force English/Arabic" does not reach a spreadsheet's or Word form's own questions
+
+- **What:** found 2026-11-07 by plan 033's Workbench builder. Older than plan 033.
+  - `POST /api/forms/{id}/answer` took no language. A file questionnaire's own rows were always answered in each question's own language, whatever "More options" said.
+  - Plan 033 sends lists through that route, so it now takes `language`, and the page sends it for a list only. The option's note says so.
+- **Impact:** a person who forces English on an Arabic form gets Arabic answers in the file.
+- **Fix (needs approval):** send `language` for a file questionnaire too. It changes what a file's answers are written in, so the user decides. One line in `answerThroughBatch` in `src/static/index.html`, and the note.

@@ -245,6 +245,8 @@ class AnswerBatchRequest(BaseModel):
     reviewer approved here.
     """
 
+    language: Language | None = None  # every answer in this one, as typed questions could be (plan 033)
+
 
 class ReviseBatchRequest(BaseModel):
     instruction: str = Field(min_length=1, max_length=2000)
@@ -270,10 +272,7 @@ async def answer_questionnaire(batch_id: str, request: AnswerBatchRequest, user:
     from the moment the call is made.
     """
     outcome = await tools.answer(
-        user,
-        batch_id,
-        request.scope.to_scope(),
-        replace_existing=request.replace_existing,
+        user, batch_id, request.scope.to_scope(), replace_existing=request.replace_existing, language=request.language
     )
     return {**vars(outcome), "batch": tools.inspect(user, batch_id)}
 

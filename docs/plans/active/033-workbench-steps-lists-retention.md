@@ -88,6 +88,32 @@ All:
 ## Progress log
 
 - 2026-11-07: plan written from the user's decisions above and plan 029's analysis of the feedback (R1, R3, R4, D6, D10, D11).
+- 2026-11-07: the three builders' first phase, merged.
+  - **A, the Workbench** (`f127eb0`):
+    - the five steps, reading on drop, the sticky Answer bar, Fill and download, and More;
+    - smaller cards, and the keyboard review (J/K or the arrows, A, E, Esc, "N of M reviewed").
+    - 12 browser tests, each failing on the old page. About 30 existing tests changed on purpose, most of them to drop the "Read questions from file" click, which is gone.
+  - **B, the server** (`0916a38`, `1783a8a`, `8f112c7`):
+    - TD-046 first: `src/migration_steps.py`;
+    - room in `tools.py` (1302 to 1151) and `api.py` (1221 to 1179), behaviour-neutral;
+    - `POST /api/forms/list` (`src/lists.py`);
+    - `DELETE /api/forms/{id}`;
+    - `RETENTION_DAYS` with `src/retention.py`, migration 15's `used_at`, `kept_until` on the routes, and `inspect retention`.
+    - 46 tests: 19 changes were each undone to show a test fails.
+  - **C, the chat** (`4cbf06e`): a labelled Attach control, the drop target, unsupported types refused, and the empty chat's attach area. 9 browser tests.
+- 2026-11-07: the second phase, merged.
+  - **A** (`27c6a34`):
+    - typed lists and PDF/Word text lists are kept through `POST /api/forms/list` when Answer is pressed;
+    - their cards say "Ready to use" (`Cards.fileless`);
+    - Delete on each "Or pick up" row and on the open questionnaire;
+    - "Kept until".
+    - 7 browser tests.
+  - **C** (`84ecdfd`): the chat's list is dated by last use and says "Kept until"; a chat whose questionnaire was deleted says so when the page can tell. 8 browser tests.
+- 2026-11-07, fixed while merging:
+  - **Forced language for lists.** A list is answered through the questionnaire's route, which took no language, so "Force English/Arabic" stopped reaching typed questions. `POST /api/forms/{id}/answer` now takes `language`, and the page sends it for a list. A spreadsheet's or Word form's own rows never had it; that is TD-077, for the user to decide.
+  - **A flaky chat test**, `test_new_conversation_suggests_the_chat_that_was_open`. It expected "General" after a reload, but opening a chat now counts as using it, and the two chats' last use often fell in the same second. The test now dates them apart and expects the chat just opened.
+  - **A flaky run-id test** from plan 031 (`ab2b97a`).
+- Recorded: TD-076 (the chat's list on a narrow screen), TD-077.
 
 ## Decision log
 

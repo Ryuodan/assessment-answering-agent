@@ -858,9 +858,10 @@
                    title="Applied as a rewording pass once the answers are written"
                    placeholder="How should they be written? — optional, e.g. one sentence each, formal, no bullet points">
           </div>
-          <!-- Said because it is so: a questionnaire's answer route takes no language (plan 033). -->
-          <p class="hint" id="languageNote">A questionnaire's own questions, a list's included, are answered in each
-            question's own language; forcing English or Arabic applies to questions typed beside one.</p>
+          <!-- Said because it is so: a file's own rows are answered in their own language (TD-077). -->
+          <p class="hint" id="languageNote">Forcing English or Arabic applies to a typed or PDF list, and to questions
+            typed beside a questionnaire. A spreadsheet's or Word form's own questions are answered in each
+            question's own language.</p>
           <p class="hint">Left blank, answers come out in the house style. Anything typed here is applied as a
             rewording pass once the answers are written, so the facts and the citations are settled first and
             only the wording follows the instruction.</p>
@@ -3977,6 +3978,10 @@
              whatever this page sends -- so asking has to be deliberate, and
              the only thing that asks is the button on the row itself. */
           replace_existing: own.some((entry) => entry.replace),
+          /* A list's questions were typed, or read as text, and "Force English" applied to
+             them before they were kept as a list (plan 033). A file's own rows are answered
+             in each question's language, as they always were (TD-077). */
+          language: isList() ? ($("languageSelect").value || null) : null,
         }),
       });
       formBatch = outcome.batch;

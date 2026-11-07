@@ -27,7 +27,6 @@ import logging
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import asyncio
 
@@ -212,6 +211,7 @@ async def answer(
     *,
     run_id: str = "",
     replace_existing: bool = False,
+    language: Language | None = None,
 ) -> Outcome:
     """Answer a selection of a batch's questions.
 
@@ -219,9 +219,9 @@ async def answer(
     over an answer that already exists -- see the note on the drafting node for
     what measuring the two ways showed.
 
-    Each question is answered in its own language: the samples mix an Arabic
-    question into an English form, and the question's own language is the one
-    the assessor asked in.
+    Each question is answered in its own language, unless `language` forces one:
+    the samples mix an Arabic question into an English form, and the question's
+    own language is the one the assessor asked in.
 
     An answer that already exists is never overwritten unless the caller says
     `replace_existing`. This is a guard and not a convenience: an answer in the
@@ -254,14 +254,13 @@ async def answer(
     # One run at a time, and nothing else changes it meanwhile (plan 029). No
     # await since `_require` looked, so no other run can have started since.
     with busy.hold(batch.id, run_id or batch.id):
-        # The questionnaire's product, from its knowledge base beside the shared one.
-        scope_of_answers: dict[str, Any] = {"product_id": batch.product_id} if batch.product_id else {}
         results = await service.answer_questions(
             [_as_question(question) for question in chosen],
+            language=language,
             run_id=run_id or batch.id,
             team_id=user.team_id,
+            product_id=batch.product_id,  # its knowledge base beside the shared one; "" for General
             on_answer=batches.saver(batch.id),  # each saved as it finishes: a run cut short keeps them
-            **scope_of_answers,
         )
         # Preferences are applied here, after drafting and review, and never
         # handed to `service`: see `src.preferences` for why the drafter must not

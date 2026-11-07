@@ -608,3 +608,66 @@ a plan relies on it.
   - With more than one server process, a turn is seen only by the process
     running it, as a questionnaire's run already is.
 - **Date:** 2026-11-06. **Status:** accepted. **Decided by:** the user (plan 031).
+
+## D-029: the Workbench is a questionnaire page in five steps, and review stays on the cards
+
+- **Context:** the team's feedback, and plan 029's measurement of it. With 120 questions at 1366x768, the Answer button sat 14,000 px down and Fill 61 screens down. The team asked for a step-by-step flow and a review table. The user kept the chat as the home page, and chose the cards over a table.
+- **Decision:**
+  - **Five steps** with a step header: choose and load, check what was found, answer, review, fill and download. A done step folds to one line saying what it holds.
+  - **Reading starts** when a file and a product are both there. A file given first waits in the page, and nothing is sent before a product.
+  - **Answer** is one button in a bar that stays in view.
+  - **"Fill and download"** is one action that says what was written and what was held back.
+  - **Under "More":** the other downloads, rewording and "Ask another question".
+  - **Review** opens on "Needs review", on smaller cards.
+  - **Keys** work while no field has focus: J/K or the arrows move, A accepts, E edits, Esc closes. An accept moves to the next held answer, and a counter says how many are reviewed. There is no "Approve all".
+- **Consequences:**
+  - The "Read questions from file" click is gone, and the tests that clicked it were changed.
+  - Esc keeps an edit, as leaving the editor always has.
+  - The keys follow the physical key, so they work on an Arabic layout too.
+- **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user (plan 033).
+
+## D-030: a typed list, or a PDF's or Word text's questions, is a questionnaire with no file to fill
+
+- **Context:** typed questions and PDF and Word text lists were answered statelessly. A reload lost them, and their card actions did nothing. Their runs were saved to `runs`, which no page reads.
+- **Decision:**
+  - `POST /api/forms/list` stores a list in `form_batches` with format `LIST` (`src/lists.py`). It is owner-scoped, and its product is fixed.
+  - A list is answered, reopened, listed and exported like a file questionnaire, and every card action works on it.
+  - Fill refuses it with 422 `nothing_to_fill` and offers the downloads. Its cards say "Ready to use".
+  - `DELETE /api/forms/{id}` deletes any questionnaire with its answers and its own files. It is refused while it is being answered.
+- **Consequences:**
+  - The old `/api/assessments/answer-questions` and `/extract` routes stay, for scripts and the evaluation.
+  - A question typed beside an open file questionnaire is answered as before: there is no route to add one to it.
+- **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user (plan 033).
+
+## D-031: saved work is deleted after RETENTION_DAYS unused
+
+- **Context:** questionnaires arrive from other companies, often under an NDA, and every one, every list and every chat was kept for good.
+- **Decision:**
+  - `RETENTION_DAYS`, default 180 (0 keeps everything). Questionnaires, lists, chats and old `runs` not used for that long are deleted, with what is only theirs. Opening one counts as using it (`used_at`, migration 15).
+  - A pass runs at start-up and then daily (`src/retention.py`). It skips what is being answered or talked about.
+  - It never deletes the knowledge base, the answer memory, products, people or the event log.
+  - Each pass that deletes something records one event per team, with counts.
+  - The pages say "Kept until".
+  - `inspect retention` lists what is due, and writes nothing.
+- **Consequences:**
+  - "Or pick up" and the chat's list are ordered by last use, so opening one moves it to the top.
+  - Uploads in the team's shared folder from before per-person folders are left to the storage limit.
+- **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user (plan 033).
+
+## D-032: consistency comes from the same searches and the same question's earlier answer, not from copying
+
+- **Context:** the same question was answered differently on each run (plan 029: three NAC runs). The user chose to keep drafting every time, not to return earlier answers word for word.
+- **Decision:**
+  - **The same searches.** The first search plan that worked is kept per team, product, language and folded wording (`search_plans`, migration 16), and used again. `REUSE_SEARCH_PLANS` turns it off.
+  - **The same question's earlier answer first.** An earlier answer to the same words is kept first in the sources, beyond the cap, and marked PREVIOUS ANSWER TO THIS SAME QUESTION. The drafter keeps its position and facts unless our policy now says otherwise.
+  - **No invented names.** The drafter and the reviewer are told not to claim a technology named in the question unless a source names it.
+- **Consequences:**
+  - On 12 questions, three runs each, measured against the baseline:
+    - same decision: 9 to 11 of 12;
+    - same verdict: 11 to 12 of 12;
+    - cited sources in common: 0.72 to 0.88;
+    - wording in common: 0.41 to 0.57.
+  - The drafter's own wording still varies (temperature 0.2).
+  - A kept plan does not change when the knowledge base does. What it finds does.
+  - Kept plans hold the question's words, so retention deletes them.
+- **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user (plan 034).

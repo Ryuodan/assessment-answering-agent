@@ -176,6 +176,23 @@ def test_it_is_answered_by_the_answer_route(client: TestClient, drafted: list[Qu
     assert all(q["will_be_written"] for q in batch["questions"]), "the review gate's verdict, as for a file"
 
 
+def test_a_lists_answers_can_be_forced_into_one_language(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Typed questions could be answered all in English or all in Arabic before they were
+    kept as a list; through the questionnaire's route, which took no language, that was lost."""
+    asked: list[Any] = []
+
+    async def fake(questions: list[Question], language: Any = None, run_id: Any = None, **extra: Any):
+        asked.append(language)
+        return [AnsweredQuestion(question=q, answer=ANSWER, confidence=0.9, needs_review=False) for q in questions]
+
+    monkeypatch.setattr("src.tools.service.answer_questions", fake)
+    made = make_list(client, "هل تشفرون النسخ الاحتياطية؟")
+
+    assert client.post(f"/api/forms/{made['id']}/answer", json={"language": "en"}).status_code == 200
+    assert client.post(f"/api/forms/{made['id']}/answer", json={"replace_existing": True}).status_code == 200
+    assert asked == ["en", None], "forced when asked, each question's own otherwise"
+
+
 def test_a_second_run_is_refused_while_one_is_answering(
     client: TestClient, drafted: list[Question], monkeypatch: pytest.MonkeyPatch
 ) -> None:
