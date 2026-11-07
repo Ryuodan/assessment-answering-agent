@@ -51,6 +51,27 @@ The user's request: "Fix the debts. Test the system from A to Z and make sure it
   - **What did it was not found.** Not the reviewer (by its own account), and not `poe gen`, `arch`, `types`, `docs` or the test runs of that window: each was run again against a version-14 copy, which none changed. No app server was running.
   - **One way it could happen is closed:** `inspect retention` and `inspect fills`, documented as read-only, read through the app's connection, which upgrades an older database first. They now ask the version on a read-only connection, as `doctor` does, and refuse with a FIX when the database is older (`src/cli.py`, `diagnostics.schema_version`). 4 tests in `tests/test_inspect_older_database.py`; 2 fail on the old CLI.
   - From here, the real data's hashes are taken at the new version, before the A-to-Z run.
+- 2026-11-07: the A-to-Z run.
+  - **How:** a Playwright script outside the repository started the app in a thread on a copy of `data/` and `chroma_db/` (448 MB), with the real model and embedding service and a test admin account made on the copy. It drove every page as a person would, and collected the pages' JavaScript errors and the server's errors.
+  - **First run: 15 of 16 steps passed.** The one failure was the script's, twice over:
+    - it typed the product's name where the dialog asks for the word "confirm";
+    - its first "Delete" button was Availo's, so it deleted Availo, on the copy. The page asked, as it should, and deleted the product chosen.
+  - **Final run, on a fresh copy of the final tree: 20 of 20 steps passed, with 0 page errors and 0 server errors:**
+    - signing in, and signing out;
+    - a product added, then deleted behind its typed confirmation;
+    - a document added to that product's knowledge base, viewed with its text, then removed;
+    - the Workbench: a spreadsheet read on drop and answered by the model (4 answers, all "will be written"), one accepted from the keyboard, filled and downloaded (the file had the 4 answers), then deleted;
+    - a typed list answered, reopened by its address, then deleted;
+    - search: 20 passages, 10 of them earlier answers;
+    - the chat: a question answered as a card; the same in Arabic, answered in Arabic and right to left; a questionnaire attached and answered while the person switched to another chat and back; the list resized from the keyboard;
+    - the answer memory listed, searched and added to;
+    - preferences saved;
+    - on a phone, the list closed and the box usable.
+  - The hashes of the real `data/app.db` and `chroma_db/chroma.sqlite3` were unchanged after both runs.
+  - **The command line:** `doctor` passes everything but Docling, which is not running on this machine. Without it, documents are read by the local fallback, as the run's knowledge-base step did; the server is expected to run Docling. `inspect retention` and `inspect fills` work on the copy: nothing is due in 30 days, and the fills audit lists the 34 fills from before plan 029's fix, as before.
+  - **The gate's own findings:**
+    - `test_a_long_conversation_title_does_not_widen_the_history` measured the list at 768 px without opening it. It now starts closed there (TD-076), so the test opens it first: changed on purpose.
+    - The chat test's turn watcher counted the working bubble and then read it, and the reply could replace it in between. It reads it in one step now (flaky, a test fix only).
 
 ## Decision log
 

@@ -26,12 +26,14 @@ def watch_the_turn(page: Page, timeout: float = 30) -> list[str]:
     seen: list[str] = []
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        working = page.locator(".working .bubble")
-        if not working.count():
+        # Read in one step: counting the bubble and then reading it raced the reply,
+        # which can replace it in between, and the read then waited 30 s for it (flaky).
+        texts = page.locator(".working .bubble").all_inner_texts()
+        if not texts:
             if seen:
                 return seen
         else:
-            text = " ".join(working.first.inner_text().split())
+            text = " ".join(texts[0].split())
             if not seen or seen[-1] != text:
                 seen.append(text)
         page.wait_for_timeout(100)

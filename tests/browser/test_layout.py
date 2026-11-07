@@ -86,6 +86,10 @@ def test_a_long_conversation_title_does_not_widen_the_history(page: Page) -> Non
     for width in (1280, 900, 768):
         page.set_viewport_size({"width": width, "height": 800})
         page.goto("/")
+        if width <= 860:
+            # Changed on purpose by plan 035 (TD-076): over the page, the list starts closed.
+            expect(page.locator("#history")).to_be_hidden()
+            page.click("#toggleHistory")
         expect(page.locator("#historyList .convo")).to_have_count(2)
         history = page.locator("#history").bounding_box()
         assert history and abs(history["width"] - 250) <= 1, f"at {width}px the history column is {history}"
