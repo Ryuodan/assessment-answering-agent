@@ -145,6 +145,9 @@
      work; one without is a question that was asked once. */
   .convo .when { font-size: 11.5px; color: var(--ink-faint); font-weight: 400; }
   .convo.on .when { color: var(--accent-ink); opacity: .8; }
+  /* Until when it is kept (plan 033): the quietest line in the row. */
+  .convo .kept { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+  .convo.on .kept { color: var(--accent-ink); opacity: .75; }
   .convo .file {
     display: inline-flex; align-items: baseline; gap: 4px; min-width: 0;
     font-size: 11.5px; font-weight: 500; color: var(--accent-ink);
@@ -770,6 +773,7 @@
   let productsFailed = false;  // and the first read failed: said, rather than offering General alone
   let pageLastUsed = "";  // the product of the chat last opened or started on this page
   let historyChoices = [];  // the products of this person's chats, most recently used first
+  const hadQuestionnaire = new Set();  // conversations this page has seen with a questionnaire (plan 033)
 
   const STARTERS = [
     "Read this questionnaire and tell me what is in it",
@@ -859,8 +863,9 @@
     if (role === "assistant" && asked && asked.length) turn.append(askedCards(asked));
 
     /* The answers, one click from the reply that changed them. The panel may be
-       closed, or showing a different file's answers from earlier in the day. */
-    if (role === "assistant" && data && (data.changed || data.refreshed)) {
+       closed, or showing a different file's answers from earlier in the day.
+       Not once the questionnaire is deleted: there are none to show (plan 033). */
+    if (role === "assistant" && data && (data.changed || data.refreshed) && batchId) {
       const show = document.createElement("button");
       show.type = "button";
       show.className = "ghost show-answers to-answers";
@@ -1790,7 +1795,13 @@
     refreshAnswersToggle();
   }
   $("closeAnswers").onclick = () => showAnswersPane(false);
-  $("toggleAnswers").onclick = () => showAnswersPane($("answersPane").hidden);
+  // Read again as it opens, as "Show the answers →" does: put away, they may have
+  // changed on the Workbench meanwhile, or been deleted there (plan 033).
+  $("toggleAnswers").onclick = () => {
+    const opening = $("answersPane").hidden;
+    showAnswersPane(opening);
+    if (opening) reloadAnswers();
+  };
   /* On a narrow window the panel is a full-screen overlay, and Escape is what
      people press to get out of one. */
   document.addEventListener("keydown", (event) => {
@@ -2000,7 +2011,18 @@
 
   async function reloadAnswers() {
     if (!batchId) return;
-    try { showAnswers(await request("/api/forms/" + batchId)); } catch (error) { /* stale is survivable */ }
+    try {
+      showAnswers(await request("/api/forms/" + batchId));
+    } catch (error) {
+      // Deleted since it was drawn, on the Workbench or by retention (plan 033): the
+      // conversation is read again, and drawn without its answers. Anything else:
+      // stale is survivable.
+      if (error.code === "questionnaire_not_found" && conversationId) {
+        hadQuestionnaire.add(conversationId);
+        goneSaid = "";
+        redraw(conversationId);
+      }
+    }
   }
 
   /* --- the document viewer -------------------------------------------------- */
@@ -2057,6 +2079,7 @@
         return;
       }
       data.conversations.forEach((c) => {
+        if (c.batch_id) hadQuestionnaire.add(c.id);  // so a deletion since can be told apart: questionnaireGone()
         /* Two buttons side by side, not one inside the other: the ✕ was a span
            inside the row's button, which no keyboard could reach (plan 029). */
         const item = document.createElement("div");
@@ -2074,11 +2097,24 @@
         if (Cards.isArabic(label.textContent)) label.dir = "rtl";
         what.append(label);
 
+        // When it was last used -- opened, or said in -- which is the order the
+        // list comes in since plan 033, and what it is kept from.
+        const usedAt = c.used_at || c.updated_at;
         const when = document.createElement("span");
         when.className = "when";
-        when.textContent = said(c.updated_at);
-        when.title = exactly(c.updated_at);
+        when.textContent = said(usedAt);
+        when.title = exactly(usedAt);
         what.append(when);
+        // Until when it is kept, unless it is opened again (plan 033); nothing when nothing is deleted.
+        const until = keptDay(c.kept_until);
+        if (until) {
+          const kept = document.createElement("span");
+          kept.className = "kept";
+          kept.textContent = "Kept until " + until;
+          kept.title = "Kept until " + until + ". A conversation not opened for a while is deleted; opening it keeps it longer.";
+          when.title += " · Kept until " + until;
+          what.append(kept);
+        }
 
         // The file is what a person recognises the work by -- "the Contoso one" --
         // and the list gave them a title the assistant wrote from the first
@@ -2131,7 +2167,7 @@
         cross.setAttribute("aria-hidden", "true");
         forget.append(cross);
         forget.onclick = async () => {
-          const when = said(c.updated_at);
+          const when = said(usedAt);
           if (!confirm("Forget “" + title + "”" + (when ? " (" + when + ")" : "") + "?\n\n" +
               "The conversation is deleted and cannot be recovered." +
               (c.source_name ? "\n\nIts questionnaire, " + c.source_name +
@@ -2149,6 +2185,11 @@
         item.append(row, forget);
         host.append(item);
       });
+      // Once the list drawn shows the conversation just opened as the open one.
+      if (revealOpen && revealOpen === conversationId) {
+        if (!back) showOpenRow(host);
+        revealOpen = "";
+      }
       if (back) putKeyboardBack(host, back);
     } catch (error) {
       if (asked === historyAsked) host.textContent = error.message;
@@ -2181,6 +2222,23 @@
     target.focus();
   }
 
+  /* Opening a conversation is using it, and since plan 033 it goes to the top
+     of the list. Where the keyboard was in the list, putKeyboardBack follows
+     it there. Where it was not -- a click that does not focus what it clicks,
+     as in Safari -- the list stayed where it was scrolled, and the conversation
+     just opened went out of sight above it: brought back into view, once, on
+     the list drawn after the open, and never on the redraws while a turn runs,
+     which would fight a person scrolling the list. */
+  let revealOpen = "";  // the conversation just opened, until the list shows it open
+  function showOpenRow(host) {
+    const row = host.querySelector(".convo-row.on");
+    if (!row) return;
+    const shown = host.getBoundingClientRect();
+    const at = row.getBoundingClientRect();
+    if (at.top < shown.top) host.scrollTop -= shown.top - at.top;
+    else if (at.bottom > shown.bottom) host.scrollTop += at.bottom - shown.bottom;
+  }
+
   /* Dates the way somebody would say them: today and yesterday by the clock,
      this year without the year, anything older with it. The stored stamp is
      UTC to the second; `Date` renders it in the reader's own zone. */
@@ -2206,6 +2264,16 @@
     return !stamp || isNaN(at) ? "" : "Last used " + at.toLocaleString();
   }
 
+  /* The day the server keeps something until, "2027-05-05", in the reader's
+     own way of writing a date. Read as that calendar day: parsed as a time it
+     is midnight UTC, which is the day before anywhere west of Greenwich. */
+  function keptDay(iso) {
+    const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+    if (!day) return "";
+    return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
+      .toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+  }
+
   /* Only the last conversation asked for is drawn: two clicks in a row, or a
      click then New conversation, drew whichever answer came back last. */
   async function open(id) {
@@ -2213,7 +2281,11 @@
     const mine = ++opening;
     try {
       const data = await request("/api/chat/" + id);
-      if (mine === opening) await draw(data, mine);
+      if (mine === opening) {
+        revealOpen = id;  // opened, it goes to the top of the list: showOpenRow
+        goneSaid = "";  // and a questionnaire deleted since is said again: sayQuestionnaireGone
+        await draw(data, mine);
+      }
     } catch (error) {
       if (mine === opening) addTurn("assistant", "That conversation could not be opened: " + error.message);
     }
@@ -2247,8 +2319,11 @@
     screenRun = "";
     unread.delete(data.id);
     if (failedIn === data.id) { $("historyStatus").textContent = ""; failedIn = null; }
-    batchId = data.batch_id || "";
+    // A questionnaire deleted since (plan 033): no answers, no way to them, and said once by the box.
+    const gone = questionnaireGone(data);
+    batchId = gone ? "" : data.batch_id || "";
     setReadOnly(Boolean(data.read_only), data.product_id);
+    if (gone && goneSaid !== data.id) sayQuestionnaireGone(data.id);
     // Offered as "Last used" for the next new chat, never chosen for it (plan 029, 2).
     if (!data.read_only) pageLastUsed = Cards.choiceOf(data.product_id);
     showProduct(Cards.choiceOf(data.product_id));
@@ -2275,6 +2350,26 @@
     // said so, but the page has the reply already, and the transcript may not.
     // Once more, now it does (plan 031's review).
     if (!again && data.running && endedRuns.has(runOf(data.id, data.running))) redraw(data.id, true);
+  }
+
+  /* Whether this conversation had a questionnaire that has since been deleted
+     (plan 033). The server says only that it has none now, as of a chat that
+     never had one, so it is told from what the page can be sure of: a reply
+     that changed its answers, which nothing does without a questionnaire open;
+     a questionnaire this page saw it with; or an id with nothing behind it. */
+  function questionnaireGone(data) {
+    if (data.answers) return false;
+    return Boolean(data.batch_id) || hadQuestionnaire.has(data.id) ||
+      (data.messages || []).some((m) => m.role === "assistant" && m.changed);
+  }
+  /* Once each time the conversation is opened, or its answers go from under
+     the person: not again on the redraw after each turn in it. */
+  let goneSaid = "";
+  function sayQuestionnaireGone(id) {
+    goneSaid = id;
+    noteByTheBox(readOnly
+      ? $("composerNote").textContent + " Its questionnaire was deleted too, with its answers."
+      : "This chat's questionnaire was deleted, with its answers. The conversation is kept.", true);
   }
 
   /* The turn to draw at the foot of an opened conversation, if one is running.
@@ -2319,6 +2414,7 @@
   function newConversation() {
     const fromAChat = Boolean(conversationId || screenRun);
     wanted = "";
+    revealOpen = "";
     opening++;  // an open on its way no longer decides what is on screen
     conversationId = "";
     screenRun = "";
