@@ -723,3 +723,11 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - `GET /api/runs` and `GET /api/runs/{id}`: answered runs, which no page reads (retention deletes them after `RETENTION_DAYS`).
 - **Impact:** API surface to keep correct, secure and documented, with nobody using it; about 80 lines of `src/api.py`.
 - **Fix (needs the user's decision):** remove them with their tests. The pages and the team's own scripts are the API's only clients (TD-066), so nothing depends on them. `POST /api/assessments/answer-questions` stays: the Workbench answers questions typed beside an open questionnaire through it.
+
+## TD-080: The Workbench's search can run twice under load, and a test of it is flaky
+
+- **What:** found 2026-11-07 by the browser suite during plan 038. `tests/browser/test_knowledge_page.py::test_the_workbench_still_searches_the_knowledge_base` failed once in a full run (`assert searched == ["MFA"]`) and passed 4 times out of 4 on its own. It failed the same way in a full run during plans 033 and 034, before plan 038 existed.
+  - Plan 033 fixed one way a search ran twice: it runs again after the scope's files load only if the words, the scope or the file changed (`lastSearched`).
+  - Under load, a second search still happens. Which event sends it is not found yet.
+- **Impact:** a flaky gate test. A person may wait for one search more than they asked for; the results are the same.
+- **Fix (needs approval):** find the second call with the page's network log in a slow run, and make the search run once per request.

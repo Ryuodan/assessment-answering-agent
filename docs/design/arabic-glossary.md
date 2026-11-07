@@ -5,7 +5,7 @@ term always reads the same way on every page. The user checks it first: correct
 the Arabic column, or write a better word in "Your correction", and the pages
 follow.
 
-Status: **draft, waiting for the user's check** (2026-11-07).
+Status: **approved by the user, 2026-11-07, as written.** A term changed later is changed here first, then in the pages' catalogs.
 
 Notes on the choices:
 - **Modern Standard Arabic**, in the register of Saudi government and enterprise software (NCA, SDAIA, PDPL documents): formal, not colloquial.

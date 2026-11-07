@@ -50,6 +50,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `document_type_unsupported` | 415 | `UnsupportedFile` | `src.routes.knowledge.check_suffix` |
 | `extraction_failed` | 422 | `Unprocessable` | `src.api.view_extracted_text` |
 | `filled_file_missing` | 404 | `NotFound` | `src.routes.forms.download_filled_questionnaire` |
+| `language_invalid` | 400 | `PreferenceError` | `src.interface_language.choose` |
 | `last_administrator` | 400 | `Invalid` | `src.routes.admin._refuse_last_admin` |
 | `memory_entry_not_found` | 404 | `NotFound` | `src.routes.memory.edit_memory_entry`, `src.routes.memory.move_memory_entry`, `src.routes.memory.remove_memory_entry`, `src.routes.memory.resolve_memory_conflict`, `src.routes.memory.restore_memory_entry` |
 | `no_files` | 400 | `Invalid` | `src.routes.knowledge._ingest_files` |
@@ -67,7 +68,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `run_not_found` | 404 | `NotFound` | `src.api.get_run` |
 | `run_not_in_progress` | 404 | `NotFound` | `src.api.assessment_progress` |
 | `search_mode_unknown` | 422 | `Unprocessable` | `src.api.search_knowledge` |
-| `skill_not_found` | 404 | `NotFound` | `src.api.copy_skill`, `src.api.edit_skill`, `src.api.remove_skill` |
+| `skill_not_found` | 404 | `NotFound` | `src.routes.preferences.copy_skill`, `src.routes.preferences.edit_skill`, `src.routes.preferences.remove_skill` |
 | `source_not_found` | 404 | `NotFound` | `src.routes.knowledge.remove_source` |
 | `team_not_found` | 404 | `NotFound` | `src.routes.admin.admin_rotate_code`, `src.routes.products._team` |
 | `too_many_questions` | 400 | `Invalid` | `src.lists.open_list` |

@@ -2673,6 +2673,47 @@
         }
       }
     },
+    "/api/preferences/language": {
+      "put": {
+        "summary": "Choose Language",
+        "description": "The language this person sees the pages in, English or Arabic (plan 038). Answers are not changed.",
+        "operationId": "choose_language_api_preferences_language_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Choose Language Api Preferences Language Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/forms/{batch_id}/skills/{skill_id}": {
       "post": {
         "summary": "Apply A Skill",
@@ -4812,6 +4853,20 @@
         ],
         "title": "IngestResult",
         "description": "Summary of ingesting one uploaded file into the knowledge base."
+      },
+      "LanguageRequest": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "pattern": "^(en|ar)$",
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language"
+        ],
+        "title": "LanguageRequest"
       },
       "MemoryEditRequest": {
         "properties": {

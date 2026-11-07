@@ -72,7 +72,7 @@ Everything that talks to something outside the process: model providers, the emb
 
 What the system remembers about people and their work: identity, events, runs, questionnaires, conversations, preferences, the answer memory, storage limits.
 
-- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.memory`, `src.memory_sweep`, `src.preferences`, `src.products`, `src.retention`, `src.runs`, `src.search_plans`, `src.storage`
+- **Modules:** `src.access_codes`, `src.answer_memory`, `src.batches`, `src.conversations`, `src.events`, `src.identity`, `src.interface_language`, `src.memory`, `src.memory_sweep`, `src.preferences`, `src.products`, `src.retention`, `src.runs`, `src.search_plans`, `src.storage`
 
 | Module | What it is |
 |---|---|
@@ -82,6 +82,7 @@ What the system remembers about people and their work: identity, events, runs, q
 | `src/conversations.py` | A conversation with the assistant, kept so the work outlives the request. |
 | `src/events.py` | An append-only record of what people and the system did. |
 | `src/identity.py` | Who is using the system, which team's work they see, and who may say so. |
+| `src/interface_language.py` | The language each person sees the pages in: English or Arabic (plan 038). |
 | `src/memory.py` | The answer memory: what this organisation has actually said, and which of it still stands. |
 | `src/memory_sweep.py` | The disagreement sweep: what the arrival of a remembered answer means for the others. |
 | `src/preferences.py` | How one person wants answers worded: preferences, and skills. |
@@ -158,6 +159,7 @@ How people and programs reach the system: the HTTP API with its pages, and the c
 | `src/routes/knowledge.py` | The knowledge base's routes: the shared knowledge base, or a product's (plan 021), and its page (plan 030). |
 | `src/routes/memory.py` | The answer memory's routes: the shared memory, or a product's (plan 022). |
 | `src/routes/pages.py` | Serving the pages: each names its shared assets by a fingerprint of their content. |
+| `src/routes/preferences.py` | The preferences and skills routes, and the interface's language (plan 038). |
 | `src/routes/products.py` | Products: everyone on a team may list them; its leads and administrators change them (plan 020). |
 | `src/web.py` | What every HTTP request shares: its ID, its log line, and how errors answer. |
 

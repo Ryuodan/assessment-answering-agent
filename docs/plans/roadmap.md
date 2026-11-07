@@ -40,3 +40,4 @@ Work asked for directly, outside the milestones:
 | [035](completed/035-debts-and-readiness.md) | TD-076 to TD-078 fixed; the system tested from A to Z for use | done 2026-11-07 |
 | [036](completed/036-gc-round-5.md) | cleanup round 5: gc, coverage, grades, ceilings, tech-debt states | done 2026-11-07 |
 | [037](completed/037-chat-answers-review-tabs.md) | the chat's answers panel has the Workbench's review tabs | done 2026-11-07 |
+| [038](active/038-arabic-interface.md) | the whole interface in Arabic, right to left, chosen per person | active |

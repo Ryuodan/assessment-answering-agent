@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import Depends, Request
 
-from src import identity
+from src import identity, interface_language
 from src.config import settings
 from src.errors import Forbidden, SignInRequired
 from src.identity import User
@@ -46,6 +46,8 @@ def user_payload(user: User) -> dict[str, Any]:
         "is_admin": user.is_admin,
         "sign_in_required": identity.sign_in_required(),
         "review_threshold": settings.review_confidence_threshold,
+        # English or Arabic, the person's (plan 038): a page drawn in the device's copy takes this one.
+        "interface_language": interface_language.get(user.email),
     }
 
 

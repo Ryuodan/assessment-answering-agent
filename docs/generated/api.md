@@ -113,6 +113,7 @@ Errors: [errors.md](errors.md).
 | `PUT` | `/api/preferences` | Save Preferences |
 | `POST` | `/api/preferences/compose` | What a set of choices would tell the rewrite, without saving them. |
 | `POST` | `/api/preferences/try` | What an instruction does to one answer, before it is let loose on all of them. |
+| `PUT` | `/api/preferences/language` | The language this person sees the pages in, English or Arabic (plan 038). Answers are not changed. |
 
 ## `/api/skills`
 

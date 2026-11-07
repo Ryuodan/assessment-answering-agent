@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- The interface's language, English or Arabic, before anything draws (plan 038):
+     static/i18n.js, then the catalogs this page's words are in. -->
+<script src="static/i18n.js"></script>
+<script src="static/i18n/ar-common.js"></script>
+<script src="static/i18n/ar-server.js"></script>
+<script src="static/i18n/ar-cards.js"></script>
+<script src="static/i18n/ar-chat.js"></script>
 <title>Assessment Answering Agent</title>
 
 <!-- The design tokens, the answer card and the chunk renderer, shared with the
@@ -689,7 +696,7 @@
   const theme = () => document.documentElement.getAttribute("data-theme") || (systemDark() ? "dark" : "light");
   function applyTheme(next) {
     document.documentElement.setAttribute("data-theme", next);
-    $("themeToggle").textContent = next === "dark" ? "Light mode" : "Dark mode";
+    $("themeToggle").textContent = next === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, next); } catch (error) { /* private mode */ }
   }
   (function () {
@@ -727,6 +734,7 @@
   let me = null;
   async function whoAmI() {
     try { me = await request("/api/auth/session"); } catch (error) { me = null; }
+    I18n.follow(me);  // the person's language, if this device's copy differs (plan 038)
     Cards.setReviewThreshold(me && me.review_threshold);  // before anything is drawn (plan 030)
     const needed = me && me.sign_in_required && !me.email;
     $("gate").hidden = !needed;

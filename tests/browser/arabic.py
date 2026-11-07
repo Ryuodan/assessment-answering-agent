@@ -1,0 +1,102 @@
+"""Opening a page in Arabic, and finding English left on it (plan 038).
+
+For the Arabic browser tests. `in_arabic(page)` makes every page the test opens
+start in Arabic, as a device that chose it does. `english_on_screen(page)` lists
+the visible text that still has English words: interface left untranslated.
+
+Content is not interface. A question, an answer, a source's text, a file's or
+a product's name, an address or a conversation's title sits inside
+`data-no-translate`, and is not read. Names, formats, standards and keys in
+the interface's own text are allowed (`NAMES`, shared with the catalog test).
+"""
+
+from __future__ import annotations
+
+import re
+
+from playwright.sync_api import Page, expect
+
+from src import identity, interface_language
+from tests.test_i18n_catalogs import NAMES
+
+STORED = "interface-language"
+
+# While the pages are translated in parallel (plan 038), a translator's tests
+# leave out what another one owns: the answer card and the review's tabs
+# (cards.js). Emptied once they are merged, so every test reads every word.
+NOT_YET: tuple[str, ...] = (".answer", ".review-tabs", ".tab-empty")
+
+# What a page draws, read by the page itself: each visible text node, and the
+# placeholder, title and aria-label of each visible element.
+_ON_SCREEN = """({ within, besides }) => {
+  const LEFT_ALONE = "[data-no-translate], script, style, textarea, code, pre, kbd, noscript" +
+    (besides ? ", " + besides : "");
+  const root = document.querySelector(within);
+  if (!root) return [];
+  const shown = (element) => {
+    const box = element.closest("select") || element;
+    if (box.closest("[hidden], dialog:not([open]), details:not([open]) > :not(summary)")) return false;
+    return box.checkVisibility ? box.checkVisibility({ visibilityProperty: true }) : box.offsetParent !== null;
+  };
+  const found = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parent = node.parentElement;
+    const text = node.nodeValue.replace(/\\s+/g, " ").trim();
+    if (!parent || !text || !/[A-Za-z]/.test(text) || parent.closest(LEFT_ALONE) || !shown(parent)) continue;
+    found.push(text);
+  }
+  root.querySelectorAll("[placeholder], [title], [aria-label]").forEach((element) => {
+    if (element.closest(LEFT_ALONE) || !shown(element)) return;
+    ["placeholder", "title", "aria-label"].forEach((name) => {
+      const value = (element.getAttribute(name) || "").replace(/\\s+/g, " ").trim();
+      if (/[A-Za-z]/.test(value)) found.push(name + ": " + value);
+    });
+  });
+  return found;
+}"""
+
+_WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
+_NOT_WORDS = re.compile(r"[\w.+-]+@[\w.-]+|https?://\S+|[\w*.-]+\.(?:xlsx|xls|docx|doc|pdf|csv|txt|md|json)\b", re.I)
+
+
+def in_arabic(page: Page, *, person: bool = True) -> None:
+    """The test's pages start in Arabic, as on a device that chose it, and so does the person.
+
+    The device's copy is set once per tab, before the first page: a page that
+    switches language reloads, and setting it on every load would undo the
+    switch. `person` gives the open-access person the same choice on the
+    server, or a page would follow the session back to English; a test that
+    signs somebody else in chooses for them (`interface_language.choose`).
+    """
+    page.add_init_script(
+        "try { if (!sessionStorage.getItem('arabic-set')) {"
+        f" localStorage.setItem('{STORED}', 'ar'); sessionStorage.setItem('arabic-set', '1'); }}"
+        " } catch (error) {}"
+    )
+    if person:
+        interface_language.choose(identity.local_user().email, "ar")
+
+
+def english_on_screen(page: Page, *, within: str = "body", besides: tuple[str, ...] = NOT_YET) -> list[str]:
+    """The visible interface text inside `within` that still has English words in it.
+
+    `besides`: selectors of areas not read, by default what another translator owns (`NOT_YET`).
+    """
+    left = []
+    for text in page.evaluate(_ON_SCREEN, {"within": within, "besides": ", ".join(besides)}):
+        spare = _NOT_WORDS.sub(
+            "", text.split(": ", 1)[1] if text.startswith(("placeholder: ", "title: ", "aria-label: ")) else text
+        )
+        if [word for word in _WORD.findall(spare) if word not in NAMES]:
+            left.append(text)
+    return sorted(set(left))
+
+
+def expect_arabic(page: Page, where: str = "", *, within: str = "body", besides: tuple[str, ...] = NOT_YET) -> None:
+    """The page is Arabic, right to left, with no English left on screen (inside `within`)."""
+    expect(page.locator("html")).to_have_attribute("dir", "rtl")
+    expect(page.locator("html")).to_have_attribute("lang", "ar")
+    left = english_on_screen(page, within=within, besides=besides)
+    assert not left, f"English on screen{' ' + where if where else ''}: {len(left)}: {left[:30]}"

@@ -347,4 +347,14 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (team_id, product_id, language, wording)
     );
     """,
+    # 17 -- the language each person sees the pages in, English or Arabic (plan 038,
+    # `src/interface_language.py`). Apart from `user_preferences`: it changes how the
+    # pages read, never an answer.
+    """
+    CREATE TABLE IF NOT EXISTS interface_languages (
+        email      TEXT PRIMARY KEY,
+        language   TEXT NOT NULL DEFAULT 'en',
+        updated_at TEXT NOT NULL
+    );
+    """,
 ]

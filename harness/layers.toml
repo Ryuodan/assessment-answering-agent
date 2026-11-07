@@ -74,6 +74,7 @@ modules = [
     "src.storage",
     "src.retention",
     "src.search_plans",
+    "src.interface_language",
 ]
 
 [[layer]]

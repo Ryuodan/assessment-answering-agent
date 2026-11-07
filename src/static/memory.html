@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- The interface's language, English or Arabic, before anything draws (plan 038):
+     static/i18n.js, then the catalogs this page's words are in. -->
+<script src="static/i18n.js"></script>
+<script src="static/i18n/ar-common.js"></script>
+<script src="static/i18n/ar-server.js"></script>
+<script src="static/i18n/ar-memory.js"></script>
 <title>Answer memory — Assessment Answering</title>
 <link rel="stylesheet" href="static/cards.css" />
 <style>
@@ -319,6 +325,7 @@
   const gate = $("authGate"), form = $("authForm"), error = $("authError");
 
   function apply(session) {
+    I18n.follow(session);  // the person's language, if this device's copy differs (plan 038)
     const signedIn = Boolean(session.email);
     gate.hidden = signedIn || !session.sign_in_required;
     $("whoami").hidden = !(signedIn && session.sign_in_required);
@@ -379,7 +386,7 @@
   }
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    $("themeToggle").textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    $("themeToggle").textContent = theme === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
   }
   (function initTheme() {
