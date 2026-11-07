@@ -477,13 +477,7 @@
     box-shadow: var(--shadow-sm);
   }
   .review-bar[hidden] { display: none; }
-  .review-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-  .review-tabs button {
-    background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong);
-    padding: 5px 10px; font-size: 12.5px; white-space: nowrap;
-  }
-  .review-tabs button:hover:not(:disabled) { color: var(--ink); filter: none; }
-  .review-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+  /* The tabs themselves are in cards.css, shared with the chat's answers panel (plan 037). */
   .review-side { display: flex; align-items: center; gap: 10px; margin-inline-start: auto; }
   .review-counts { font-size: 12.5px; color: var(--ink-soft); }
   .review-counts:empty { display: none; }
@@ -2237,50 +2231,16 @@
      (`will_be_written`): the page does not repeat the threshold. Needing
      review is what the gate holds back, and what failed; the "need review"
      chip alone missed an answer below the threshold that nobody flagged. */
-  const REVIEW_TABS = [
-    ["review", "Needs review", "Held back until a person edits or approves them, and the ones that failed"],
-    ["written", "Will be written", "Confident answers nobody has checked: they go into the file as drafted"],
-    ["person", "Done by a person", "Approved, edited or written by a person"],
-    ["blank", "Blank or set aside", "Left blank on purpose, and rows set aside: nothing goes in for them"],
-    ["all", "All", "Every answer, in the file's order"],
-  ];
-  const WRITTEN_IN_A_LIST = ["Ready to use", "Confident answers nobody has checked: ready to use as drafted"];
+  /* The tabs and which answer is in which are in cards.js, shared with the
+     chat's answers panel (plan 037). */
   let reviewTab = null;  // the person's choice; null until the next draw picks the default
-
-  function reviewBucket(item) {
-    if (item.set_aside || item.blanked) return "blank";
-    // Typed beside the file: never written, so in a tab only when it needs a person.
-    if (item.will_be_written === undefined) return item.error || item.needs_review ? "review" : null;
-    if (item.error || !item.will_be_written) return "review";
-    return item.approved || item.by_hand || item.edited_by ? "person" : "written";
-  }
+  const reviewBucket = Cards.reviewBucket;
 
   function renderReviewBar(counted, tab) {
-    const tabs = $("reviewTabs");
-    /* Drawn again with each count, so the keyboard's place goes with it: on
-       the tab chosen. Left alone, it dropped to the page and the next Tab
-       began again at the first tab (plan 029's review). */
-    const hadFocus = tabs.contains(document.activeElement);
-    tabs.replaceChildren();
-    REVIEW_TABS.forEach(([key, name, about]) => {
-      // A list has no file to write into: its confident answers are ready to use (plan 033).
-      if (key === "written" && isList()) [name, about] = WRITTEN_IN_A_LIST;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = name + " (" + counted[key] + ")";
-      button.title = about;
-      button.dataset.tab = key;
-      button.setAttribute("aria-pressed", String(key === tab));
-      button.onclick = () => {
-        reviewTab = key;
-        renderResult(result, { keepQuestions: true });
-      };
-      tabs.append(button);
+    Cards.reviewTabs($("reviewTabs"), counted, tab, (key) => {
+      reviewTab = key;
+      renderResult(result, { keepQuestions: true });
     });
-    if (hadFocus) {
-      const chosen = tabs.querySelector('[data-tab="' + tab + '"]');
-      if (chosen) chosen.focus({ preventScroll: true });
-    }
     $("reviewCounts").textContent = (counted.written + counted.person) + (isList() ? " ready to use · " : " will be written · ") +
       counted.review + " need review";
     /* How far the review has got (plan 033): the answers a person has done,
@@ -2349,11 +2309,7 @@
     if (!container.childElementCount) {
       const empty = document.createElement("div");
       empty.className = "qlist-empty";
-      const going = counted.written + counted.person;
-      const fate = isList() ? " ready to use" : " will be written";
-      empty.textContent = tab === "review"
-        ? "Nothing needs review. " + going + " answer(s)" + fate + "."
-        : "No answers here. " + counted.review + " need review, " + going + fate + ".";
+      empty.textContent = Cards.emptyTab(tab, counted);
       container.append(empty);
     }
     paintCounts(data, counted, queue, tab);

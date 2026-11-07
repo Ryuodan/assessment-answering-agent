@@ -123,6 +123,15 @@
 .stat .label { font-size: 12px; color: var(--ink-faint); }
 .stat.review .value { color: var(--warn); }
 
+/* The review's tabs, on the Workbench and above the chat's answers (plan 037). */
+.review-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.review-tabs button {
+  background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong);
+  padding: 5px 10px; font-size: 12.5px; white-space: nowrap;
+}
+.review-tabs button:hover:not(:disabled) { color: var(--ink); filter: none; }
+.review-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+
 .toolbar {
   display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
   padding: 12px 14px; background: var(--surface-sunken);

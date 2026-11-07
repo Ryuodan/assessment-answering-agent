@@ -41,6 +41,10 @@
    whether the fill writes an answer (`will_be_written`), the card says the
    same; elsewhere it applies the server's own rule with that threshold.
 
+   The review's tabs are shared too (plan 037): `Cards.reviewBucket(item)` says
+   which tab an answer is in, `Cards.reviewTabs(...)` draws the tabs and
+   `Cards.emptyTab(...)` what an empty one says.
+
    A page that drives the cards from the keyboard (the Workbench, plan 033)
    finds a card's controls by `data-card-action`: "approve" and "edit", the
    latter with `data-editing` while its editor is open.
@@ -245,6 +249,62 @@ const Cards = (window.Cards = {
     }
     node.setAttribute("data-chunk-source", source);
     return node;
+  }
+
+  /* The review's tabs: which answers to show, by what the fill does with each
+     (plan 029, 1.3). One set for the Workbench and the chat's answers panel
+     (plan 037), so the same answer is in the same tab on both pages. */
+  const REVIEW_TABS = [
+    ["review", "Needs review", "Held back until a person edits or approves them, and the ones that failed"],
+    ["written", "Will be written", "Confident answers nobody has checked: they go into the file as drafted"],
+    ["person", "Done by a person", "Approved, edited or written by a person"],
+    ["blank", "Blank or set aside", "Left blank on purpose, and rows set aside: nothing goes in for them"],
+    ["all", "All", "Every answer, in the file's order"],
+  ];
+  const WRITTEN_IN_A_LIST = ["Ready to use", "Confident answers nobody has checked: ready to use as drafted"];
+
+  /* An answer's tab, from the card's own facts. */
+  function reviewBucket(item) {
+    if (item.set_aside || item.blanked) return "blank";
+    // Typed beside the file: never written, so in a tab only when it needs a person.
+    if (item.will_be_written === undefined) return item.error || item.needs_review ? "review" : null;
+    if (item.error || !item.will_be_written) return "review";
+    return item.approved || item.by_hand || item.edited_by ? "person" : "written";
+  }
+
+  /* The tabs, drawn into `tabs` with each one's count from `counted`, the one
+     shown pressed. Drawn again with each count, so the keyboard's place goes
+     with it: on the tab chosen (`keepFocus` for a page that rebuilt them, which
+     cannot tell). Left alone, it dropped to the page and the next Tab began
+     again at the first tab (plan 029's review). */
+  function reviewTabs(tabs, counted, tab, onPick, keepFocus) {
+    const hadFocus = keepFocus || tabs.contains(document.activeElement);
+    tabs.replaceChildren();
+    REVIEW_TABS.forEach(([key, name, about]) => {
+      // A list has no file to write into: its confident answers are ready to use (plan 033).
+      if (key === "written" && Cards.fileless) [name, about] = WRITTEN_IN_A_LIST;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = name + " (" + (counted[key] || 0) + ")";
+      button.title = about;
+      button.dataset.tab = key;
+      button.setAttribute("aria-pressed", String(key === tab));
+      button.onclick = () => onPick(key);
+      tabs.append(button);
+    });
+    if (hadFocus) {
+      const chosen = tabs.querySelector('[data-tab="' + tab + '"]');
+      if (chosen) chosen.focus({ preventScroll: true });
+    }
+  }
+
+  /* What an empty tab says: where the answers are instead. */
+  function emptyTab(tab, counted) {
+    const going = (counted.written || 0) + (counted.person || 0);
+    const fate = Cards.fileless ? " ready to use" : " will be written";
+    return tab === "review"
+      ? "Nothing needs review. " + going + " answer(s)" + fate + "."
+      : "No answers here. " + (counted.review || 0) + " need review, " + going + fate + ".";
   }
 
   /* Full or Brief, for one questionnaire.
@@ -1348,6 +1408,9 @@ const Cards = (window.Cards = {
     isArabic: isArabic,
     viewToggle: viewToggle,
     fromQuestion: fromQuestion,
+    reviewBucket: reviewBucket,
+    reviewTabs: reviewTabs,
+    emptyTab: emptyTab,
     detailPicker: detailPicker,
     skillPicker: skillPicker,
     authorityBadge: authorityBadge,

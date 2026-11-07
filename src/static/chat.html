@@ -229,6 +229,9 @@
   .pane-status.err { color: var(--err); background: var(--err-soft); }
   .pick-row { display: flex; align-items: center; gap: 10px 20px; flex-wrap: wrap; margin-bottom: 12px; }
   #answers .summary { margin-bottom: 14px; }
+  /* The Workbench's tabs (plan 037), between the counts and the answers. */
+  .answers-tabs { margin-bottom: 12px; }
+  .tab-empty { color: var(--ink-faint); font-size: 13.5px; padding: 6px 2px 12px; }
 
   .nothing { color: var(--ink-faint); text-align: center; margin-top: 18vh; padding: 0 28px; font-size: 13.5px; }
 
@@ -1417,6 +1420,7 @@
     if (turn.shown && turn.shown.isConnected && !turn.redraw) {
       turn.shown.replaceWith(turnElement("assistant", data.reply, data));
       $("thread").scrollTop = $("thread").scrollHeight;
+      if (data.answers) answersTab = null;  // after a turn that answered, what needs a person first (plan 037)
       if (data.answers) showAnswers(data.answers);
       loadHistory();
     } else {
@@ -1513,8 +1517,18 @@
 
   /* --- the answers beside it ------------------------------------------------ */
 
+  /* Which of the Workbench's tabs the panel shows (plan 037): the person's
+     choice, kept while they work on this questionnaire. Null until the next
+     draw picks the default -- what needs a person, as the Workbench opens --
+     which is again so after a turn that answered, and in another conversation. */
+  let answersTab = null;
+  let answersTabFor = "";  // the questionnaire it was chosen on: another file starts afresh
+
   function showAnswers(report) {
     const host = $("answers");
+    // Drawn again on a choice: the keyboard stays on the tab it chose (plan 029's review).
+    const tabsHadFocus = Boolean(document.activeElement && document.activeElement.closest &&
+      document.activeElement.closest("#answerTabs"));
     host.replaceChildren();
     answersAvailable = true;
     // Render always, open only if the person has not put it away. This used to
@@ -1543,13 +1557,37 @@
     row.append(picker, Cards.skillPicker(mySkills, applySkill));
     if (!readOnly) host.append(row);  // both change the answers: not on a deleted product's
 
+    // Set-aside questions are listed after the rest, marked, with the way back:
+    // they are not written, and a card that looks like the others says they are.
+    const questions = report.questions || [];
+    const answered = questions.filter((q) => q.answered && !q.skip);
+    const aside = questions.filter((q) => q.skip);
+    /* Through the shared mapper: "deliberately blank", "held back by the gate"
+       and the brief form are facts about the question rather than about the
+       answer, and a card that is not given them cannot draw its own state. */
+    const cards = answered.map((question) => Cards.fromQuestion(question));
+
+    /* Each answer in the Workbench's tab for it, counted as it counts them
+       (plan 037). A set-aside row is "Blank or set aside", and "All" is
+       everything the panel lists. */
+    Cards.fileless = report.format === "list";  // no file to write into: "Ready to use" (plan 033)
+    const buckets = cards.map(Cards.reviewBucket);
+    const counted = { review: 0, written: 0, person: 0, blank: aside.length, all: answered.length + aside.length };
+    buckets.forEach((bucket) => { if (bucket) counted[bucket] += 1; });
+    if (!answersTab || answersTabFor !== report.id) {
+      answersTab = counted.review ? "review" : "all";
+      answersTabFor = report.id;
+    }
+    const tab = answersTab;
+
     const counts = report.counts || {};
     const summary = document.createElement("div");
     summary.className = "summary";
     summary.append(
       Cards.stat(counts.questions || 0, "questions"),
       Cards.stat(counts.answered || 0, "answered here"),
-      Cards.stat(counts.needs_review || 0, "need review", counts.needs_review ? "review" : ""),
+      // The tab's count, as on the Workbench: held back or failed, not only flagged.
+      Cards.stat(counted.review, "need review", counted.review ? "review" : ""),
     );
     // Only when there are any: a blank questionnaire showing "0 already in the
     // file" is a number about nothing.
@@ -1557,29 +1595,35 @@
       summary.append(Cards.stat(counts.already_in_file, "already in the file"));
     }
     host.append(summary);
-
-    // Set-aside questions are listed after the rest, marked, with the way back:
-    // they are not written, and a card that looks like the others says they are.
-    const questions = report.questions || [];
-    const answered = questions.filter((q) => q.answered && !q.skip);
-    const aside = questions.filter((q) => q.skip);
     if (counts.set_aside) summary.append(Cards.stat(counts.set_aside, "set aside"));
-    if (!answered.length) {
+
+    if (!answered.length && !aside.length) {
       const nothing = document.createElement("div");
       nothing.className = "nothing";
       nothing.textContent = (counts.questions || 0) +
         " question(s) found. Ask the assistant to answer some of them.";
       host.append(nothing);
-    } else {
-      answered.forEach((question, index) => {
-        /* Through the shared mapper: "deliberately blank", "held back by the
-           gate" and the brief form are facts about the question rather than
-           about the answer, and a card that is not given them cannot draw its
-           own state. */
-        host.append(Cards.render(Cards.fromQuestion(question), index));
-      });
+      $("fillBtn").hidden = true;
+      return;
     }
-    if (aside.length) {
+    const tabs = document.createElement("div");
+    tabs.className = "review-tabs answers-tabs";
+    tabs.id = "answerTabs";
+    tabs.setAttribute("role", "group");
+    tabs.setAttribute("aria-label", "Show");
+    host.append(tabs);
+    Cards.reviewTabs(tabs, counted, tab, (key) => {
+      answersTab = key;
+      showAnswers(report);
+    }, tabsHadFocus);
+
+    let shown = 0;
+    answered.forEach((question, index) => {
+      if (tab !== "all" && buckets[index] !== tab) return;
+      host.append(Cards.render(cards[index], index));
+      shown += 1;
+    });
+    if (aside.length && (tab === "all" || tab === "blank")) {
       const heading = document.createElement("h3");
       heading.className = "aside-head";
       heading.textContent = "Set aside \u2014 not written to the file (" + aside.length + ")";
@@ -1588,6 +1632,13 @@
         const card = Cards.fromQuestion(question);
         host.append(card ? Cards.render(card, answered.length + index) : asideRow(question));
       });
+      shown += aside.length;
+    }
+    if (!shown) {
+      const empty = document.createElement("div");
+      empty.className = "tab-empty";
+      empty.textContent = Cards.emptyTab(tab, counted);
+      host.append(empty);
     }
     $("fillBtn").hidden = !answered.length;
   }
@@ -2348,6 +2399,7 @@
     if (turn && kept) turn.redraw = true;
     $("empty").hidden = messages.length > 0 || Boolean(turn);
     answersPaneClosed = false;  // a different conversation, a fresh default
+    answersTab = null;  // and the tab it opens on (plan 037)
     if (data.answers) showAnswers(data.answers);
     else noAnswersToShow();
     refresh();

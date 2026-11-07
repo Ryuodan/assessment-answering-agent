@@ -160,8 +160,11 @@ def test_the_chats_answer_cards_lead_with_their_status(
     page.select_option("#productPick", "general")
     page.click("#send")
     cards = page.locator("#answersPane .answer")
-    expect(cards).to_have_count(4, timeout=30_000)
     expect(page.locator(".working")).to_have_count(0, timeout=30_000)
+    # The panel opens on what needs review, as the Workbench does (plan 037); every card is under All.
+    expect(cards).to_have_count(1, timeout=30_000)
+    page.locator("#answerTabs").get_by_role("button", name="All (4)").click()
+    expect(cards).to_have_count(4)
     assert page.evaluate("Cards.reviewThreshold") == settings.review_confidence_threshold
 
     held = cards.filter(has_text=ARABIC)
