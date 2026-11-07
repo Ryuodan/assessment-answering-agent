@@ -1,6 +1,6 @@
 # Plan 038: The whole interface in Arabic, right to left, chosen per person
 
-**Status:** active
+**Status:** completed 2026-11-07
 
 ## Goal
 
@@ -10,24 +10,24 @@ When this is done, a person can choose Arabic in Preferences, or with the switch
 
 ## Acceptance criteria
 
-- [ ] The choice:
+- [x] The choice:
   - each person has one, English until chosen, kept on the server (`src/interface_language.py`, migration 17) and returned by `GET /api/auth/session`;
   - `PUT /api/preferences/language` changes it;
   - the switch is in every page's top bar, and the same choice is in Preferences;
   - the device keeps a copy, so a page is drawn in the right language from the first paint;
   - a page whose copy differs from the person's choice takes the person's.
-- [ ] In Arabic, every page has `lang="ar"` and `dir="rtl"`, and its layout reads right to left with nothing overlapping or cut off, down to a phone's width.
-- [ ] Every string a page shows is in the catalogs (`src/static/i18n/`), translated with the glossary's terms. A test reads every page's markup and every `t("…")` in its scripts, and fails on one that has no Arabic.
-- [ ] A browser test opens each page in Arabic, in the states that matter: signed out, empty, with a questionnaire answered, with the dialogs open. It fails on any visible English word other than names: products, files, standards, formats and keys.
-- [ ] The server's sentences that reach a page are in Arabic:
+- [x] In Arabic, every page has `lang="ar"` and `dir="rtl"`, and its layout reads right to left with nothing overlapping or cut off, down to a phone's width.
+- [x] Every string a page shows is in the catalogs (`src/static/i18n/`), translated with the glossary's terms. A test reads every page's markup and every `t("…")` in its scripts, and fails on one that has no Arabic.
+- [x] A browser test opens each page in Arabic, in the states that matter: signed out, empty, with a questionnaire answered, with the dialogs open. It fails on any visible English word other than names: products, files, standards, formats and keys.
+- [x] The server's sentences that reach a page are in Arabic:
   - why an answer is held back;
   - the review's reasons;
   - the errors, by their codes, with the English kept for the rest.
-- [ ] Dates are Gregorian, with Western digits, as the glossary says.
-- [ ] Answers, questions and sources keep their own direction: an English answer in an Arabic page reads left to right.
-- [ ] The Workbench's keys (J/K, A, E) work with an Arabic keyboard layout too.
-- [ ] In English, nothing changes: every existing test passes as it is.
-- [ ] `uv run poe check` passes. ARCHITECTURE, decisions and the generated docs are updated.
+- [x] Dates are Gregorian, with Western digits, as the glossary says.
+- [x] Answers, questions and sources keep their own direction: an English answer in an Arabic page reads left to right.
+- [x] The Workbench's keys (J/K, A, E) work with an Arabic keyboard layout too.
+- [x] In English, nothing changes: every existing test passes as it is.
+- [x] `uv run poe check` passes. ARCHITECTURE, decisions and the generated docs are updated.
 
 ## Plan
 
@@ -98,6 +98,10 @@ On your local copy. The database gains migration 17 the first time the app start
     - the Preferences page's 12 patterns for the server's limits were already in `ar-server.js`, and are gone from `ar-preferences.js`;
     - tests: a reason the server really writes (`verification.UNGROUNDED`) rather than one it never does; a failure's code says what kind it was (`I18n.error`), where a translator expected the English; the settled wordings.
   - Found, not fixed: TD-081 (the closed search drawer's shadow, in English too).
+- 2026-11-07: the gate.
+  - `uv run poe check`: lint, types, arch, docs, rules and test (2436) passed. fmt failed on one line of `tests/browser/arabic.py`, now formatted. The browser task failed on TD-080 alone (`['MFA', 'MFA']`), the flaky Workbench search that failed the same way before this plan; 273 passed. That test then passed 3 times out of 3 on its own, and the whole browser task again: 274 passed.
+  - No existing English test changed: since the groundwork, only the Arabic tests and the two checks did.
+  - Screenshots in Arabic at 1280 and 375 px (the Workbench's review, Preferences, the assistant): right to left, English answers and questions left to right, nothing overlapping.
 
 ## Decision log
 
