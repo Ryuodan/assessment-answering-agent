@@ -916,6 +916,7 @@
     /* What was said is content, in its own direction (plan 038), unless the
        page wrote it (`ours`): a failure, what a fill wrote. */
     if (!(data && data.ours)) bubble.setAttribute("data-no-translate", "");
+    else if (I18n.rtl && data.names) contentIn(bubble, data.names);
     if (Cards.isArabic(text)) bubble.dir = "rtl";
     else ownDirection(bubble);
     turn.append(bubble);
@@ -1130,6 +1131,25 @@
       wrap.append(button, panel);
     });
     return details;
+  }
+
+  /* In the page's own words, drawn as Markdown, what the case put into them (a
+     file's name) is content, in its own direction (plan 038): each of `names`
+     found in the text gets an element of its own. */
+  function contentIn(root, names) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    while (walker.nextNode()) texts.push(walker.currentNode);
+    texts.forEach((node) => {
+      const name = names.find((one) => one && node.nodeValue.includes(one));
+      if (!name) return;
+      const at = node.nodeValue.indexOf(name);
+      const span = document.createElement("span");
+      span.setAttribute("data-no-translate", "");
+      span.dir = "auto";
+      span.textContent = name;
+      node.replaceWith(node.nodeValue.slice(0, at), span, node.nodeValue.slice(at + name.length));
+    });
   }
 
   function addTurn(role, text, data) {
@@ -1983,7 +2003,7 @@
           : t("Wrote {n} value(s) into {file}.", wrote))
         + (held
             ? "\n\n" + t("{n} answer(s) were held back because nobody has confirmed them. They are marked in the panel beside this — edit one or approve it, and it goes in the next time you fill.", { n: held })
-            : ""), { ours: true });
+            : ""), { ours: true, names: [filled.file] });
       $("downloadBtn").hidden = !filled.written;
     } catch (error) {
       addTurn("assistant", t("The file could not be filled: {why}", { why: I18n.error(error) }), { ours: true });

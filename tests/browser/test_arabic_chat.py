@@ -5,14 +5,10 @@ no English left on screen but names. What people said, titles, files and
 products are content, inside `data-no-translate`; the page's own words are the
 catalog's (`src/static/i18n/ar-chat.js`).
 
-Two things are allowed besides what `english_on_screen` allows:
-- what another translator owns on this page (`BESIDES`): the answer cards and
-  the review tabs (`NOT_YET`), and the rest of what `cards.js` draws here -- the
-  length and skill pickers, "Last used", the product and law badges, the
-  clause's Formatted/Raw switch and "open document";
-- content that only an attribute can hold (`names`): a conversation's title in
-  its Delete button's label, a product's name in the chip's title. No element
-  can mark part of an attribute as content.
+One thing is allowed besides what `english_on_screen` allows: content that
+only an attribute can hold (`names`), such as a conversation's title in its
+Delete button's label or a product's name in the chip's title. No element can
+mark part of an attribute as content.
 """
 
 from __future__ import annotations
@@ -44,42 +40,38 @@ from src.agents import assistant
 from src.config import settings
 from src.models import AnsweredQuestion, Question
 from tests import forms_fixtures as shapes
-from tests.browser.arabic import NOT_YET, english_on_screen, in_arabic
+from tests.browser.arabic import expect_arabic, in_arabic
 from tests.conftest import FakeVectorStore, bare_store
-from tests.test_i18n_catalogs import NAMES
 
 pytestmark = pytest.mark.browser
 
 TEAM = settings.default_team
 WRITTEN = "Yes, every backup is encrypted."
-# The server's own message for a failure: its Arabic is ar-server.js's, not this page's.
+# The server's own message for a failure, with no Arabic of its own: the page says what
+# kind of failure it was, by its code (`I18n.error`, ar-server.js).
 SERVER_SAYS = "The model could not be reached."
+FAILED_CODE = "internal_error"
 
-BESIDES = (*NOT_YET, ".detail-pick", ".skill-pick", ".last-used", ".tag", ".view-toggle", ".cite-panel button.quiet")
-# A format's name, as XLSX and DOCX are: not in NAMES yet (asked for in plan 038's merge).
-FORMATS = ("XLSM",)
 
-_ATTRIBUTE = ("placeholder: ", "title: ", "aria-label: ")
+PRODUCT = "Availo"
 _WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
-_FILE = re.compile(r"[\w*.-]+\.(?:xlsx|xlsm|xls|docx|doc|pdf|csv|txt|md|json)\b", re.I)
 _ARABIC = re.compile(r"[؀-ۿ]")
 _EASTERN_DIGITS = re.compile(r"[٠-٩]")
 
 
-def expect_arabic_here(
-    page: Page, where: str, *, names: tuple[str, ...] = (), besides: tuple[str, ...] = BESIDES
-) -> None:
-    """`expect_arabic`, where `names` -- content an attribute holds -- may stand among the Arabic."""
-    expect(page.locator("html")).to_have_attribute("dir", "rtl")
-    expect(page.locator("html")).to_have_attribute("lang", "ar")
-    left = []
-    for text in english_on_screen(page, besides=besides):
-        rest = text.split(": ", 1)[1] if text.startswith(_ATTRIBUTE) else text
-        for name in (*names, *FORMATS):
-            rest = rest.replace(name, " ")
-        if [word for word in _WORD.findall(_FILE.sub(" ", rest)) if word not in NAMES]:
-            left.append(text)
-    assert not left, f"English on screen {where}: {len(left)}: {left[:30]}"
+def expect_arabic_here(page: Page, where: str, *, names: tuple[str, ...] = (), besides: tuple[str, ...] = ()) -> None:
+    """`expect_arabic`, where `names` -- content an attribute holds -- may stand among the Arabic.
+
+    The product's name is always among them: the product chip's and the "Last used" button's titles hold it.
+    """
+    expect_arabic(page, where, besides=besides, names=(*names, PRODUCT))
+
+
+def code_says(page: Page) -> str:
+    """What the page says for the failure: its code's Arabic, not the server's English."""
+    said = page.evaluate("([message, code]) => I18n.error({ message, code })", [SERVER_SAYS, FAILED_CODE])
+    assert said != SERVER_SAYS and _ARABIC.search(said), said
+    return said
 
 
 def no_sideways_scroll(page: Page, where: str) -> None:
@@ -344,7 +336,7 @@ def test_the_conversation_list_is_arabic_and_its_titles_are_content(
         said, exact = when.inner_text(), when.get_attribute("title") or ""
         assert _ARABIC.search(said) or re.fullmatch(r"[\d:\s\u200f]+[صم]?", said), said
         assert not _WORD.search(said) and not _EASTERN_DIGITS.search(said + exact), (said, exact)
-        assert exact.startswith("آخر استخدام "), exact
+        assert exact.startswith("آخر استخدام: "), exact
     kept = row_of(page, titled).locator(".kept")
     expect(kept).to_have_text(re.compile(r"^محفوظ حتى \d{1,2} [؀-ۿ]+ \d{4}$"))
     expect(row_of(page, titled).locator(".when")).to_have_attribute("title", re.compile(r" · محفوظ حتى \d"))
@@ -455,7 +447,7 @@ def test_a_turn_that_fails_says_so_in_arabic(page: Page) -> None:
         if route.request.method != "POST":
             route.continue_()
             return
-        route.fulfill(status=500, json={"detail": SERVER_SAYS, "code": "internal_error"})
+        route.fulfill(status=500, json={"detail": SERVER_SAYS, "code": FAILED_CODE})
 
     page.route("**/api/chat", refuse)
     opened(page)
@@ -463,8 +455,8 @@ def test_a_turn_that_fails_says_so_in_arabic(page: Page) -> None:
     page.fill("#prompt", "Do we encrypt backups?")
     page.click("#send")
     failed = page.locator("#thread .turn.assistant .bubble").last
-    expect(failed).to_have_text(f"تعذّر ذلك: {SERVER_SAYS}")
-    expect_arabic_here(page, "after a turn failed", names=(SERVER_SAYS,))
+    expect(failed).to_have_text(f"تعذّر ذلك: {code_says(page)}")
+    expect_arabic_here(page, "after a turn failed")
 
 
 def test_a_turn_that_fails_in_another_conversation_is_said_under_the_list(page: Page) -> None:
@@ -491,14 +483,12 @@ def test_a_turn_that_fails_in_another_conversation_is_said_under_the_list(page: 
     assert held, "the message was never sent"
     row_of(page, "Do we encrypt backups?").locator(".convo").click()
     expect(page.locator("#thread")).to_contain_text("Yes, with AES-256.")
-    held[0].fulfill(status=500, json={"detail": SERVER_SAYS, "code": "internal_error"})
+    held[0].fulfill(status=500, json={"detail": SERVER_SAYS, "code": FAILED_CODE})
 
     status = page.locator("#historyStatus")
-    expect(status).to_have_text(f"تعذّرت الإجابة عن «Answer everything»: {SERVER_SAYS}")
+    expect(status).to_have_text(f"تعذّرت الإجابة عن «Answer everything»: {code_says(page)}")
     expect(status.locator("[data-no-translate]")).to_have_text("Answer everything")
-    expect_arabic_here(
-        page, "with a failure under the list", names=("Do we log access?", "Do we encrypt backups?", SERVER_SAYS)
-    )
+    expect_arabic_here(page, "with a failure under the list", names=("Do we log access?", "Do we encrypt backups?"))
 
 
 def test_products_that_could_not_be_loaded_are_said_in_arabic(page: Page) -> None:
@@ -543,22 +533,23 @@ def test_the_answers_panel_is_arabic_through_review_and_filling(page: Page, tmp_
     expect(page.locator("#closeAnswers")).to_have_attribute("title", "إخفاء هذه اللوحة")
     expect_arabic_here(page, "with the answers panel open", names=title)
 
-    pane.locator(".aside-row").get_by_role("button", name="أدرجها مجدداً").click()
+    pane.locator(".aside-row").get_by_role("button", name="أدرجها في الملف مجدداً").click()
     expect(page.locator("#answersStatus")).to_have_text("أُعيد إلى الاستبيان. أصبح جزءاً منه مجدداً.")
     expect_arabic_here(page, "after bringing a question back", names=title)
 
     pane.locator(".answer button[data-card-action='approve']").click()
     expect(page.locator("#answersStatus")).to_have_text(
-        "اعتُمدت. ستُكتب في الملف. لكنها ليست في ذاكرة الإجابات — فالذاكرة تحفظ ما كتبه شخص من إجابات، ولم يغيّر أحد هذه الإجابة."
+        "اعتُمدت. ستُكتب في الملف. لم تدخل ذاكرة الإجابات — فهي تحفظ ما كتبه شخص، ولم يغيّر أحد هذه الإجابة."
     )
     expect_arabic_here(page, "after approving an answer", names=title)
 
     page.click("#fillBtn")
     filled = page.locator("#thread .turn.assistant .bubble").last
-    written = "vendor - answered.xlsx"  # the filled copy's name: in the page's own sentence, which is Markdown
+    written = "vendor - answered.xlsx"  # the filled copy's name: content, in the page's own sentence
     expect(filled).to_have_text(f"كُتبت قيمة واحدة في {written} — ولم يُمسّ أي جزء آخر من الملف.")
+    expect(filled.locator("[data-no-translate]")).to_have_text(written)
     expect(page.locator("#downloadBtn")).to_have_text("تنزيل")
-    expect_arabic_here(page, "after filling the file", names=(*title, written))
+    expect_arabic_here(page, "after filling the file", names=title)
 
     page.click("#closeAnswers")
     expect(page.locator("#toggleAnswers")).to_have_text("الإجابات ←")

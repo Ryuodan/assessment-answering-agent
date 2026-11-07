@@ -102,36 +102,7 @@ I18n.add({
   "Save skill": "حفظ المهارة",
   "Cancel": "إلغاء",
 
-  "Auditor detail": "تفاصيل للمدقق",
-  "For an auditor checking evidence: every specific kept, each tied to its policy.": "لمدقق يتحقق من الأدلة: تُحفظ كل التفاصيل، ويُربط كلٌّ منها بسياسته.",
-  "Plain language": "لغة بسيطة",
-  "For a customer who is not a security specialist.": "لعميل ليس متخصصاً في الأمن.",
-  "Executive summary": "ملخص تنفيذي",
-  "Two sentences for a senior reader: the position, and why.": "جملتان لقارئ في منصب رفيع: الموقف، وسببه.",
-  "Bullet points": "نقاط موجزة",
-  "For process questions: the verdict, then one line per control.": "لأسئلة الإجراءات: الحكم، ثم سطر لكل ضابط.",
-
   "Your changes on this page are not saved yet. Switch the language anyway, and lose them?": "لم تُحفظ تغييراتك في هذه الصفحة بعد. هل تريد تبديل اللغة على أي حال وفقدانها؟",
-  "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})",
-  "That did not work. Check the address and try again.": "لم ينجح ذلك. تحقّق من البريد الإلكتروني وحاول مجدداً.",
-  "Could not reach the server.": "تعذّر الوصول إلى الخادم."
+  "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})"
 });
 
-/* The limits the preferences and the skills are held to, as the server says
-   them (src/preferences.py), for I18n.error on this page: whole sentences, by
-   pattern, as several carry a number or a name. ar-server.js is loaded first,
-   and its own Arabic for one of these, if it has it, is the one used. */
-I18n.addPatterns([
-  [/^A skill needs a name\.$/, "تحتاج المهارة إلى اسم."],
-  [/^A skill needs an instruction: how should the answers change\?$/, "تحتاج المهارة إلى تعليمات: كيف ينبغي أن تتغير الإجابات؟"],
-  [/^A skill's name can be at most (\d+) characters\.$/, "يمكن أن يتكون اسم المهارة من $1 من الأحرف على الأكثر."],
-  [/^A skill's description can be at most (\d+) characters\.$/, "يمكن أن يتكون وصف المهارة من $1 من الأحرف على الأكثر."],
-  [/^A skill's instruction can be at most (\d+) characters\.$/, "يمكن أن تتكون تعليمات المهارة من $1 من الأحرف على الأكثر."],
-  [/^You can keep at most (\d+) skills\. Remove one you no longer use first\.$/, "يمكنك الاحتفاظ بـ $1 من المهارات على الأكثر. أزل أولاً مهارة لم تعد تستخدمها."],
-  [/^There is already a built-in skill called (['"])(.*)\1\. Make a copy to change it\.$/, "توجد مهارة مدمجة باسم «$2». أنشئ نسخة منها لتعديلها."],
-  [/^You already have a skill called (['"])(.*)\1\.$/, "لديك مهارة باسم «$2» بالفعل."],
-  [/^Built-in skills cannot be changed\. Make a copy and edit that instead\.$/, "لا يمكن تغيير المهارات المدمجة. أنشئ نسخة منها وعدّلها بدلاً من ذلك."],
-  [/^What to call us can be at most (\d+) characters\.$/, "يمكن أن تتكون تسمية المنظمة من $1 من الأحرف على الأكثر."],
-  [/^Write what to call us without quotation marks\.$/, "اكتب تسمية المنظمة دون علامات تنصيص."],
-  [/^The extra line can be at most (\d+) characters; this one is (\d+)\.$/, "يمكن أن يتكون السطر الإضافي من $1 من الأحرف على الأكثر، وفي هذا السطر $2."]
-]);

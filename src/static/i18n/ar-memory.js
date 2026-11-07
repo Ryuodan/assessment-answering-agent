@@ -82,7 +82,5 @@ I18n.add({
   },
 
   "Your changes on this page are not saved yet. Switch the language anyway, and lose them?": "لم تُحفظ تغييراتك في هذه الصفحة بعد. هل تريد تبديل اللغة على أي حال وفقدانها؟",
-  "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})",
-  "That did not work. Check the address and try again.": "لم ينجح ذلك. تحقّق من البريد الإلكتروني وحاول مجدداً.",
-  "Could not reach the server.": "تعذّر الوصول إلى الخادم."
+  "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})"
 });

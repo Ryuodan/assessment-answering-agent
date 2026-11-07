@@ -2051,7 +2051,7 @@
       if (Cards.isArabic(data.text)) $("extractedText").dir = "rtl";
       else if (I18n.rtl) $("extractedText").dir = "ltr";  // an English document, in an Arabic page (plan 038)
       else $("extractedText").removeAttribute("dir");
-      setStatus($("extractedStatus"), t("{count} extracted characters.", { count: I18n.number(data.characters) }), "ok");
+      setStatus($("extractedStatus"), t("{count} extracted characters.", { n: data.characters, count: I18n.number(data.characters) }), "ok");
     } catch (error) {
       if (currentDocument !== doc) return;
       setStatus($("extractedStatus"), I18n.error(error), "error");
@@ -4365,7 +4365,8 @@
           const row = document.createElement("li");
           const reason = document.createElement("span");
           reason.className = "why";
-          reason.textContent = " — " + I18n.server(why);  // why it is held: the server's sentence (plan 038)
+          reason.append(" — ");
+          Cards.serverInto(reason, why);  // the server's sentence; what it carries from the case is content (plan 038)
           // Where it is in the file, and the question: the customer's words.
           row.append(content((question.number || I18n.server(question.location) || questionId) + "  " +
             (text.length > 80 ? text.slice(0, 80) + "…" : text)), reason);

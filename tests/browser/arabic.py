@@ -21,11 +21,6 @@ from tests.test_i18n_catalogs import NAMES
 
 STORED = "interface-language"
 
-# While the pages are translated in parallel (plan 038), a translator's tests
-# leave out what another one owns: the answer card and the review's tabs
-# (cards.js). Emptied once they are merged, so every test reads every word.
-NOT_YET: tuple[str, ...] = (".answer", ".review-tabs", ".tab-empty")
-
 # What a page draws, read by the page itself: each visible text node, and the
 # placeholder, title and aria-label of each visible element.
 _ON_SCREEN = """({ within, besides }) => {
@@ -60,7 +55,9 @@ _ON_SCREEN = """({ within, besides }) => {
 }"""
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
-_NOT_WORDS = re.compile(r"[\w.+-]+@[\w.-]+|https?://\S+|[\w*.-]+\.(?:xlsx|xls|docx|doc|pdf|csv|txt|md|json)\b", re.I)
+_NOT_WORDS = re.compile(
+    r"[\w.+-]+@[\w.-]+|https?://\S+|[\w*.-]+\.(?:xlsx|xlsm|xls|docx|doc|pdf|csv|txt|md|json)\b", re.I
+)
 
 
 def in_arabic(page: Page, *, person: bool = True) -> None:
@@ -81,24 +78,41 @@ def in_arabic(page: Page, *, person: bool = True) -> None:
         interface_language.choose(identity.local_user().email, "ar")
 
 
-def english_on_screen(page: Page, *, within: str = "body", besides: tuple[str, ...] = NOT_YET) -> list[str]:
+_ATTRIBUTES = ("placeholder: ", "title: ", "aria-label: ")
+
+
+def english_on_screen(
+    page: Page, *, within: str = "body", besides: tuple[str, ...] = (), names: tuple[str, ...] = ()
+) -> list[str]:
     """The visible interface text inside `within` that still has English words in it.
 
-    `besides`: selectors of areas not read, by default what another translator owns (`NOT_YET`).
+    `besides`: selectors of areas not read, such as what another check reads on its own.
+    `names`: content an attribute holds, such as a product's name in a badge's title or
+    a question's place in its card's label. No element can mark part of an attribute
+    as content, so these are taken out of an attribute's value before it is read.
     """
     left = []
     for text in page.evaluate(_ON_SCREEN, {"within": within, "besides": ", ".join(besides)}):
-        spare = _NOT_WORDS.sub(
-            "", text.split(": ", 1)[1] if text.startswith(("placeholder: ", "title: ", "aria-label: ")) else text
-        )
-        if [word for word in _WORD.findall(spare) if word not in NAMES]:
+        attribute = text.startswith(_ATTRIBUTES)
+        spare = text.split(": ", 1)[1] if attribute else text
+        if attribute:
+            for name in names:
+                spare = spare.replace(name, " ")
+        if [word for word in _WORD.findall(_NOT_WORDS.sub("", spare)) if word not in NAMES]:
             left.append(text)
     return sorted(set(left))
 
 
-def expect_arabic(page: Page, where: str = "", *, within: str = "body", besides: tuple[str, ...] = NOT_YET) -> None:
+def expect_arabic(
+    page: Page,
+    where: str = "",
+    *,
+    within: str = "body",
+    besides: tuple[str, ...] = (),
+    names: tuple[str, ...] = (),
+) -> None:
     """The page is Arabic, right to left, with no English left on screen (inside `within`)."""
     expect(page.locator("html")).to_have_attribute("dir", "rtl")
     expect(page.locator("html")).to_have_attribute("lang", "ar")
-    left = english_on_screen(page, within=within, besides=besides)
+    left = english_on_screen(page, within=within, besides=besides, names=names)
     assert not left, f"English on screen{' ' + where if where else ''}: {len(left)}: {left[:30]}"

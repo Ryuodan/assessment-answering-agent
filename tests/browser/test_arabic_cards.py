@@ -8,8 +8,8 @@ answer reads left to right. The server keeps writing English: the review's
 reasons, why an answer is held back and the errors are put into Arabic in the
 page (`I18n.server`, `I18n.error`), keeping what the case put into them.
 
-Only the card and the tabs are read here: the rest of each page is its own
-translator's (`besides`).
+Only the card and the tabs are read here (`within`): the rest of each page is
+read by that page's own Arabic tests.
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ def cards_in_arabic(page: Page, where: str, cards: str = "#results > .answer") -
     count = page.evaluate(_MARK_CARDS, cards)
     assert count, f"no cards {where}"
     for at in range(count):
-        expect_arabic(page, f"{where}, card {at + 1}", within=f'[data-test-card="{at}"]', besides=())
+        expect_arabic(page, f"{where}, card {at + 1}", within=f'[data-test-card="{at}"]')
 
 
 _LAYOUT = """(selector) => {
@@ -227,7 +227,7 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
     expect(tab(page, "#reviewTabs", "تحتاج إلى مراجعة")).to_have_text("تحتاج إلى مراجعة (3)")
     expect(tab(page, "#reviewTabs", "ستُكتب في الملف")).to_have_text("ستُكتب في الملف (5)")
     expect(tab(page, "#reviewTabs", "الكل")).to_have_text("الكل (8)")
-    expect_arabic(page, "in the tabs", within="#reviewTabs", besides=())
+    expect_arabic(page, "in the tabs", within="#reviewTabs")
     expect(page.locator("#results > .answer")).to_have_count(3)
     cards_in_arabic(page, "needing review")
 
@@ -265,7 +265,7 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
     expect(page.locator("#results .qlist-empty")).to_have_text(
         "لا توجد إجابات هنا. تحتاج إلى مراجعة: 3، وستُكتب في الملف: 5."
     )
-    expect_arabic(page, "in an empty tab", within="#results", besides=())
+    expect_arabic(page, "in an empty tab", within="#results")
 
     tab(page, "#reviewTabs", "ستُكتب في الملف").click()
     expect(page.locator("#results > .answer")).to_have_count(5)
@@ -319,21 +319,18 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
     tab(page, "#reviewTabs", "الكل").click()
 
     # Brief, for the whole questionnaire.
-    expect_arabic(page, "in the length and skill pickers", within="#detailPick", besides=())
+    expect_arabic(page, "in the length and skill pickers", within="#detailPick")
     page.locator("#detailPick").get_by_role("button", name="مختصرة").click()
     expect(page.locator("#detailPick").get_by_role("button", name="مختصرة")).to_have_attribute(
         "aria-pressed", "true", timeout=15_000
     )
     expect(card_for(page, 6).locator(".rendered")).to_have_text("Yes.")
-    expect_arabic(page, "with Brief chosen", within="#detailPick", besides=())
+    expect_arabic(page, "with Brief chosen", within="#detailPick")
     cards_in_arabic(page, "with Brief chosen")
     laid_out(page, "with Brief chosen")
 
 
 # --- the chat's answers panel ---------------------------------------------------
-
-# The panel's own head, its counts and the set-aside heading are the chat's.
-CHATS_OWN = ("#paneResizer", ".pane-head", "#answersStatus", ".summary", ".aside-head", ".aside-row", ".nothing")
 
 
 def test_the_chats_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -362,8 +359,8 @@ def test_the_chats_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path, mon
 
     tabs = "#answerTabs"
     expect(tab(page, tabs, "تحتاج إلى مراجعة")).to_have_text("تحتاج إلى مراجعة (2)")
-    expect_arabic(page, "in the panel's tabs", within=tabs, besides=())
-    expect_arabic(page, "in the panel", within="#answersPane", besides=CHATS_OWN + (tabs,))
+    expect_arabic(page, "in the panel's tabs", within=tabs)
+    expect_arabic(page, "in the panel", within="#answersPane")
     cards_in_arabic(page, "in the panel", cards="#answers > .answer")
     held = page.locator("#answers .answer", has_text=ARABIC_ANSWER)
     expect(held.locator(".rendered")).to_have_attribute("dir", "rtl")
@@ -376,21 +373,21 @@ def test_the_chats_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path, mon
     english.get_by_role("button", name="مستبعدة من الملف", exact=True).click()
     aside = page.locator("#answers .answer.set-aside")
     expect(aside.locator(".status-word")).to_have_text("مستبعدة من الملف")
-    expect(aside.get_by_role("button", name="إعادته إلى الملف")).to_be_visible()
-    expect_arabic(page, "with one set aside", within="#answersPane", besides=CHATS_OWN + (tabs,))
+    expect(aside.get_by_role("button", name="أدرجها في الملف مجدداً")).to_be_visible()
+    expect_arabic(page, "with one set aside", within="#answersPane")
     cards_in_arabic(page, "with one set aside", cards="#answers > .answer")
     laid_out(page, "with one set aside", cards="#answers > .answer")
 
     tab(page, tabs, "فارغة أو مستبعدة من الملف").click()
     expect(page.locator("#answers > .answer")).to_have_count(1)
-    expect_arabic(page, "in Blank or set aside", within="#answersPane", besides=CHATS_OWN + (tabs,))
+    expect_arabic(page, "in Blank or set aside", within="#answersPane")
     cards_in_arabic(page, "in Blank or set aside", cards="#answers > .answer")
 
     tab(page, tabs, "أنجزها شخص").click()
     expect(page.locator("#answers .tab-empty")).to_have_text(
         "لا توجد إجابات هنا. تحتاج إلى مراجعة: 2، وستُكتب في الملف: 1."
     )
-    expect_arabic(page, "in an empty tab", within="#answers .tab-empty", besides=())
+    expect_arabic(page, "in an empty tab", within="#answers .tab-empty")
 
 
 # --- the knowledge page ----------------------------------------------------------
@@ -518,7 +515,7 @@ def test_a_reasons_own_words_are_content_on_the_card(page: Page) -> None:
     expect(carried).to_have_text("a 2023 answer said otherwise")
     expect(carried).to_have_attribute("dir", "auto")
     expect(page.locator("#drawn .held [data-no-translate]")).to_have_text("a 2023 answer said otherwise")
-    assert english_on_screen(page, within="#drawn .answer-body", besides=()) == []
+    assert english_on_screen(page, within="#drawn .answer-body") == []
 
 
 def test_a_lists_tabs_say_ready_to_use(page: Page) -> None:

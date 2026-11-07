@@ -731,3 +731,9 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Under load, a second search still happens. Which event sends it is not found yet.
 - **Impact:** a flaky gate test. A person may wait for one search more than they asked for; the results are the same.
 - **Fix (needs approval):** find the second call with the page's network log in a slow run, and make the search run once per request.
+
+## TD-081: The Workbench's closed search drawer leaves a faint shadow at the window's edge
+
+- **What:** found 2026-11-07 by plan 038's Workbench translator, in screenshots. The closed drawer is moved just off the window (`transform: translateX(100%)`), but its shadow (`box-shadow: -18px 0 46px`) reaches back into the window, a faint strip on the right in English, on the left in Arabic.
+- **Impact:** cosmetic. Nothing is covered or unclickable: the drawer itself is off screen.
+- **Fix (needs approval):** draw the shadow only on an open drawer (`.drawer.open`), or hide the closed one (`visibility: hidden` after its transition).

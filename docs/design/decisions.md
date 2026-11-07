@@ -671,3 +671,19 @@ a plan relies on it.
   - A kept plan does not change when the knowledge base does. What it finds does.
   - Kept plans hold the question's words, so retention deletes them.
 - **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user (plan 034).
+
+## D-033: the interface is English or Arabic per person, translated in the pages from catalogs keyed by the English
+
+- **Context:** the team works in Arabic and English, and the pages were English only. The user chose the whole interface, with a switch per person, right to left in Arabic, from a glossary they checked first (plan 038, `docs/design/arabic-glossary.md`).
+- **Decision:**
+  - **Per person.** The choice is kept on the server (`interface_languages`, migration 17), English until chosen. The device keeps a copy, so a page is right to left from its first paint; a page whose copy differs takes the person's.
+  - **In the pages.** The server, its logs, the API and the generated docs stay English. `i18n.js` translates the markup once the page has loaded, and the scripts call `I18n.t("English", params)`, with Arabic plural forms by `n`. The server's sentences (review reasons, why an answer is held back) and errors are translated in the page too, by the whole sentence or a pattern, and errors by their code.
+  - **English is the key.** A missing entry shows the English. Every Arabic word is in a catalog in `src/static/i18n/`, and one English reads the same in every catalog.
+  - **Content is not interface.** Questions, answers, sources and names sit in `data-no-translate`, in their own direction.
+  - **A switch reloads the page.** A page with unsaved typing asks first (`I18n.beforeSwitch`).
+  - **Answers are not changed by it.** They follow the question's language, or the one a questionnaire is forced into.
+- **Consequences:**
+  - A new string needs its Arabic, or `tests/test_i18n_catalogs.py` fails; the Arabic browser tests fail on English left on screen.
+  - CSS uses logical properties (`margin-inline-start`, `text-align: start`), so a page mirrors without its own right-to-left rules.
+  - The filled files and the PDF and Word downloads stay in the questionnaire's language.
+- **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user chose the scope and approved the glossary; the design is mine (plan 038).

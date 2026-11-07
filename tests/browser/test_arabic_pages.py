@@ -31,7 +31,7 @@ from src.config import settings
 from src.forms.model import DetectedForm
 from src.identity import User
 from src.models import IngestResult
-from tests.browser.arabic import NOT_YET, expect_arabic, in_arabic
+from tests.browser.arabic import expect_arabic, in_arabic
 from tests.conftest import FakeVectorStore, bare_store
 
 pytestmark = pytest.mark.browser
@@ -43,8 +43,6 @@ MEMBER = "member@example.test"
 POLICY_TEXT = "Section 4.2: multi-factor authentication is enforced for every account."
 PDF = "application/pdf"
 
-# What cards.js draws on the knowledge page: the badge on an external document.
-CARDS = NOT_YET + (".tag.external",)
 
 _ids = itertools.count()
 
@@ -165,28 +163,28 @@ def test_the_knowledge_base_in_arabic_with_its_documents(page: Page, stores, mon
     expect(page.locator("#kbSummary .tag")).to_have_text("ملفان")
     expect(page.locator("#kbSummary a")).to_have_text("إجابة سابقة واحدة")
     expect(page.locator("#kbScopeHint")).to_have_text("تُستخدم لجميع الاستبيانات.")
-    expect_arabic(page, "the shared knowledge base, listed", besides=CARDS)
+    expect_arabic(page, "the shared knowledge base, listed")
 
     page.set_input_files("#guidelinesInput", files=[{"name": "Backup standard.pdf", "mimeType": PDF, "buffer": b"%"}])
     page.click("#guidelinesBtn")
     expect(page.locator("#guidelinesStatus")).to_have_text("تمت فهرسة 1 من أصل 1 من الملفات — عدد المقاطع: 3.")
-    expect_arabic(page, "after indexing", besides=CARDS)
+    expect_arabic(page, "after indexing")
 
     page.once("dialog", lambda dialog: dialog.accept())
     sources.locator("li", has_text="Backup standard.pdf").get_by_role("button", name="إزالة").click()
     expect(status).to_have_text("تمت إزالة Backup standard.pdf.")
-    expect_arabic(page, "after removing a document", besides=CARDS)
+    expect_arabic(page, "after removing a document")
 
     page.select_option("#kbScope", availo.id)
     expect(page.locator("#kbScopeHint")).to_have_text("تُستخدم لاستبيانات Availo فقط، إلى جانب المشتركة.")
     expect(sources).to_contain_text("Availo standard.pdf")
-    expect_arabic(page, "a product's knowledge base", besides=CARDS)
+    expect_arabic(page, "a product's knowledge base")
 
     page.once("dialog", lambda dialog: dialog.accept())
     page.click("#kbClear")
     expect(status).to_have_text("تمت إزالة جميع وثائق السياسات من قاعدة معرفة Availo.")
     expect(page.locator("#kbSummary")).to_have_text("لا توجد وثائق مفهرسة بعد. ارفع سياساتك في الأعلى.")
-    expect_arabic(page, "after removing every policy document", besides=CARDS)
+    expect_arabic(page, "after removing every policy document")
 
 
 def test_the_document_viewer_in_arabic(page: Page, stores, monkeypatch) -> None:
@@ -390,7 +388,7 @@ def test_preferences_in_arabic(page: Page) -> None:
     # One of the limits the server holds the preferences to, said in Arabic.
     page.fill("#referTo", '"T2"')
     page.click("#savePreferences")
-    expect(page.locator("#preferencesStatus")).to_have_text("اكتب تسمية المنظمة دون علامات تنصيص.")
+    expect(page.locator("#preferencesStatus")).to_have_text("اكتب تسمية المنظمة دون علامات اقتباس.")
     expect_arabic(page, "a choice the server refuses")
 
 
@@ -582,7 +580,7 @@ def test_products_in_arabic_for_a_lead_who_adds_and_deletes_one(page: Page, stor
 
     page.click("#addProduct")  # no name: the server's sentence, ar-server.js's
     expect(page.locator("#addStatus.error")).not_to_be_empty()
-    expect_arabic(page, "a product added without a name", besides=NOT_YET + ("#addStatus",))
+    expect_arabic(page, "a product added without a name")
 
     page.fill("#productName", "Availo")
     page.fill("#productDescription", "Payments for merchants")

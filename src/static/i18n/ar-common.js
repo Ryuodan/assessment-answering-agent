@@ -39,5 +39,7 @@ I18n.add({
 
   "Dark mode": "الوضع الداكن",
   "Light mode": "الوضع الفاتح",
-  "Switch between light and dark": "التبديل بين الوضع الفاتح والوضع الداكن"
+  "Switch between light and dark": "التبديل بين الوضع الفاتح والوضع الداكن",
+  "That did not work. Check the address and try again.": "لم ينجح ذلك. تحقّق من البريد الإلكتروني وحاول مجدداً.",
+  "Could not reach the server.": "تعذّر الوصول إلى الخادم."
 });

@@ -6,10 +6,8 @@ standards, formats and keys. Content is not interface: a question, an answer,
 a file's, a sheet's or a product's name, and what the file or the reader said
 are marked `data-no-translate`, in their own direction.
 
-Left out while the pages are translated in parallel: what `cards.js` draws
-(another translator's: `NOT_YET`, and its badges and pickers on this page,
-`CARDS_DRAWN`), and the server's sentences on why an answer is held back
-(`ar-server.js`). Both are emptied once the four are merged.
+What `cards.js` draws on this page and the server's sentences (why an answer is
+held back, `ar-server.js`) are read here too.
 """
 
 from __future__ import annotations
@@ -31,11 +29,12 @@ from src import (
     retention,
     service,
     tools,
+    verification,
 )
 from src.config import settings
 from src.models import AnsweredQuestion
 from tests import forms_fixtures as shapes
-from tests.browser.arabic import NOT_YET, english_on_screen, expect_arabic, in_arabic
+from tests.browser.arabic import english_on_screen, expect_arabic, in_arabic
 from tests.browser.choosing import choose_general
 from tests.conftest import FakeVectorStore, bare_store
 
@@ -45,23 +44,15 @@ TEAM = settings.default_team
 ANSWER = "Yes, an approved policy is in place and reviewed annually."
 ADMIN = "admin@example.test"
 
-# Drawn on this page by cards.js, whose Arabic is another translator's (plan 038).
-CARDS_DRAWN = NOT_YET + (
-    ".tag.product",  # Cards.choiceTag and productBadge: a product's badge, or General's
-    ".last-used",  # Cards.lastUsedButton
-    "#detailPick",  # Cards.detailPicker and skillPicker
-    ".tag.external",  # Cards.authorityBadge
-    ".hit-head > button",  # Cards.openDocumentButton
-    "[data-chunk-source]",  # Cards.chunk: a source's own text
-    "#results > .qlist-empty",  # Cards.emptyTab: what an empty tab says
-    "#viewerMeta .doc-label",  # the card's word for the kind of document
-)
-# Why an answer is held back: the server's sentence, in ar-server.js.
-SERVER_SAID = (".held-which .why",)
+# Content the page puts in attributes: the product's name in its badge's title,
+# a question's place in the file ("Questionnaire!3") in its card's label.
+IN_ATTRIBUTES = ("Availo", "Questionnaire")
+# Why an answer is held, as the server writes it.
+HELD = verification.UNGROUNDED
 
 
-def arabic(page: Page, where: str, *, within: str = "body", besides: tuple[str, ...] = CARDS_DRAWN) -> None:
-    expect_arabic(page, where, within=within, besides=besides)
+def arabic(page: Page, where: str, *, within: str = "body") -> None:
+    expect_arabic(page, where, within=within, names=IN_ATTRIBUTES)
 
 
 def fits(page: Page) -> None:
@@ -119,7 +110,7 @@ def one_held(monkeypatch: pytest.MonkeyPatch) -> None:
                 answer="Partly." if index == 1 else ANSWER,
                 confidence=0.4 if index == 1 else 0.9,
                 needs_review=index == 1,
-                review_reasons=["the sources disagree"] if index == 1 else [],
+                review_reasons=[HELD] if index == 1 else [],
             )
             for index, q in enumerate(questions)
         ]
@@ -140,7 +131,7 @@ def mixed(monkeypatch: pytest.MonkeyPatch) -> None:
                 answer=["", "Partly.", "Probably.", "Not yet."][index],
                 confidence=0.3,
                 needs_review=True,
-                review_reasons=["the sources disagree"],
+                review_reasons=[HELD],
             )
             for index, q in enumerate(questions)
         ]
@@ -249,7 +240,7 @@ def test_a_questionnaire_is_read_answered_reviewed_and_filled_in_arabic(
     expect(report).to_contain_text("حُجزت إجابة واحدة للمراجعة")
     report.get_by_text("أيّها، ولماذا").click()
     expect(page.locator("#step5Held")).to_have_text("كُتبت 3 قيم في vendor - answered.xlsx · محجوزة للمراجعة: 1")
-    arabic(page, "filled, with one held back", besides=CARDS_DRAWN + SERVER_SAID)
+    arabic(page, "filled, with one held back")
 
     asked: list[str] = []
     page.once("dialog", lambda dialog: (asked.append(dialog.message), dialog.dismiss()))
@@ -259,9 +250,9 @@ def test_a_questionnaire_is_read_answered_reviewed_and_filled_in_arabic(
     page.locator("#moreActions > summary").click()
     composer = page.locator("#composerInput")
     expect(composer).to_be_visible()
-    # A textarea's own words: english_on_screen leaves every textarea alone, its placeholder included.
+    # A textarea's own text is the person's; its placeholder is read by english_on_screen as well.
     expect(composer).to_have_attribute("placeholder", "اكتب سؤالاً واضغط Enter، أو انقر «إضافة إلى القائمة»")
-    arabic(page, "more: the downloads, rewording and another question", besides=CARDS_DRAWN + SERVER_SAID)
+    arabic(page, "more: the downloads, rewording and another question")
 
 
 def test_the_review_keys_work_on_an_arabic_keyboard(page: Page, tmp_path: Path, mixed: None, stores) -> None:
@@ -528,7 +519,7 @@ def test_the_access_panel_is_arabic(page: Page, monkeypatch: pytest.MonkeyPatch,
 
     page.fill("#adminNewEmail", "alice@example.test")
     page.click("#adminAddUser")
-    expect(page.locator("#adminDone")).to_have_text("أُضيف alice@example.test.")
+    expect(page.locator("#adminDone")).to_have_text("تمت إضافة alice@example.test.")
     expect(drawer.locator("#adminUsers tr", has_text="alice@example.test")).to_contain_text("نشط")
     arabic(page, "a person added", within="#adminDrawer")
 
@@ -563,7 +554,7 @@ def test_nothing_scrolls_sideways_in_arabic(page: Page, tmp_path: Path, one_held
     expect(page.locator("#formFilled")).to_be_visible()
     page.locator("#moreActions > summary").click()
     fits(page)
-    assert not english_on_screen(page, besides=CARDS_DRAWN + SERVER_SAID)
+    assert not english_on_screen(page, names=IN_ATTRIBUTES)
 
     page.click("#searchOpen")
     fits(page)

@@ -57,6 +57,8 @@
    name and locator, a person's address, the model's own words -- is content:
    inside `data-no-translate`, in its own direction. The helpers a page calls
    with words (`stat`, a badge's title) are given them in the page's language.
+   `Cards.serverInto(element, sentence)` puts a server's sentence into a
+   page's own element the same way.
 */
 
 const Cards = (window.Cards = {
@@ -1565,5 +1567,6 @@ const Cards = (window.Cards = {
     markdown: renderMarkdown,
     view: chunkView,
     setView: setChunkView,
+    serverInto: serverInto,
   });
 })();

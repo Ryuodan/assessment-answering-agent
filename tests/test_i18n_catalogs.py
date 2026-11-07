@@ -31,9 +31,8 @@ CATALOGS = STATIC / "i18n"
 PAGES = ["chat.html", "index.html", "knowledge.html", "memory.html", "preferences.html", "products.html"]
 SCRIPTS = {"cards.js": ["index.html", "chat.html", "knowledge.html"]}  # a shared script, and the pages that load it
 
-# Each file's own catalog. A file is checked once its catalog has entries: its
-# translator fills it, and nobody edits a list here. When all are filled,
-# `test_every_page_is_translated` passes and its xfail comes off (plan 038).
+# Each file's own catalog. Every one has its Arabic (`test_every_page_is_translated`);
+# a new page or shared script gets its own catalog and a line here.
 OWN_CATALOG = {
     "chat.html": "ar-chat.js",
     "index.html": "ar-workbench.js",
@@ -56,6 +55,7 @@ NAMES = {
     "Word",
     "CSV",
     "XLSX",
+    "XLSM",
     "XLS",
     "DOCX",
     "DOC",
@@ -305,7 +305,6 @@ def test_a_translated_scripts_strings_have_their_arabic(name: str) -> None:
         assert not missing, f"{name} in {page}: {len(missing)} t() without Arabic: {missing[:25]}"
 
 
-@pytest.mark.xfail(strict=True, reason="plan 038: the pages are being translated")
 def test_every_page_is_translated() -> None:
     assert all(translated(name) for name in OWN_CATALOG)
 

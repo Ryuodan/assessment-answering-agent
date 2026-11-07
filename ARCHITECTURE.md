@@ -148,6 +148,22 @@ The chat's message box has a labelled "Attach a questionnaire" control, and a
 file dragged over the page shows where to drop it (plan 033). Its list is
 ordered by last use and says until when each conversation is kept.
 
+Every page reads in English or in Arabic, right to left, as the person chose
+(plan 038, D-033). The choice is kept with the person (`src/interface_language.py`,
+`PUT /api/preferences/language`, `interface_language` in the session), and the
+device keeps a copy so a page is drawn in it from the first paint. `i18n.js`
+loads first in every page: it sets `lang` and `dir`, translates the markup once
+the page has loaded, and gives the scripts `I18n.t`. The pages and the server
+stay in English, which is the key: every Arabic word is in a catalog in
+`static/i18n/` (`ar-common.js` for what every page shares, one per page,
+`ar-cards.js` for the card, `ar-server.js` for the server's sentences and its
+errors by code), in the glossary's terms (`docs/design/arabic-glossary.md`).
+Content (questions, answers, sources, names) is marked `data-no-translate`
+and keeps its own direction (`dir="auto"`). `tests/test_i18n_catalogs.py` fails
+on a string with no Arabic, or on one English read two ways;
+`tests/browser/test_arabic_*.py` open each page in Arabic and fail on English
+left on screen.
+
 `tests/browser/` drives them in headless Chromium (Playwright, plan 011): the
 app runs in a thread of the test process, so the suite's fixtures (temporary
 storage, faked model calls) apply to it, and a page that raises a JavaScript
@@ -160,7 +176,8 @@ area are moving into `src/routes/` as they change (plan 019, TD-006):
 `routes/auth.py` holds the dependencies every route uses (`current_user`,
 `current_admin`), and `routes/admin.py` the Access panel's routes.
 `routes/knowledge.py` holds the knowledge-base routes and serves the Knowledge
-base page.
+base page. `routes/preferences.py` holds the answer preferences, the skills,
+and the interface's language (plan 038), and serves the Preferences page.
 `routes/forms.py` holds opening, listing, reading and filling a
 questionnaire (plan 029), in two routers: `opening` is included before the
 answering routes and `router` (filling) after approving. A router is

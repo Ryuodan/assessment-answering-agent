@@ -80,7 +80,7 @@ I18n.add({
   "view": "عرض",
   "remove": "إزالة",
   "Open the document, and the text the agent read out of it": "افتح الوثيقة، والنص الذي قرأه الوكيل منها",
-  "Uploaded completed assessment": "استبيان مكتمل مرفوع",
+  "Uploaded completed assessment": "استبيان مُجاب عنه مرفوع",
   "Uploaded guideline": "وثيقة إرشادية مرفوعة",
   "Removed {name}.": "تمت إزالة {name}.",
   "Removed every policy document from the shared knowledge base.": "تمت إزالة جميع وثائق السياسات من قاعدة المعرفة المشتركة.",
@@ -106,7 +106,5 @@ I18n.add({
     "other": "{count} حرف مستخرج."
   },
 
-  "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})",
-  "That did not work. Check the address and try again.": "لم ينجح ذلك. تحقّق من البريد الإلكتروني وحاول مجدداً.",
-  "Could not reach the server.": "تعذّر الوصول إلى الخادم."
+  "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})"
 });
