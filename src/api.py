@@ -6,11 +6,9 @@ Run with:  uvicorn src.api:app --reload
 from __future__ import annotations
 
 import asyncio
-import unicodedata
 import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from contextlib import asynccontextmanager, suppress
 
@@ -18,7 +16,8 @@ from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from src import web
+from src import retention, web
+from src.web import attachment_headers as attachment_headers
 from src.logs import get_logger
 from src import (
     events,
@@ -98,7 +97,7 @@ async def lifespan(_: FastAPI):
             acting_as=identity.LOCAL_EMAIL,
             fix="add someone before exposing this beyond localhost",
         )
-    housekeeping = asyncio.create_task(storage.keep_within_limits())
+    housekeeping = asyncio.gather(storage.keep_within_limits(), retention.keep_for_days())  # RETENTION_DAYS too
     try:
         yield
     finally:
@@ -452,31 +451,6 @@ def approve_an_answer(
 
 
 app.include_router(form_routes.router)  # filling, src/routes/forms.py
-
-
-OOXML_TYPES = {
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
-
-
-@app.get("/api/forms/{batch_id}/file")
-def download_filled_questionnaire(batch_id: str, user: User = Depends(current_user)) -> FileResponse:
-    """The filled copy. Produced by `/fill`, which must have run first."""
-    batch = tools._require(user, batch_id, reading=True)  # a deleted product's too (plan 027)
-    filled = tools._filled_path(batch)
-    if not filled.exists():
-        raise NotFound("Fill the questionnaire first.", code="filled_file_missing")
-    # The real type, so a browser hands it to Excel or Word rather than to
-    # whatever it does with an unknown blob; `attachment_headers` still forces
-    # the download and carries the Arabic file name.
-    return FileResponse(
-        filled,
-        filename=filled.name,
-        headers=attachment_headers(filled.name),
-        media_type=OOXML_TYPES.get(filled.suffix.lower(), "application/octet-stream"),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1096,22 +1070,6 @@ def assessment_progress(run_id: str, user: User = Depends(current_user)) -> dict
     if state is None:
         raise NotFound(f"No run in progress with id '{run_id}'.", code="run_not_in_progress")
     return state
-
-
-def attachment_headers(filename: str) -> dict[str, str]:
-    """`Content-Disposition` for a download, safe for a non-ASCII file name.
-
-    HTTP header values are latin-1, so an Arabic assessment name raised
-    UnicodeEncodeError inside Starlette and the download failed with a 500 —
-    on precisely the corpus this system exists to serve. RFC 6266 answers it
-    with two parameters: a transliterated `filename` that any client can read,
-    and a percent-encoded `filename*` that modern browsers prefer.
-    """
-    stripped = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
-    fallback = stripped.replace('"', "").strip() or "assessment"
-    if fallback.startswith("."):
-        fallback = f"assessment{fallback}"
-    return {"Content-Disposition": f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename, safe='')}"}
 
 
 @app.post("/api/assessments/export/pdf")

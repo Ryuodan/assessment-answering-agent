@@ -67,6 +67,9 @@ ASSISTANT_TURN = "assistant_turn"
 
 # Housekeeping: files removed because a team went over its storage limit.
 FILES_REMOVED = "files_removed"
+# Saved work deleted: one questionnaire by its owner, and what retention found unused (plan 033).
+QUESTIONNAIRE_DELETED = "questionnaire_deleted"
+WORK_EXPIRED = "work_expired"
 
 
 @dataclass(frozen=True)

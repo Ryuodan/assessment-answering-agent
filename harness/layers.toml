@@ -41,6 +41,7 @@ modules = [
     "src.uploads",
     "src.store",
     "src.migrations",
+    "src.migration_steps",
     "src.diagnostics",
     "src.knowledge",
     "src.scoped_knowledge",
@@ -70,6 +71,7 @@ modules = [
     "src.memory",
     "src.memory_sweep",
     "src.storage",
+    "src.retention",
 ]
 
 [[layer]]
@@ -95,6 +97,8 @@ modules = [
     "src.selection",
     "src.styling",
     "src.fill_audit",
+    "src.questionnaire",
+    "src.lists",
     "src.tools",
     "src.agents.assistant",
     "src.agents.assistant_cards",
