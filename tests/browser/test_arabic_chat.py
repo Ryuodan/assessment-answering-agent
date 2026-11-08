@@ -278,22 +278,6 @@ def test_a_file_attached_dragged_and_refused_in_arabic(page: Page, tmp_path: Pat
     expect_arabic_here(page, "with a refused file")
 
 
-def test_switching_the_language_asks_first_when_the_box_holds_a_message(page: Page) -> None:
-    opened(page)
-    page.fill("#prompt", "Do we encrypt backups?")
-    asked: list[str] = []
-    page.once("dialog", lambda dialog: (asked.append(dialog.message), dialog.dismiss()))
-    page.click("#languageToggle")
-    expect(page.locator("#prompt")).to_have_value("Do we encrypt backups?")
-    assert asked == ["لم تُرسل رسالتك بعد، وستضيع. هل تريد تبديل اللغة رغم ذلك؟"]
-    expect(page.locator("html")).to_have_attribute("dir", "rtl")
-
-    page.fill("#prompt", "")
-    page.click("#languageToggle")  # nothing to lose: no question, and the page is English again
-    expect(page.locator("html")).to_have_attribute("dir", "ltr")
-    expect(page.locator("#newChat")).to_have_text("New conversation")
-
-
 def test_signed_out_the_page_is_arabic(page: Page) -> None:
     identity.ensure_team(TEAM)
     identity.set_access_code(TEAM, "BROWSER-TEST-CODE")

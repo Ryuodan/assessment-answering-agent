@@ -14,6 +14,8 @@ I18n.add({
   "How you want your answers to read — nobody else sees these": "كيف تريد أن تُصاغ إجاباتك — لا يراها أحد غيرك",
 
   "Language of the pages": "لغة الصفحات",
+  "Appearance": "المظهر",
+  "Kept on this device.": "يُحفظ على هذا الجهاز.",
   "Answers are not changed by it: they follow the question’s language.": "لا تتغير بها الإجابات: فهي تتبع لغة السؤال.",
 
   "Every answer you draft": "كل إجابة تصوغها",

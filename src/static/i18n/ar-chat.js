@@ -112,9 +112,6 @@ I18n.add({
   "“{file}” was not attached: a questionnaire here is an XLSX, XLSM or DOCX file.": "لم يُرفق «{file}»: الاستبيان هنا ملف XLSX أو XLSM أو DOCX.",
   "A PDF's questions can be read on the Workbench.": "يمكن قراءة أسئلة ملف PDF في مساحة العمل.",
   "In place of {file}": "بدلاً من {file}",
-  "Your message and the attached file have not been sent, and will be lost. Switch the language anyway?": "لم تُرسل رسالتك ولا الملف المرفق بعد، وسيضيعان. هل تريد تبديل اللغة رغم ذلك؟",
-  "Your message has not been sent, and will be lost. Switch the language anyway?": "لم تُرسل رسالتك بعد، وستضيع. هل تريد تبديل اللغة رغم ذلك؟",
-  "The attached file has not been sent, and will be lost. Switch the language anyway?": "لم يُرسل الملف المرفق بعد، وسيضيع. هل تريد تبديل اللغة رغم ذلك؟",
 
   "Choose which product this chat is for before you send.": "اختر المنتج الذي تخصه هذه المحادثة قبل الإرسال.",
   "{name} was deleted. This chat is kept to read; start a new chat to carry on.": "حُذف {name}. هذه المحادثة محفوظة للقراءة فقط؛ ابدأ محادثة جديدة للمتابعة.",

@@ -301,9 +301,7 @@ def test_setting_a_row_aside_is_an_action_and_what_it_is_then_a_state(
 # --- typing the questions ---------------------------------------------------------
 
 
-def test_typed_questions_wait_for_a_product_and_switching_language_asks_first(
-    page: Page, availo: products.Product
-) -> None:
+def test_typed_questions_wait_for_a_product(page: Page, availo: products.Product) -> None:
     in_arabic(page)
     page.goto("/workbench")
     page.click("#addQuestionBtn")
@@ -318,24 +316,6 @@ def test_typed_questions_wait_for_a_product_and_switching_language_asks_first(
 
     page.locator("#answerOptions > summary").click()
     arabic(page, "a typed question, more options")
-
-    asked: list[str] = []
-    page.once("dialog", lambda dialog: (asked.append(dialog.message), dialog.dismiss()))
-    page.click("#languageToggle")
-    assert asked and asked[0].startswith("تبديل اللغة يعيد تحميل الصفحة"), asked
-    expect(page.locator("html")).to_have_attribute("dir", "rtl")  # stayed: the question is still there
-    expect(box).to_have_value("Do you encrypt backups?")
-
-
-def test_switching_with_nothing_unsaved_asks_nothing(page: Page, availo: products.Product) -> None:
-    in_arabic(page)
-    page.goto("/workbench")
-    asked: list[str] = []
-    page.on("dialog", lambda dialog: (asked.append(dialog.message), dialog.dismiss()))
-    page.click("#languageToggle")
-    expect(page.locator("html")).to_have_attribute("dir", "ltr")
-    expect(page.locator("#questionListTitle")).to_have_text("Or type the questions yourself")
-    assert asked == []
 
 
 # --- "Or pick up", the offer of a file already open, and closing --------------------

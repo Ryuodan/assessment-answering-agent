@@ -215,6 +215,7 @@ follow.
 | verdict | الحكم | "Start with the verdict" is البدء بالحكم. | |
 | Built in / Yours | مدمجة / مهاراتك | The two kinds of skill. | |
 | Language of the pages | لغة الصفحات | The interface's language, in Preferences. | |
+| Appearance | المظهر | Light mode or Dark mode, in Preferences. Added 2026-11-08. | |
 
 ### The chat
 

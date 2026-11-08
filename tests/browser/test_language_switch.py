@@ -1,4 +1,4 @@
-"""The language switch in every page's top bar, and the person's choice followed (plan 038)."""
+"""The pages' language and look, chosen in Preferences, and the person's choice followed (plans 038 and 040)."""
 
 from __future__ import annotations
 
@@ -25,32 +25,47 @@ def chosen() -> str:
 
 
 @pytest.mark.parametrize("path", list(PAGES))
-def test_every_page_has_the_switch_and_it_turns_the_page_arabic(page: Page, path: str) -> None:
+def test_the_top_bar_has_no_language_or_theme_button(page: Page, path: str) -> None:
     page.goto(path)
-    expect(page.locator("html")).to_have_attribute("dir", "ltr")
-    switch = page.locator(".topbar #languageToggle")
-    expect(switch).to_have_text("العربية")
+    expect(page.locator(".topbar a").first).to_be_visible()
+    expect(page.locator("#languageToggle")).to_have_count(0)
+    expect(page.locator("#themeToggle")).to_have_count(0)
 
-    switch.click()
 
+def test_arabic_chosen_in_preferences_reaches_every_page(page: Page) -> None:
+    page.goto("/preferences")
+    page.locator("#languagePanel").get_by_text("العربية").click()
     expect(page.locator("html")).to_have_attribute("dir", "rtl")
-    expect(page.locator("html")).to_have_attribute("lang", "ar")
-    expect(page.locator("#languageToggle")).to_have_text("English")
-    expect(page).to_have_title(PAGES[path])
     assert page.evaluate(f"localStorage.getItem('{STORED}')") == "ar"
     assert chosen() == "ar", "kept with the person, not only on this device"
 
+    for path, title in PAGES.items():
+        page.goto(path)
+        expect(page.locator("html")).to_have_attribute("dir", "rtl")
+        expect(page.locator("html")).to_have_attribute("lang", "ar")
+        expect(page).to_have_title(title)
 
-def test_english_back_from_arabic(page: Page) -> None:
-    in_arabic(page)
-    page.goto("/products")
-    expect(page.locator("html")).to_have_attribute("dir", "rtl")
 
-    page.locator("#languageToggle").click()
+def test_the_appearance_is_chosen_in_preferences_and_kept_on_every_page(page: Page) -> None:
+    page.emulate_media(color_scheme="light")
+    page.goto("/preferences")
+    panel = page.locator("#languagePanel")
+    expect(page.locator("input[name=theme][value=light]")).to_be_checked()
 
-    expect(page.locator("html")).to_have_attribute("dir", "ltr")
-    expect(page).to_have_title("Products — Assessment Answering")
-    assert chosen() == "en"
+    panel.get_by_text("Dark mode").click()
+
+    expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    expect(page.locator("input[name=theme][value=dark]")).to_be_checked()
+    expect(page.locator("#preferencesStatus")).not_to_have_text("Not saved yet.")  # not one of the answer preferences
+
+    for path in PAGES:
+        page.goto(path)
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+
+    page.goto("/preferences")
+    expect(page.locator("input[name=theme][value=dark]")).to_be_checked()
+    panel.get_by_text("Light mode").click()
+    expect(page.locator("html")).to_have_attribute("data-theme", "light")
 
 
 def test_a_new_device_takes_the_persons_choice(page: Page) -> None:
@@ -60,7 +75,6 @@ def test_a_new_device_takes_the_persons_choice(page: Page) -> None:
     page.goto("/knowledge")
 
     expect(page.locator("html")).to_have_attribute("dir", "rtl", timeout=10_000)
-    expect(page.locator("#languageToggle")).to_have_text("English")
 
 
 def test_the_devices_copy_gives_way_to_the_persons_choice(page: Page) -> None:

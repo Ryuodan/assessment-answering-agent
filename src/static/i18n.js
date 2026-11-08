@@ -1,7 +1,6 @@
 /* The interface's language (plan 038): English, or Arabic right to left.
 
-   Chosen per person, in Preferences and with the switch this script puts in
-   every page's top bar, and kept on the server with the person. The device
+   Chosen per person, in Preferences, and kept on the server with the person. The device
    keeps a copy, so a page is drawn in it from the first paint, before the
    session is read; a page whose copy differs takes the person's
    (`I18n.follow(session)`). Loaded first, in the <head>, before anything draws.
@@ -219,30 +218,7 @@ const I18n = (window.I18n = (function () {
     if (keep(wanted)) window.location.reload();
   }
 
-  /* The switch, in every top bar beside the theme's. It names the other
-     language in that language, as a person who cannot read this one looks for. */
-  function drawSwitch() {
-    if (document.getElementById("languageToggle")) return;
-    const theme = document.getElementById("themeToggle");
-    const bar = theme ? theme.parentElement : document.querySelector(".topbar");
-    if (!bar) return;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "ghost";
-    button.id = "languageToggle";
-    const other = rtl ? "en" : "ar";
-    button.lang = other;
-    button.dir = rtl ? "ltr" : "rtl";
-    button.setAttribute("data-no-translate", "");
-    button.textContent = rtl ? "English" : "العربية";
-    button.title = rtl ? "Show the pages in English" : "اعرض الصفحات بالعربية";
-    button.onclick = () => setLanguage(other);
-    if (theme) theme.before(button);
-    else bar.append(button);
-  }
-
   function whenLoaded() {
-    drawSwitch();
     translate(document.body);
     if (rtl && document.title) document.title = t(document.title);
   }

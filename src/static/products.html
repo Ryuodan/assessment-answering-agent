@@ -199,8 +199,7 @@
   <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
   <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
-  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
-  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
+  <a class="ghost" href="preferences" title="The pages' language and look, how you want answers to read, and your skills">Preferences</a>
 </div>
 
 <main>
@@ -331,7 +330,6 @@
   const THEME_KEY = "assessment-theme";
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    $("themeToggle").textContent = theme === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
   }
   (function initTheme() {
@@ -340,9 +338,6 @@
     const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     applyTheme(stored || (dark ? "dark" : "light"));
   })();
-  $("themeToggle").addEventListener("click", () => {
-    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
-  });
 
   // --- talking to the server ----------------------------------------------
 
@@ -745,14 +740,6 @@
       ready();
     }
   });
-
-  /* Switching the language draws the page again (plan 038): asked first when
-     a product being added or edited would be lost. */
-  I18n.beforeSwitch = () => {
-    const adding = $("productName").value.trim() || $("productDescription").value.trim();
-    const editing = document.querySelector("#productList .fields");
-    return adding || editing ? t("Your changes on this page are not saved yet. Switch the language anyway, and lose them?") : "";
-  };
 
   load();
 })();

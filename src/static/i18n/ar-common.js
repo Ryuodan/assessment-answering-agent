@@ -22,7 +22,7 @@ I18n.add({
   "Load a questionnaire, check what was found, and answer it": "حمّل استبياناً، وتحقّق مما تم العثور عليه، ثم أجب عنه",
   "The documents answers are drawn from: add, open and remove them": "الوثائق التي تُستمد منها الإجابات: أضفها وافتحها وأزلها",
   "What we have said before, and which of it still stands": "ما قلناه سابقاً، وما لا يزال قائماً منه",
-  "How you want answers to read, and your skills": "كيف تريد أن تُصاغ الإجابات، ومهاراتك",
+  "The pages' language and look, how you want answers to read, and your skills": "لغة الصفحات ومظهرها، وكيف تريد أن تُصاغ الإجابات، ومهاراتك",
   "The team's products, each with its own knowledge and answers": "منتجات الفريق، لكل منها معرفته وإجاباته",
 
   "Sign in": "تسجيل الدخول",
@@ -39,7 +39,6 @@ I18n.add({
 
   "Dark mode": "الوضع الداكن",
   "Light mode": "الوضع الفاتح",
-  "Switch between light and dark": "التبديل بين الوضع الفاتح والوضع الداكن",
   "That did not work. Check the address and try again.": "لم ينجح ذلك. تحقّق من البريد الإلكتروني وحاول مجدداً.",
   "Could not reach the server.": "تعذّر الوصول إلى الخادم."
 });

@@ -65,7 +65,6 @@ def test_every_header_fits_and_shows_who_is_signed_in(signed_in: Page, width: in
         expect(page.locator("#whoamiEmail"), f"{path} at {width}px").to_have_text(EMAIL)
         expect(page.locator("#whoamiEmail"), f"{path} at {width}px").to_be_in_viewport(ratio=1)
         expect(page.locator("#signOut"), f"{path} at {width}px").to_be_in_viewport(ratio=1)
-        expect(page.locator("#themeToggle"), f"{path} at {width}px").to_be_in_viewport(ratio=1)
 
         bar = page.evaluate(MEASURE_THE_BAR)
         assert bar["scrolls"] <= bar["width"], f"{path} at {width}px is wider than the window: {bar}"

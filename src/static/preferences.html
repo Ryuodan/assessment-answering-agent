@@ -263,20 +263,26 @@
   <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
-  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
 <main>
-  <!-- The pages' language (plan 038): the same choice as the switch in every
-       top bar, kept with the person. Each language is named in itself, as a
-       person who cannot read the other looks for it. It changes how the pages
-       read, never an answer. -->
+  <!-- About the pages, not the answers (plans 038 and 040), so first and apart.
+       Each language is named in itself, as a person who cannot read the other
+       looks for it. The language is kept with the person; it changes how the
+       pages read, never an answer. The look is kept on the device. -->
   <section class="panel language" id="languagePanel">
     <div class="choice">
       <div class="label">Language of the pages<small>Answers are not changed by it: they follow the question&rsquo;s language.</small></div>
       <div class="options" data-field="interface_language">
         <label><input type="radio" name="interface_language" value="en"> <span lang="en" dir="ltr" data-no-translate>English</span></label>
         <label><input type="radio" name="interface_language" value="ar"> <span lang="ar" dir="rtl" data-no-translate>العربية</span></label>
+      </div>
+    </div>
+    <div class="choice">
+      <div class="label">Appearance<small>Kept on this device.</small></div>
+      <div class="options">
+        <label><input type="radio" name="theme" value="light"> <span>Light mode</span></label>
+        <label><input type="radio" name="theme" value="dark"> <span>Dark mode</span></label>
       </div>
     </div>
   </section>
@@ -483,7 +489,7 @@
   }
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    $("themeToggle").textContent = theme === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
+    document.querySelectorAll('input[name="theme"]').forEach((input) => { input.checked = input.value === theme; });
     try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
   }
   (function initTheme() {
@@ -491,8 +497,8 @@
     try { stored = localStorage.getItem(THEME_KEY); } catch (e) { /* private mode */ }
     applyTheme(stored || (systemPrefersDark() ? "dark" : "light"));
   })();
-  $("themeToggle").addEventListener("click", () => {
-    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  document.querySelectorAll('input[name="theme"]').forEach((input) => {
+    input.addEventListener("change", () => { if (input.checked) applyTheme(input.value); });
   });
 
   // --- talking to the server ----------------------------------------------
@@ -1034,8 +1040,8 @@
   }
 
   // --- the pages' language (plan 038) ---------------------------------------
-  /* The same choice as the switch in the top bar: kept with the person, and
-     the page drawn again in it. Shown as the language the page is in. */
+  /* Kept with the person, and the page drawn again in it. Shown as the
+     language the page is in. */
 
   const languages = document.querySelectorAll('input[name="interface_language"]');
   function showLanguage() {

@@ -704,10 +704,9 @@
   <a class="ghost" href="./" title="Ask for what you need in a conversation">Assistant</a>
   <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
-  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="preferences" title="The pages' language and look, how you want answers to read, and your skills">Preferences</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
   <button class="ghost" id="searchOpen" title="Search the indexed policies">Search</button>
-  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
 <main>
@@ -1585,14 +1584,8 @@
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
-  function currentTheme() {
-    return document.documentElement.getAttribute("data-theme") ||
-      (systemPrefersDark() ? "dark" : "light");
-  }
-
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    $("themeToggle").textContent = theme === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, theme); } catch (error) { /* private mode */ }
   }
 
@@ -5277,7 +5270,6 @@
   $("exportPdf").onclick = () => exportDocument("pdf", "exportPdf");
   $("exportDocx").onclick = () => exportDocument("docx", "exportDocx");
 
-  $("themeToggle").onclick = () => applyTheme(currentTheme() === "dark" ? "light" : "dark");
 
   $("originalTab").onclick = () => showViewerTab("original");
   $("textTab").onclick = () => showViewerTab("text");
@@ -5346,15 +5338,6 @@
     event.preventDefault();
     event.returnValue = "";
   });
-
-  /* Switching the interface's language draws the page again (plan 038), and a
-     reload loses what only this page holds: what leaving asks about, and a
-     wording typed under "More options" or "More", or a file waiting for its
-     product. Asked in the language the person is reading. */
-  I18n.beforeSwitch = () => (unsavedWork() || heldFile
-    || $("answerStyle").value.trim() !== "" || $("reviseInstruction").value.trim() !== ""
-    ? t("Switching the language reloads the page, and what you have typed or given here and not yet saved will be lost. Switch anyway?")
-    : "");
 
   /* Two sentences with elements inside, written here so the elements stay
      whole in either language (plan 038). */

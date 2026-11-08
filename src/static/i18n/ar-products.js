@@ -111,6 +111,5 @@ I18n.add({
     "other": "{n} محادثة"
   },
 
-  "Your changes on this page are not saved yet. Switch the language anyway, and lose them?": "لم تُحفظ تغييراتك في هذه الصفحة بعد. هل تريد تبديل اللغة على أي حال وفقدانها؟",
   "Request failed ({status})": "تعذّر تنفيذ الطلب ({status})"
 });

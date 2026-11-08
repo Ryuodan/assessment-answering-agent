@@ -276,9 +276,8 @@
   <a class="ghost" href="./" title="Ask for what you need in a conversation">Assistant</a>
   <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
-  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="preferences" title="The pages' language and look, how you want answers to read, and your skills">Preferences</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
-  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
 <main>
@@ -462,7 +461,6 @@
   const THEME_KEY = "assessment-theme";
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    $("themeToggle").textContent = theme === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
   }
   (function initTheme() {
@@ -471,9 +469,6 @@
     const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     applyTheme(stored || (dark ? "dark" : "light"));
   })();
-  $("themeToggle").addEventListener("click", () => {
-    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
-  });
 
   // --- helpers -------------------------------------------------------------
 

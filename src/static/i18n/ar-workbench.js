@@ -558,7 +558,6 @@ I18n.add({
   "Closed {file}. It stays in “Or pick up” below.": "أُغلق {file}. ويبقى في «أو تابِع من حيث توقفت» أدناه.",
   "{product} was deleted. This questionnaire is kept so its answers can be read and its filled file downloaded; it can no longer be answered, edited or approved. To answer the file again, close it and open the file for another product or General.": "حُذف {product}. هذا الاستبيان محفوظ لتُقرأ إجاباته ويُنزَّل ملفه المملوء؛ ولم يعد ممكناً الإجابة عنه أو تعديله أو اعتماده. للإجابة عن الملف مجدداً، أغلقه وافتح الملف لمنتج آخر أو لـ«عام».",
   "Its product": "منتجه",
-  "Switching the language reloads the page, and what you have typed or given here and not yet saved will be lost. Switch anyway?": "تبديل اللغة يعيد تحميل الصفحة، وسيضيع ما كتبته أو وضعته هنا ولم يُحفظ بعد. هل تبدّل اللغة على أي حال؟",
   "Search the knowledge base": "البحث في قاعدة المعرفة",
   "How to show the text": "طريقة عرض النص",
   "Formatted": "منسّق",

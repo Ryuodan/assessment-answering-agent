@@ -232,9 +232,8 @@
   <a class="ghost" href="./" title="Ask for what you need in a conversation">Assistant</a>
   <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
   <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
-  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="preferences" title="The pages' language and look, how you want answers to read, and your skills">Preferences</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
-  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
 <main>
@@ -390,7 +389,6 @@
   }
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    $("themeToggle").textContent = theme === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ }
   }
   (function initTheme() {
@@ -398,9 +396,6 @@
     try { stored = localStorage.getItem(THEME_KEY); } catch (e) { /* private mode */ }
     applyTheme(stored || (systemPrefersDark() ? "dark" : "light"));
   })();
-  $("themeToggle").addEventListener("click", () => {
-    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
-  });
 
   // --- talking to the server ----------------------------------------------
 
@@ -889,14 +884,6 @@
       $("add").disabled = false;
     }
   });
-
-  /* Switching the language draws the page again (plan 038): asked first when
-     an answer being added or edited would be lost. */
-  I18n.beforeSwitch = () => {
-    const adding = $("newQuestion").value.trim() || $("newAnswer").value.trim();
-    const editing = document.querySelector("#entries .editing");
-    return adding || editing ? t("Your changes on this page are not saved yet. Switch the language anyway, and lose them?") : "";
-  };
 
   loadScopes().then(reload);
 })();

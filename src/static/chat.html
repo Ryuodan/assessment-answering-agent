@@ -555,9 +555,8 @@
   <a class="ghost" href="workbench" title="Load a questionnaire, check what was found, and answer it">Workbench</a>
   <a class="ghost" href="knowledge" title="The documents answers are drawn from: add, open and remove them">Knowledge base</a>
   <a class="ghost" href="memory" title="What we have said before, and which of it still stands">Answer memory</a>
-  <a class="ghost" href="preferences" title="How you want answers to read, and your skills">Preferences</a>
+  <a class="ghost" href="preferences" title="The pages' language and look, how you want answers to read, and your skills">Preferences</a>
   <a class="ghost" href="products" title="The team's products, each with its own knowledge and answers">Products</a>
-  <button class="ghost" id="themeToggle" title="Switch between light and dark">Dark mode</button>
 </div>
 
 <main>
@@ -732,12 +731,10 @@
     });
   }
 
-  /* --- theme, the same two lines the workbench uses ----------------------- */
+  /* --- theme, chosen in Preferences (plan 040) ----------------------- */
   const systemDark = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const theme = () => document.documentElement.getAttribute("data-theme") || (systemDark() ? "dark" : "light");
   function applyTheme(next) {
     document.documentElement.setAttribute("data-theme", next);
-    $("themeToggle").textContent = next === "dark" ? I18n.t("Light mode") : I18n.t("Dark mode");
     try { localStorage.setItem(THEME_KEY, next); } catch (error) { /* private mode */ }
   }
   (function () {
@@ -745,7 +742,6 @@
     try { stored = localStorage.getItem(THEME_KEY); } catch (error) { /* private mode */ }
     applyTheme(stored || (systemDark() ? "dark" : "light"));
   })();
-  $("themeToggle").onclick = () => applyTheme(theme() === "dark" ? "light" : "dark");
 
   /* --- talking to the server ---------------------------------------------- */
   async function request(url, options) {
@@ -2687,17 +2683,6 @@
   });
   $("send").onclick = send;
   $("detach").onclick = detach;
-
-  /* Switching the language draws the page again (plan 038): what is in the box,
-     and a file attached to it, would be lost, so it asks first. A turn that is
-     running is not lost: it carries on, and is found again after the reload. */
-  I18n.beforeSwitch = () => {
-    const typed = Boolean($("prompt").value.trim());
-    if (typed && attached) return t("Your message and the attached file have not been sent, and will be lost. Switch the language anyway?");
-    if (typed) return t("Your message has not been sent, and will be lost. Switch the language anyway?");
-    if (attached) return t("The attached file has not been sent, and will be lost. Switch the language anyway?");
-    return "";
-  };
 
   /* --- attaching a questionnaire (plan 033) ---------------------------------
      The team did not find how: a "＋" in the box was the only control, and a

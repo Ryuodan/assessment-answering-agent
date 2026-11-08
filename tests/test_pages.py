@@ -178,7 +178,8 @@ def test_every_header_links_the_other_pages_the_same_way(client, path):
     assert [(link["href"], link["text"]) for link in header.links] == [
         (href, text) for href, text in NAV if href != own
     ], f"{path}: the header's links are not the other pages', in the usual order and words"
-    assert {"whoami", "whoamiEmail", "signOut", "themeToggle"} <= header.ids, f"{path}: the header lost a control"
+    assert {"whoami", "whoamiEmail", "signOut"} <= header.ids, f"{path}: the header lost a control"
+    assert "themeToggle" not in header.ids, f"{path}: the theme is chosen in Preferences (plan 040)"
 
 
 def test_a_header_link_says_the_same_on_every_page(client):
