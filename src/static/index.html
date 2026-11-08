@@ -1828,13 +1828,17 @@
   async function searchScopeChanged() {
     const scope = searchScope();
     ++searchAsked;
-    if ($("searchInput").value.trim()) setStatus($("searchStatus"), t("Searching…"), "busy");
+    const hadWords = Boolean($("searchInput").value.trim());
+    if (hadWords) setStatus($("searchStatus"), t("Searching…"), "busy");
     await loadSearchSources();
     // Again only if what is asked now differs from the search last sent: one typed while the
     // files loaded was sent for this scope already, and searching twice drew it twice.
     const now = searchAskedNow();
     const sent = lastSearched && ["query", "scope", "source"].every((key) => lastSearched[key] === now[key]);
-    if (now.query && scope === searchScope() && !sent) runSearch();
+    // Words typed while the files loaded and not yet sent are the person's to send (TD-080):
+    // searching them here searched them twice with Enter, or half-typed without it.
+    const asked = hadWords || (lastSearched && lastSearched.query === now.query && lastSearched.scope === now.scope);
+    if (now.query && scope === searchScope() && !sent && asked) runSearch();
   }
 
   let lastSearched = null;  // what the last search sent asked: its words, scope and file

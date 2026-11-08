@@ -41,3 +41,4 @@ Work asked for directly, outside the milestones:
 | [036](completed/036-gc-round-5.md) | cleanup round 5: gc, coverage, grades, ceilings, tech-debt states | done 2026-11-07 |
 | [037](completed/037-chat-answers-review-tabs.md) | the chat's answers panel has the Workbench's review tabs | done 2026-11-07 |
 | [038](completed/038-arabic-interface.md) | the whole interface in Arabic, right to left, chosen per person | done 2026-11-07 |
+| [039](completed/039-arabic-versus-english.md) | the team's feedback: do Arabic and English get the same answer? Measured | done 2026-11-08 |

@@ -208,6 +208,31 @@ def test_the_drawer_follows_the_workbench_when_it_opens_and_keeps_a_scope_chosen
     assert searched == [], "nothing was typed, so nothing was searched"
 
 
+def test_words_typed_while_the_files_load_wait_for_enter(page: Page, stores, searched) -> None:
+    """TD-080: the list of files arriving searched the words in the box, and Enter searched them again."""
+    holding("", "Access policy.pdf")
+    sent: list[str] = []
+    page.on("request", lambda request: sent.append(request.url) if "/api/search" in request.url else None)
+    page.goto("/workbench")
+    expect(page.locator("#searchOpen")).to_be_enabled()
+    held = []
+    page.route("**/api/knowledge*", lambda route: held.append(route))
+    with page.expect_request("**/api/knowledge*"):
+        page.click("#searchOpen")
+    page.fill("#searchInput", "MFA")
+
+    for route in held:
+        route.continue_()
+    expect(page.locator("#searchSource option")).to_have_count(2)
+    expect(page.locator("#searchStatus")).to_have_text("")
+    assert sent == [], "nobody has asked for a search yet"
+
+    page.press("#searchInput", "Enter")
+    expect(page.locator("#searchResults .search-hit").first).to_be_visible()
+    assert len(sent) == 1
+    assert [call["query"] for call in searched] == ["MFA"]
+
+
 def test_an_earlier_answer_is_told_apart_from_a_policy(page: Page, availo, monkeypatch) -> None:
     """TD-074: search shows the team's earlier answers now, so each says what it is."""
     remembered = {**hit("Answer memory"), "source_type": "prior_answer", "locator": "Answer memory (2026-10-01)"}

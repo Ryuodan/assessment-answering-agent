@@ -731,6 +731,7 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
   - Under load, a second search still happens. Which event sends it is not found yet.
 - **Impact:** a flaky gate test. A person may wait for one search more than they asked for; the results are the same.
 - **Fix (needs approval):** find the second call with the page's network log in a slow run, and make the search run once per request.
+- **Resolved** 2026-11-08 (Claude, plan 039, approved by the user): opening the drawer loads the scope's list of files. When that list arrived after the words were typed and before Enter, the page saw words it had not searched and searched them, and Enter searched them again; without Enter, it searched half-typed words. A change of scope now searches again only if the box held words when the scope changed, or a search was sent for this scope while the files loaded. `tests/browser/test_workbench_search.py::test_words_typed_while_the_files_load_wait_for_enter` forces that order and failed before the fix. It had failed in two full browser runs in a row that day.
 
 ## TD-081: The Workbench's closed search drawer leaves a faint shadow at the window's edge
 
@@ -738,3 +739,9 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **Impact:** cosmetic. Nothing is covered or unclickable: the drawer itself is off screen.
 - **Fix (needs approval):** draw the shadow only on an open drawer (`.drawer.open`), or hide the closed one (`visibility: hidden` after its transition).
 - **Resolved** 2026-11-08 (Claude, plan 038's follow-ups, approved by the user): only an open drawer casts the shadow, and it fades with the slide. Both drawers, the search and the access panel, in both directions. `tests/browser/test_layout.py::test_a_closed_drawer_leaves_no_shadow_in_the_window` checks it at phone width in English and Arabic.
+
+## TD-082: A kept search plan repeats a first search that missed our own policy
+
+- **What:** plan 034 keeps a question's search plan so that the same question finds the same sources. It keeps the first plan the planner returns, whatever that plan finds. In plan 039's check, "Do you have a documented incident response plan, and how often is it tested?" found, in English, the regulator's ECC implementation guide and our earlier answers, and not our own Cybersecurity Incident and Threat Management Policy. The second English run used the kept plan and found the same. In Arabic, the same question found our own policy in both runs. Plan 034's last run, in English, had found both documents. Measured, one question, on a copy.
+- **Impact:** the English answer says the same thing as the Arabic one, but rests on a regulator's guide rather than on our policy, and it was held once and written once. Until the kept plan expires, every later run of those words starts from the same search.
+- **Fix (needs approval):** do not keep a plan whose first run cites no document of our own when the question is about our own practice, or let a person's "Answer again" plan afresh. Either needs measuring on the 12 questions of plan 034, since keeping plans is what made the sources steady.

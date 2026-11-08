@@ -722,3 +722,44 @@ changes. Up to 15, 13 and 12 more, held between 0.3 and 0.6, drop to 0.3 if the
 reviewer found them not grounded. The files do not record which check held an
 answer, so that count is an upper bound. The "why the confidence is low"
 sentence still explains the models' rating, so it is unchanged.
+
+## Arabic versus English (plan 039)
+
+The team reported that the SLA question got different answers in Arabic and in
+English. This checks whether the two languages agree. Ten questions, the team's
+NAC and SLA wording and eight general ones, each asked in English and in Arabic,
+twice each: 40 answers on a copy of the local data, General, at `6fbffd4`,
+through `answer_one_question`, the pipeline both pages show word for word.
+
+"Within" compares a language's two runs, which is the noise. "English vs Arabic"
+compares every English run with every Arabic run.
+
+| | same held-or-written decision | same verdict (yes/no) | cited sources in common |
+|---|---|---|---|
+| within English | 0.80 | 1.00 | 0.95 |
+| within Arabic | 1.00 | 1.00 | 0.70 |
+| English vs Arabic | 0.80 | 1.00 | 0.70 |
+
+Read pair by pair, **all ten questions say the same thing in both languages**:
+the same position and the same facts. SLA is immediate response and resolution
+within 2 hours in both; logs are kept at least 12 months in both; a leaver's
+access goes on the last working day in both. An answer sometimes adds or leaves
+out a detail, in either language, as two runs of one language also do.
+
+- **Held or written.** Each language had 2 of its 20 answers held, so there is no
+  sign that Arabic is judged more harshly. Two of the three questions that
+  differed are noise: incident response and background checks flipped between
+  the two English runs, saying the same thing. The third is a real difference
+  between the languages: business continuity was held in both Arabic runs, as
+  "not grounded" at 0.3, and written in both English runs at 0.85. The held
+  direction is the safe one.
+- **Sources.** The cross-language figure equals Arabic's own run-to-run figure:
+  the planner searches in both languages, so most answers rest on the same
+  clauses. The exception is incident response: TD-082.
+- **Numbers.** A count of the digits in common is not reported: Arabic writes
+  "ساعتين" where English writes "2 hours".
+
+Small sample: ten questions, one knowledge base, two runs. The Arabic of eight
+questions was written for this check. The agreement is one reader's judgement.
+The chat itself was not run; since plan 030 it shows this pipeline's answer word
+for word.
