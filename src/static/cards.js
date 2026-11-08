@@ -1307,7 +1307,7 @@ const Cards = (window.Cards = {
       const aside = document.createElement("button");
       aside.className = "quiet";
       aside.dataset.mutates = "true";
-      aside.textContent = t("Set aside");
+      aside.textContent = t("action|Set aside");
       aside.title = t("Leave this question out of the file. Its answer is kept, and it can be brought back.");
       aside.onclick = () => Cards.onSetAside(item, index, true);
       meta.append(aside);

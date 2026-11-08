@@ -737,3 +737,4 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** found 2026-11-07 by plan 038's Workbench translator, in screenshots. The closed drawer is moved just off the window (`transform: translateX(100%)`), but its shadow (`box-shadow: -18px 0 46px`) reaches back into the window, a faint strip on the right in English, on the left in Arabic.
 - **Impact:** cosmetic. Nothing is covered or unclickable: the drawer itself is off screen.
 - **Fix (needs approval):** draw the shadow only on an open drawer (`.drawer.open`), or hide the closed one (`visibility: hidden` after its transition).
+- **Resolved** 2026-11-08 (Claude, plan 038's follow-ups, approved by the user): only an open drawer casts the shadow, and it fades with the slide. Both drawers, the search and the access panel, in both directions. `tests/browser/test_layout.py::test_a_closed_drawer_leaves_no_shadow_in_the_window` checks it at phone width in English and Arabic.

@@ -9,11 +9,14 @@ column at its width -- rather than pixel heights, which depend on the fonts.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
 from src import conversations, identity
 from src.config import settings
+from tests.browser.arabic import in_arabic
 
 pytestmark = pytest.mark.browser
 
@@ -116,3 +119,25 @@ def test_the_product_chip_leaves_the_message_box_its_room(page: Page) -> None:
         assert chip.bounding_box()["y"] + chip.bounding_box()["height"] <= inner.bounding_box()["y"], "above the box"
         assert box.bounding_box()["width"] >= inner.bounding_box()["width"] - 100, "the message has the box"
         assert chip.bounding_box()["width"] <= 280, f"the chip is {chip.bounding_box()['width']}px wide"
+
+
+@pytest.mark.parametrize("language", ["en", "ar"])
+def test_a_closed_drawer_leaves_no_shadow_in_the_window(page: Page, language: str) -> None:
+    """A closed drawer sits just off the window's edge, and its shadow reached back in:
+    a grey strip down the right of the Workbench, the left in Arabic, plainest on a
+    phone (TD-081). Only an open drawer casts it now, into the window."""
+    if language == "ar":
+        in_arabic(page)
+    page.set_viewport_size({"width": 375, "height": 812})
+    page.goto("/workbench")
+    search, access = page.locator("#searchDrawer"), page.locator("#adminDrawer")
+    expect(search).to_have_css("box-shadow", "none")
+    expect(access).to_have_css("box-shadow", "none")
+
+    page.click("#searchOpen")
+    expect(search).to_have_class(re.compile(r"\bopen\b"))
+    into_the_window = "18px" if language == "ar" else "-18px"
+    expect(search).to_have_css("box-shadow", f"rgba(0, 0, 0, 0.14) {into_the_window} 0px 46px 0px")
+
+    page.click("#searchClose")
+    expect(search).to_have_css("box-shadow", "none")

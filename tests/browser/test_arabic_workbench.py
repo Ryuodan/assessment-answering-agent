@@ -276,6 +276,28 @@ def test_the_review_keys_work_on_an_arabic_keyboard(page: Page, tmp_path: Path, 
     expect(page.locator("#reviewStatus")).to_contain_text("اعتُمدت.")
 
 
+def test_setting_a_row_aside_is_an_action_and_what_it_is_then_a_state(
+    page: Page, tmp_path: Path, mixed: None, stores
+) -> None:
+    """The button says what it does, استبعاد من الملف; the row then says what it is, مستبعدة من الملف."""
+    in_arabic(page)
+    read_as_general(page, tmp_path)
+    page.click("#answerBtn")
+    expect(page.locator("#reviewBar")).to_be_visible(timeout=15_000)
+    page.locator("#questionListSummary").click()  # the folded list, where a row is set aside
+    row = page.locator("#questionList .qrow").first
+    row.get_by_role("button", name="استبعاد من الملف", exact=True).click()
+
+    expect(page.locator("#answerStatus")).to_have_text("استُبعد من الملف. لن يُكتب شيء في ذلك الصف.")
+    expect(row.get_by_role("button", name="تضمين", exact=True)).to_be_visible()
+    expect(row).to_contain_text("· مستبعدة من الملف")
+    tabs = page.locator("#reviewTabs")
+    expect(tabs.get_by_role("button", name=re.compile(r"^فارغة أو مستبعدة من الملف \("))).to_have_text(
+        "فارغة أو مستبعدة من الملف (1)"
+    )
+    arabic(page, "a row set aside")
+
+
 # --- typing the questions ---------------------------------------------------------
 
 

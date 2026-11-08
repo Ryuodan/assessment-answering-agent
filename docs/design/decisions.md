@@ -678,12 +678,12 @@ a plan relies on it.
 - **Decision:**
   - **Per person.** The choice is kept on the server (`interface_languages`, migration 17), English until chosen. The device keeps a copy, so a page is right to left from its first paint; a page whose copy differs takes the person's.
   - **In the pages.** The server, its logs, the API and the generated docs stay English. `i18n.js` translates the markup once the page has loaded, and the scripts call `I18n.t("English", params)`, with Arabic plural forms by `n`. The server's sentences (review reasons, why an answer is held back) and errors are translated in the page too, by the whole sentence or a pattern, and errors by their code.
-  - **English is the key.** A missing entry shows the English. Every Arabic word is in a catalog in `src/static/i18n/`, and one English reads the same in every catalog.
+  - **English is the key.** A missing entry shows the English. Every Arabic word is in a catalog in `src/static/i18n/`, and one English reads the same in every catalog. Where one English means two things that Arabic says differently, its key names the meaning before a bar: `t("action|Set aside")` is the button (استبعاد من الملف), `t("Set aside")` the state (مستبعدة من الملف). English never shows the bar.
   - **Content is not interface.** Questions, answers, sources and names sit in `data-no-translate`, in their own direction.
   - **A switch reloads the page.** A page with unsaved typing asks first (`I18n.beforeSwitch`).
   - **Answers are not changed by it.** They follow the question's language, or the one a questionnaire is forced into.
 - **Consequences:**
   - A new string needs its Arabic, or `tests/test_i18n_catalogs.py` fails; the Arabic browser tests fail on English left on screen.
   - CSS uses logical properties (`margin-inline-start`, `text-align: start`), so a page mirrors without its own right-to-left rules.
-  - The filled files and the PDF and Word downloads stay in the questionnaire's language.
+  - The filled files and the PDF and Word downloads stay in the questionnaire's language, their headings too: they are documents for a customer, not the interface (the user, 2026-11-08).
 - **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user chose the scope and approved the glossary; the design is mine (plan 038).

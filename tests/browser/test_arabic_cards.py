@@ -370,7 +370,8 @@ def test_the_chats_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path, mon
     expect(page.locator("#answers > .answer")).to_have_count(4)
     english = page.locator("#answers .answer", has_text=ANSWER).last
     expect(english.locator(".rendered")).to_have_attribute("dir", "ltr")
-    english.get_by_role("button", name="مستبعدة من الملف", exact=True).click()
+    # The button is an action, the status a state: one English, two Arabic ("action|Set aside").
+    english.get_by_role("button", name="استبعاد من الملف", exact=True).click()
     aside = page.locator("#answers .answer.set-aside")
     expect(aside.locator(".status-word")).to_have_text("مستبعدة من الملف")
     expect(aside.get_by_role("button", name="أدرجها في الملف مجدداً")).to_be_visible()

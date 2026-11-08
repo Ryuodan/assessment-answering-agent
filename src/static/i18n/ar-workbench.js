@@ -332,7 +332,7 @@ I18n.add({
   "Answer it again": "أجب عنه مجدداً",
   "Replace what the file already says for this question": "استبدل ما يقوله الملف من قبل لهذا السؤال",
   "Include": "تضمين",
-  "Set aside": "مستبعدة من الملف",
+  "action|Set aside": "استبعاد من الملف",
   "set aside": "مستبعدة من الملف",
   "Answer this one after all": "أجب عن هذا السؤال في النهاية",
   "Leave this one out: unanswered, and not in the downloads": "استبعد هذا السؤال: بلا إجابة، ولا يظهر في التنزيلات",

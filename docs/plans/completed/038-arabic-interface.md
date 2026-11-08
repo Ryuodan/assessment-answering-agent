@@ -102,6 +102,10 @@ On your local copy. The database gains migration 17 the first time the app start
   - `uv run poe check`: lint, types, arch, docs, rules and test (2436) passed. fmt failed on one line of `tests/browser/arabic.py`, now formatted. The browser task failed on TD-080 alone (`['MFA', 'MFA']`), the flaky Workbench search that failed the same way before this plan; 273 passed. That test then passed 3 times out of 3 on its own, and the whole browser task again: 274 passed.
   - No existing English test changed: since the groundwork, only the Arabic tests and the two checks did.
   - Screenshots in Arabic at 1280 and 375 px (the Workbench's review, Preferences, the assistant): right to left, English answers and questions left to right, nothing overlapping.
+- 2026-11-08: the user's follow-ups, after reading the report.
+  - **"Set aside" as a button** reads استبعاد من الملف, an action; the status keeps the glossary's مستبعدة من الملف. The two share one English, so `I18n.t` takes a key with its meaning before a bar (`"action|Set aside"`), and English never shows it. The Workbench's row button and the answer card's button use it. Checked by `test_setting_a_row_aside_is_an_action_and_what_it_is_then_a_state` and the card test, which now press the button by its new name.
+  - **TD-081 fixed:** only an open drawer casts its shadow. Checked by `test_a_closed_drawer_leaves_no_shadow_in_the_window`, at 375 px in English and Arabic.
+  - **The glossary** gained a section of the 63 terms the translators chose outside it, as the catalogs have them now, for the user to review. The "Set aside" row is split in two.
 
 ## Decision log
 
@@ -118,3 +122,6 @@ On your local copy. The database gains migration 17 the first time the app start
   - Counts take Arabic plural forms wherever one translator gave them.
   - The sign-in's "Check the address" names the email (تحقّق من البريد الإلكتروني): the address is the email address.
 - 2026-11-07: the filled files and the PDF and Word downloads are not part of this plan. They are documents for a customer, in the questionnaire's language, not the interface. (Mine; worth asking the user whether the downloads' own headings should follow the interface.)
+- 2026-11-08: the downloads' headings stay in the questionnaire's language too, as the rest of the file does. (The user.)
+- 2026-11-08: the "Set aside" button reads استبعاد من الملف, an action, and the status stays مستبعدة من الملف, as two translators suggested. (The user chose it. Keying one English by its meaning, `"action|Set aside"`, is mine: the English on the page and in its tests is unchanged.)
+- 2026-11-08: TD-081 fixed by drawing the shadow only on an open drawer, the smaller of its two fixes. Hiding the closed drawer (`visibility: hidden`) would also take its controls out of the tab order: a change to what a keyboard reaches, not asked for. (The user approved the fix; the choice is mine.)

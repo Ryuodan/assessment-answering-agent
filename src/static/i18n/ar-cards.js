@@ -8,6 +8,7 @@ I18n.add({
   "Done by a person": "أنجزها شخص",
   "Left blank": "تُركت فارغة",
   "Set aside": "مستبعدة من الملف",
+  "action|Set aside": "استبعاد من الملف",
   "Could not be answered": "تعذّرت الإجابة",
   "{n}% confidence": "درجة الثقة {n}%",
   "How well the models found the sources support the answer. Whether it goes in is the status.": "مدى دعم المصادر للإجابة كما قدّرته النماذج. أما كتابتها في الملف فتحدّدها الحالة.",

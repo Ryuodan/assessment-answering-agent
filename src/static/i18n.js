@@ -18,6 +18,9 @@
      I18n.t(english, params)    the text in the interface's language. `{name}` is filled
                                 from `params`. A catalog entry may be plural forms
                                 ({ zero, one, two, few, many, other }), chosen by `params.n`.
+                                Where one English needs two Arabic, the key says which
+                                it means before a bar: "action|Set aside" is the button,
+                                "Set aside" the state. English never shows the bar.
      I18n.translate(root)       the text and the title, placeholder, aria-label and alt
                                 attributes under `root`, where the catalog has the whole
                                 text; `data-i18n-html="English key"` puts the catalog's
@@ -90,11 +93,15 @@ const I18n = (window.I18n = (function () {
     return typeof found === "string" ? found : null;
   }
 
+  // "action|Set aside": a meaning, then the English shown.
+  const MEANING = /^[a-z]+\|(?=\S)/;
+
   function t(english, params) {
     const text = String(english);
-    if (!rtl) return fill(text, params);
+    const shown = text.replace(MEANING, "");
+    if (!rtl) return fill(shown, params);
     const found = arabicFor(text, params);
-    return fill(found === null ? text : found, params);
+    return fill(found === null ? shown : found, params);
   }
 
   /* --- the page's markup --------------------------------------------------- */
