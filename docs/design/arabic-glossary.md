@@ -76,6 +76,10 @@ Notes on the choices:
 | Set aside (the button) | استبعاد من الملف | An action, as "Approve" is اعتماد. Changed 2026-11-08; was مستبعدة من الملف, which reads as a state. | |
 | Could not be answered | تعذّرت الإجابة | | |
 | Approve | اعتماد | | |
+| Approve all | اعتماد الكل | The button above the answers, with a confirmation. Added 2026-11-08. | |
+| Why this answer | سبب هذه الإجابة | On the card: the reasoning and the checks. Added 2026-11-08. | |
+| More (on the card) | المزيد | The card's rarer actions. Added 2026-11-08. | |
+| Reworded | أُعيدت صياغتها | On the card's status line. Added 2026-11-08. | |
 | Withdraw the approval | سحب الاعتماد | | |
 | Edit | تعديل | | |
 | Leave blank | اتركها فارغة | | |

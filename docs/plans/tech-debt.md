@@ -745,3 +745,10 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** plan 034 keeps a question's search plan so that the same question finds the same sources. It keeps the first plan the planner returns, whatever that plan finds. In plan 039's check, "Do you have a documented incident response plan, and how often is it tested?" found, in English, the regulator's ECC implementation guide and our earlier answers, and not our own Cybersecurity Incident and Threat Management Policy. The second English run used the kept plan and found the same. In Arabic, the same question found our own policy in both runs. Plan 034's last run, in English, had found both documents. Measured, one question, on a copy.
 - **Impact:** the English answer says the same thing as the Arabic one, but rests on a regulator's guide rather than on our policy, and it was held once and written once. Until the kept plan expires, every later run of those words starts from the same search.
 - **Fix (needs approval):** do not keep a plan whose first run cites no document of our own when the question is about our own practice, or let a person's "Answer again" plan afresh. Either needs measuring on the 12 questions of plan 034, since keeping plans is what made the sources steady.
+
+## TD-083: A failed question counts as answered until the page is drawn again
+
+- **Where:** `src/static/index.html`, what follows a run and `adoptBatch`.
+- **What:** straight after a run with one failed question, the Answer step says "6 of 6 answered". After anything that redraws from the server, an approval for one, it says "5 of 6 answered, 1 waiting", and the button offers "Answer 1 question". The second is right.
+- **Seen:** 2026-11-08, in plan 041's screenshots. It predates that plan.
+- **Fix (needs approval):** mark a failed question as waiting when the run's answers arrive, as the server's copy does.

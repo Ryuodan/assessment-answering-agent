@@ -243,9 +243,8 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
         ]
     )
     expect(held.locator(".status-score")).to_have_text("درجة الثقة 90%")
-    expect(held.locator(".held").first).to_contain_text(
-        "لن تُكتب في الملف بعد. عُلِّمت للمراجعة — لسنا متسقين في هذا: " + THEIR_WORDS
-    )
+    expect(held.locator(".card-hint")).to_have_text("لن تُكتب في الملف بعد.")
+    expect(held.locator(".reasons").first).to_contain_text("لسنا متسقين في هذا: " + THEIR_WORDS)
     expect(held.locator(".reasons").first).to_contain_text("تستشهد ببنود لا تغطيها مصادرها: 9.9, 5.1")
     # The reviewer's words are kept as they came, as content in their own direction.
     note = held.locator(".reasons.why [data-no-translate]")
@@ -254,7 +253,7 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
 
     low = card_for(page, 3)
     expect(low.locator(".reason-chip")).to_have_text(["ثقة منخفضة"])
-    expect(low.locator(".held").first).to_contain_text("درجة الثقة 45%، وهي لا تتجاوز حدّ 60%")
+    expect(low.locator(".reasons").first).to_contain_text("درجة الثقة 45%، وهي لا تتجاوز حدّ 60%")
     failed = card_for(page, 4)
     expect(failed.locator(".status-word")).to_have_text("تعذّرت الإجابة")
     expect(failed.locator(".rationale")).to_have_text("تعذّرت الإجابة: the model was unavailable")
@@ -301,6 +300,7 @@ def test_the_workbenchs_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path
     first.get_by_role("button", name="اعتماد", exact=True).click()
     approved = page.locator("#results .answer", has=page.get_by_role("button", name="معتمدة ✓"))
     expect(approved.locator(".status-word")).to_have_text("أنجزها شخص")
+    card_for(page, 7).locator(".card-more summary").click()
     card_for(page, 7).get_by_role("button", name="اتركها فارغة").click()
     blank = card_for(page, 7)
     expect(blank.locator(".status-word")).to_have_text("تُركت فارغة")
@@ -371,6 +371,7 @@ def test_the_chats_cards_and_tabs_read_in_arabic(page: Page, tmp_path: Path, mon
     english = page.locator("#answers .answer", has_text=ANSWER).last
     expect(english.locator(".rendered")).to_have_attribute("dir", "ltr")
     # The button is an action, the status a state: one English, two Arabic ("action|Set aside").
+    english.locator(".card-more summary").click()
     english.get_by_role("button", name="استبعاد من الملف", exact=True).click()
     aside = page.locator("#answers .answer.set-aside")
     expect(aside.locator(".status-word")).to_have_text("مستبعدة من الملف")
@@ -515,7 +516,6 @@ def test_a_reasons_own_words_are_content_on_the_card(page: Page) -> None:
     carried = page.locator("#drawn .reasons [data-no-translate]")
     expect(carried).to_have_text("a 2023 answer said otherwise")
     expect(carried).to_have_attribute("dir", "auto")
-    expect(page.locator("#drawn .held [data-no-translate]")).to_have_text("a 2023 answer said otherwise")
     assert english_on_screen(page, within="#drawn .answer-body") == []
 
 

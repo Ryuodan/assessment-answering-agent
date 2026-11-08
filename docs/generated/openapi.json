@@ -1495,6 +1495,58 @@
         }
       }
     },
+    "/api/forms/{batch_id}/approve-all": {
+      "post": {
+        "summary": "Approve All",
+        "description": "Release these held-back answers for writing, with the reviewer's name on them (plan 041).\n\nNothing goes into the answer memory, whoever wrote the words. The ids are\nthe ones the confirmation counted, so an answer that changed since then is\nnot swept up. `approved` lists the ids that were.",
+        "operationId": "approve_all_api_forms__batch_id__approve_all_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveHeldRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Approve All Api Forms  Batch Id  Approve All Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/forms/{batch_id}/fill": {
       "post": {
         "summary": "Fill Questionnaire",
@@ -4074,6 +4126,25 @@
         },
         "type": "object",
         "title": "ApplySkillRequest"
+      },
+      "ApproveHeldRequest": {
+        "properties": {
+          "question_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Question Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_ids"
+        ],
+        "title": "ApproveHeldRequest",
+        "description": "The held-back answers a person has just confirmed approving."
       },
       "ApproveRequest": {
         "properties": {

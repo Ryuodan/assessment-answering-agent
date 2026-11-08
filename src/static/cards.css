@@ -122,6 +122,15 @@
 .stat .value { display: block; font-size: 23px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
 .stat .label { font-size: 12px; color: var(--ink-faint); }
 .stat.review .value { color: var(--warn); }
+/* The counts above the review, in one line of text (plan 041): the tabs under
+   them say the same numbers, and four tiles took the first screen. */
+.summary.compact { gap: 4px 16px; margin-bottom: 0; align-items: baseline; }
+.summary.compact .stat {
+  flex: 0 0 auto; display: inline-flex; align-items: baseline; gap: 5px;
+  background: none; border: 0; padding: 0;
+}
+.summary.compact .stat .value { display: inline; font-size: 13px; font-weight: 650; letter-spacing: 0; }
+.summary.compact .stat .label { font-size: 13px; color: var(--ink-soft); }
 
 /* The review's tabs, on the Workbench and above the chat's answers (plan 037). */
 .review-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -131,6 +140,8 @@
 }
 .review-tabs button:hover:not(:disabled) { color: var(--ink); filter: none; }
 .review-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+/* Nothing in it: still there, so the tabs do not move, and plainly not the place to look. */
+.review-tabs button[data-empty="true"]:not([aria-pressed="true"]) { background: transparent; border-color: var(--line); color: var(--ink-faint); }
 
 .toolbar {
   display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
@@ -145,42 +156,52 @@
 }
 .pdf-options label { color: var(--ink-soft); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 
-/* Each question and its answer form one card; the gap and the shadow are
-   what stop a page of them reading as a single wall of text. Smaller since
-   plan 033, so a review moves from one to the next without scrolling a
-   screen each: tighter padding, the question in two lines, the controls in
-   one row and the sources in one row of chips. */
+/* Each question and its answer form one card, redrawn in plan 041 because it
+   read as confusing and overwhelming: the reason an answer was held was said
+   three times, in up to six coloured boxes, and the actions were small words
+   above what they acted on. One thing is coloured now, the status. The answer
+   is the largest thing on the card, and has no box round it. */
 .answer {
   background: var(--surface-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 12px;
-  overflow: hidden;
+  margin-bottom: 10px;
+  padding: 13px 16px 11px;
 }
-.answer.review { border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); }
+.answer.review { border-inline-start: 3px solid var(--warn); }
 /* Out of the file: still readable, plainly not part of what gets written. */
-.answer.set-aside { border-style: dashed; box-shadow: none; }
+.answer.set-aside { border-style: dashed; }
 .answer.set-aside .qtext, .answer.set-aside .rendered { opacity: .62; }
-.answer.set-aside .rendered { border-inline-start-color: var(--line-strong); }
 
-.answer-head {
-  display: flex; gap: 10px; align-items: flex-start;
-  padding: 10px 14px; background: var(--surface-sunken);
-  border-bottom: 1px solid var(--line);
-  /* Anything unexpected in here wraps onto its own line rather than widening
-     the card and everything the card sits in. */
-  flex-wrap: wrap;
+/* Line one: what happens to the answer, why, how sure. */
+.answer-status {
+  --status: var(--ink-faint);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px;
+  font-size: 12.5px; color: var(--ink-soft);
 }
-.answer.review .answer-head { background: var(--warn-soft); }
-.qnum {
-  flex: 0 0 auto; min-width: 24px; height: 24px; padding: 0 6px;
-  border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line-strong);
-  display: grid; place-items: center; font-size: 12.5px; font-weight: 650; color: var(--ink-soft);
+.answer-status.ready, .answer-status.person { --status: var(--ok); }
+.answer-status.review { --status: var(--warn); }
+.answer-status.failed { --status: var(--err); }
+.answer-status .status-word {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--status); font-size: 13px; font-weight: 650;
 }
-.qbody { flex: 1; min-width: 0; }
+.answer-status .status-word::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--status); flex: 0 0 auto;
+}
+/* After the first, so that a line that wraps does not begin with a dot. */
+.answer-status .reason-chip:has(+ .reason-chip)::after { content: "·"; margin-inline-start: 10px; color: var(--ink-faint); }
+.answer-status .tag { font-size: 11.5px; font-weight: 550; color: var(--ink-faint); background: none; border: 0; padding: 0; text-transform: none; letter-spacing: 0; }
+.answer-status .tag.memory { color: var(--accent-ink); }
+.answer-status .status-score {
+  margin-inline-start: auto; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+}
+
+/* The question. */
+.answer-head { margin-top: 8px; }
+.qbody { min-width: 0; }
 .qtext {
-  font-weight: 640; font-size: 14.5px; line-height: 1.45; letter-spacing: -.005em;
+  font-weight: 620; font-size: 15px; line-height: 1.45; letter-spacing: -.005em;
   overflow-wrap: anywhere;
 }
 /* Two lines of the question, and the answer above the fold. `.qmore` un-hides
@@ -189,56 +210,90 @@
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.qmore { margin-inline-start: auto; white-space: nowrap; }
 .qmeta {
-  display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
-  margin-top: 3px; font-size: 11.5px; color: var(--ink-faint);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin-top: 2px; font-size: 12px; color: var(--ink-faint);
 }
 
-/* The status is the headline (plan 030): what happens to the answer, and why,
-   in the status's colour; the score is a secondary number after it. It was a
-   score coloured by band, which showed a held answer as "High confidence". */
-.answer-status {
-  --status: var(--ink-faint);
-  --status-soft: var(--surface-sunken);
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
-  padding: 6px 14px; background: var(--status-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--status) 30%, var(--line));
-  border-inline-start: 4px solid var(--status);
-  font-size: 12.5px; color: var(--ink-soft);
+/* The way a reviewer acts, after what they have read. */
+.card-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line);
 }
-.answer-status.ready, .answer-status.person { --status: var(--ok); --status-soft: var(--ok-soft); }
-.answer-status.review { --status: var(--warn); --status-soft: var(--warn-soft); }
-.answer-status.failed { --status: var(--err); --status-soft: var(--err-soft); }
-.answer-status .status-word {
-  color: var(--status); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+.card-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.card-controls:empty { display: none; }
+.card-hint { font-size: 12.5px; color: var(--ink-faint); }
+.card-side { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto; }
+
+button.card-btn {
+  font: inherit; font-size: 13px; font-weight: 550; line-height: 1.4; white-space: nowrap;
+  padding: 5px 13px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); box-shadow: none;
 }
-.answer-status .reason-chip {
-  padding: 1px 9px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 600;
-  color: var(--status); background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--status) 45%, transparent);
+button.card-btn:hover:not(:disabled) { background: var(--surface-sunken); border-color: var(--ink-faint); filter: none; }
+button.card-btn:disabled { opacity: .55; cursor: default; }
+button.card-btn.primary { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+button.card-btn.primary:hover:not(:disabled) { background: var(--ok); border-color: var(--ok); filter: brightness(1.08); }
+button.card-btn.primary-plain { border-color: var(--accent); color: var(--accent-ink); }
+button.card-btn.approved { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+
+/* The small things that open something else. */
+button.card-link, .card-more > summary {
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ink-soft);
+  background: none; border: 0; border-radius: var(--radius-sm); padding: 4px 8px; cursor: pointer; box-shadow: none;
 }
-.answer-status .status-score {
-  margin-inline-start: auto; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+button.card-link:hover:not(:disabled), .card-more > summary:hover { color: var(--accent-ink); background: var(--accent-soft); filter: none; }
+button.card-link[aria-expanded="true"], .card-more[open] > summary { color: var(--accent-ink); background: var(--accent-soft); }
+button.card-link.qmore { padding: 0 4px; font-size: 12px; }
+button.card-link.qmore[hidden] { display: none; }
+
+.card-more { position: relative; }
+.card-more > summary { list-style: none; display: inline-block; }
+.card-more > summary::-webkit-details-marker { display: none; }
+.card-more > summary::after { content: "▾"; margin-inline-start: 4px; font-size: 12px; }
+.card-menu {
+  position: absolute; z-index: 20; top: calc(100% + 4px); inset-inline-end: 0;
+  display: grid; gap: 2px; min-width: 220px; padding: 6px;
+  background: var(--surface-raised); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+}
+button.card-btn.menu-item {
+  display: block; width: 100%; text-align: start; border: 0; background: none; white-space: normal;
+  color: var(--ink-soft); font-weight: 500; padding: 6px 9px;
+}
+button.card-btn.menu-item:hover:not(:disabled) { background: var(--surface-sunken); color: var(--ink); }
+button.card-btn.menu-item.danger:hover:not(:disabled) { background: var(--err-soft); color: var(--err); }
+.card-menu-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 4px 9px 6px; font-size: 13px; color: var(--ink-soft);
 }
 
-/* Held back from the file. Warning-coloured rather than error-coloured: the
-   answer is not wrong, it is unread, and the difference matters to somebody
-   deciding what to look at first. */
-.held {
-  margin-top: 7px; padding: 6px 10px; border-radius: var(--radius-sm);
-  background: var(--warn-soft); border: 1px solid var(--warn);
-  font-size: 12.5px; line-height: 1.5; color: var(--ink);
+/* Everything behind "Why this answer": plain text under plain labels. */
+.why-panel {
+  display: grid; gap: 10px; margin-top: 8px; padding: 11px 13px;
+  background: var(--surface-sunken); border-radius: var(--radius-sm);
 }
-.held strong { font-weight: 640; }
-.held .how { display: block; margin-top: 3px; color: var(--ink-soft); }
-.held.aside { background: var(--surface-sunken); border-color: var(--line-strong); }
-.held.aside button { margin-inline-start: 6px; }
-.held.edit-refused { margin-bottom: 0; }
+.why-panel[hidden] { display: none; }
+.why-panel .field { margin: 0; }
+.why-panel button.card-btn { margin-top: 7px; }
+.why-facts { font-size: 12px; color: var(--ink-faint); }
+
 /* Empty until a refusal, and still there: a live region has to exist before it speaks. */
-.held.edit-refused:empty { margin: 0; padding: 0; border: 0; }
-.quiet.approve { color: var(--ok); font-weight: 600; }
-.quiet.approve:hover { background: var(--ok-soft); }
+.edit-refused { margin: 6px 0 0; font-size: 12.5px; color: var(--warn); }
+.edit-refused:empty { margin: 0; }
+.card-error { margin-top: 6px; font-size: 13.5px; line-height: 1.5; color: var(--err); }
+
+/* A question the page puts to the person (plan 041). */
+dialog.card-dialog {
+  width: min(440px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px); margin: auto; padding: 20px 22px;
+  background: var(--surface-raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+dialog.card-dialog::backdrop { background: rgba(15, 18, 22, .45); }
+dialog.card-dialog h3 { margin: 0 0 10px; font-size: 16px; font-weight: 650; line-height: 1.35; }
+dialog.card-dialog ul { margin: 0; padding-inline-start: 18px; font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); }
+dialog.card-dialog li + li { margin-top: 4px; }
+.card-dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 /* A source that is a law rather than one of our documents. Marked rather than
    coloured like an error: it is a perfectly good source for what we are
@@ -347,49 +402,23 @@ button.last-used .tag { text-transform: none; }
 .skill-pick a { color: var(--accent-ink); font-size: 12px; text-decoration: none; }
 .skill-pick a:hover { text-decoration: underline; }
 
-/* The draft a house style reworded. Folded away: it is there to be checked
-   when something reads oddly, not to be read twice every time. */
-.drafted summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
-.drafted .rationale { margin-bottom: 9px; white-space: pre-wrap; }
-.drafted button { font-size: 12px; padding: 4px 11px; }
-
 /* The same choice for one answer, sized down: it lives in a label row beside
    Edit rather than above a whole panel. */
 .len-pick { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-pill); overflow: hidden; }
-.len-pick button { border: 0; border-radius: 0; padding: 2px 9px; font-size: 11px; }
+.len-pick button { border: 0; border-radius: 0; padding: 2px 10px; font-size: 12px; }
 .len-pick button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 650; }
 
-.answer-body { padding: 10px 14px 12px; }
+.answer-body { margin-top: 8px; }
 
-/* The card's controls in one row at the end of the answer's label (plan 033). */
-.card-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
-.card-controls .len-pick { margin-inline-start: 4px; }
-
-/* Removing an answer belongs on the answer, not on a list further up. */
-.answer .qdelete { flex: 0 0 auto; align-self: flex-start; }
-
-.field { margin-top: 10px; }
+.field { margin-top: 9px; }
 .field:first-child { margin-top: 0; }
 .field-label {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
-  text-transform: uppercase; color: var(--ink-faint); margin-bottom: 5px;
+  font-size: 12px; font-weight: 600; color: var(--ink-faint); margin-bottom: 3px;
 }
-.field-label .grow { flex: 1; }
-.field-label.accent { color: var(--accent); }
-.field-label.warn { color: var(--warn); }
-.field-label.err { color: var(--err); }
 
-.rendered {
-  font-size: 14.5px; line-height: 1.6; color: var(--ink);
-  background: var(--surface-sunken);
-  border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--accent);
-  border-radius: var(--radius-sm);
-  border-start-start-radius: 0; border-end-start-radius: 0;
-  padding: 10px 13px;
-}
-.answer.review .rendered { border-inline-start-color: var(--warn); }
+/* The answer: what the card is for. */
+.rendered { font-size: 15px; line-height: 1.6; color: var(--ink); }
 .rendered p { margin: 0 0 .65em; }
 .rendered p:last-child { margin-bottom: 0; }
 .rendered ul, .rendered ol { margin: .35em 0 .7em; padding-inline-start: 1.35em; }
@@ -397,70 +426,34 @@ button.last-used .tag { text-transform: none; }
 .rendered li::marker { color: var(--ink-faint); }
 .rendered h4 { margin: .9em 0 .35em; font-size: 14px; font-weight: 650; }
 .rendered strong { font-weight: 680; }
-.rendered .empty { color: var(--ink-faint); font-style: italic; }
+.rendered p.empty { max-width: none; margin: 0; text-align: start; color: var(--ink-faint); font-style: italic; }
 
 .answer textarea {
-  width: 100%; min-height: 240px; resize: vertical;
-  font: inherit; font-size: 15px; line-height: 1.7; padding: 14px 16px;
-  border-radius: var(--radius-sm);
-  border-start-start-radius: 0; border-end-start-radius: 0;
-  border: 1px solid var(--line); border-inline-start: 3px solid var(--accent);
-  background: var(--surface-sunken); color: var(--ink);
+  width: 100%; min-height: 150px; resize: vertical;
+  font: inherit; font-size: 15px; line-height: 1.6; padding: 10px 12px;
+  border-radius: var(--radius-sm); border: 1px solid var(--accent);
+  background: var(--surface); color: var(--ink);
 }
 
-/* Reasoning is shown, not hidden behind a disclosure. */
-.rationale {
-  font-size: 13.5px; line-height: 1.6; color: var(--ink-soft);
-  background: var(--accent-soft); border-inline-start: 3px solid var(--accent);
-  border-radius: var(--radius-sm); border-start-start-radius: 0; border-end-start-radius: 0;
-  padding: 8px 12px;
-}
-.reasons {
-  font-size: 13px; line-height: 1.55; color: var(--warn);
-  background: var(--warn-soft); border-inline-start: 3px solid var(--warn);
-  border-radius: var(--radius-sm); border-start-start-radius: 0; border-end-start-radius: 0;
-  padding: 8px 12px;
-}
-/* The cause of a low score, as opposed to a defect found in the answer. */
-.reasons.why {
-  color: var(--err); background: var(--err-soft); border-inline-start-color: var(--err);
-}
+.rationale, .reasons { font-size: 13.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
 
-/* Citations: soft bubbles that open the chunk they point at. The hue says
-   where the answer came from — a policy the organisation wrote, or a
-   questionnaire it has already answered — because that changes how much
-   weight a reviewer gives it. */
+/* Citations: one quiet row, each opening the clause it names. Whether a source
+   is a policy or a previous answer is said when it is opened (plan 041). */
 .cites { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 /* The row's own label, its first word: "Sources", then the chips (plan 033). */
-.cites .cites-label { margin: 0; margin-inline-end: 2px; }
+.cites .cites-label { margin: 0; margin-inline-end: 2px; font-weight: 500; }
 .cite {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px; line-height: 1.4;
-  border-radius: var(--radius-pill); padding: 3px 10px; cursor: pointer;
-  transition: background .15s, border-color .15s, transform .1s;
-  text-align: start;
-  --cite-hue: var(--accent);
-  --cite-ground: var(--accent-soft);
-  --cite-ink: var(--accent-ink);
-  background: var(--cite-ground); color: var(--cite-ink);
-  border: 1px solid color-mix(in srgb, var(--cite-hue) 24%, transparent);
+  font: inherit; font-size: 12.5px; line-height: 1.4; font-weight: 500;
+  border-radius: var(--radius-sm); padding: 2px 8px; cursor: pointer;
+  text-align: start; overflow-wrap: anywhere;
+  background: var(--surface-sunken); color: var(--ink-soft);
+  border: 1px solid var(--line); box-shadow: none;
 }
-.cite.prior_answer { --cite-hue: var(--ok); --cite-ground: var(--ok-soft); --cite-ink: var(--ok); }
-.cite.unknown { --cite-hue: var(--ink-faint); --cite-ground: var(--surface-sunken); --cite-ink: var(--ink-soft); }
-.cite:hover { background: color-mix(in srgb, var(--cite-hue) 15%, var(--cite-ground)); filter: none; }
-.cite:active { transform: translateY(1px); }
-.cite[aria-expanded="true"] {
-  border-color: var(--cite-hue);
-  background: color-mix(in srgb, var(--cite-hue) 20%, var(--cite-ground));
-}
-.cite .caret { opacity: .6; margin-inline-start: 6px; font-size: 10px; }
+.cite:hover:not(:disabled) { color: var(--accent-ink); border-color: var(--accent); background: var(--surface-sunken); filter: none; }
+.cite[aria-expanded="true"] { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+.cite .caret { opacity: .7; margin-inline-start: 6px; font-size: 12px; }
 /* Whose source it is -- a law's, or a product's own -- after the name, not run into it. */
 .cite .tag { margin-inline-start: 6px; }
-.cite-key { display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--ink-faint); }
-.cite-key span { display: inline-flex; align-items: center; gap: 5px; }
-.cite-key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.cite-key i.guideline { background: var(--accent); }
-.cite-key i.prior_answer { background: var(--ok); }
 
 .cite-panel {
   margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
@@ -495,13 +488,9 @@ button.last-used .tag { text-transform: none; }
 
 /* Arabic is joined up: spacing its letters apart breaks the joins, and it has
    no capitals to set small. Its labels are a step larger to read as easily. */
-:root[lang="ar"] .answer-status .status-word,
-:root[lang="ar"] .field-label,
 :root[lang="ar"] .pdf-options .caption,
 :root[lang="ar"] .tag.external,
 :root[lang="ar"] .tag.product { letter-spacing: 0; }
-:root[lang="ar"] .answer-status .status-word { font-size: 12.5px; }
-:root[lang="ar"] .field-label { font-size: 12px; }
 
 /* --- chunk rendering: raw markdown, or laid out ------------------------ */
 .view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }

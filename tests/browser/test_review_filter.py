@@ -114,6 +114,8 @@ def test_choosing_a_tab_from_the_keyboard_keeps_the_keyboards_place(page: Page, 
     expect(tab(page, "All")).to_have_attribute("aria-pressed", "true")
     expect(tab(page, "All")).to_be_focused()
     page.keyboard.press("Tab")
+    expect(page.locator("#approveAllBtn")).to_be_focused()
+    page.keyboard.press("Tab")
     expect(page.locator("#fillFormBtn")).to_be_focused()
 
 
@@ -251,8 +253,11 @@ def test_a_run_of_the_file_and_a_typed_question_says_where_the_typed_answer_is(
 
 def test_set_aside_and_blank_answers_have_their_own_tab(page: Page, tmp_path: Path, mixed: None) -> None:
     answered(page, shapes.simple(tmp_path / "vendor.xlsx"), 4)
-    page.locator("#results .answer", has_text="Probably.").get_by_role("button", name="Leave blank").click()
+    card = page.locator("#results .answer", has_text="Probably.")
+    card.locator(".card-more summary").click()
+    card.get_by_role("button", name="Leave blank").click()
     expect(tab(page, "Blank or set aside")).to_have_text("Blank or set aside (1)")
+    page.click("#step3Toggle")  # the folded step (plan 041)
     page.locator("#questionListSummary").click()  # the folded list, where a row is set aside
     page.locator("#questionList .qrow").first.get_by_role("button", name="Set aside").click()
 
@@ -371,6 +376,8 @@ def test_the_question_list_folds_once_answers_exist(page: Page, tmp_path: Path, 
     rows = page.locator("#questionList .qrow")
     expect(rows.first).to_be_hidden()
     expect(page.locator("#questionListSummary")).to_have_text("Show the 40 questions (40 answered, 0 waiting)")
+    page.click("#step3Toggle")  # the step folds too (plan 041); inside it, the list is still folded
+    expect(rows.first).to_be_hidden()
     folded = page.locator("#results .answer").first.bounding_box()
 
     page.locator("#questionListSummary").click()

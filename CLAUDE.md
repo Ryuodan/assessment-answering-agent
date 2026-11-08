@@ -51,7 +51,7 @@ Always `python -m <tool>`; never a bare `pytest` or `uvicorn` (D-008).
 
 | Path | What it is |
 |---|---|
-| `src/api.py`, `src/routes/`, `src/cli.py` | entry points: HTTP (79 operations, 7 pages; routes grouped by area move into `src/routes/`) and command line |
+| `src/api.py`, `src/routes/`, `src/cli.py` | entry points: HTTP (80 operations, 7 pages; routes grouped by area move into `src/routes/`) and command line |
 | `src/tools.py`, `selection.py`, `service.py`, `search.py` | operations shared by the UI and the assistant; ingestion, answering, documents, search |
 | `src/agents/` | the chat assistant; the Excel-reading agent |
 | `src/graph/` | the answering pipeline: plan, retrieve, rerank, draft, review, finalize |

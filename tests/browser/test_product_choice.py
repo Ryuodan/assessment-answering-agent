@@ -379,7 +379,7 @@ def test_close_waits_for_a_request_about_the_questionnaire(
     held = []
     page.route("**/approve", lambda route: held.append(route))
 
-    page.locator("#results button.approve").first.click()
+    page.locator('#results [data-card-action="approve"]').first.click()
     close = page.locator("#closeForm")
     expect(close).to_be_disabled()
     held[0].continue_()

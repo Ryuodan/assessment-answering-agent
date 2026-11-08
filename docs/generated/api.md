@@ -64,6 +64,7 @@ Errors: [errors.md](errors.md).
 | `POST` | `/api/forms/{batch_id}/product` | Refused unless it is the questionnaire's own product: a product is fixed when the file is opened. |
 | `POST` | `/api/forms/{batch_id}/answers/length` | Write this one answer full or brief, whatever the rest of the file does. |
 | `POST` | `/api/forms/{batch_id}/approve` | Release one answer for writing, with the reviewer's name on it. |
+| `POST` | `/api/forms/{batch_id}/approve-all` | Release these held-back answers for writing, with the reviewer's name on them (plan 041). |
 | `POST` | `/api/forms/{batch_id}/fill` | Write the confirmed answers into a copy of the original, and report the rest. |
 | `GET` | `/api/forms/{batch_id}/file` | The filled copy. Produced by `/fill`, which must have run first. |
 | `POST` | `/api/forms/{batch_id}/skills/{skill_id}` | Reword a selection of a questionnaire's answers with one of your skills. |

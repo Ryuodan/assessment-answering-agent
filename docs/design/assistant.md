@@ -132,7 +132,8 @@ everything.
 The rest of what people ask without thinking about it has a tool or a plain
 answer: "undo that" after a rewording is `put_back_drafts`; "translate them to
 Arabic" passes a language to the rewording; "approve all of them" is refused,
-because approving is a person putting their name to an answer, on its card. An
+because approving is a person putting their name to an answer, on its card or
+with the review's Approve all, confirmed (plan 041). An
 empty result says what *is* true -- "none of the 4 answers is flagged; 0 have
 been approved by a person" -- because told only that nothing matched, the
 assistant announced that every answer had been approved.

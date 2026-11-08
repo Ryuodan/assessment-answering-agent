@@ -153,7 +153,7 @@
   .answer-options .hint { margin: 6px 0 0; color: var(--ink-faint); font-size: 12.5px; }
 
   /* Review from the keyboard: the card in focus has a ring, and the keys are said once. */
-  .keys-hint { margin: 0 0 12px; font-size: 12px; color: var(--ink-faint); }
+  .keys-hint { margin: 12px 0 0; font-size: 12px; color: var(--ink-faint); }
   .keys-hint[hidden] { display: none; }
   .keys-hint kbd {
     font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -494,10 +494,18 @@
   .review-side { display: flex; align-items: center; gap: 10px; margin-inline-start: auto; }
   .review-counts { font-size: 12.5px; color: var(--ink-soft); }
   .review-counts:empty { display: none; }
+  .review-counts.for-readers { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .review-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 22px; margin-bottom: 12px; }
+  .review-tools .pick-row { margin-bottom: 0; }
+  #approveAllBtn { white-space: nowrap; }
+  #approveAllBtn[hidden] { display: none; }
   #fillFormBtn { white-space: nowrap; }
   .review-bar .review-status { flex-basis: 100%; margin: 0; min-height: 0; }
   .review-bar .review-status:empty { display: none; }
   @media (max-width: 600px) {
+    /* The bar of links is six rows' worth on a phone: it scrolls away, and the review's bar stays. */
+    .topbar { position: static; }
+    .review-bar { top: 0; }
     .review-tabs { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
     .review-side { margin-inline-start: 0; flex-basis: 100%; justify-content: space-between; }
   }
@@ -827,7 +835,9 @@
       <span class="step-number">3</span>
       <h2>Answer</h2>
       <span class="step-held" id="step3Held"></span>
+      <button class="quiet step-toggle" id="step3Toggle" type="button" aria-controls="step3Body" aria-expanded="true" hidden>Fold</button>
     </div>
+    <div class="step-body" id="step3Body">
     <div class="panel" id="questionListPanel">
       <div class="library-heading">
         <h3 id="questionListTitle">Questions</h3>
@@ -871,6 +881,7 @@
         <div class="status" id="answerStatus"></div>
       </div>
     </div>
+    </div>
   </section>
 
   <!-- Step 4 ------------------------------------------------------------ -->
@@ -881,37 +892,33 @@
       <!-- The product the answers were written for, and approvals are filed
            under, in sight of whoever is approving (plan 029, 2). -->
       <span id="resultsProduct" class="results-product"></span>
-      <span class="step-held" id="step4Held"></span>
     </div>
-    <p class="step-hint">Read each answer, follow a source to the exact clause it came from, and
-      edit or accept it. The answers that need you come first; Fill and download stays in the bar
-      above them.</p>
+    <p class="step-hint changes-it">Read each answer, check its sources, then approve or edit it. Whatever you change is kept, and goes into the filled file and every download.</p>
 
-    <div class="summary" id="resultsSummary"></div>
-
-    <!-- Above the answers rather than beside the fill button: it changes what
-         every card below is showing, not only what the button will write. -->
-    <div id="detailPick" class="pick-row" hidden></div>
-
-    <div class="status changes-it" style="margin-bottom:14px">Edits you make here are kept, and go into
-      the filled file and every download.</div>
+    <!-- The counts, and how every card below reads, on one line (plan 041). -->
+    <div class="review-tools">
+      <div class="summary compact" id="resultsSummary"></div>
+      <div id="detailPick" class="pick-row" hidden></div>
+    </div>
 
     <!-- The review queue (plan 029, 1.3): which answers to show, how many will
          be written, and Fill and download, kept in reach while the answers scroll. -->
     <div class="review-bar" id="reviewBar" hidden>
       <div class="review-tabs" id="reviewTabs" role="group" aria-label="Show"></div>
       <div class="review-side">
-        <span class="review-counts" id="reviewCounts" aria-live="polite"></span>
+        <!-- The tabs show these numbers; this says them to a screen reader as they change (plan 041). -->
+        <span class="review-counts for-readers" id="reviewCounts" aria-live="polite"></span>
         <span class="review-counts" id="reviewDone" aria-live="polite"></span>
+        <button class="ghost" id="approveAllBtn" type="button" data-mutates="true" hidden>Approve all</button>
         <button id="fillFormBtn" hidden title="Write the answers into the original file, and download it">Fill and download</button>
       </div>
       <div class="status review-status" id="reviewStatus" role="status"></div>
     </div>
-    <!-- Said once, in a line: the keys act only while nobody is typing (plan 033).
-         Written by the script, the keys in <kbd> (plan 038). -->
-    <p class="keys-hint" id="reviewKeys" hidden></p>
-
     <div id="results"></div>
+
+    <!-- Said once, in a line, after the cards: the keys act only while nobody is
+         typing (plan 033). Written by the script, the keys in <kbd> (plan 038). -->
+    <p class="keys-hint" id="reviewKeys" hidden></p>
   </section>
 
   <!-- Step 5 ------------------------------------------------------------ -->
@@ -1605,8 +1612,14 @@
     paintStatus(el, message, kind, "status");
     // What a click on a card did, said in the bar the reviewer is looking at
     // too: the line above the cards can be thousands of pixels away (plan 029, 1.3).
-    if (el && el.id === "answerStatus") paintStatus($("reviewStatus"), message, kind, "status review-status");
+    if (el && el.id === "answerStatus") {
+      paintStatus($("reviewStatus"), message, kind, "status review-status");
+      // The bar stays over the cards, so a line that has been read goes (plan 041).
+      clearTimeout(reviewNoteTimer);
+      if (kind === "ok") reviewNoteTimer = setTimeout(() => paintStatus($("reviewStatus"), "", "", "status review-status"), 9000);
+    }
   }
+  let reviewNoteTimer = null;
 
   function paintStatus(el, message, kind, base) {
     el.className = base + (kind ? " " + kind : "");
@@ -2160,7 +2173,7 @@
   function chooseStep(step, open) { stepChoices()[step] = open; }
   function stepSection(step) { return $(step === 4 ? "resultsCard" : "step" + step); }
   function openStep(step, scroll) {
-    if (step === 1 || step === 2) chooseStep(step, true);
+    if (step >= 1 && step <= 3) chooseStep(step, true);
     paintSteps();
     const section = stepSection(step);
     if (scroll && section && !section.hidden) section.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2169,7 +2182,6 @@
   /* A count and its noun, "1 question", "4 questions": the English chosen by
      the count, as it always was, and the Arabic by its own plural forms (plan 038). */
   const questionsSaid = (n) => (n === 1 ? t("{n} question", { n }) : t("{n} questions", { n }));
-  const answersSaid = (n) => (n === 1 ? t("{n} answer", { n }) : t("{n} answers", { n }));
   const typedSaid = (n) => (n === 1 ? t("{n} typed question", { n }) : t("{n} typed questions", { n }));
   const answeredCount = () => (result ? result.answers.length : 0);
 
@@ -2252,13 +2264,6 @@
       pending ? t("{n} waiting", { n: pending }) : ""]);
   }
 
-  function reviewSummary() {
-    const answers = answeredCount();
-    if (!answers) return "";
-    const needs = needingReview();
-    return joined([answersSaid(answers), needs ? t("{n} need review", { n: needs }) : t("nothing needs review")]);
-  }
-
   function fillSummary() {
     if (!fillable()) return [t("No file to write into: the answers are downloaded")];
     if (!lastFill) return [t("Not filled yet")];
@@ -2269,6 +2274,11 @@
         { file: lastFill.file }),
       ...(lastFill.held ? [" · " + t("{n} held back", { n: lastFill.held })] : []),
     ];
+  }
+
+  /* Waiting and with no card yet. One that failed has a card, and "Try this question again" on it. */
+  function stillToAnswer() {
+    return pendingQuestions().some((q) => !result || !result.answers.some((a) => a.__key === q.key));
   }
 
   function paintStepFold(step, open, forced) {
@@ -2298,9 +2308,11 @@
       $("step2Held").replaceChildren(...foundSummary(formBatch));
     }
 
+    // Answered, every one: the questions are behind the answers now (plan 041).
+    const forced3 = !answers || answering || running() || stillToAnswer();
+    paintStepFold(3, forced3 || (choices[3] !== undefined ? choices[3] : false), forced3);
     $("step3").classList.toggle("way-in", !questions.length && !formBatch && !answers);
     $("step3Held").textContent = answerSummary();
-    $("step4Held").textContent = reviewSummary();
 
     $("step5").hidden = !answers;
     $("step5Held").replaceChildren(...(answers ? fillSummary() : []));
@@ -2361,6 +2373,7 @@
       reviewTab = key;
       renderResult(result, { keepQuestions: true });
     });
+    Cards.paintApproveAll($("approveAllBtn"), result ? result.answers : [], counted.review, approveEveryHeld);
     const going = counted.written + counted.person;
     $("reviewCounts").textContent = joined([
       isList() ? t("{n} ready to use", { n: going }) : t("{n} will be written", { n: going }),
@@ -3088,6 +3101,24 @@
               ? t("Approved. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")
               : t("Approved. It will be written into the file. It is not in the answer memory — that keeps answers a person wrote, and nobody changed this one.")))
         : withdrawnMessage(updated, entry.formId), "ok");
+    } catch (error) {
+      setStatus($("answerStatus"), I18n.error(error), "error");
+    }
+  }
+
+  /* Approve all, once the person has said yes (plan 041). `items` are the
+     answers the confirmation counted. */
+  async function approveEveryHeld(items) {
+    const ids = items.map((item) => (questions.find((q) => q.key === item.__key) || {}).formId).filter(Boolean);
+    if (!formBatch || !ids.length) return;
+    try {
+      const updated = await request("/api/forms/" + formBatch.id + "/approve-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_ids: ids }),
+      });
+      await keepingPlace(() => adoptBatch(updated, { quiet: true }));
+      setStatus($("answerStatus"), Cards.approvedAllMessage(updated.approved.length), "ok");
     } catch (error) {
       setStatus($("answerStatus"), I18n.error(error), "error");
     }
@@ -4763,7 +4794,7 @@
     const button = event.target.closest("button[data-step]");
     if (button && !button.disabled) openStep(Number(button.dataset.step), true);
   });
-  [1, 2].forEach((step) => {
+  [1, 2, 3].forEach((step) => {
     $("step" + step + "Toggle").onclick = () => {
       chooseStep(step, $("step" + step + "Body").hidden);
       paintSteps();

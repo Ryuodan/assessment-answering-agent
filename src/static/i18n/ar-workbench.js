@@ -157,22 +157,6 @@ I18n.add({
     "many": "{n} سؤالاً",
     "other": "{n} سؤال"
   },
-  "{n} answer": {
-    "zero": "لا إجابات",
-    "one": "إجابة واحدة",
-    "two": "إجابتان",
-    "few": "{n} إجابات",
-    "many": "{n} إجابة",
-    "other": "{n} إجابة"
-  },
-  "{n} answers": {
-    "zero": "لا إجابات",
-    "one": "إجابة واحدة",
-    "two": "إجابتان",
-    "few": "{n} إجابات",
-    "many": "{n} إجابة",
-    "other": "{n} إجابة"
-  },
   "{n} typed question": {
     "one": "سؤال واحد مكتوب",
     "two": "سؤالان مكتوبان",
@@ -400,8 +384,7 @@ I18n.add({
     "many": "جارٍ حفظ {n} سؤالاً قائمةً…",
     "other": "جارٍ حفظ {n} سؤال قائمةً…"
   },
-  "Read each answer, follow a source to the exact clause it came from, and edit or accept it. The answers that need you come first; Fill and download stays in the bar above them.": "اقرأ كل إجابة، وتتبّع مصدرها إلى البند الذي جاءت منه، ثم عدّلها أو اعتمدها. تأتي أولاً الإجابات التي تحتاج إليك؛ ويبقى زر «املأ الملف ونزّله» في الشريط فوقها.",
-  "Edits you make here are kept, and go into the filled file and every download.": "تُحفظ تعديلاتك هنا، وتدخل في الملف المملوء وفي كل تنزيل.",
+  "Read each answer, check its sources, then approve or edit it. Whatever you change is kept, and goes into the filled file and every download.": "اقرأ كل إجابة وتحقق من مصادرها، ثم اعتمدها أو عدّلها. كل ما تغيّره يُحفظ، ويدخل في الملف المملوء وفي كل تنزيل.",
   "Show": "عرض",
   "Write the answers into the original file, and download it": "اكتب الإجابات في الملف الأصلي، ونزّله",
   "Keys: {up} {down} or {j} {k} move between answers, {a} accepts, {e} edits, {esc} closes the editor and keeps what you typed.": "المفاتيح: {up} {down} أو {j} {k} للتنقل بين الإجابات، و{a} للاعتماد، و{e} للتعديل، و{esc} لإغلاق المحرر مع الاحتفاظ بما كتبته.",
@@ -409,7 +392,6 @@ I18n.add({
   "{n} will be written": "ستُكتب في الملف: {n}",
   "{n} need review": "تحتاج إلى مراجعة: {n}",
   "{done} of {all} reviewed": "تمت مراجعة {done} من {all}",
-  "nothing needs review": "لا شيء يحتاج إلى مراجعة",
   "questions found": "الأسئلة التي عُثر عليها",
   "answered": "أُجيب عنها",
   "need review": "تحتاج إلى مراجعة",

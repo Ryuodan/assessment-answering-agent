@@ -34,6 +34,24 @@ opening = APIRouter()
 router = APIRouter()
 
 
+class ApproveHeldRequest(BaseModel):
+    """The held-back answers a person has just confirmed approving."""
+
+    question_ids: list[str] = Field(min_length=1, max_length=2000)
+
+
+@router.post("/api/forms/{batch_id}/approve-all")
+def approve_all(batch_id: str, request: ApproveHeldRequest, user: User = Depends(current_user)) -> dict[str, Any]:
+    """Release these held-back answers for writing, with the reviewer's name on them (plan 041).
+
+    Nothing goes into the answer memory, whoever wrote the words. The ids are
+    the ones the confirmation counted, so an answer that changed since then is
+    not swept up. `approved` lists the ids that were.
+    """
+    approved = questionnaire.approve_held(user, batch_id, request.question_ids)
+    return {**tools.inspect(user, batch_id), "approved": approved}
+
+
 @opening.post("/api/forms")
 async def open_questionnaire(
     file: UploadFile = File(...),

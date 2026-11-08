@@ -284,6 +284,7 @@ def test_setting_a_row_aside_is_an_action_and_what_it_is_then_a_state(
     read_as_general(page, tmp_path)
     page.click("#answerBtn")
     expect(page.locator("#reviewBar")).to_be_visible(timeout=15_000)
+    page.click("#step3Toggle")  # the folded step (plan 041)
     page.locator("#questionListSummary").click()  # the folded list, where a row is set aside
     row = page.locator("#questionList .qrow").first
     row.get_by_role("button", name="استبعاد من الملف", exact=True).click()
@@ -367,7 +368,6 @@ def test_a_file_already_open_is_offered_and_closing_says_where_it_went(
     workbook = read_as_general(page, tmp_path)
     page.click("#answerBtn")
     expect(page.locator("#results .answer")).to_have_count(4, timeout=15_000)
-    expect(page.locator("#step4Held")).to_have_text("4 إجابات · لا شيء يحتاج إلى مراجعة")
     expect(page.locator("#keptUntil")).to_have_text(re.compile(r"^محفوظ حتى \d"))
 
     page.click("#closeForm")

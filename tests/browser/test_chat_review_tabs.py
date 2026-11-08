@@ -121,7 +121,9 @@ def test_a_set_aside_answer_is_under_blank_or_set_aside(
     answered_in_the_chat(page, tmp_path, monkeypatch)
     tab(page, "All").click()
 
-    cards(page).filter(has_text="Probably.").get_by_role("button", name="Set aside", exact=True).click()
+    card = cards(page).filter(has_text="Probably.")
+    card.locator(".card-more summary").click()
+    card.get_by_role("button", name="Set aside", exact=True).click()
 
     expect(tab(page, "Blank or set aside")).to_have_text("Blank or set aside (1)")
     expect(tab(page, "Needs review")).to_have_text("Needs review (1)")

@@ -351,7 +351,6 @@ def test_the_keys_move_between_cards_and_an_accept_goes_on_to_the_next_held_answ
     expect(review).to_have_attribute("aria-pressed", "true")  # opens on what needs a person
     expect(page.locator("#reviewKeys")).to_contain_text("A accepts")
     expect(page.locator("#reviewDone")).to_have_text("0 of 3 reviewed")
-    expect(page.get_by_role("button", name=re.compile("approve all", re.IGNORECASE))).to_have_count(0)
 
     page.keyboard.press("j")  # from nowhere in particular: the first card
     expect(cards.nth(0)).to_be_focused()
@@ -466,7 +465,7 @@ def test_a_card_folds_a_long_question_to_two_lines_with_its_controls_and_sources
     assert question.evaluate("el => el.scrollHeight <= el.clientHeight + 1"), "the whole question, once asked for"
 
     controls = card.locator(".card-controls > button:visible")
-    expect(controls).to_have_text(["Approve", "Edit", "Leave blank"])
+    expect(controls).to_have_text(["Approve", "Edit"])
     tops = {round(box["y"]) for box in (button.bounding_box() for button in controls.all()) if box}
     assert len(tops) == 1, f"the controls are in one row: {tops}"
 

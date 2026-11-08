@@ -619,7 +619,7 @@ a plan relies on it.
   - **"Fill and download"** is one action that says what was written and what was held back.
   - **Under "More":** the other downloads, rewording and "Ask another question".
   - **Review** opens on "Needs review", on smaller cards.
-  - **Keys** work while no field has focus: J/K or the arrows move, A accepts, E edits, Esc closes. An accept moves to the next held answer, and a counter says how many are reviewed. There is no "Approve all".
+  - **Keys** work while no field has focus: J/K or the arrows move, A accepts, E edits, Esc closes. An accept moves to the next held answer, and a counter says how many are reviewed. There was no "Approve all" until plan 041 (D-034).
 - **Consequences:**
   - The "Read questions from file" click is gone, and the tests that clicked it were changed.
   - Esc keeps an edit, as leaving the editor always has.
@@ -687,3 +687,17 @@ a plan relies on it.
   - CSS uses logical properties (`margin-inline-start`, `text-align: start`), so a page mirrors without its own right-to-left rules.
   - The filled files and the PDF and Word downloads stay in the questionnaire's language, their headings too: they are documents for a customer, not the interface (the user, 2026-11-08).
 - **Date:** 2026-11-07. **Status:** accepted. **Decided by:** the user chose the scope and approved the glossary; the design is mine (plan 038).
+
+## D-034: Approve all is confirmed and teaches nothing, and a card asks one question
+
+- **Context:** the user reversed plan 033's "no Approve all", and a reader found the cards confusing and overwhelming. Screenshots of a realistic review showed why: the reason an answer was held said three times, up to six coloured boxes, and the actions above what they acted on.
+- **Decision:**
+  - **Approve all** releases the answers under Needs review with words to write, after a confirmation in the page that says how many, under whose name, and that they are not added to the answer memory. The page sends the ids it counted; the server takes those still held.
+  - **It never writes the answer memory**, whoever wrote the words, unlike a single Approve of a person's own words. Each approval is an `answer_edited` event with `bulk: true`, so the record shows nobody read them one at a time.
+  - **A card asks one thing: is this answer right?** One line of status and why, the question, the answer, the sources, then Approve and Edit. Only the status is coloured.
+  - **One click away:** "Why this answer" for the reasoning and the checks, "More" for Full or Brief, Leave blank, Set aside and Remove.
+  - **A card offers only what can be done** in its state.
+- **Consequences:**
+  - A reviewer who wants the review's own sentence opens "Why this answer"; the short form is on the card and in its tooltip.
+  - The assistant still refuses "approve all of them": the button is a person, confirming.
+- **Date:** 2026-11-08. **Status:** accepted. **Decided by:** the user (plan 041), the layout delegated.

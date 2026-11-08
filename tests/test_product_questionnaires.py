@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage
 
 from src import answer_memory, batches, conversations, identity, knowledge, preferences, products, roles, service
-from src import store, tools
+from src import questionnaire, store, tools
 from src.agents import assistant
 from src.agents.assistant_prompt import FOR_PRODUCT
 from src.api import app
@@ -391,6 +391,7 @@ CHANGES = {
     "set_column_role": lambda user, batch_id, q: tools.set_column_role(user, batch_id, "Sheet1", "C", "ignore"),
     "set_product": lambda user, batch_id, q: tools.set_product(user, batch_id, ""),
     "approve_answer": lambda user, batch_id, q: tools.approve_answer(user, batch_id, q),
+    "approve_held": lambda user, batch_id, q: questionnaire.approve_held(user, batch_id, [q]),
     "withdraw_approval": lambda user, batch_id, q: tools.approve_answer(user, batch_id, q, approved=False),
 }
 

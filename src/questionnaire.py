@@ -25,6 +25,7 @@ from src.selection import (
     Scope,
     _has_answer,
     _settled,
+    approve,
     length_of,
     ready_to_write,
     written_by_a_person,
@@ -48,6 +49,48 @@ def require(user: User, batch_id: str, *, reading: bool = False) -> Batch:
         products.refuse_deleted(user.team_id, batch.product_id)
         busy.refuse(batch.id)
     return batch
+
+
+def approve_held(user: User, batch_id: str, question_ids: list[str]) -> list[str]:
+    """Accept, in one step, the held-back answers a person has just confirmed (plan 041).
+
+    Only `question_ids`, the answers the confirmation counted, and of those only
+    what `fill` is still holding back with words to write. So an answer approved
+    or edited since the question was asked is left as it is, one that failed or
+    was left blank or set aside has nothing to approve, and one that will be
+    written anyway does not gain a name nobody earned.
+
+    It never teaches the answer memory, by the user's decision. Each answer is
+    recorded as an approval like any other (`fill_audit` reads them one by one),
+    marked `bulk`, because nobody read it the way a single click implies.
+    Returns the ids it approved.
+    """
+    batch = require(user, batch_id)
+    asked = set(question_ids)
+    stored = batches.answers(batch.id)
+    names = batches.edited_by(batch.id)
+    released = []
+    for question in batch.form.questions:
+        existing = stored.get(question.id)
+        if question.id not in asked or question.skip or existing is None:
+            continue
+        if existing.error or not existing.answer.strip() or existing.confidence_reason == BLANKED:
+            continue
+        if not ready_to_write(existing, names.get(question.id, ""))[0]:
+            released.append(approve(existing))
+    batches.save_answers(batch.id, released, edited_by=user.email)
+    for answered in released:
+        events.record(
+            user,
+            events.ANSWER_EDITED,
+            subject_type=batches.SUBJECT,
+            subject_id=batch.id,
+            question_id=answered.question.id,
+            approved=True,
+            bulk=True,
+        )
+    logger.info("questionnaire.approved_held", batch_id=batch.id, approved=len(released))
+    return [answered.question.id for answered in released]
 
 
 def inspect(user: User, batch_id: str, scope: Scope | None = None) -> dict[str, Any]:

@@ -235,7 +235,7 @@
   }
   .pane-status.err { color: var(--err); background: var(--err-soft); }
   .pick-row { display: flex; align-items: center; gap: 10px 20px; flex-wrap: wrap; margin-bottom: 12px; }
-  #answers .summary { margin-bottom: 14px; }
+  #answers .summary { margin-bottom: 10px; }
   /* The Workbench's tabs (plan 037), between the counts and the answers. */
   .answers-tabs { margin-bottom: 12px; }
   .tab-empty { color: var(--ink-faint); font-size: 13.5px; padding: 6px 2px 12px; }
@@ -650,6 +650,7 @@
          title="Drag to resize. Double-click to reset."></div>
     <div class="pane-head">
       <h2 id="answerTitle">Answers</h2>
+      <button class="ghost" id="approveAllBtn" type="button" hidden>Approve all</button>
       <button class="ghost" id="fillBtn" hidden>Fill the file</button>
       <button class="ghost" id="downloadBtn" hidden>Download</button>
       <button class="ghost" id="closeAnswers" title="Hide this panel">✕</button>
@@ -1683,7 +1684,7 @@
 
     const counts = report.counts || {};
     const summary = document.createElement("div");
-    summary.className = "summary";
+    summary.className = "summary compact";
     summary.append(
       Cards.stat(counts.questions || 0, t("questions")),
       Cards.stat(counts.answered || 0, t("answered here")),
@@ -1705,6 +1706,7 @@
         { n: counts.questions || 0 });
       host.append(nothing);
       $("fillBtn").hidden = true;
+      $("approveAllBtn").hidden = true;
       return;
     }
     const tabs = document.createElement("div");
@@ -1742,6 +1744,23 @@
       host.append(empty);
     }
     $("fillBtn").hidden = !answered.length;
+    Cards.paintApproveAll($("approveAllBtn"), cards, counted.review, approveEveryHeld);
+  }
+
+  /* Approve all, once the person has said yes (plan 041). `items` are the
+     answers the confirmation counted. */
+  async function approveEveryHeld(items) {
+    if (!batchId) return;
+    try {
+      const updated = await request("/api/forms/" + batchId + "/approve-all", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_ids: items.map((item) => item.question.id) }),
+      });
+      showUpdated(updated);
+      sayInPane(Cards.approvedAllMessage(updated.approved.length));
+    } catch (error) {
+      sayInPane(t("That could not be approved: {why}", { why: I18n.error(error) }), "err");
+    }
   }
 
   /* A set-aside question nobody answered has no card to draw, and still needs a

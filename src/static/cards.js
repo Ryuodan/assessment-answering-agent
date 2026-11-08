@@ -36,8 +36,12 @@
      Cards.setReviewThreshold(value)      the server's review threshold, from the
                                           session the page reads on load
 
-   A card leads with its status, "Will be written" or "Needs review" and why,
-   coloured by that status; the score is secondary. Where the server has said
+   A card asks one thing: is this answer right? (plan 041.) Its status and why
+   in one line, the question, the answer, the sources, then the two things a
+   reviewer does, Approve and Edit, after what they have read. Everything else
+   is one click away: "Why this answer" holds the reasoning and the checks,
+   "More" the rarer actions. The status is coloured; nothing else on the card
+   is. Where the server has said
    whether the fill writes an answer (`will_be_written`), the card says the
    same; elsewhere it applies the server's own rule with that threshold.
 
@@ -376,6 +380,7 @@ const Cards = (window.Cards = {
       button.textContent = tabName(key, counted[key] || 0);
       button.title = tabAbout(key);
       button.dataset.tab = key;
+      button.dataset.empty = String(!counted[key]);  // drawn quieter: nothing to go and look at (plan 041)
       button.setAttribute("aria-pressed", String(key === tab));
       button.onclick = () => onPick(key);
       tabs.append(button);
@@ -717,6 +722,7 @@ const Cards = (window.Cards = {
     return { key: "ready", word: judged && !Cards.fileless ? t("Will be written") : t("Ready to use") };
   }
 
+  /* The card's one coloured line: what happens to the answer, why, and how sure. */
   function statusBar(item, status) {
     const bar = document.createElement("div");
     bar.className = "answer-status " + status.key;
@@ -733,6 +739,22 @@ const Cards = (window.Cards = {
       if (why) tag.title = why;
       bar.append(tag);
     });
+    /* Facts that stay with an answer, after the file's own status. Each said
+       once, here, rather than in a row of its own. */
+    const fact = (className, words, about) => {
+      const tag = document.createElement("span");
+      tag.className = "tag " + className;
+      tag.textContent = words;
+      if (about) tag.title = about;
+      bar.append(tag);
+    };
+    if (Cards.readOnly && item.approved) fact("", t("approved"));
+    if (item.drafted && !item.blanked) {
+      fact("reworded", t("card|Reworded"), t("Changed after it was drafted. The draft, and the way to put it back, are under Why this answer."));
+    }
+    if (item.remembered && !Cards.readOnly) {
+      fact("memory", t("in the answer memory"), t("Your wording is saved. The next questionnaire asking this is answered from it."));
+    }
     // Nothing was drafted for a blank or a failure, so there is no score to show.
     if (status.key !== "blank" && status.key !== "failed") {
       const score = document.createElement("span");
@@ -744,25 +766,27 @@ const Cards = (window.Cards = {
     return bar;
   }
 
+  /* A card's button. Not the page's own `button`, which is the page's main action. */
+  function cardButton(words, kind) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "card-btn" + (kind ? " " + kind : "");
+    button.textContent = words;
+    return button;
+  }
+
   let refusedNotes = 0;  // each editor's refusal note has an id of its own, for aria-describedby
 
+  /* The answer itself, and the editor that takes its place. Returns the two
+     parts a card lays out: the text, and the button that opens the editor. */
   function answerField(item, index) {
-    const field = labelledField(t("Answer"), "");
+    const field = document.createElement("div");
+    field.className = "field answer-text";
     const rendered = document.createElement("div");
     rendered.className = "rendered";
     const editor = document.createElement("textarea");
-    const toggle = document.createElement("button");
-    toggle.className = "quiet";
-    toggle.dataset.cardAction = "edit";  // what a page's keys press (plan 033)
-
-    /* The card's controls, in one row at the end of the label (plan 033):
-       approve, edit, leave blank, then the length. Tags stay by the label. */
-    const grow = document.createElement("span");
-    grow.className = "grow";
-    const controls = document.createElement("span");
-    controls.className = "card-controls";
-    controls.append(toggle);
-    field.querySelector(".field-label").append(grow, controls);
+    const edit = cardButton("");
+    edit.dataset.cardAction = "edit";  // what a page's keys press (plan 033)
 
     const paint = () => {
       const text = Cards.shownAnswer(item, index).text;
@@ -790,167 +814,8 @@ const Cards = (window.Cards = {
       rendered.toggleAttribute("data-no-translate", answered);
       rendered.dir = !answered && I18n.rtl ? "rtl" : isArabic(text) ? "rtl" : "ltr";
     };
-    Cards.repaint = paint;
 
-    /* Held back, and why. `will_be_written` is absent on an answer that never
-       came through `inspect` -- a loose question answered in the workbench, an
-       imported run -- and absent must not read as "held", or every card on
-       those pages would grow a warning about a file it will never be written
-       into. */
-    const gated = !item.set_aside && item.will_be_written === false && !item.blanked && item.answer;
-    if (item.set_aside) {
-      /* Said on the card, with the way back beside it. Setting a question aside
-         used to change nothing anyone could see beside the assistant: the card
-         stayed exactly as it was, so "leave that one out" looked ignored. */
-      const aside = document.createElement("div");
-      aside.className = "held aside";
-      const what = document.createElement("strong");
-      what.textContent = t("Set aside.");
-      const why = document.createElement("span");
-      why.textContent = " " + t("Nothing is written to the file for this question, whatever its answer says.");
-      aside.append(what, why);
-      if (Cards.canSetAside && !Cards.readOnly) {
-        const back = document.createElement("button");
-        back.className = "quiet";
-        back.dataset.mutates = "true";
-        back.textContent = t("Include it again");
-        back.onclick = () => Cards.onSetAside(item, index, false);
-        aside.append(back);
-      }
-      field.append(aside);
-    } else if (gated) {
-      const held = document.createElement("div");
-      held.className = "held";
-      const what = document.createElement("strong");
-      what.textContent = Cards.fileless ? t("Not confirmed yet.") : t("Not going into the file yet.");
-      const why = document.createElement("span");
-      if (item.held_back_because) {
-        // The server's sentence (`selection.ready_to_write`), in the page's language.
-        serverInto(why, item.held_back_because, (because) => " " + because[0].toUpperCase() + because.slice(1) + ".");
-      } else {
-        why.textContent = " " + t("Nobody has confirmed this answer.");
-      }
-      held.append(what, why);
-      if (!Cards.readOnly) {
-        const how = document.createElement("span");
-        how.className = "how";
-        how.textContent = t("Edit it, or approve it as it stands.");
-        held.append(how);
-      }
-      field.append(held);
-    }
-
-    /* Read-only: a deleted product's answers (plan 027). What they say, and
-       whether they were approved, is shown; nothing that would change one is. */
-    if (Cards.readOnly) {
-      if (item.approved) {
-        const approved = document.createElement("span");
-        approved.className = "tag";
-        approved.textContent = t("approved");
-        grow.before(approved);
-      }
-      toggle.hidden = true;
-      editor.readOnly = true;
-    }
-
-    /* Full or brief, for this one answer. The questionnaire-level control is
-       the bulk action -- 183 rows, make them short -- and it is the wrong unit
-       for the answer somebody actually cares about, which is usually the one
-       the assessor will read closely.
-
-       On every answer of a questionnaire, whether or not a brief form exists
-       yet. It used to appear only once one did, which meant only after the
-       whole file had been switched to Brief at least once: the per-answer
-       choice was reachable only through the bulk one it exists to avoid.
-       Choosing Brief here shortens this one answer on the spot. */
-    if (item.length && !item.blanked && (item.answer || "").trim() && !Cards.readOnly) {
-      const lengths = document.createElement("span");
-      lengths.className = "len-pick";
-      const buttons = [["full", t("Full")], ["brief", t("Brief")]].map(([value, text]) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "quiet";
-        button.textContent = text;
-        button.dataset.mutates = "true";
-        button.setAttribute("aria-pressed", String(item.length === value));
-        button.title = value === "brief"
-          ? item.brief
-            ? t("Write this one briefly, whatever the rest of the file does")
-            : t("Shorten this one answer and write it briefly, whatever the rest of the file does")
-          : t("Write this one in full, whatever the rest of the file does");
-        button.onclick = async () => {
-          if (button.getAttribute("aria-pressed") === "true") return;
-          buttons.forEach((b) => { b.disabled = true; });
-          // Deriving a brief form is a model call; a button that sits there
-          // for five seconds reads as a button that did nothing.
-          if (value === "brief" && !item.brief) button.textContent = t("Shortening…");
-          try {
-            await Cards.onLength(item, index, value);
-          } finally {
-            button.textContent = text;
-            buttons.forEach((b) => { b.disabled = false; });
-          }
-        };
-        lengths.append(button);
-        return button;
-      });
-      controls.append(lengths);
-    }
-
-    /* Approving is the other half of editing: an answer that is right as
-       written should not have to be retyped to be released.
-
-       It has a second effect on an answer somebody wrote: that one joins the
-       answer memory, and is what the next questionnaire asking this question is
-       answered from. A draft nobody touched does not, however sure the reviewer
-       is -- remembering the model's own output would feed it back as a
-       "previous answer" at a confidence the loop manufactured rather than
-       earned. The title says which of the two effects apply here, because the
-       difference is invisible otherwise. */
-    if (!Cards.readOnly) {
-      const byHand = item.by_hand || item.confidence_reason === "written by hand";
-      const approve = document.createElement("button");
-      approve.className = item.approved ? "quiet" : "quiet approve";
-      approve.textContent = item.approved ? t("Approved ✓") : t("Approve");
-      approve.title = item.approved
-        ? byHand
-          ? t("You approved this answer, and it is in the answer memory. Click to withdraw both.")
-          : t("You approved this answer. It is not in the answer memory — the memory only keeps answers a person wrote.")
-        : byHand
-          ? t("Confirm this answer, and remember your wording for next time")
-          : gated
-            ? Cards.fileless
-              ? t("Accept this answer as it stands. It is not added to the answer memory: nobody has changed a word of it.")
-              : t("Accept this answer as it stands, so it goes into the file. It is not added to the answer memory: nobody has changed a word of it.")
-            : t("Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.");
-      approve.dataset.mutates = "true";
-      approve.dataset.cardAction = "approve";  // what a page's A key presses (plan 033)
-      approve.onclick = () => Cards.onApprove(item, index, !item.approved);
-      controls.prepend(approve);  // first in the row: the decision a review is for
-
-      /* The second effect, on the card rather than in a message that scrolls
-         away: this wording is what the next questionnaire asking this question
-         gets answered from, and there was nothing anywhere that said so once
-         the click was over. */
-      if (item.remembered) {
-        const kept = document.createElement("span");
-        kept.className = "tag memory";
-        kept.textContent = t("in the answer memory");
-        kept.title = t("Your wording is saved. The next questionnaire asking this is answered from it.");
-        grow.before(kept);
-      }
-    }
-
-    /* Leaving it blank on purpose. Beside Edit because it is the same kind of
-       decision -- what this question should say -- and because a control that
-       empties an answer belongs next to the answer and nowhere else. */
-    if (!Cards.readOnly) {
-      const blank = document.createElement("button");
-      blank.className = "quiet";
-      blank.textContent = item.blanked ? t("Write an answer") : t("Leave blank");
-      blank.onclick = () => Cards.onBlank(item, index, !item.blanked);
-      toggle.after(blank);
-    }
+    if (Cards.readOnly) editor.readOnly = true;
 
     /* The editor holds the text the card shows: the brief on a brief card, and
        says which back to the page, so an edit lands where it was made. */
@@ -959,7 +824,7 @@ const Cards = (window.Cards = {
        otherwise silent. A live region in place before it speaks, empty and
        drawn at no height until then, and the editor's description. */
     const refused = document.createElement("p");
-    refused.className = "held edit-refused";
+    refused.className = "edit-refused";
     refused.id = "edit-refused-" + (++refusedNotes);
     refused.setAttribute("role", "status");
     editor.setAttribute("aria-describedby", refused.id);
@@ -979,8 +844,8 @@ const Cards = (window.Cards = {
       }
       rendered.hidden = editing;
       editor.hidden = !editing;
-      toggle.textContent = editing ? t("Done editing") : t("Edit");
-      toggle.dataset.editing = String(editing);
+      edit.textContent = editing ? t("Done editing") : t("Edit");
+      edit.dataset.editing = String(editing);
       if (editing) { editor.focus(); } else { paint(); }
     };
 
@@ -1006,11 +871,198 @@ const Cards = (window.Cards = {
       sayRefused(false);
       Cards.onEditDone(item, index, editor.value, shown.which);
     });
-    toggle.onclick = () => setMode(!editing);
+    edit.onclick = () => setMode(!editing);
 
     field.append(rendered, editor, refused);
     setMode(false);
-    return field;
+    return { field, edit };
+  }
+
+  /* Full or brief, for this one answer. The questionnaire-level control is
+     the bulk action -- 183 rows, make them short -- and it is the wrong unit
+     for the answer somebody actually cares about, which is usually the one
+     the assessor will read closely.
+
+     On every answer of a questionnaire, whether or not a brief form exists
+     yet: choosing Brief here shortens this one answer on the spot. */
+  function lengthPicker(item, index, closeMenu) {
+    const row = document.createElement("div");
+    row.className = "card-menu-row";
+    const label = document.createElement("span");
+    label.textContent = t("This answer:");
+    const lengths = document.createElement("span");
+    lengths.className = "len-pick";
+    const buttons = [["full", t("Full")], ["brief", t("Brief")]].map(([value, words]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "quiet";
+      button.textContent = words;
+      button.dataset.mutates = "true";
+      button.setAttribute("aria-pressed", String(item.length === value));
+      button.title = value === "brief"
+        ? item.brief
+          ? t("Write this one briefly, whatever the rest of the file does")
+          : t("Shorten this one answer and write it briefly, whatever the rest of the file does")
+        : t("Write this one in full, whatever the rest of the file does");
+      button.onclick = async () => {
+        if (button.getAttribute("aria-pressed") === "true") return;
+        buttons.forEach((b) => { b.disabled = true; });
+        // Deriving a brief form is a model call; a button that sits there
+        // for five seconds reads as a button that did nothing.
+        if (value === "brief" && !item.brief) button.textContent = t("Shortening…");
+        try {
+          await Cards.onLength(item, index, value);
+        } finally {
+          button.textContent = words;
+          buttons.forEach((b) => { b.disabled = false; });
+          closeMenu();
+        }
+      };
+      lengths.append(button);
+      return button;
+    });
+    row.append(label, lengths);
+    return row;
+  }
+
+  /* The rarer actions, out of the way until asked for: how long this one is,
+     leaving it blank, leaving it out, removing it. Null when there are none. */
+  function moreMenu(item, index) {
+    const menu = document.createElement("div");
+    menu.className = "card-menu";
+    const more = document.createElement("details");
+    more.className = "card-more";
+    const summary = document.createElement("summary");
+    summary.textContent = t("More");
+    const close = () => { more.open = false; };
+    const add = (words, about, act, kind) => {
+      const button = cardButton(words, "menu-item" + (kind ? " " + kind : ""));
+      if (about) button.title = about;
+      button.dataset.mutates = "true";
+      button.addEventListener("click", () => { close(); act(); });
+      menu.append(button);
+      return button;
+    };
+
+    if (item.length && !item.blanked && !item.set_aside && (item.answer || "").trim()) {
+      menu.append(lengthPicker(item, index, close));
+    }
+    if (!item.blanked && !item.set_aside) {
+      const blank = add(t("Leave blank"), "", () => Cards.onBlank(item, index, true));
+      delete blank.dataset.mutates;  // as it always was: it never waited for a run
+    }
+    if (Cards.canSetAside && !item.set_aside) {
+      add(t("action|Set aside"), t("Leave this question out of the file. Its answer is kept, and it can be brought back."),
+        () => Cards.onSetAside(item, index, true));
+    }
+    // Only for answers this session produced: an imported result has no question row to keep in step.
+    if (item.__key) {
+      add(t("Remove this question and its answer"), "", () => Cards.onDiscard(item.__key), "danger qdelete");
+    }
+    if (!menu.childElementCount) return null;
+    more.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !more.open) return;
+      event.stopPropagation();
+      close();
+      summary.focus();
+    });
+    more.append(summary, menu);
+    return more;
+  }
+
+  // A menu open on one card closes when the person goes elsewhere.
+  document.addEventListener("click", (event) => {
+    document.querySelectorAll("details.card-more[open]").forEach((more) => {
+      if (!more.contains(event.target)) more.open = false;
+    });
+  });
+
+  /* What the card's reviewer can do, after what they have read: Approve and
+     Edit, or whichever single action this state leaves. */
+  function cardActions(item, index, edit, why) {
+    const row = document.createElement("div");
+    row.className = "card-actions";
+    const controls = document.createElement("span");
+    controls.className = "card-controls";
+    row.append(controls);
+
+    if (!Cards.readOnly) {
+      const answered = Boolean((item.answer || "").trim());
+      const held = !item.set_aside && item.will_be_written === false && !item.blanked && answered;
+      const hint = (words) => {
+        const note = document.createElement("span");
+        note.className = "card-hint";
+        note.textContent = words;
+        row.append(note);
+      };
+
+      if (item.set_aside) {
+        /* Said on the card, with the way back beside it. Setting a question aside
+           used to change nothing anyone could see beside the assistant. */
+        if (Cards.canSetAside) {
+          const back = cardButton(t("Include it again"), "primary-plain");
+          back.dataset.mutates = "true";
+          back.onclick = () => Cards.onSetAside(item, index, false);
+          controls.append(back);
+        }
+        hint(t("Nothing is written to the file for this question, whatever its answer says."));
+      } else if (item.blanked) {
+        const write = cardButton(t("Write an answer"), "primary-plain");
+        write.onclick = () => Cards.onBlank(item, index, false);
+        controls.append(write);
+      } else {
+        if (item.error && item.__key) {
+          /* A question that never produced an answer has nothing to judge. A
+             rate limit or a withdrawn model is transient: offer another go. */
+          const again = cardButton(t("Try this question again"), "primary-plain");
+          again.dataset.mutates = "true";
+          again.onclick = () => Cards.onRetry([item.__key], again);
+          controls.append(again);
+        }
+        /* Approving is the other half of editing: an answer that is right as
+           written should not have to be retyped to be released.
+
+           It has a second effect on an answer somebody wrote: that one joins the
+           answer memory, and is what the next questionnaire asking this question is
+           answered from. A draft nobody touched does not, however sure the reviewer
+           is -- remembering the model's own output would feed it back as a
+           "previous answer" at a confidence the loop manufactured rather than
+           earned. The title says which of the two effects apply here, because the
+           difference is invisible otherwise. Nothing to approve, no button: the
+           server refuses an empty answer. */
+        if (answered) {
+          const byHand = item.by_hand || item.confidence_reason === "written by hand";
+          const approve = cardButton(item.approved ? t("Approved ✓") : t("Approve"),
+            item.approved ? "approved" : held ? "primary" : "");
+          approve.title = item.approved
+            ? byHand
+              ? t("You approved this answer, and it is in the answer memory. Click to withdraw both.")
+              : t("You approved this answer. It is not in the answer memory — the memory only keeps answers a person wrote.")
+            : byHand
+              ? t("Confirm this answer, and remember your wording for next time")
+              : held
+                ? Cards.fileless
+                  ? t("Accept this answer as it stands. It is not added to the answer memory: nobody has changed a word of it.")
+                  : t("Accept this answer as it stands, so it goes into the file. It is not added to the answer memory: nobody has changed a word of it.")
+                : t("Confirm this answer is right. It is not added to the answer memory: nobody has changed a word of it.");
+          approve.dataset.mutates = "true";
+          approve.dataset.cardAction = "approve";  // what a page's A key presses (plan 033)
+          approve.onclick = () => Cards.onApprove(item, index, !item.approved);
+          controls.append(approve);
+        }
+        controls.append(edit);
+        // What the two buttons are for, once, beside them.
+        if (held) hint(Cards.fileless ? t("Not confirmed yet.") : t("Not going into the file yet."));
+      }
+    }
+
+    const side = document.createElement("span");
+    side.className = "card-side";
+    if (why) side.append(why.toggle);
+    const more = Cards.readOnly ? null : moreMenu(item, index);
+    if (more) side.append(more);
+    if (side.childElementCount) row.append(side);
+    return row.childElementCount > 1 || controls.childElementCount ? row : null;
   }
 
   /* What removing from a knowledge base asks first (plan 029), in one wording
@@ -1218,20 +1270,6 @@ const Cards = (window.Cards = {
       cites.append(chip);
     });
 
-    // A two-colour scheme needs a key, but only when both colours are present.
-    if (sourceTypes.size > 1) {
-      const key = document.createElement("div");
-      key.className = "cite-key";
-      [["guideline", t("guideline")], ["prior_answer", t("previous answer")]].forEach(([kind, name]) => {
-        const entry = document.createElement("span");
-        const dot = document.createElement("i");
-        dot.className = kind;
-        entry.append(dot, name);
-        key.append(entry);
-      });
-      cites.append(key);
-    }
-
     field.append(cites, panel);
     return field;
   }
@@ -1246,6 +1284,114 @@ const Cards = (window.Cards = {
     return String(kind || "").replace(/_/g, " ");
   }
 
+  /* Where the question is in the file. A spreadsheet's id is `Sheet!row`, read
+     as a person would say it; any other id is the file's own number. */
+  function placeOf(id, index) {
+    const cell = /^(.+)!(\d+)$/.exec(id || "");
+    if (cell) return asContent("span", t("{sheet}, row {row}", { sheet: cell[1], row: cell[2] }));
+    return asContent("span", id || String(index + 1));
+  }
+
+  /* Why the answer says what it says, and why it was held: everything a
+     reviewer may want when the answer alone does not settle it, and does not
+     want on every card. Each block is plain text under a plain label. It was
+     up to five coloured boxes, three of them saying why the answer was held.
+     Null when there is nothing to tell. */
+  function whyPanel(item, index) {
+    const panel = document.createElement("div");
+    panel.className = "why-panel";
+    panel.hidden = true;
+    const block = (label) => {
+      const field = labelledField(label);
+      panel.append(field);
+      return field;
+    };
+
+    const heldBecause = item.will_be_written === false && item.held_back_because;
+    if ((item.needs_review || heldBecause) && !item.error && !item.blanked && !item.set_aside) {
+      const field = block(t("Why this is flagged"));
+      const reasons = document.createElement("div");
+      reasons.className = "reasons";
+      if (item.review_reasons && item.review_reasons.length) {
+        // The review's own sentences, each in the page's language.
+        item.review_reasons.forEach((reason, at) => {
+          if (at) reasons.append(t("; "));
+          serverInto(reasons, reason);
+        });
+      } else if (heldBecause) {
+        // The server's sentence (`selection.ready_to_write`), in the page's language.
+        serverInto(reasons, item.held_back_because, (because) => because[0].toUpperCase() + because.slice(1) + ".");
+      } else {
+        reasons.textContent = t("The confidence score is below the level set for automatic acceptance.");
+      }
+      field.append(reasons);
+    }
+
+    // Plain-English cause of the score itself, computed server-side so the
+    // interface and both exports say exactly the same thing. Not for a blank,
+    // nor for what a *person* did: approved or written by hand are decisions,
+    // and that field keeps them too.
+    const decision = ["approved by a reviewer", "written by hand"].includes(item.confidence_reason);
+    if (item.confidence_reason && !item.blanked && !decision) {
+      const why = document.createElement("div");
+      why.className = "reasons why";
+      serverInto(why, item.confidence_reason);  // the server's sentence (`explain_confidence`)
+      block(t("Why the confidence is low")).append(why);
+    }
+
+    if (item.rationale) {
+      /* The drafter's own words: content. A failed answer's is the server's
+         sentence ("Answering failed: ..."), in the page's language. */
+      const said = I18n.server(item.rationale) !== item.rationale;
+      const rationale = said
+        ? serverInto(document.createElement("div"), item.rationale)
+        : directed(asContent("div", item.rationale), item.rationale);
+      rationale.className = "rationale";
+      block(t("Reasoning")).append(rationale);
+    }
+
+    /* Something reworded this answer after it was drafted -- preferences, a
+       skill, a "make them shorter". Undoable from the card: each of those runs
+       over many answers at once, so the one place an odd result gets noticed
+       has to be the place it can be put right. */
+    if (item.drafted && !item.blanked) {
+      const field = block(t("As it was first drafted"));
+      const original = directed(asContent("div", item.drafted), item.drafted);
+      original.className = "rationale";
+      field.append(original);
+      if (!Cards.readOnly) {
+        const back = cardButton(t("Put the draft back"));
+        back.dataset.mutates = "true";
+        back.title = t("Replace the reworded answer with the original draft, for this question only");
+        back.onclick = () => Cards.onRestoreDraft(item, index);
+        field.append(back);
+      }
+    }
+
+    if (!panel.childElementCount) return null;
+
+    const facts = [questionKind(item.question.question_type)];
+    if (item.attempts > 1) facts.push(t("{n} retrieval rounds", { n: item.attempts }));
+    const line = document.createElement("div");
+    line.className = "why-facts";
+    line.textContent = facts.join(" · ");
+    panel.append(line);
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "card-link";
+    toggle.textContent = t("Why this answer");
+    toggle.setAttribute("aria-expanded", "false");
+    panel.id = "why-" + (++whyPanels);
+    toggle.setAttribute("aria-controls", panel.id);
+    toggle.onclick = () => {
+      panel.hidden = !panel.hidden;
+      toggle.setAttribute("aria-expanded", String(!panel.hidden));
+    };
+    return { panel, toggle };
+  }
+  let whyPanels = 0;
+
   function renderAnswer(item, index) {
     const card = document.createElement("div");
     // The card's colour follows its status, not the score (plan 030).
@@ -1253,23 +1399,14 @@ const Cards = (window.Cards = {
     const held = status.key === "review" || status.key === "failed";
     card.className = "answer" + (held ? " review" : "") + (item.set_aside ? " set-aside" : "");
 
-    // --- head: number, question
     const head = document.createElement("div");
     head.className = "answer-head";
-
-    // The question's number and text are the questionnaire's (plan 038).
-    const number = asContent("div", item.question.id || String(index + 1));
-    number.className = "qnum";
-
     const body = document.createElement("div");
     body.className = "qbody";
 
-    /* A questionnaire item can be a paragraph: the brand-protection question in
-       this corpus runs to six lines of bold text, which pushes the answer --
-       the thing the card is about -- below the fold, and strands the confidence
-       meter at the top of an empty column. So a long question is clamped to
-       two lines (three until plan 033 made the cards smaller) with a control
-       to see the rest.
+    /* A questionnaire item can be a paragraph, which pushes the answer -- the
+       thing the card is about -- below the fold. So a long question is clamped
+       to two lines with a control to see the rest.
 
        Whether it needs clamping is measured after layout rather than guessed
        from a character count: the same two hundred characters are two lines on
@@ -1279,7 +1416,8 @@ const Cards = (window.Cards = {
     question.className = "qtext clamped";
 
     const more = document.createElement("button");
-    more.className = "quiet qmore";
+    more.type = "button";
+    more.className = "card-link qmore";
     more.hidden = true;
     more.textContent = t("show the whole question");
     more.onclick = () => {
@@ -1291,155 +1429,37 @@ const Cards = (window.Cards = {
       else question.classList.remove("clamped");
     });
 
+    // Where it is in the file, and the file's own heading for it.
     const meta = document.createElement("div");
     meta.className = "qmeta";
-    // The section is the questionnaire's own heading; the kind and the rounds are the card's words.
-    const bits = [];
-    if (item.question.section) bits.push(asContent("span", item.question.section));
-    bits.push(questionKind(item.question.question_type));
-    if (item.attempts > 1) bits.push(t("{n} retrieval rounds", { n: item.attempts }));
-    const detail = document.createElement("span");
-    bits.forEach((bit, at) => detail.append(...(at ? [" · ", bit] : [bit])));
-    meta.append(detail, more);
-    /* Beside the question, because it is a decision about the question: leave
-       it out of the file, whatever the answer says. */
-    if (Cards.canSetAside && !Cards.readOnly && !item.set_aside) {
-      const aside = document.createElement("button");
-      aside.className = "quiet";
-      aside.dataset.mutates = "true";
-      aside.textContent = t("action|Set aside");
-      aside.title = t("Leave this question out of the file. Its answer is kept, and it can be brought back.");
-      aside.onclick = () => Cards.onSetAside(item, index, true);
-      meta.append(aside);
-    }
+    const place = document.createElement("span");
+    place.append(placeOf(item.question.id, index));
+    if (item.question.section) place.append(" · ", asContent("span", item.question.section));
+    meta.append(place, more);
 
     body.append(question, meta);
+    head.append(body);
 
-    // Removing the pair belongs here, beside what it removes. Only offered for
-    // answers this session produced, since an imported result has no question
-    // row behind it to keep in step.
-    if (item.__key && !Cards.readOnly) {
-      const remove = document.createElement("button");
-      remove.className = "quiet danger qdelete";
-      remove.dataset.mutates = "true";
-      remove.textContent = "✕";
-      remove.title = t("Remove this question and its answer");
-      remove.onclick = () => Cards.onDiscard(item.__key);
-      head.append(number, body, remove);
-    } else {
-      head.append(number, body);
-    }
-
-    // --- body: answer, citations, flags, reasoning, evidence
     const content = document.createElement("div");
     content.className = "answer-body";
-    content.append(answerField(item, index));
+    const answer = answerField(item, index);
+    content.append(answer.field);
 
-    /* Something reworded this answer after it was drafted -- preferences, a
-       skill, a "make them shorter". Said on the card and undoable from it: each
-       of those runs over many answers at once, so the one place an odd result
-       gets noticed has to be the place it can be put right. Which one it was is
-       in the reasoning below. */
-    if (item.drafted && !item.blanked) {
-      const field = labelledField(t("Reworded after drafting"), "accent");
-      const box = document.createElement("details");
-      box.className = "drafted";
-      const summary = document.createElement("summary");
-      summary.textContent = t("See the answer as it was drafted");
-      const original = directed(asContent("div", item.drafted), item.drafted);
-      original.className = "rationale";
-      const back = document.createElement("button");
-      back.type = "button";
-      back.className = "ghost";
-      back.dataset.mutates = "true";
-      back.textContent = t("Put the draft back");
-      back.title = t("Replace the reworded answer with the original draft, for this question only");
-      back.onclick = () => Cards.onRestoreDraft(item, index);
-      box.append(summary, original);
-      if (!Cards.readOnly) box.append(back);
-      field.append(box);
-      content.append(field);
+    // What went wrong, as the model's service said it: content (plan 038).
+    if (item.error) {
+      const problem = asContent("div", item.error);
+      problem.className = "card-error";
+      content.append(problem);
     }
 
     if (item.citations && item.citations.length) {
       content.append(citationsField(item));
     }
 
-    // A flag with no explanation is what a reviewer cannot act on. The
-    // mechanical checks only speak when something is demonstrably wrong, so an
-    // answer flagged purely for scoring low used to arrive with an empty
-    // reason list and showed nothing here at all — the one place it was most
-    // needed. Fall back to the same wording the exports use.
-    if (item.needs_review) {
-      const field = labelledField(t("Why this is flagged"), "warn");
-      const reasons = document.createElement("div");
-      reasons.className = "reasons";
-      if (item.review_reasons && item.review_reasons.length) {
-        // The review's own sentences, each in the page's language.
-        item.review_reasons.forEach((reason, at) => {
-          if (at) reasons.append(t("; "));
-          serverInto(reasons, reason);
-        });
-      } else {
-        reasons.textContent = t("The confidence score is below the level set for automatic acceptance.");
-      }
-      field.append(reasons);
-      content.append(field);
-    }
-
-    // A question that never produced an answer is not a weak answer — there is
-    // nothing to read, judge or edit. A rate limit or a withdrawn model is
-    // transient, so the only useful thing to offer is another go.
-    if (item.error) {
-      const field = labelledField(t("Could not be answered"), "err");
-      // What went wrong, as the model's service said it: content (plan 038).
-      const box = asContent("div", item.error);
-      box.className = "reasons why";
-      field.append(box);
-      if (item.__key && !Cards.readOnly) {
-        const again = document.createElement("button");
-        again.className = "ghost";
-        again.dataset.mutates = "true";
-        again.style.marginTop = "9px";
-        again.textContent = t("Try this question again");
-        again.onclick = () => Cards.onRetry([item.__key], again);
-        field.append(again);
-      }
-      content.append(field);
-    }
-
-    // Plain-English cause of the score itself, computed server-side so the
-    // interface and both exports say exactly the same thing. Not for a blank:
-    // "left blank on purpose" is where that field keeps the decision, and
-    // reading it back as a reason the confidence is low is nonsense.
-    //
-    // The same field also carries what a *person* did — approved it, wrote it —
-    // and those are not explanations of a score either. A hand-written answer
-    // scores 100% and was arriving under a red "why the confidence is low:
-    // approved by a reviewer". The button and the tag beside it already say
-    // that, and say it in the right place.
-    const decision = ["approved by a reviewer", "written by hand"].includes(item.confidence_reason);
-    if (item.confidence_reason && !item.blanked && !decision) {
-      const field = labelledField(t("Why the confidence is low"), "err");
-      const why = document.createElement("div");
-      why.className = "reasons why";
-      serverInto(why, item.confidence_reason);  // the server's sentence (`explain_confidence`)
-      field.append(why);
-      content.append(field);
-    }
-
-    if (item.rationale) {
-      const field = labelledField(t("Reasoning"), "accent");
-      /* The drafter's own words: content. A failed answer's is the server's
-         sentence ("Answering failed: ..."), in the page's language. */
-      const said = I18n.server(item.rationale) !== item.rationale;
-      const rationale = said
-        ? serverInto(document.createElement("div"), item.rationale)
-        : directed(asContent("div", item.rationale), item.rationale);
-      rationale.className = "rationale";
-      field.append(rationale);
-      content.append(field);
-    }
+    const why = whyPanel(item, index);
+    const actions = cardActions(item, index, answer.edit, why);
+    if (actions) content.append(actions);
+    if (why) content.append(why.panel);
 
     /* There was a second list here, "All n retrieved source(s)". It showed
        the same sources as the bubbles above, a second time: `finalize` keeps
@@ -1465,6 +1485,93 @@ const Cards = (window.Cards = {
     } finally {
       Object.assign(Cards, page);
     }
+  }
+
+  /* --- Approve all (plan 041) ----------------------------------------------
+
+     The answers held back that a person could approve one at a time. Asked for
+     by the user, with a confirmation, and kept out of the answer memory: the
+     server's `approve_held` never teaches it. Not a failed answer (nothing to
+     approve), nor one that will be written anyway: an approval changes nothing
+     for those but the name against them, and nobody will have read them. */
+  function canApproveAll(item) {
+    return item.will_be_written === false && !item.error && !item.blanked && !item.set_aside
+      && Boolean((item.answer || "").trim());
+  }
+
+  /* A question for the person, in the page. Resolves true or false. Cancel has
+     the focus, so Enter on a dialog nobody read does nothing. */
+  function confirmDialog({ title, lines, confirm }) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "card-dialog";
+      const heading = document.createElement("h3");
+      heading.textContent = title;
+      const list = document.createElement("ul");
+      lines.forEach((line) => {
+        const entry = document.createElement("li");
+        entry.textContent = line;
+        list.append(entry);
+      });
+      const buttons = document.createElement("div");
+      buttons.className = "card-dialog-buttons";
+      const no = cardButton(t("Cancel"));
+      const yes = cardButton(confirm, "primary");
+      const finish = (answer) => {
+        dialog.close();
+        dialog.remove();
+        resolve(answer);
+      };
+      no.onclick = () => finish(false);
+      yes.onclick = () => finish(true);
+      dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(false); });
+      buttons.append(no, yes);
+      dialog.append(heading, list, buttons);
+      document.body.append(dialog);
+      dialog.showModal();
+      no.focus();
+    });
+  }
+
+  /* Draws a page's Approve all button for these answers. `review` is how many
+     the Needs review tab holds, so the question can say how many it leaves.
+     `onApprove(items)` does the work, once the person has said yes. */
+  function paintApproveAll(button, answers, review, onApprove) {
+    const ready = answers.filter(canApproveAll);
+    const n = ready.length;
+    button.hidden = Cards.readOnly || !n;
+    if (button.hidden) return;
+    button.textContent = t("Approve all ({n})", { n });
+    button.title = t("Approve every answer under Needs review, after asking you to confirm");
+    const stays = review - n;
+    button.onclick = async () => {
+      const lines = [
+        t("Answers to approve: {n}", { n }),
+        Cards.fileless
+          ? t("They are marked as confirmed under your name, even though nobody has read them one by one.")
+          : t("They go into the file under your name, even though nobody has read them one by one."),
+        t("They are not added to the answer memory."),
+      ];
+      if (stays > 0) lines.push(t("Questions that could not be answered stay under Needs review: {n}", { n: stays }));
+      const yes = await confirmDialog({
+        title: t("Approve every answer that needs review?"),
+        lines,
+        confirm: t("Approve all ({n})", { n }),
+      });
+      if (!yes) return;
+      button.disabled = true;
+      try {
+        await onApprove(ready);
+      } finally {
+        button.disabled = false;
+      }
+    };
+  }
+
+  function approvedAllMessage(n) {
+    return Cards.fileless
+      ? t("Approved {n} answer(s). None were added to the answer memory.", { n })
+      : t("Approved {n} answer(s). They will be written into the file. None were added to the answer memory.", { n });
   }
 
   function statCard(value, label, tone) {
@@ -1534,6 +1641,8 @@ const Cards = (window.Cards = {
   // What the pages use. Everything else above is private to the card.
   Object.assign(Cards, {
     render: renderAnswer,
+    paintApproveAll: paintApproveAll,
+    approvedAllMessage: approvedAllMessage,
     renderReadOnly: renderReadOnly,
     setReviewThreshold: setReviewThreshold,
     withdrawnMessage: withdrawnMessage,
