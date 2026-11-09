@@ -694,10 +694,21 @@ a plan relies on it.
 - **Decision:**
   - **Approve all** releases the answers under Needs review with words to write, after a confirmation in the page that says how many, under whose name, and that they are not added to the answer memory. The page sends the ids it counted; the server takes those still held.
   - **It never writes the answer memory**, whoever wrote the words, unlike a single Approve of a person's own words. Each approval is an `answer_edited` event with `bulk: true`, so the record shows nobody read them one at a time.
-  - **A card asks one thing: is this answer right?** One line of status and why, the question, the answer, the sources, then Approve and Edit. Only the status is coloured.
+  - **A card asks one thing: is this answer right?** One line of status and why, the question, the answer, the sources, then Approve and Edit. Only the status was coloured until plan 042 (D-035).
   - **One click away:** "Why this answer" for the reasoning and the checks, "More" for Full or Brief, Leave blank, Set aside and Remove.
   - **A card offers only what can be done** in its state.
 - **Consequences:**
   - A reviewer who wants the review's own sentence opens "Why this answer"; the short form is on the card and in its tooltip.
   - The assistant still refuses "approve all of them": the button is a person, confirming.
 - **Date:** 2026-11-08. **Status:** accepted. **Decided by:** the user (plan 041), the layout delegated.
+
+## D-035: On the card, each colour means one thing
+
+- **Context:** with only the status coloured (D-034), the user found the answer did not stand out, the sources did not say where they came from, and the confidence was easy to miss. They asked for more colour that signals meaning, without looking like a game.
+- **Decision:**
+  - **Five meanings:** green fine, amber a person should look, red low or failed, blue the knowledge base, plum the answer memory. The words say it too. Everything else stays neutral, the answer's own ground included.
+  - **Confidence** is coloured from the server's threshold: red at or under it, green in the top half above it, amber between. A held answer is never green, and a person's decision is not coloured.
+- **Consequences:**
+  - The card holds no threshold of its own; changing the setting moves the colours.
+  - A new thing on the card that wants a colour has to mean one of the five, or stay neutral.
+- **Date:** 2026-11-09. **Status:** accepted. **Decided by:** the user (plan 042), the details delegated.

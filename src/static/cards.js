@@ -40,8 +40,9 @@
    in one line, the question, the answer, the sources, then the two things a
    reviewer does, Approve and Edit, after what they have read. Everything else
    is one click away: "Why this answer" holds the reasoning and the checks,
-   "More" the rarer actions. The status is coloured; nothing else on the card
-   is. Where the server has said
+   "More" the rarer actions. Colour says one thing each (plan 042): green is
+   fine, amber a person should look, red low or failed, blue the knowledge base,
+   plum the answer memory. Where the server has said
    whether the fill writes an answer (`will_be_written`), the card says the
    same; elsewhere it applies the server's own rule with that threshold.
 
@@ -722,7 +723,20 @@ const Cards = (window.Cards = {
     return { key: "ready", word: judged && !Cards.fileless ? t("Will be written") : t("Ready to use") };
   }
 
-  /* The card's one coloured line: what happens to the answer, why, and how sure. */
+  /* The score's colour (plan 042), from the server's threshold and never a
+     number of the card's own: red at or under it, green in the top half of what
+     is above it, amber between. A check that held the answer caps it at amber:
+     green beside "Needs review" is the contradiction plan 030 took away. What a
+     person decided is theirs, so the draft's score goes uncoloured. */
+  function confidenceTone(item, status) {
+    const threshold = Cards.reviewThreshold;
+    if (typeof threshold !== "number" || !["review", "ready"].includes(status.key)) return "plain";
+    if (heldByScore(item.confidence)) return "low";
+    if (status.key === "review") return "mid";
+    return item.confidence >= threshold + (1 - threshold) / 2 ? "high" : "mid";
+  }
+
+  /* The card's first line: what happens to the answer, why, and how sure. */
   function statusBar(item, status) {
     const bar = document.createElement("div");
     bar.className = "answer-status " + status.key;
@@ -758,7 +772,7 @@ const Cards = (window.Cards = {
     // Nothing was drafted for a blank or a failure, so there is no score to show.
     if (status.key !== "blank" && status.key !== "failed") {
       const score = document.createElement("span");
-      score.className = "status-score";
+      score.className = "status-score " + confidenceTone(item, status);
       score.textContent = t("{n}% confidence", { n: Math.round((item.confidence || 0) * 100) });
       score.title = t("How well the models found the sources support the answer. Whether it goes in is the status.");
       bar.append(score);
@@ -812,6 +826,7 @@ const Cards = (window.Cards = {
          note in its place is in the page's. */
       const answered = Boolean(!item.blanked && text.trim());
       rendered.toggleAttribute("data-no-translate", answered);
+      rendered.classList.toggle("no-answer", !answered);  // a note in its place is not set apart as an answer
       rendered.dir = !answered && I18n.rtl ? "rtl" : isArabic(text) ? "rtl" : "ltr";
     };
 
@@ -1207,31 +1222,38 @@ const Cards = (window.Cards = {
     });
   }
 
-  /* The sources as one row of chips, each opening its clause; the label is
-     the row's first word rather than a line of its own (plan 033). */
+  /* Where a source came from, in the words of the pages that manage it. */
+  function sourceHome(kind) {
+    if (kind === "guideline") return t("Knowledge base");
+    return kind === "prior_answer" ? t("Answer memory") : t("Sources");
+  }
+
+  /* The sources, a row for each place they came from, each chip opening its
+     clause. The row's first word says the place, and its colour is the chips'
+     (plan 042), so nothing relies on the colour alone. */
   function citationsField(item) {
     const field = document.createElement("div");
     field.className = "field sources-field";
-    const cites = document.createElement("div");
-    cites.className = "cites";
-    const label = document.createElement("span");
-    label.className = "field-label accent cites-label";
-    label.textContent = t("Sources");
-    label.title = t("Click a source to read the clause it names");
-    cites.append(label);
+    const rows = new Map(["guideline", "prior_answer", "unknown"].map((kind) => [kind, document.createElement("div")]));
+    rows.forEach((cites, kind) => {
+      cites.className = "cites " + kind;
+      const label = document.createElement("span");
+      label.className = "field-label cites-label";
+      label.textContent = sourceHome(kind);
+      label.title = t("Click a source to read the clause it names");
+      cites.append(label);
+    });
     const panel = document.createElement("div");
     panel.className = "cite-panel";
     panel.hidden = true;
 
     let openButton = null;
-    const sourceTypes = new Set();
     const sources = citedSources(item);
 
     item.citations.forEach((citation, position) => {
       const source = sources[position];
       const mark = authorityBadge(source && source.authority);
       const kind = source ? source.source_type : "unknown";
-      if (source) sourceTypes.add(kind);
 
       const chip = document.createElement("button");
       chip.className = "cite " + kind;
@@ -1267,10 +1289,11 @@ const Cards = (window.Cards = {
         showChunk(panel, citation, source);
       };
 
-      cites.append(chip);
+      rows.get(kind).append(chip);
     });
 
-    field.append(cites, panel);
+    rows.forEach((cites) => { if (cites.childElementCount > 1) field.append(cites); });
+    field.append(panel);
     return field;
   }
 
@@ -1294,22 +1317,23 @@ const Cards = (window.Cards = {
 
   /* Why the answer says what it says, and why it was held: everything a
      reviewer may want when the answer alone does not settle it, and does not
-     want on every card. Each block is plain text under a plain label. It was
-     up to five coloured boxes, three of them saying why the answer was held.
-     Null when there is nothing to tell. */
+     want on every card. It was up to five coloured boxes, three of them saying
+     why the answer was held; only the two that say what is wrong are coloured
+     now (plan 042). Null when there is nothing to tell. */
   function whyPanel(item, index) {
     const panel = document.createElement("div");
     panel.className = "why-panel";
     panel.hidden = true;
-    const block = (label) => {
+    const block = (label, tone) => {
       const field = labelledField(label);
+      if (tone) field.classList.add("why-" + tone);
       panel.append(field);
       return field;
     };
 
     const heldBecause = item.will_be_written === false && item.held_back_because;
     if ((item.needs_review || heldBecause) && !item.error && !item.blanked && !item.set_aside) {
-      const field = block(t("Why this is flagged"));
+      const field = block(t("Why this is flagged"), "warn");
       const reasons = document.createElement("div");
       reasons.className = "reasons";
       if (item.review_reasons && item.review_reasons.length) {
@@ -1336,7 +1360,7 @@ const Cards = (window.Cards = {
       const why = document.createElement("div");
       why.className = "reasons why";
       serverInto(why, item.confidence_reason);  // the server's sentence (`explain_confidence`)
-      block(t("Why the confidence is low")).append(why);
+      block(t("Why the confidence is low"), heldByScore(item.confidence) ? "err" : "warn").append(why);
     }
 
     if (item.rationale) {
@@ -1615,8 +1639,8 @@ const Cards = (window.Cards = {
 
     if (source) {
       const kind = document.createElement("span");
-      kind.className = "tag " + source.source_type;
-      kind.textContent = source.source_type === "prior_answer" ? t("previous answer") : t("guideline");
+      kind.className = "tag from " + source.source_type;
+      kind.textContent = sourceHome(source.source_type);
       head.prepend(kind);
       const own = ownSourceBadge(source);
       if (own) kind.after(own);

@@ -160,3 +160,14 @@ def test_the_choice_is_kept_until_another_conversation(
     page.locator("#historyList .convo").first.click()
     expect(tab(page, "Needs review")).to_have_attribute("aria-pressed", "true", timeout=15_000)
     expect(cards(page)).to_have_count(2)
+
+
+def test_the_tabs_are_drawn_as_on_the_workbench(page: Page, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The chat page has no `button` rule of its own for them to lean on (plan 042)."""
+    answered_in_the_chat(page, tmp_path, monkeypatch)
+
+    drawn = tab(page, "All").evaluate(
+        "b => { const s = getComputedStyle(b); return [s.borderTopStyle, s.borderTopWidth, s.borderTopLeftRadius]; }"
+    )
+
+    assert drawn == ["solid", "1px", "8px"]

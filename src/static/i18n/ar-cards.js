@@ -132,8 +132,6 @@ I18n.add({
   "From a previously answered assessment — click to read it": "من استبيان أُجيب عنه سابقاً — انقر لقراءته",
   "From an indexed guideline — click to read the clause": "من وثيقة في قاعدة المعرفة — انقر لقراءة البند",
   "Named in the answer; the chunk is not in the exported evidence": "مذكور في الإجابة، لكن المقطع غير موجود في الأدلة المُصدَّرة",
-  "guideline": "وثيقة إرشادية",
-  "previous answer": "إجابة سابقة",
   "relevance {score}": "الصلة {score}",
   "This clause was named in the answer, but the chunk behind it is not in the exported evidence.": "ذُكر هذا البند في الإجابة، لكن المقطع الذي يستند إليه غير موجود في الأدلة المُصدَّرة.",
   "open document": "فتح الوثيقة",

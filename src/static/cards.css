@@ -40,6 +40,9 @@
   --err: #b42318;
   --err-soft: #fdecea;
 
+  --memory: #86329b;
+  --memory-soft: #f6eafa;
+
   --shadow-sm: 0 1px 2px rgba(20, 24, 31, .06), 0 1px 3px rgba(20, 24, 31, .04);
   --shadow-md: 0 2px 4px rgba(20, 24, 31, .05), 0 6px 16px rgba(20, 24, 31, .07);
   --shadow-lg: 0 12px 40px rgba(20, 24, 31, .16);
@@ -79,6 +82,9 @@
   --err: #f4796f;
   --err-soft: #3a1a17;
 
+  --memory: #d59ae6;
+  --memory-soft: #2f1c38;
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, .6);
@@ -106,6 +112,8 @@
   --warn-soft: #322610;
   --err: #f4796f;
   --err-soft: #3a1a17;
+  --memory: #d59ae6;
+  --memory-soft: #2f1c38;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, .6);
@@ -135,9 +143,13 @@
 /* The review's tabs, on the Workbench and above the chat's answers (plan 037). */
 .review-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .review-tabs button {
-  background: var(--surface); color: var(--ink-soft); border-color: var(--line-strong);
-  padding: 5px 10px; font-size: 12.5px; white-space: nowrap;
+  /* Whole, not leaning on the page's own `button` rule: the chat page has none,
+     so there they were the browser's square, double-edged buttons (plan 042). */
+  background: var(--surface); color: var(--ink-soft); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 5px 10px; font-size: 12.5px; font-weight: 550;
+  white-space: nowrap; cursor: pointer;
 }
+.review-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .review-tabs button:hover:not(:disabled) { color: var(--ink); filter: none; }
 .review-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
 /* Nothing in it: still there, so the tabs do not move, and plainly not the place to look. */
@@ -159,8 +171,12 @@
 /* Each question and its answer form one card, redrawn in plan 041 because it
    read as confusing and overwhelming: the reason an answer was held was said
    three times, in up to six coloured boxes, and the actions were small words
-   above what they acted on. One thing is coloured now, the status. The answer
-   is the largest thing on the card, and has no box round it. */
+   above what they acted on.
+
+   Colour says one thing each (plan 042): green is fine, amber a person should
+   look, red low or failed, blue the knowledge base, plum the answer memory.
+   Everything else stays on the neutral ramp, and the words say it too. The
+   answer sits on its own ground, so it is plainly the thing being judged. */
 .answer {
   background: var(--surface-raised);
   border: 1px solid var(--line);
@@ -169,6 +185,7 @@
   padding: 13px 16px 11px;
 }
 .answer.review { border-inline-start: 3px solid var(--warn); }
+.answer.review:has(> .answer-status.failed) { border-inline-start-color: var(--err); }
 /* Out of the file: still readable, plainly not part of what gets written. */
 .answer.set-aside { border-style: dashed; }
 .answer.set-aside .qtext, .answer.set-aside .rendered { opacity: .62; }
@@ -192,10 +209,17 @@
 /* After the first, so that a line that wraps does not begin with a dot. */
 .answer-status .reason-chip:has(+ .reason-chip)::after { content: "·"; margin-inline-start: 10px; color: var(--ink-faint); }
 .answer-status .tag { font-size: 11.5px; font-weight: 550; color: var(--ink-faint); background: none; border: 0; padding: 0; text-transform: none; letter-spacing: 0; }
-.answer-status .tag.memory { color: var(--accent-ink); }
+.answer-status .reason-chip { color: var(--status); }
+.answer-status .tag.memory { color: var(--memory); }
+/* How sure, as a label of its own at the end of the line (plan 042). */
 .answer-status .status-score {
-  margin-inline-start: auto; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  margin-inline-start: auto; padding: 2px 10px; border-radius: var(--radius-pill);
+  font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: var(--surface-sunken); color: var(--ink-soft);
 }
+.answer-status .status-score.high { background: var(--ok-soft); color: var(--ok); }
+.answer-status .status-score.mid { background: var(--warn-soft); color: var(--warn); }
+.answer-status .status-score.low { background: var(--err-soft); color: var(--err); }
 
 /* The question. */
 .answer-head { margin-top: 8px; }
@@ -268,13 +292,19 @@ button.card-btn.menu-item.danger:hover:not(:disabled) { background: var(--err-so
   padding: 4px 9px 6px; font-size: 13px; color: var(--ink-soft);
 }
 
-/* Everything behind "Why this answer": plain text under plain labels. */
+/* Everything behind "Why this answer": plain text under plain labels, but for
+   the two that say what is wrong (plan 042). */
 .why-panel {
   display: grid; gap: 10px; margin-top: 8px; padding: 11px 13px;
   background: var(--surface-sunken); border-radius: var(--radius-sm);
 }
 .why-panel[hidden] { display: none; }
 .why-panel .field { margin: 0; }
+.why-panel .why-warn, .why-panel .why-err { padding: 8px 11px; border-radius: var(--radius-sm); }
+.why-panel .why-warn { background: var(--warn-soft); }
+.why-panel .why-err { background: var(--err-soft); }
+.why-panel .why-warn .field-label { color: var(--warn); }
+.why-panel .why-err .field-label { color: var(--err); }
 .why-panel button.card-btn { margin-top: 7px; }
 .why-facts { font-size: 12px; color: var(--ink-faint); }
 
@@ -374,7 +404,7 @@ button.last-used .tag { text-transform: none; }
 /* Not a state of the answer but a fact about the memory: quieter than the
    review and blank tags, which are things somebody has to act on. */
 .tag.memory {
-  background: var(--accent-soft); color: var(--accent-ink);
+  background: var(--memory-soft); color: var(--memory);
   border: 1px solid transparent; font-weight: 600;
 }
 
@@ -427,6 +457,12 @@ button.last-used .tag { text-transform: none; }
 .rendered h4 { margin: .9em 0 .35em; font-size: 14px; font-weight: 650; }
 .rendered strong { font-weight: 680; }
 .rendered p.empty { max-width: none; margin: 0; text-align: start; color: var(--ink-faint); font-style: italic; }
+/* On the card, on a ground of its own: what the rest of the card is about (plan 042). */
+.answer .answer-text .rendered {
+  padding: 10px 13px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface-raised));
+}
+.answer .answer-text .rendered.no-answer { padding: 0; border: 0; background: none; }
 
 .answer textarea {
   width: 100%; min-height: 150px; resize: vertical;
@@ -437,20 +473,25 @@ button.last-used .tag { text-transform: none; }
 
 .rationale, .reasons { font-size: 13.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
 
-/* Citations: one quiet row, each opening the clause it names. Whether a source
-   is a policy or a previous answer is said when it is opened (plan 041). */
+/* Citations: a row for each place they came from, each opening the clause it
+   names. The row's first word says the place, in the chips' colour (plan 042). */
 .cites { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-/* The row's own label, its first word: "Sources", then the chips (plan 033). */
-.cites .cites-label { margin: 0; margin-inline-end: 2px; font-weight: 500; }
+.cites + .cites { margin-top: 6px; }
+.cites .cites-label { margin: 0; margin-inline-end: 2px; font-weight: 600; }
+.cites.guideline .cites-label { color: var(--accent-ink); }
+.cites.prior_answer .cites-label { color: var(--memory); }
 .cite {
+  --cite-ink: var(--ink-soft); --cite-ground: var(--surface-sunken); --cite-edge: var(--line);
   font: inherit; font-size: 12.5px; line-height: 1.4; font-weight: 500;
   border-radius: var(--radius-sm); padding: 2px 8px; cursor: pointer;
   text-align: start; overflow-wrap: anywhere;
-  background: var(--surface-sunken); color: var(--ink-soft);
-  border: 1px solid var(--line); box-shadow: none;
+  background: var(--cite-ground); color: var(--cite-ink);
+  border: 1px solid var(--cite-edge); box-shadow: none;
 }
-.cite:hover:not(:disabled) { color: var(--accent-ink); border-color: var(--accent); background: var(--surface-sunken); filter: none; }
-.cite[aria-expanded="true"] { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+.cite.guideline { --cite-ink: var(--accent-ink); --cite-ground: var(--accent-soft); --cite-edge: color-mix(in srgb, var(--accent) 28%, transparent); }
+.cite.prior_answer { --cite-ink: var(--memory); --cite-ground: var(--memory-soft); --cite-edge: color-mix(in srgb, var(--memory) 28%, transparent); }
+.cite:hover:not(:disabled) { color: var(--cite-ink); border-color: var(--cite-ink); background: var(--cite-ground); filter: none; }
+.cite[aria-expanded="true"] { border-color: var(--cite-ink); box-shadow: inset 0 0 0 1px var(--cite-ink); }
 .cite .caret { opacity: .7; margin-inline-start: 6px; font-size: 12px; }
 /* Whose source it is -- a law's, or a product's own -- after the name, not run into it. */
 .cite .tag { margin-inline-start: 6px; }
@@ -473,6 +514,10 @@ button.last-used .tag { text-transform: none; }
   flex: 1 1 220px; min-width: 0; color: var(--ink-soft); font-weight: 550;
   overflow-wrap: anywhere;
 }
+/* The place it came from, said again where it is read. */
+.tag.from { font-size: 10.5px; font-weight: 650; padding: 1px 7px; border-radius: var(--radius-pill); white-space: nowrap; }
+.tag.from.guideline { background: var(--accent-soft); color: var(--accent-ink); border: 0; }
+.tag.from.prior_answer { background: var(--memory-soft); color: var(--memory); }
 .cite-panel .cite-head .view-toggle,
 .cite-panel .cite-head .quiet,
 .cite-panel .cite-head .tag { flex: 0 0 auto; }

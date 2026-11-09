@@ -470,7 +470,7 @@ def test_a_card_folds_a_long_question_to_two_lines_with_its_controls_and_sources
     assert len(tops) == 1, f"the controls are in one row: {tops}"
 
     sources = card.locator(".cites")
-    expect(sources.locator(".cites-label")).to_have_text("Sources")
+    expect(sources.locator(".cites-label")).to_have_text("Knowledge base")
     chip = sources.locator(".cite")
     label_box, chip_box = sources.locator(".cites-label").bounding_box(), chip.bounding_box()
     assert label_box and chip_box and abs(label_box["y"] - chip_box["y"]) < chip_box["height"], "one row"

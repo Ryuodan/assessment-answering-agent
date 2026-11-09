@@ -44,3 +44,4 @@ Work asked for directly, outside the milestones:
 | [039](completed/039-arabic-versus-english.md) | the team's feedback: do Arabic and English get the same answer? Measured | done 2026-11-08 |
 | [040](completed/040-language-and-theme-in-preferences.md) | the language and Dark mode leave the top bar for Preferences | done 2026-11-08 |
 | [041](completed/041-approve-all-and-the-card.md) | Approve all, with a confirmation and nothing in the answer memory; the answer card and the review redrawn | done 2026-11-08 |
+| [042](completed/042-the-cards-colours.md) | the card's colours say what they mean: the answer set apart, sources by origin, confidence colour-coded | done 2026-11-09 |
