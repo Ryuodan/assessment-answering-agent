@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from src import batches, forms, lists, products, questionnaire, reading, retention, service, tools
+from src import batches, forms, lists, products, questionnaire, reading, retention, service, sheet_columns, tools
 from src.errors import NotFound
 from src.identity import User
 from src.logs import get_logger
@@ -50,6 +50,15 @@ def approve_all(batch_id: str, request: ApproveHeldRequest, user: User = Depends
     """
     approved = questionnaire.approve_held(user, batch_id, request.question_ids)
     return {**tools.inspect(user, batch_id), "approved": approved}
+
+
+@opening.get("/api/forms/{batch_id}/columns/every")
+def every_column(batch_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
+    """Every column beside the questions, with its heading, for a person to choose where answers go (plan 043).
+
+    `GET /columns` is where they go now; this is what else there is. Choosing is `POST /columns`.
+    """
+    return {"sheets": sheet_columns.every_column(user, batch_id)}
 
 
 @opening.post("/api/forms")

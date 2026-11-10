@@ -48,6 +48,7 @@ Errors: [errors.md](errors.md).
 
 | Method | Path | What it does |
 |---|---|---|
+| `GET` | `/api/forms/{batch_id}/columns/every` | Every column beside the questions, with its heading, for a person to choose where answers go (plan 043). |
 | `POST` | `/api/forms` | Read an uploaded questionnaire, for a `product` or General, and report what can be answered in it. |
 | `GET` | `/api/forms` | One person's questionnaires, most recently used first, each with the day it is kept until (plan 033). |
 | `POST` | `/api/forms/list` | Keep typed questions, or a PDF's or a Word file's, as a questionnaire with no file to write into (plan 033). |

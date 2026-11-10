@@ -1631,6 +1631,11 @@
     // Drawn again on a choice: the keyboard stays on the tab it chose (plan 029's review).
     const tabsHadFocus = Boolean(document.activeElement && document.activeElement.closest &&
       document.activeElement.closest("#answerTabs"));
+    // The panel is its own scroller, and anything that measures the page while it
+    // is empty (the list's remembered width does) puts it back at its top: the
+    // reviewer lost their place on every approval (plan 043). Kept for the same
+    // questionnaire and tab; another tab starts at its top.
+    const was = { top: host.scrollTop, drawn: host.dataset.drawn || "" };
     host.replaceChildren();
     answersAvailable = true;
     // Render always, open only if the person has not put it away. This used to
@@ -1681,6 +1686,8 @@
       answersTabFor = report.id;
     }
     const tab = answersTab;
+    host.dataset.drawn = report.id + "|" + tab;
+    const keepPlace = () => { host.scrollTop = was.drawn === host.dataset.drawn ? was.top : 0; };
 
     const counts = report.counts || {};
     const summary = document.createElement("div");
@@ -1707,6 +1714,7 @@
       host.append(nothing);
       $("fillBtn").hidden = true;
       $("approveAllBtn").hidden = true;
+      keepPlace();
       return;
     }
     const tabs = document.createElement("div");
@@ -1745,6 +1753,7 @@
     }
     $("fillBtn").hidden = !answered.length;
     Cards.paintApproveAll($("approveAllBtn"), cards, counted.review, approveEveryHeld);
+    keepPlace();
   }
 
   /* Approve all, once the person has said yes (plan 041). `items` are the

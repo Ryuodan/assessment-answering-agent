@@ -733,6 +733,48 @@
         }
       }
     },
+    "/api/forms/{batch_id}/columns/every": {
+      "get": {
+        "summary": "Every Column",
+        "description": "Every column beside the questions, with its heading, for a person to choose where answers go (plan 043).\n\n`GET /columns` is where they go now; this is what else there is. Choosing is `POST /columns`.",
+        "operationId": "every_column_api_forms__batch_id__columns_every_get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Every Column Api Forms  Batch Id  Columns Every Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/forms": {
       "post": {
         "summary": "Open Questionnaire",

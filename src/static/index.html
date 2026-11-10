@@ -532,6 +532,16 @@
   .qn-part .tick { font-weight: 700; color: var(--ok); }
   .qn-part.skipped .tick { color: var(--ink-faint); font-weight: 400; }
   .qn-part .pname { font-weight: 600; overflow-wrap: anywhere; }
+  /* Every column of the file, to choose where answers go (plan 043). */
+  .every-column { margin-top: 10px; }
+  .every-column > summary { cursor: pointer; font-size: 12.5px; font-weight: 550; color: var(--accent-ink); padding: 4px 0; }
+  .every-column p { margin: 6px 0; }
+  .column-grid {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; align-items: center;
+    font-size: 12.5px; margin: 6px 0 4px; max-width: 760px; max-height: 340px; overflow-y: auto; padding-inline-end: 4px;
+  }
+  .column-grid > div { min-width: 0; overflow-wrap: anywhere; }
+  .column-grid select { font-size: 12.5px; padding: 4px 7px; max-width: 46vw; }
   .qn-part .pcount { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
   .qn-part .why { grid-column: 2 / -1; color: var(--ink-faint); font-size: 12px; }
   .qn-part .why.check { color: var(--warn); }
@@ -3968,36 +3978,113 @@
         // The column's letter and heading are the file's own (plan 038).
         wrap.append(...sentence(column.label ? t("column {column} — {label}") : t("column {column}"),
           { column: column.column, label: column.label }));
-        const picker = document.createElement("select");
-        picker.disabled = readOnly();  // shown, to read, on a deleted product's questionnaire
-        ROLE_LABELS.forEach(function (pair) {
-          const option = document.createElement("option");
-          option.value = pair[0];
-          option.textContent = pair[1];
-          option.selected = pair[0] === column.role;
-          picker.append(option);
-        });
-        picker.addEventListener("change", async () => {
-          try {
-            const updated = await request("/api/forms/" + batchId + "/columns", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                sheet: sheet.sheet, column: column.column, role: picker.value,
-              }),
-            });
-            await adoptBatch(updated, { quiet: true });
-            setStatus($("extractStatus"), sentence(t("Column {column} on {sheet} now holds {role}.",
-              { role: ROLE_WORDS[picker.value] || picker.value }), { column: column.column, sheet: sheet.sheet }), "ok");
-          } catch (error) {
-            setStatus($("extractStatus"), I18n.error(error), "error");
-          }
-        });
-        wrap.append(picker);
+        wrap.append(rolePicker(batchId, sheet.sheet, column.column, column.role));
         row.append(wrap);
       });
       host.append(row);
     });
+    host.append(everyColumn(batchId, sheets));
+  }
+
+  /* What one column holds, chosen. The same control for the columns detection
+     chose and for every other (plan 043). */
+  function rolePicker(batchId, sheet, column, current) {
+    const picker = document.createElement("select");
+    picker.disabled = readOnly();  // shown, to read, on a deleted product's questionnaire
+    ROLE_LABELS.forEach(function (pair) {
+      const option = document.createElement("option");
+      option.value = pair[0];
+      option.textContent = pair[1];
+      option.selected = pair[0] === current;
+      picker.append(option);
+    });
+    picker.addEventListener("change", async () => {
+      try {
+        const updated = await request("/api/forms/" + batchId + "/columns", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sheet: sheet, column: column, role: picker.value }),
+        });
+        await adoptBatch(updated, { quiet: true });
+        setStatus($("extractStatus"), sentence(t("Column {column} on {sheet} now holds {role}.",
+          { role: ROLE_WORDS[picker.value] || picker.value }), { column: column, sheet: sheet }), "ok");
+      } catch (error) {
+        setStatus($("extractStatus"), I18n.error(error), "error");
+      }
+    });
+    return picker;
+  }
+
+  /* Every column beside the questions, for when detection chose the wrong one
+     (plan 043). Above, only the columns that will be written are listed, and a
+     file whose answers were read as a status had no way to the right one. Read
+     from the file when opened, not on every redraw, and kept open across the
+     redraw that a choice causes. Nothing here changes how files are read. */
+  let everyColumnOpen = "";  // the questionnaire whose list is open
+  function everyColumn(batchId, sheets) {
+    const more = document.createElement("details");
+    more.className = "every-column";
+    const summary = textElement("summary", t("Write to another column"));
+    const body = document.createElement("div");
+    more.append(summary, body);
+    const now = {};
+    sheets.forEach((sheet) => sheet.columns.forEach((c) => { now[sheet.sheet + "!" + c.column] = c.role; }));
+
+    let loaded = false;
+    async function load() {
+      if (loaded) return;
+      loaded = true;
+      body.replaceChildren(textElement("p", t("Reading the file's columns…")));
+      let every = [];
+      try {
+        every = (await request("/api/forms/" + batchId + "/columns/every")).sheets;
+      } catch (error) {
+        loaded = false;
+        body.replaceChildren(textElement("p", I18n.error(error)));
+        return;
+      }
+      const note = textElement("p", t("Every column beside the questions. Choose what one holds and this questionnaire's answers go there; other files are read as before."));
+      note.className = "adm-note";
+      body.replaceChildren(note);
+      every.forEach((sheet, place) => {
+        if (every.length > 1) {
+          const name = content(sheet.sheet, "p");  // the sheet's own name
+          name.className = "pname";
+          body.append(name);
+        }
+        const grid = document.createElement("div");
+        grid.className = "column-grid";
+        sheet.columns.forEach((column) => {
+          const name = document.createElement("div");
+          name.id = "everyColumn-" + place + "-" + column.column;  // names its picker, in either language
+          name.append(...sentence(column.heading ? t("column {column} — {label}") : t("column {column}"),
+            { column: column.column, label: column.heading }));
+          const sample = document.createElement("div");
+          sample.className = "adm-note";
+          if (column.sample) sample.append(...sentence(t("e.g. {sample}"), { sample: column.sample }));
+          else sample.textContent = t("empty beside the questions");
+          name.append(sample);
+          let choice;
+          if (column.detected === "question" || column.detected === "number") {
+            // Read, never written: the file's own questions are not a place for answers.
+            choice = textElement("span", column.detected === "question"
+              ? t("the questions — never written") : t("question numbers — never written"));
+            choice.className = "adm-note";
+          } else {
+            choice = rolePicker(batchId, sheet.sheet, column.column, now[sheet.sheet + "!" + column.column] || "ignore");
+            choice.setAttribute("aria-labelledby", name.id);
+          }
+          grid.append(name, choice);
+        });
+        body.append(grid);
+      });
+    }
+    more.addEventListener("toggle", () => {
+      everyColumnOpen = more.open ? batchId : "";
+      if (more.open) load();
+    });
+    if (everyColumnOpen === batchId) more.open = true;
+    return more;
   }
 
   /* Which length this questionnaire is filled in with. Only shown for a real

@@ -101,6 +101,7 @@ modules = [
     "src.styling",
     "src.fill_audit",
     "src.questionnaire",
+    "src.sheet_columns",
     "src.lists",
     "src.tools",
     "src.agents.assistant",
