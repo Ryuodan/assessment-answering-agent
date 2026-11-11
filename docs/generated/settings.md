@@ -41,6 +41,13 @@ source. The description is the comment above the field, the field's
 | `PHOENIX_TRACING` | `bool` | `False` | The same traces, kept locally. Phoenix is an OpenTelemetry collector with a UI that understands LLM spans, and it runs wherever this does, so the data-residency objection to LangSmith does not apply: nothing crosses a border, or leaves the host at all. Still off by default, because a trace is a copy of the policy text and the customer's questionnaire in a second store with no access control in front of it. Local is not the same as harmless -- see docs/operations/tracing.md. |
 | `PHOENIX_ENDPOINT` | `str` | `"http://localhost:6006/v1/traces"` |  |
 | `PHOENIX_PROJECT` | `str` | `"assessment-answer"` |  |
+| `PHOENIX_HOST` | `str` | `"127.0.0.1"` | Phoenix's own server (plan 044). It has no sign-in of its own, so it stays on loopback: the app publishes its UI at /phoenix/ to administrators only (src/routes/phoenix.py), and `serve-phoenix.sh` starts it with these. |
+| `PHOENIX_PORT` | `int` | `6006` |  |
+| `PHOENIX_GRPC_PORT` | `int` | `4317` |  |
+| `PHOENIX_WORKING_DIR` | `str` | `""` | Where Phoenix keeps its traces. Empty: Phoenix's own default, ~/.phoenix. |
+| `PHOENIX_HOST_ROOT_PATH` | `str` | `""` | The prefix Phoenix's links carry when it is published under one (/assessment/phoenix on the deployment), and the public address it is at. Empty when it is opened directly. |
+| `PHOENIX_ROOT_URL` | `str` | `""` |  |
+| `PHOENIX_EXECUTABLE` | `str` | `""` | The `phoenix` command. Empty: the one on PATH. |
 
 ## Embeddings (BGE-M3 behind an OpenAI-compatible endpoint)
 

@@ -39,7 +39,7 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 
 | Code | Status | Raised as | Where |
 |---|---|---|---|
-| `admin_required` | 403 | `Forbidden` | `src.routes.auth.current_admin` |
+| `admin_required` | 403 | `Forbidden` | `src.routes.auth.current_admin`, `src.routes.phoenix.refusal` |
 | `assistant_unconfigured` | 503 | `Unavailable` | `src.routes.chat.say_to_assistant`, `src.routes.chat.say_with_a_file` |
 | `authority_invalid` | 400 | `Invalid` | `src.routes.knowledge.upload_guidelines` |
 | `confirmation_required` | 400 | `Invalid` | `src.products.delete` |
@@ -59,6 +59,8 @@ for a person and may change; the code is stable. Classes are defined in `src/err
 | `nothing_to_export` | 422 | `Unprocessable` | `src.api._export_options` |
 | `other_team` | 403 | `Forbidden` | `src.routes.products._team` |
 | `password_from_environment` | 400 | `Invalid` | `src.routes.admin.admin_set_password` |
+| `phoenix_sign_in_required` | 401 | `SignInRequired` | `src.routes.phoenix.refusal` |
+| `phoenix_unavailable` | 503 | `Unavailable` | `src.phoenix_upstream.forward` |
 | `preview_failed` | 422 | `Unprocessable` | `src.api.preview_document` |
 | `product_color_invalid` | 400 | `Invalid` | `src.products._color` |
 | `product_description_too_long` | 400 | `Invalid` | `src.products._description` |

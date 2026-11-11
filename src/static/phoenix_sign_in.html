@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<!-- The sign-in gate for the Phoenix UI.
+
+     Phoenix is reached at its own URL rather than from inside the app, so a
+     browser that lands here usually has no session yet. Returning the API's
+     JSON 401 told the person nothing they could act on; this asks for the same
+     address and code the app's own gate asks for, then reloads the Phoenix URL
+     they were trying to open.
+
+     Self-contained on purpose: it is served in place of a page that failed to
+     authorise, so it must not depend on assets behind the same gate. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in &middot; Phoenix</title>
+<style>
+  :root {
+    --ink: #17191c; --ink-soft: #565b62; --ink-faint: #82888f;
+    --surface: #ffffff; --surface-sunken: #f2f3f5; --surface-raised: #ffffff;
+    --line: #e2e4e8; --line-strong: #c9ced5;
+    --accent: #3b5bdb; --accent-ink: #ffffff;
+    --err: #b42318; --err-soft: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8eaed; --ink-soft: #a5abb3; --ink-faint: #7d848c;
+      --surface: #1b1d21; --surface-sunken: #121417; --surface-raised: #1b1d21;
+      --line: #2c3037; --line-strong: #3c424a;
+      --accent: #5c7cfa; --accent-ink: #0f1115;
+      --err: #f08a7e; --err-soft: #37211f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px;
+    display: grid; place-items: center;
+    background: var(--surface-sunken); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  form {
+    width: min(420px, 100%); padding: 28px;
+    background: var(--surface-raised); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .09);
+  }
+  h1 { margin: 0 0 6px; font-size: 19px; }
+  p { margin: 0 0 18px; color: var(--ink-soft); font-size: 14px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  label + input { margin-bottom: 14px; }
+  input {
+    width: 100%; padding: 10px 12px; font: inherit;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 8px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    margin-top: 14px; width: 100%; padding: 10px 14px; font: inherit; font-weight: 600;
+    color: var(--accent-ink); background: var(--accent);
+    border: 0; border-radius: 8px; cursor: pointer;
+  }
+  button[disabled] { opacity: .6; cursor: default; }
+  .hint { margin: 10px 0 0; font-size: 12px; color: var(--ink-faint); }
+  .error {
+    margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+    background: var(--err-soft); color: var(--err); font-size: 13.5px;
+  }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+<form id="form">
+  <h1>Sign in to view Phoenix</h1>
+  <p>The trace store holds prompts and questionnaire text, so it is open to
+     administrators only.</p>
+  <label for="email">Email address</label>
+  <input id="email" type="email" autocomplete="email" required
+         placeholder="you@t2.sa" spellcheck="false">
+  <label for="code">Password or access code</label>
+  <input id="code" type="password" autocomplete="current-password" required
+         spellcheck="false">
+  <p class="hint">Administrators: use your own password here.</p>
+  <button type="submit" id="submit">Continue</button>
+  <div class="error" id="error" hidden></div>
+</form>
+<script>
+(() => {
+  const form = document.getElementById("form");
+  const email = document.getElementById("email");
+  const code = document.getElementById("code");
+  const submit = document.getElementById("submit");
+  const error = document.getElementById("error");
+
+  // Spelled absolutely and without the deployment's prefix, exactly as the
+  // app's own pages spell it: nginx rewrites `/api/` in the HTML it serves, so
+  // adding the prefix here -- or computing one from `location` -- would apply
+  // it twice and post to `/assessment/assessment/api/...`.
+  const endpoint = "/api/auth/session";
+
+  function fail(message) {
+    error.textContent = message;
+    error.hidden = false;
+  }
+
+  email.focus();
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.value.trim(), code: code.value }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        fail(body.detail || "That did not work. Check the address and try again.");
+        return;
+      }
+      if (!body.is_admin) {
+        // Signed in, but this page would only 403 on reload. Say so here
+        // rather than bouncing them into an error they have to interpret.
+        fail("Signed in, but this account is not an administrator.");
+        return;
+      }
+      // Reload the Phoenix URL that sent them here, now that the cookie is set.
+      window.location.reload();
+    } catch (e) {
+      fail("Could not reach the server.");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

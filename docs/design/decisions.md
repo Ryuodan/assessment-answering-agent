@@ -712,3 +712,16 @@ a plan relies on it.
   - The card holds no threshold of its own; changing the setting moves the colours.
   - A new thing on the card that wants a colour has to mean one of the five, or stay neutral.
 - **Date:** 2026-11-09. **Status:** accepted. **Decided by:** the user (plan 042), the details delegated.
+
+## D-036: Phoenix is published only through the app, to administrators
+
+- **Context:** Phoenix keeps a copy of every traced prompt, policy text and the customer's questionnaire included, and its server has no sign-in. On the deployment it was published behind the app on 2026-09-24, by a commit that never reached this repository; the restart of 2026-11-10 dropped the page (plan 044).
+- **Decision:**
+  - **Phoenix listens on loopback only.** Its UI is reached at `/phoenix/` through the app (`src/routes/phoenix.py`), never on its own port.
+  - **Only a signed-in administrator passes**, in every mode. Open mode's local stand-in, which passes `current_admin`, does not.
+  - **A browser without a session gets a sign-in form** that posts to the app's own `/api/auth/session`, so there is one way in and one lockout policy. A script gets the usual JSON error.
+  - **The app's session cookie is not passed to Phoenix**, Phoenix's cookies are not set on the app's origin, and the upstream host comes from the settings alone.
+- **Consequences:**
+  - The app holds every request to Phoenix in memory, both ways. Fine for its UI; nothing large goes through it.
+  - Restarting the app interrupts an open Phoenix page; restarting Phoenix does not sign anyone out.
+- **Date:** 2026-11-10. **Status:** accepted. **Decided by:** the user (plan 044), as on 2026-09-24; the rewrite delegated.

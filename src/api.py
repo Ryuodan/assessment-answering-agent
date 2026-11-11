@@ -33,6 +33,7 @@ from src import (
     tools,
 )
 from src.routes import admin as admin_routes
+from src.routes import phoenix as phoenix_routes
 from src.routes import knowledge as knowledge_routes
 from src.routes import memory as memory_routes
 from src.routes import chat as chat_routes
@@ -46,11 +47,7 @@ from src.routes.auth import current_user, user_payload
 from src.routes.pages import STATIC_DIR as STATIC_DIR, RevalidatedStatic, page
 from src.identity import User
 from src.config import configure_logging, settings
-from src.errors import (
-    Invalid,
-    NotFound,
-    Unprocessable,
-)
+from src.errors import Invalid, NotFound, Unprocessable
 from src.extraction import detect_question_language
 from src.export_docx import render_docx
 from src.export_pdf import ExportOptions, render_pdf, selected_answers
@@ -192,6 +189,7 @@ def sign_out(request: Request, response: Response) -> dict:
 
 app.include_router(admin_routes.router)
 app.include_router(product_routes.router)  # products, src/routes/products.py
+app.include_router(phoenix_routes.router)  # the trace viewer, administrators only, src/routes/phoenix.py
 
 
 @app.get("/admin", response_class=HTMLResponse)

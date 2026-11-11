@@ -14,7 +14,7 @@ and [Facing a network](docs/design/access.md#facing-a-network).
 | The team's past answers | the answer memory (SQLite and Chroma); `eval/answer_memory.json` and `eval/house_set.json`, committed only sealed in `eval/sealed/` (plaintext gitignored) | real answers given to named customers |
 | Accounts, sessions, the event log | SQLite at `DB_PATH` (`data/app.db`), gitignored | who did what; session tokens (stored as SHA-256) |
 | Secrets | `.env`, gitignored: `GROQ_API_KEY`, `LANGSMITH_API_KEY`, `EMBEDDING_API_KEY`, `ADMIN_PASSWORD`, `EVAL_DATA_KEY` | access to paid services, to the system, and to the sealed eval data |
-| Traces, when switched on | LangSmith (EU or US) or a local Phoenix store | each trace is a copy of the prompt: policy text and the questionnaire |
+| Traces, when switched on | LangSmith (EU or US) or a local Phoenix store; Phoenix's UI only through the app, to administrators (D-036) | each trace is a copy of the prompt: policy text and the questionnaire |
 
 ## Known exposure
 
@@ -75,7 +75,9 @@ products and nothing else. Deleting a product needs `confirm=confirm` on the
 request, as well as the word typed on the page. It deletes the product's
 knowledge-base files and its remembered answers. Its questionnaires and chats
 are kept read-only, so its wording cannot later be approved into the shared
-memory (D-019).
+memory (D-019). Phoenix, which has no sign-in of its own, listens on loopback
+only; the app publishes its UI at `/phoenix/` to administrators, and never to
+open mode's local stand-in (D-036).
 
 ## Security-sensitive code, and the tests that hold it
 
@@ -87,6 +89,7 @@ memory (D-019).
 | server text shown as markup (XSS) | `src/static/*.html`, `service.docx_preview_html` | `tests/test_document_library.py` (Word preview); the page-side rule has no test (TD-021) |
 | team isolation | `knowledge`, `answer_memory`, `service.list_documents` | `tests/test_team_isolation.py` |
 | per-person privacy | `conversations.load`, `batches.load` (via `tools._require`), `runs.load` | `tests/test_private_work.py` |
+| the Phoenix trace viewer: administrators only, the session not forwarded, the host fixed | `src/routes/phoenix.py`, `src/phoenix_upstream.py` | `tests/test_phoenix.py` |
 
 ## Rules for anyone working here, agents included
 

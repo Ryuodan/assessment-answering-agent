@@ -752,3 +752,12 @@ Found 2026-10-19; none was repeated or confirmed by a second run:
 - **What:** straight after a run with one failed question, the Answer step says "6 of 6 answered". After anything that redraws from the server, an approval for one, it says "5 of 6 answered, 1 waiting", and the button offers "Answer 1 question". The second is right.
 - **Seen:** 2026-11-08, in plan 041's screenshots. It predates that plan.
 - **Fix (needs approval):** mark a failed question as waiting when the run's answers arrive, as the server's copy does.
+
+## TD-084: 18 tests fail on the Linux deployment server, at HEAD as well
+
+- **What:** measured 2026-11-10 (Claude, plan 044), the first time the gate was run on the testing server (Linux; a fresh `.venv` from `uv.lock`). The same 18 fail on an untouched checkout of `e6d1fa2` (plan 042) with the same `.venv`, so no plan's change caused them:
+  - 15 characterization snapshots of filling (`tests/characterization/test_questionnaires.py::test_filling[...]`): the recorded path is `<tmp>\filled-simple.xlsx`, Windows's separator; Linux gives `<tmp>/filled-simple.xlsx`. Nothing else differs.
+  - 1 characterization snapshot of the PDF export (`test_exports.py::test_pdf_export[default]`): the summary line wraps one word earlier ("should be read\nbefore submission"), so the text measures differently here.
+  - 2 tests of Arabic in the PDF (`tests/test_export_pdf.py::test_a_long_arabic_question_is_not_reordered_across_its_lines`, `::test_the_question_number_leads_the_question`): the extracted question starts `.26 استضافة وتخزين البيانات...` instead of with its number and its first words, in order.
+- **Impact:** the gate cannot pass on the machine the system is deployed on. The two Arabic PDF tests may be more than a test's portability: the deployment renders its PDFs on this machine, so an Arabic question's number and words may come out of order in the PDFs people download. Not yet checked in a PDF from the deployment.
+- **Fix (needs approval):** make the snapshots write paths with `/` on every system; find which font or library the PDF picks up on Linux (it wraps differently, and Arabic reorders), check one exported Arabic PDF from the deployment by eye, and fix the export if it is wrong there too.

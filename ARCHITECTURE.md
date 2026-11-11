@@ -180,7 +180,10 @@ base page. `routes/preferences.py` holds the answer preferences, the skills,
 and the interface's language (plan 038), and serves the Preferences page.
 `routes/forms.py` holds opening, listing, reading and filling a
 questionnaire (plan 029), in two routers: `opening` is included before the
-answering routes and `router` (filling) after approving. A router is
+answering routes and `router` (filling) after approving. `routes/phoenix.py`
+publishes the Phoenix trace viewer at `/phoenix/` to administrators (plan 044,
+D-036), and `src/phoenix_upstream.py` carries each request to Phoenix on
+loopback. A router is
 included where its routes used to be defined, so the routes are registered,
 and the OpenAPI contract is ordered, as before. The SQLite schema's
 migrations are in `src/migrations.py`, applied by `src/store.py`.
@@ -354,14 +357,16 @@ tools are thin wrappers over `tools` (open a form, answer, revise, fill, search,
 
 **Every request** is authenticated by `routes.auth.current_user` (a session cookie, or
 open local mode when no users exist); administrator routes add
-`routes.auth.current_admin`. Unhandled errors become a generic 500 with the detail in
+`routes.auth.current_admin`. `/phoenix/` has its own gate, `routes.phoenix.refusal`,
+which wants a real administrator's session even in open mode (D-036). Unhandled errors become a generic 500 with the detail in
 the log.
 
 ## External services
 
 Groq (chat model, ME-Central-1 region), a BGE-M3 embedding endpoint, Docling
 (document conversion, normally on `localhost:8092`, with a local fallback),
-optionally LangSmith or a local Phoenix collector for traces, and a HuggingFace
+optionally LangSmith or a local Phoenix collector for traces (its UI reached only
+through the app, D-036), and a HuggingFace
 download for the optional reranker. Data-residency and secret handling are in
 [SECURITY.md](SECURITY.md).
 

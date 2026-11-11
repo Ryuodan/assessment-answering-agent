@@ -124,11 +124,14 @@ handles that without you managing a second environment by hand.
 1. **Start Phoenix first**, in its own terminal, and leave it running:
 
    ```bash
-   phoenix serve
+   ./serve-phoenix.sh      # or plain `phoenix serve`
    ```
 
-   It is ready when it prints `Phoenix is up and running` — open
-   <http://localhost:6006>.
+   The launcher reads Phoenix's server settings (`PHOENIX_HOST`, `PHOENIX_PORT`,
+   `PHOENIX_WORKING_DIR` and the rest) from this project's `.env` through
+   `src/config.py`, never as shell code; `python -m scripts.serve_phoenix --check`
+   says what it would start. It is ready when it prints
+   `Phoenix is up and running` — open <http://localhost:6006>.
 
 2. **Start the app** in a second terminal, from this directory, the usual way:
 
@@ -160,6 +163,27 @@ handles that without you managing a second environment by hand.
 4. **Stop** with Ctrl+C in each terminal. Set `PHOENIX_TRACING=false` when you
    are done — the app does not need Phoenix to run, it just warns while it
    cannot reach one.
+
+### On the deployed server
+
+Phoenix runs in `screen -S phoenix` (`./serve-phoenix.sh`), from an environment
+of its own (`PHOENIX_EXECUTABLE`), bound to loopback. It is never published
+directly: it has no sign-in, and it holds every prompt. The app publishes its UI
+at <https://ds.t2.sa/assessment/phoenix/> to **administrators only** (plan 044,
+D-036). Opening that address without a session shows a sign-in form; signing in
+on the app's own pages works too, since one session covers both. A member is
+refused, and so is open mode's local stand-in. The app's session cookie is not
+passed on to Phoenix.
+
+The deployment's `.env` sets `PHOENIX_HOST_ROOT_PATH=/assessment/phoenix` and
+`PHOENIX_ROOT_URL` to the public address, so the links Phoenix writes come back
+through nginx and the app. Do not bind port 6006 to anything but loopback.
+
+| What you see | Why, and what to do |
+|---|---|
+| The page answers 404 | The app running predates plan 044. Restart it. |
+| `Phoenix is not available.` (503, `phoenix_unavailable`) | The collector is down. Start it with `./serve-phoenix.sh` in its screen session. |
+| The sign-in form says the account is not an administrator | Phoenix is for administrators; ask one, or use the break-glass `ADMIN_EMAIL`. |
 
 ### When it does not work
 

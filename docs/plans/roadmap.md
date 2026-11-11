@@ -46,3 +46,4 @@ Work asked for directly, outside the milestones:
 | [041](completed/041-approve-all-and-the-card.md) | Approve all, with a confirmation and nothing in the answer memory; the answer card and the review redrawn | done 2026-11-08 |
 | [042](completed/042-the-cards-colours.md) | the card's colours say what they mean: the answer set apart, sources by origin, confidence colour-coded | done 2026-11-09 |
 | [043](completed/043-review-place-and-every-column.md) | the chat's review keeps its place on approving; the Workbench can write the answers to any column | done 2026-11-10 |
+| [044](completed/044-phoenix-behind-the-admin-gate.md) | Phoenix's page published again, to administrators only, after the move to this repository dropped it | done 2026-11-10 |

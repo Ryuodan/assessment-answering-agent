@@ -118,6 +118,21 @@ class Settings(BaseSettings):
     phoenix_tracing: bool = False
     phoenix_endpoint: str = "http://localhost:6006/v1/traces"
     phoenix_project: str = "assessment-answer"
+    # Phoenix's own server (plan 044). It has no sign-in of its own, so it stays
+    # on loopback: the app publishes its UI at /phoenix/ to administrators only
+    # (src/routes/phoenix.py), and `serve-phoenix.sh` starts it with these.
+    phoenix_host: str = "127.0.0.1"
+    phoenix_port: int = Field(default=6006, ge=1, le=65535)
+    phoenix_grpc_port: int = Field(default=4317, ge=1, le=65535)
+    # Where Phoenix keeps its traces. Empty: Phoenix's own default, ~/.phoenix.
+    phoenix_working_dir: str = ""
+    # The prefix Phoenix's links carry when it is published under one
+    # (/assessment/phoenix on the deployment), and the public address it is at.
+    # Empty when it is opened directly.
+    phoenix_host_root_path: str = ""
+    phoenix_root_url: str = ""
+    # The `phoenix` command. Empty: the one on PATH.
+    phoenix_executable: str = ""
 
     # --- Embeddings (BGE-M3 behind an OpenAI-compatible endpoint) ----------
     embedding_base_url: str = "https://ds.t2.sa/text_embed/v1"

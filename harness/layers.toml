@@ -52,6 +52,7 @@ modules = [
     "src.organisation",
     "src.export_pdf",
     "src.export_docx",
+    "src.phoenix_upstream",
     "src.docx_preview",
     "src.forms.*",
 ]
